@@ -75,6 +75,7 @@ pub struct UploaderApp {
     token: Option<String>,
     load_state: LoadState,
     staged_image: Option<StagedImage>,
+    paste_generation: u64,
     upload_result: Option<UploadResult>,
     uploading: bool,
     status: Option<InlineStatus>,
@@ -143,6 +144,7 @@ impl UploaderApp {
             token: None,
             load_state: LoadState::NeedsSetup,
             staged_image: None,
+            paste_generation: 0,
             upload_result: None,
             uploading: false,
             status: None,
@@ -181,6 +183,9 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.settings_open = false;
+        self.reset_image_draft("Quick Paste cleared the previous image draft.", cx);
+
         let Some(repository_name) = self.settings.pinned_repositories.first().cloned() else {
             self.warn(
                 "Quick Paste needs a pinned repository. Pin one in App Preferences first.",
@@ -220,6 +225,29 @@ impl UploaderApp {
         }
 
         self.on_paste(&PasteImage, window, cx);
+    }
+
+    /// Clears a pasted image when the main window is hidden, or when the user
+    /// explicitly discards it. Incrementing the generation keeps a pending
+    /// clipboard conversion from restoring an image after it was cleared.
+    pub fn clear_staged_image(&mut self, reason: &str, cx: &mut Context<Self>) {
+        self.paste_generation = self.paste_generation.wrapping_add(1);
+        if self.staged_image.take().is_some() {
+            self.status = None;
+            self.diagnostics.info(reason);
+            cx.notify();
+        }
+    }
+
+    fn reset_image_draft(&mut self, reason: &str, cx: &mut Context<Self>) {
+        let had_upload_result = self.upload_result.take().is_some();
+        let had_staged_image = self.staged_image.is_some();
+        self.clear_staged_image(reason, cx);
+        if had_upload_result && !had_staged_image {
+            self.status = None;
+            self.diagnostics.info(reason);
+            cx.notify();
+        }
     }
 
     pub fn report_menu_bar_error(
@@ -360,11 +388,13 @@ impl UploaderApp {
             ClipboardEntry::Image(image) => Some(image.clone()),
             _ => None,
         }) {
+            self.paste_generation = self.paste_generation.wrapping_add(1);
+            let paste_generation = self.paste_generation;
             let task = cx.background_spawn(async move { StagedImage::from_clipboard(&image) });
             cx.spawn_in(window, async move |this, window| {
                 let result = task.await;
                 let _ = this.update_in(window, |this, window, cx| {
-                    this.accept_image_result(result, window, cx);
+                    this.accept_pasted_image_result(paste_generation, result, window, cx);
                 });
             })
             .detach();
@@ -420,6 +450,30 @@ impl UploaderApp {
             }
         }
         cx.notify();
+    }
+
+    fn accept_pasted_image_result(
+        &mut self,
+        paste_generation: u64,
+        result: anyhow::Result<StagedImage>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paste_generation != self.paste_generation {
+            self.diagnostics
+                .info("Discarded a stale clipboard image conversion.");
+            return;
+        }
+        self.accept_image_result(result, window, cx);
+    }
+
+    fn discard_staged_image(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.clear_staged_image("Discarded the staged image.", cx);
     }
 
     fn warn(
@@ -890,7 +944,20 @@ impl UploaderApp {
             let detail = format!("{} · {}", image.formatted_size(), image.mime_type);
             v_flex()
                 .gap_2()
-                .child(div().text_sm().font_semibold().child("Preview"))
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(div().text_sm().font_semibold().child("Preview"))
+                        .child(
+                            Button::new("discard-staged-image")
+                                .ghost()
+                                .small()
+                                .icon(IconName::Close)
+                                .tooltip("Discard staged image")
+                                .on_click(cx.listener(Self::discard_staged_image)),
+                        ),
+                )
                 .child(
                     div()
                         .w_full()

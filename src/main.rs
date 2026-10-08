@@ -37,15 +37,22 @@ fn main() {
         let (window_handle, view) = gpui_kit::open_window(window_options, cx, |window, cx| {
             window.set_window_title("Gatto");
             window_limits::set_maximum_content_size(window, 920., 1040.);
-            window.on_window_should_close(cx, |_, cx| {
-                cx.hide();
-                set_dock_visible(false);
-                false
-            });
 
             let diagnostics = diagnostics.clone();
             let menu_bar_controller = menu_bar_controller.clone();
             let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar_controller, cx));
+            let close_view = view.clone();
+            window.on_window_should_close(cx, move |_, cx| {
+                close_view.update(cx, |this, cx| {
+                    this.clear_staged_image(
+                        "Closed the main window; discarded the staged image.",
+                        cx,
+                    );
+                });
+                cx.hide();
+                set_dock_visible(false);
+                false
+            });
             let focus = view.read(cx).focus_handle(cx);
             window.focus(&focus, cx);
             view

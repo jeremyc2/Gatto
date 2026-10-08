@@ -17,6 +17,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - A Quick Paste menu bar action for staging a clipboard image against a pinned repository.
 - Minimum and maximum window sizes for the main app and Application logs windows.
 - A transparent rocket-cat illustration for the app header and project README.
+- A close control on staged image previews for discarding an image draft.
 
 ### Changed
 
@@ -24,6 +25,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   Gatto.
 - Reworked the Dock icon as a rounded blue-to-indigo tile with a dimensional rocket-cat mark.
 - Reworked the main header into a responsive hero layout with an enlarged illustration.
+- Closing the main window discards its staged image, and Quick Paste always opens the main page
+  with a fresh image draft.
 
 ## [0.2.0] - 2026-10-07
 
