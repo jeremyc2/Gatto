@@ -1,6 +1,6 @@
 [package]
-name = "github-image-upload"
-version = "0.2.0"
+name = "gatto"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.90"
 description = "A lightweight GPUI menu bar app for uploading GitHub image attachments"
@@ -27,9 +27,12 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
   "NSAppearance",
   "NSImage",
+  "NSView",
+  "NSWindow",
   "NSRunningApplication",
   "NSResponder",
 ] }
+raw-window-handle = "0.6"
 
 [profile.release]
 lto = "thin"

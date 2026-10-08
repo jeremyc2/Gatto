@@ -16,22 +16,26 @@ use gpui_kit::{
     App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity, ExternalPaths,
     FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _, IntoElement, KeyBinding,
     Keystroke, ObjectFit, ParentElement as _, PathPromptOptions, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Window, actions,
-    div, img, prelude::FluentBuilder as _, px,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Window,
+    WindowBounds, WindowOptions, actions, div, img, prelude::FluentBuilder as _, px, size,
 };
 
 use crate::{
+    diagnostics::Diagnostics,
     github,
+    log_viewer::LogViewer,
+    menu_bar::MenuBarController,
     model::{Repository, StagedImage, parse_organization},
     settings::AppSettings,
+    window_limits,
 };
 
 actions!(
-    github_image_upload,
-    [PasteImage, CopyUploadUrl, CopyUploadMarkdown]
+    gatto,
+    [PasteImage, QuickPaste, CopyUploadUrl, CopyUploadMarkdown]
 );
 
-const KEY_CONTEXT: &str = "GitHubImageUpload";
+const KEY_CONTEXT: &str = "Gatto";
 const UNSUPPORTED_MESSAGE: &str =
     "Unsupported format. Please paste or drop a PNG, JPEG, GIF, or WebP image.";
 
@@ -77,15 +81,26 @@ pub struct UploaderApp {
     settings: AppSettings,
     settings_status: Option<InlineStatus>,
     settings_open: bool,
-    app_icon: Arc<Image>,
+    quick_paste_repository: Option<String>,
+    menu_bar: MenuBarController,
+    diagnostics: Diagnostics,
+    header_mark: Arc<Image>,
     focus_handle: FocusHandle,
     _repository_subscription: Subscription,
 }
 
 impl UploaderApp {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        window: &mut Window,
+        diagnostics: Diagnostics,
+        menu_bar: MenuBarController,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let (settings, settings_status) = match AppSettings::load() {
-            Ok(settings) => (settings, None),
+            Ok(settings) => {
+                diagnostics.info("Loaded application preferences.");
+                (settings, None)
+            }
             Err(error) => (
                 AppSettings::default(),
                 Some(InlineStatus {
@@ -94,6 +109,9 @@ impl UploaderApp {
                 }),
             ),
         };
+        if settings_status.is_some() {
+            diagnostics.error("Could not load application preferences; using defaults.");
+        }
         let initial_organization = settings.organization.clone().unwrap_or_default();
         let organization_input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -131,9 +149,12 @@ impl UploaderApp {
             settings,
             settings_status,
             settings_open: false,
-            app_icon: Arc::new(Image::from_bytes(
+            quick_paste_repository: None,
+            menu_bar,
+            diagnostics,
+            header_mark: Arc::new(Image::from_bytes(
                 ImageFormat::Png,
-                include_bytes!("../packaging/app-icon.png").to_vec(),
+                include_bytes!("../packaging/rocket-cat-transparent.png").to_vec(),
             )),
             focus_handle: cx.focus_handle(),
             _repository_subscription: subscription,
@@ -143,8 +164,62 @@ impl UploaderApp {
     }
 
     pub fn show_settings(&mut self, cx: &mut Context<Self>) {
+        self.diagnostics.info("Opened application preferences.");
         self.settings_open = true;
         cx.notify();
+    }
+
+    pub fn has_pinned_repository(&self) -> bool {
+        !self.settings.pinned_repositories.is_empty()
+    }
+
+    /// Stages the current clipboard image and chooses the first pinned repository
+    /// (alphabetically) so the user can upload immediately after the window opens.
+    fn quick_paste_from_menu(
+        &mut self,
+        _: &QuickPaste,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(repository_name) = self.settings.pinned_repositories.first().cloned() else {
+            self.warn(
+                "Quick Paste needs a pinned repository. Pin one in App Preferences first.",
+                window,
+                cx,
+            );
+            return;
+        };
+        if self.load_state == LoadState::NeedsSetup {
+            self.warn(
+                "Quick Paste needs an organization in App Preferences first.",
+                window,
+                cx,
+            );
+            return;
+        }
+
+        self.diagnostics.info(format!(
+            "Quick Paste requested with pinned repository {repository_name}."
+        ));
+        self.quick_paste_repository = Some(repository_name.clone());
+        if self.load_state == LoadState::Ready
+            && !self.select_repository(&repository_name, window, cx)
+        {
+            self.quick_paste_repository = None;
+            self.warn(
+                "The pinned repository is not available to the active GitHub account.",
+                window,
+                cx,
+            );
+            return;
+        }
+        if self.load_state == LoadState::Failed {
+            self.diagnostics
+                .info("Quick Paste is retrying the repository list.");
+            self.load_repositories(window, cx);
+        }
+
+        self.on_paste(&PasteImage, window, cx);
     }
 
     pub fn report_menu_bar_error(
@@ -152,9 +227,10 @@ impl UploaderApp {
         error: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
+        self.diagnostics.error(error.into());
         self.status = Some(InlineStatus {
             kind: StatusKind::Error,
-            message: error.into(),
+            message: "The menu bar could not be set up. See Application logs for details.".into(),
         });
         cx.notify();
     }
@@ -169,18 +245,24 @@ impl UploaderApp {
         });
         self.status = None;
         let Some(organization) = self.settings.organization.clone() else {
+            self.diagnostics
+                .info("Repository loading is waiting for an organization setting.");
             self.load_state = LoadState::NeedsSetup;
             cx.notify();
             return;
         };
 
         self.load_state = LoadState::Loading;
+        self.diagnostics.info(format!(
+            "Loading repositories for organization {organization}."
+        ));
         cx.notify();
 
+        let diagnostics = self.diagnostics.clone();
         cx.spawn_in(window, async move |this, window| {
             let requested = organization.clone();
             let result = window
-                .background_spawn(async move { github::load_session(&organization) })
+                .background_spawn(async move { github::load_session(&organization, &diagnostics) })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
                 if this.settings.organization.as_deref() != Some(requested.as_str()) {
@@ -188,6 +270,10 @@ impl UploaderApp {
                 }
                 match result {
                     Ok(session) => {
+                        this.diagnostics.info(format!(
+                            "Loaded {} accessible repositories.",
+                            session.repositories.len()
+                        ));
                         this.repositories = session
                             .repositories
                             .into_iter()
@@ -199,8 +285,26 @@ impl UploaderApp {
                         this.repository_picker.update(cx, |picker, cx| {
                             picker.set_items(SearchableVec::new(names), window, cx);
                         });
+                        if let Some(repository_name) = this.quick_paste_repository.take() {
+                            if this.select_repository(&repository_name, window, cx) {
+                                this.diagnostics.info(format!(
+                                    "Quick Paste selected pinned repository {repository_name}."
+                                ));
+                            } else {
+                                this.status = Some(InlineStatus {
+                                    kind: StatusKind::Error,
+                                    message: "The pinned repository is not available to the active GitHub account."
+                                        .into(),
+                                });
+                                this.diagnostics.error(
+                                    "Quick Paste could not find its pinned repository in the loaded list.",
+                                );
+                            }
+                        }
                     }
                     Err(error) => {
+                        this.diagnostics
+                            .error(format!("Repository loading failed: {error}"));
                         this.load_state = LoadState::Failed;
                         this.status = Some(InlineStatus {
                             kind: StatusKind::Error,
@@ -215,6 +319,7 @@ impl UploaderApp {
     }
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.diagnostics.info("Opened the image file picker.");
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
@@ -302,11 +407,14 @@ impl UploaderApp {
     ) {
         match result {
             Ok(image) => {
+                self.diagnostics.info("Staged an image for upload.");
                 self.status = None;
                 self.staged_image = Some(image);
                 self.upload_result = None;
             }
             Err(error) => {
+                self.diagnostics
+                    .error(format!("Image staging failed: {error}"));
                 self.warn(error.to_string(), window, cx);
                 return;
             }
@@ -325,6 +433,7 @@ impl UploaderApp {
             kind: StatusKind::Warning,
             message: message.clone(),
         });
+        self.diagnostics.warn(message.to_string());
         cx.notify();
 
         let expected = message;
@@ -362,16 +471,22 @@ impl UploaderApp {
         self.status = None;
         let uploaded_image_id = image.preview.id();
         let image_name = image.name.clone();
+        self.diagnostics.info("Started image upload.");
         cx.notify();
 
+        let diagnostics = self.diagnostics.clone();
         cx.spawn_in(window, async move |this, window| {
             let result = window
-                .background_spawn(async move { github::upload(&token, repository.id, &image) })
+                .background_spawn(async move {
+                    github::upload(&token, repository.id, &image, &diagnostics)
+                })
                 .await;
             let _ = this.update_in(window, move |this, _, cx| {
                 this.uploading = false;
                 match result {
                     Ok(url) => {
+                        this.diagnostics
+                            .info("Image upload completed successfully.");
                         if this
                             .staged_image
                             .as_ref()
@@ -385,6 +500,8 @@ impl UploaderApp {
                         });
                     }
                     Err(error) => {
+                        this.diagnostics
+                            .error(format!("Image upload failed: {error}"));
                         this.status = Some(InlineStatus {
                             kind: StatusKind::Error,
                             message: error.to_string().into(),
@@ -402,6 +519,8 @@ impl UploaderApp {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(result.url.clone()));
+        self.diagnostics
+            .info("Copied uploaded image URL to the clipboard.");
         self.status = Some(InlineStatus {
             kind: StatusKind::Success,
             message: "URL copied to the clipboard.".into(),
@@ -419,6 +538,8 @@ impl UploaderApp {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(result.markdown.clone()));
+        self.diagnostics
+            .info("Copied uploaded Markdown image snippet to the clipboard.");
         self.status = Some(InlineStatus {
             kind: StatusKind::Success,
             message: "Markdown image snippet copied to the clipboard.".into(),
@@ -436,6 +557,22 @@ impl UploaderApp {
                 .then_with(|| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()))
         });
         names
+    }
+
+    fn select_repository(
+        &mut self,
+        name: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(repository) = self.repositories.get(name).cloned() else {
+            return false;
+        };
+        self.selected_repository = Some(repository);
+        self.repository_picker.update(cx, |picker, cx| {
+            picker.set_selected_values(&[name.to_owned()], window, cx);
+        });
+        true
     }
 
     fn refresh_repository_picker(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -473,6 +610,7 @@ impl UploaderApp {
         } else {
             self.settings_status = None;
             self.refresh_repository_picker(window, cx);
+            self.menu_bar.set_quick_paste_visible(true);
         }
         cx.notify();
     }
@@ -490,6 +628,8 @@ impl UploaderApp {
         } else {
             self.settings_status = None;
             self.refresh_repository_picker(window, cx);
+            self.menu_bar
+                .set_quick_paste_visible(!self.settings.pinned_repositories.is_empty());
         }
         cx.notify();
     }
@@ -539,6 +679,36 @@ impl UploaderApp {
             }
         }
         cx.notify();
+    }
+
+    fn open_log_window(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.diagnostics.info("Opened the application logs window.");
+        let diagnostics = self.diagnostics.clone();
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::centered(size(px(820.), px(620.)), cx)),
+            window_min_size: Some(size(px(540.), px(420.))),
+            ..Default::default()
+        };
+        let result = gpui_kit::open_window(options, cx, move |window, cx| {
+            window.set_window_title("Gatto Logs");
+            window_limits::set_maximum_content_size(window, 1200., 1000.);
+            cx.new(|cx| LogViewer::new(diagnostics, cx))
+        });
+        if let Err(error) = result {
+            self.diagnostics.error(format!(
+                "Could not open the application logs window: {error}"
+            ));
+            self.status = Some(InlineStatus {
+                kind: StatusKind::Error,
+                message: "Could not open Application logs. See the menu bar and try again.".into(),
+            });
+            cx.notify();
+        }
     }
 
     fn render_repository_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1090,6 +1260,7 @@ impl Render for UploaderApp {
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_paste))
+            .on_action(cx.listener(Self::quick_paste_from_menu))
             .size_full()
             .bg(cx.theme().background);
 
@@ -1114,44 +1285,63 @@ impl Render for UploaderApp {
                         .pb_5()
                         .child(
                             h_flex()
-                                .gap_3()
-                                .items_center()
-                                .justify_between()
+                                .w_full()
+                                .min_w_0()
+                                .items_start()
+                                .gap_4()
                                 .child(
-                                    h_flex()
+                                    img(self.header_mark.clone())
+                                        .size(px(72.))
+                                        .flex_shrink_0()
+                                        .object_fit(ObjectFit::Contain),
+                                )
+                                .child(
+                                    v_flex()
+                                        .flex_1()
+                                        .min_w_0()
                                         .gap_3()
-                                        .items_center()
-                                        .child(
-                                            img(self.app_icon.clone())
-                                                .size_10()
-                                                .object_fit(ObjectFit::Contain),
-                                        )
                                         .child(
                                             v_flex()
                                                 .child(
-                                                    div()
-                                                        .text_lg()
-                                                        .font_semibold()
-                                                        .child("GitHub Image Upload"),
+                                                    div().text_lg().font_semibold().child("Gatto"),
                                                 )
                                                 .child(
                                                     div()
+                                                        .max_w_full()
+                                                        .min_w_0()
                                                         .text_xs()
+                                                        .whitespace_normal()
                                                         .text_color(cx.theme().muted_foreground)
                                                         .child(
                                                             "Upload an image for GitHub Markdown",
                                                         ),
                                                 ),
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .w_full()
+                                                .min_w_0()
+                                                .gap_2()
+                                                .flex_wrap()
+                                                .child(
+                                                    Button::new("open-logs")
+                                                        .outline()
+                                                        .small()
+                                                        .label("Application logs")
+                                                        .on_click(
+                                                            cx.listener(Self::open_log_window),
+                                                        ),
+                                                )
+                                                .child(
+                                                    Button::new("open-settings")
+                                                        .outline()
+                                                        .small()
+                                                        .label("App Preferences")
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.show_settings(cx);
+                                                        })),
+                                                ),
                                         ),
-                                )
-                                .child(
-                                    Button::new("open-settings")
-                                        .outline()
-                                        .small()
-                                        .label("App Preferences")
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.show_settings(cx);
-                                        })),
                                 ),
                         )
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))

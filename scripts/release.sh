@@ -8,14 +8,14 @@
 #
 # Optional environment:
 #   SIGN_IDENTITY   Certificate name; auto-detected when exactly one exists
-#   NOTARY_PROFILE  notarytool keychain profile (default: github-image-upload-notary)
+#   NOTARY_PROFILE  notarytool keychain profile (default: gatto-notary)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 TARGET="aarch64-apple-darwin"
-APP_NAME="GitHub Image Upload.app"
-NOTARY_PROFILE="${NOTARY_PROFILE:-github-image-upload-notary}"
+APP_NAME="Gatto.app"
+NOTARY_PROFILE="${NOTARY_PROFILE:-gatto-notary}"
 
 fail() {
   echo "error: $*" >&2
@@ -55,7 +55,7 @@ mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 plutil -lint packaging/Info.plist
 cp packaging/Info.plist "$bundle/Contents/Info.plist"
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
-cp "target/$TARGET/release/github-image-upload" "$bundle/Contents/MacOS/"
+cp "target/$TARGET/release/gatto" "$bundle/Contents/MacOS/"
 
 # The hardened runtime and a secure timestamp are required for notarization.
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bundle"
@@ -70,7 +70,7 @@ xcrun stapler staple "$bundle"
 xcrun stapler validate "$bundle"
 spctl --assess --type execute --verbose=2 "$bundle"
 
-archive="github-image-upload-$version-$TARGET.zip"
+archive="gatto-$version-$TARGET.zip"
 ditto -c -k --keepParent "$bundle" "$dist/$archive"
 (cd "$dist" && shasum -a 256 "$archive" > SHA256SUMS)
 

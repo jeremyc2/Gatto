@@ -1,4 +1,8 @@
-# GitHub Image Upload
+# Gatto
+
+<p align="center">
+  <img src="packaging/rocket-cat-transparent.png" alt="Gatto, a cat with rocket boosters" width="220">
+</p>
 
 A lightweight macOS menu bar app for uploading images to GitHub's native
 user-attachment storage. Set an organization in App Preferences, paste, drop, or select an
@@ -17,8 +21,8 @@ the formatter and linter components.
 Releases are built, signed with a Developer ID certificate, and notarized on the
 maintainer's Mac (see [Releasing](#releasing)), then published on this
 repository's **Releases** page. Download
-`github-image-upload-<version>-aarch64-apple-darwin.zip` for Apple Silicon Macs and
-unzip it to get `GitHub Image Upload.app`. Move the app to `/Applications` before
+`gatto-<version>-aarch64-apple-darwin.zip` for Apple Silicon Macs and
+unzip it to get `Gatto.app`. Move the app to `/Applications` before
 enabling Start at Login, because the login item records the app's location.
 `SHA256SUMS` contains the archive's SHA-256 checksum. GitHub CLI and
 authentication are still required as described below. Intel Macs currently require
@@ -37,6 +41,8 @@ a local build.
 - Can start automatically at macOS login.
 - Shows the build's app version and Git commit hash in App Preferences.
 - Preserves the staged image when GitHub returns an error so the upload can be retried.
+- Includes an **Application logs** window with a copy button for troubleshooting.
+- Provides a menu bar **Quick Paste** action for clipboard images and pinned repositories.
 
 ## Prerequisites
 
@@ -98,13 +104,19 @@ gh auth status
 Choose `GitHub.com` and HTTPS during login. The authenticated account must be able
 to read the repositories of the organization you plan to configure in App Preferences.
 
+The app does not need Accessibility, Automation, Full Disk Access, or other special macOS
+permissions to run GitHub CLI. It launches `gh` as the signed-in user, and GitHub CLI uses that
+user's existing authentication. A GUI app may not inherit your shell's Homebrew path, so the app
+also checks `/opt/homebrew/bin/gh` (Apple Silicon) and `/usr/local/bin/gh` (Intel). If you use a
+custom install location, launch the app with `GH_PATH=/absolute/path/to/gh` set in its environment.
+
 ## Project setup
 
 Clone the repository, substituting its actual URL for the placeholder:
 
 ```sh
 git clone <repository-url>
-cd github-image-upload
+cd gatto
 cargo fetch
 ```
 
@@ -128,6 +140,12 @@ it again or quit.
 5. Choose **Copy URL** or **Copy Markdown**, then paste it into a GitHub issue,
    pull request, discussion, or Markdown file.
 
+For a faster path, pin a repository in App Preferences, copy an image, then choose
+**Quick Paste** from the menu bar icon. The app opens with that image staged and the first
+pinned repository selected, ready for **Upload image**. When multiple repositories are pinned,
+Quick Paste uses the alphabetically first one. The menu item appears only while at least one
+repository is pinned.
+
 Nothing is copied automatically. The Markdown button copies a value such as
 `![screenshot.png](https://github.com/user-attachments/assets/…)`.
 
@@ -149,6 +167,9 @@ Open App Preferences from the app window or choose **App Preferences** from the 
 - The About section shows the package version and the Git commit hash captured at
   build time. Builds made outside a Git checkout show `unknown` unless
   `GIT_COMMIT_HASH` is supplied to the build.
+- **Application logs** opens a separate, in-memory event log. It records safe lifecycle,
+  image-processing, GitHub CLI, and upload events; use **Copy all** when reporting an issue.
+  Logs are discarded when the app quits and never include tokens or image bytes.
 
 The app lists the organization's repositories through `gh api`, including private
 repositories available to the active GitHub CLI account.
@@ -192,7 +213,7 @@ One-time setup:
    ID Application). Check it with `security find-identity -v -p codesigning`.
 2. Create an app-specific password at account.apple.com, then store it:
    ```sh
-   xcrun notarytool store-credentials github-image-upload-notary \
+   xcrun notarytool store-credentials gatto-notary \
      --apple-id <apple-id> --team-id <team-id>
    ```
    Enter the app-specific password when prompted.
@@ -214,6 +235,8 @@ certificate is installed.
 src/main.rs       Application entry point and GPUI startup
 src/app.rs        Main window, interactions, and upload state
 src/github.rs     GitHub CLI integration and attachment uploads
+src/diagnostics.rs In-memory troubleshooting event log
+src/log_viewer.rs Application logs window
 src/menu_bar.rs   macOS menu bar behavior
 src/model.rs      Shared application models
 src/settings.rs   Repository setting and macOS login startup
@@ -245,7 +268,9 @@ Xcode license or reinstalling the tools may be necessary.
 
 Run `gh auth status`, confirm the correct GitHub account is active, and verify that
 it can access the organization set in App Preferences. For SAML-protected organizations,
-authorize the token for single sign-on through GitHub.
+authorize the token for single sign-on through GitHub. If it works in Terminal but not in the
+app, open **Application logs**: it records the `gh` path the app found and the command's safe
+error detail. Install Homebrew's `gh` in its normal location or set `GH_PATH` for custom installs.
 
 ### Uploads fail
 

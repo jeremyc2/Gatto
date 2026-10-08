@@ -1,4 +1,9 @@
-use std::{io, process::Command, time::Duration};
+use std::{
+    env, io,
+    path::PathBuf,
+    process::{Command, Output},
+    time::Duration,
+};
 
 use reqwest::{StatusCode, blocking::Client};
 use serde::Deserialize;
@@ -6,7 +11,10 @@ use serde_json::Value;
 use thiserror::Error;
 use url::Url;
 
-use crate::model::{Repository, StagedImage};
+use crate::{
+    diagnostics::Diagnostics,
+    model::{Repository, StagedImage},
+};
 
 const ATTACHMENT_ENDPOINT: &str = "https://uploads.github.com/user-attachments/assets";
 const AUTH_HELP: &str =
@@ -30,16 +38,25 @@ pub struct GithubSession {
     pub repositories: Vec<Repository>,
 }
 
-pub fn load_session(organization: &str) -> Result<GithubSession, GithubError> {
-    let token = read_token()?;
-    let repositories = read_repositories(organization)?;
+pub fn load_session(
+    organization: &str,
+    diagnostics: &Diagnostics,
+) -> Result<GithubSession, GithubError> {
+    let token = read_token(diagnostics)?;
+    let repositories = read_repositories(organization, diagnostics)?;
     Ok(GithubSession {
         token,
         repositories,
     })
 }
 
-pub fn upload(token: &str, repository_id: u64, image: &StagedImage) -> Result<String, GithubError> {
+pub fn upload(
+    token: &str,
+    repository_id: u64,
+    image: &StagedImage,
+    diagnostics: &Diagnostics,
+) -> Result<String, GithubError> {
+    diagnostics.info("Sending image data to GitHub's attachment service.");
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(90))
@@ -52,10 +69,7 @@ pub fn upload(token: &str, repository_id: u64, image: &StagedImage) -> Result<St
         .bearer_auth(token)
         .header("Accept", "application/json")
         .header("Content-Type", &image.mime_type)
-        .header(
-            "User-Agent",
-            concat!("gpui-github-image-upload/", env!("CARGO_PKG_VERSION")),
-        )
+        .header("User-Agent", concat!("gatto/", env!("CARGO_PKG_VERSION")))
         .query(&[
             ("name", image.name.as_str()),
             ("content_type", image.mime_type.as_str()),
@@ -70,6 +84,7 @@ pub fn upload(token: &str, repository_id: u64, image: &StagedImage) -> Result<St
         .text()
         .map_err(|error| GithubError::Upload(error.to_string()))?;
     if !status.is_success() {
+        diagnostics.error(format!("GitHub attachment service returned HTTP {status}."));
         return Err(GithubError::Upload(api_error(status, &body)));
     }
 
@@ -91,18 +106,21 @@ pub fn upload(token: &str, repository_id: u64, image: &StagedImage) -> Result<St
         ));
     }
 
+    diagnostics.info("GitHub attachment service accepted the image.");
     Ok(attachment_url)
 }
 
-fn read_token() -> Result<String, GithubError> {
-    let output = Command::new("gh")
-        .args(["auth", "token", "--hostname", "github.com"])
-        .output()
-        .map_err(|error| match error.kind() {
-            io::ErrorKind::NotFound => GithubError::CliUnavailable,
-            _ => GithubError::Unauthenticated,
+fn read_token(diagnostics: &Diagnostics) -> Result<String, GithubError> {
+    diagnostics.info("Checking GitHub CLI authentication.");
+    let output =
+        run_gh(["auth", "token", "--hostname", "github.com"], diagnostics).map_err(|error| {
+            match error.kind() {
+                io::ErrorKind::NotFound => GithubError::CliUnavailable,
+                _ => GithubError::Unauthenticated,
+            }
         })?;
     if !output.status.success() {
+        log_gh_failure("GitHub CLI authentication", &output, diagnostics);
         return Err(GithubError::Unauthenticated);
     }
     let token = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -112,10 +130,14 @@ fn read_token() -> Result<String, GithubError> {
     Ok(token)
 }
 
-fn read_repositories(organization: &str) -> Result<Vec<Repository>, GithubError> {
+fn read_repositories(
+    organization: &str,
+    diagnostics: &Diagnostics,
+) -> Result<Vec<Repository>, GithubError> {
     let route = format!("orgs/{organization}/repos?per_page=100&type=all");
-    let output = Command::new("gh")
-        .args([
+    diagnostics.info("Requesting the organization repository list through GitHub CLI.");
+    let output = run_gh(
+        [
             "api",
             "--paginate",
             "--method",
@@ -123,14 +145,16 @@ fn read_repositories(organization: &str) -> Result<Vec<Repository>, GithubError>
             &route,
             "--jq",
             ".[] | [.id, .name] | @tsv",
-        ])
-        .output()
-        .map_err(|error| match error.kind() {
-            io::ErrorKind::NotFound => GithubError::CliUnavailable,
-            _ => GithubError::RepositoryList(error.to_string()),
-        })?;
+        ],
+        diagnostics,
+    )
+    .map_err(|error| match error.kind() {
+        io::ErrorKind::NotFound => GithubError::CliUnavailable,
+        _ => GithubError::RepositoryList(error.to_string()),
+    })?;
 
     if !output.status.success() {
+        log_gh_failure("GitHub CLI repository request", &output, diagnostics);
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         return Err(GithubError::RepositoryList(if detail.is_empty() {
             "GitHub CLI returned an error".into()
@@ -156,7 +180,69 @@ fn read_repositories(organization: &str) -> Result<Vec<Repository>, GithubError>
             "No accessible repositories were found for {organization}"
         )));
     }
+    diagnostics.info(format!(
+        "GitHub CLI returned {} repositories.",
+        repositories.len()
+    ));
     Ok(repositories)
+}
+
+fn run_gh<const N: usize>(args: [&str; N], diagnostics: &Diagnostics) -> io::Result<Output> {
+    let Some(path) = github_cli_path() else {
+        diagnostics.error(
+            "GitHub CLI was not found. Checked GH_PATH, PATH, /opt/homebrew/bin/gh, and /usr/local/bin/gh.",
+        );
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "GitHub CLI not found",
+        ));
+    };
+    diagnostics.info(format!("Using GitHub CLI at {}.", path.display()));
+    let result = Command::new(&path)
+        .args(args)
+        .env("GH_PROMPT_DISABLED", "1")
+        .output();
+    if let Err(error) = &result {
+        diagnostics.error(format!(
+            "Could not run GitHub CLI at {}: {error}",
+            path.display()
+        ));
+    }
+    result
+}
+
+fn github_cli_path() -> Option<PathBuf> {
+    env::var_os("GH_PATH")
+        .map(PathBuf::from)
+        .filter(|path| path.is_file())
+        .or_else(|| {
+            env::var_os("PATH").and_then(|paths| {
+                env::split_paths(&paths)
+                    .map(|directory| directory.join("gh"))
+                    .find(|path| path.is_file())
+            })
+        })
+        .or_else(|| {
+            ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]
+                .into_iter()
+                .map(PathBuf::from)
+                .find(|path| path.is_file())
+        })
+}
+
+fn log_gh_failure(operation: &str, output: &Output, diagnostics: &Diagnostics) {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let detail = stderr
+        .lines()
+        .next()
+        .unwrap_or("No diagnostic message was returned.");
+    diagnostics.error(format!(
+        "{operation} exited with {}: {detail}",
+        output
+            .status
+            .code()
+            .map_or_else(|| "a signal".to_owned(), |code| code.to_string())
+    ));
 }
 
 fn api_error(status: StatusCode, body: &str) -> String {

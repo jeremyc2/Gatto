@@ -73,10 +73,10 @@ working tree.
 - The app does not copy an upload result automatically. A clipboard write occurs
   only after the user chooses **Copy URL** or **Copy Markdown**.
 - Pinned repository names are stored in
-  `~/Library/Application Support/GitHub Image Upload/settings.json`. Tokens, image
+  `~/Library/Application Support/Gatto/settings.json`. Tokens, image
   bytes, and upload URLs are not persisted there.
 - Start at Login creates only the current user's
-  `~/Library/LaunchAgents/com.jeremy-chandler.github-image-upload.plist`. The plist
+  `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. The plist
   contains the app executable path and no credentials.
 - Moving or replacing the executable can make a previously written login item
   stale. Toggle Start at Login off and on after moving the app.

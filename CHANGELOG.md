@@ -7,6 +7,24 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
+### Added
+
+- An in-memory Application logs window with safe diagnostic events and copy support.
+- GitHub CLI path diagnostics, including standard Homebrew locations and the optional
+  `GH_PATH` override for custom installations.
+- A Quick Paste menu bar action for staging a clipboard image against a pinned repository.
+- Minimum and maximum window sizes for the main app and Application logs windows.
+- A transparent rocket-cat illustration for the app header and project README.
+
+### Changed
+
+- Rebranded the app, package, bundle, release artifact, settings directory, and login item as
+  Gatto.
+- Reworked the Dock icon as a rounded blue-to-indigo tile with a dimensional rocket-cat mark.
+- Reworked the main header into a responsive hero layout with an enlarged illustration.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
@@ -17,7 +35,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Dark-only theme with an accent color palette.
 - App icon built with Icon Composer, shared by the Dock, menu bar, and app window.
 - Manually triggered release workflow publishing an ad-hoc signed Apple Silicon
-  `GitHub Image Upload.app` bundle archive and SHA-256 checksum to a
+  `Gatto.app` bundle archive and SHA-256 checksum to a
   commit-specific GitHub prerelease from `main`.
 - Contributor, security, community, and project setup documentation.
 - GitHub issue and pull request templates.

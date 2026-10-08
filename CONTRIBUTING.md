@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve GitHub Image Upload. Contributions of code,
+Thank you for helping improve Gatto. Contributions of code,
 documentation, bug reports, and focused feature proposals are welcome.
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

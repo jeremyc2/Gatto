@@ -2045,6 +2045,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gatto"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gpui-kit",
+ "image",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "raw-window-handle",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tray-icon",
+ "url",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2130,25 +2150,6 @@ name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
-
-[[package]]
-name = "github-image-upload"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "gpui-kit",
- "image",
- "objc2 0.6.5",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tray-icon",
- "url",
-]
 
 [[package]]
 name = "gl_generator"

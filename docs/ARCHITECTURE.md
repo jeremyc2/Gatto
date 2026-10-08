@@ -1,6 +1,6 @@
 # Architecture
 
-GitHub Image Upload is a single-process macOS menu bar application. GPUI owns the
+Gatto is a single-process macOS menu bar application. GPUI owns the
 application and window lifecycle, while small modules isolate GitHub access,
 platform integration, persistent settings, and shared state.
 
@@ -12,6 +12,8 @@ platform integration, persistent settings, and shared state.
   status messages.
 - `src/github.rs` calls GitHub CLI for authentication and repository lookup,
   then sends image bytes to GitHub's user-attachment service.
+- `src/diagnostics.rs` owns the bounded, in-memory troubleshooting event log.
+- `src/log_viewer.rs` renders that event log in its own application window.
 - `src/menu_bar.rs` owns the macOS status item and open/settings/quit actions.
 - `src/model.rs` contains shared repository, image, and upload-state models.
 - `src/settings.rs` persists the configured repository and manages the per-user macOS
@@ -54,12 +56,12 @@ without selecting it again.
 ## App Preferences and local state
 
 The configured repository (`owner/name`) is saved as JSON under the current user's
-`Library/Application Support/GitHub Image Upload` directory. The GitHub token and
+`Library/Application Support/Gatto` directory. The GitHub token and
 image bytes are never written there. Until a repository is set, the main screen
 only points the user to App Preferences.
 
 Start at Login is represented by the exact file
-`~/Library/LaunchAgents/com.jeremy-chandler.github-image-upload.plist`. Enabling the
+`~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the
 setting writes a LaunchAgent containing the current executable's canonical path;
 disabling it removes that one file. The agent runs in the user's Aqua session at
 the next login. No privileged helper or system-wide service is installed.
@@ -86,5 +88,6 @@ the minimum supported Rust version in `Cargo.toml`.
 - Persistent settings contain the repository name only; Start at Login stores the
   executable path in a per-user LaunchAgent.
 - Logs and errors should never include tokens or raw image bytes.
+- Diagnostic events are retained only in memory (up to 500 entries) and are lost on quit.
 - GitHub's attachment endpoint is undocumented, so failures must be handled as an
   expected condition and surfaced without losing user state.

@@ -3,8 +3,9 @@ use std::{collections::BTreeSet, env, fs, path::PathBuf};
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 
-const APPLICATION_SUPPORT_DIRECTORY: &str = "GitHub Image Upload";
-const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.github-image-upload.plist";
+const APPLICATION_SUPPORT_DIRECTORY: &str = "Gatto";
+const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.gatto.plist";
+const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
@@ -31,20 +32,7 @@ impl AppSettings {
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = settings_path()?;
-        let directory = path
-            .parent()
-            .context("The settings file has no parent directory")?;
-        fs::create_dir_all(directory)
-            .with_context(|| format!("Could not create {}", directory.display()))?;
-
-        let temporary_path = path.with_extension("json.tmp");
-        let contents = serde_json::to_string_pretty(self)?;
-        fs::write(&temporary_path, format!("{contents}\n"))
-            .with_context(|| format!("Could not write {}", temporary_path.display()))?;
-        fs::rename(&temporary_path, &path)
-            .with_context(|| format!("Could not replace {}", path.display()))?;
-        Ok(())
+        write_settings(self, &settings_path()?)
     }
 
     pub fn set_start_at_login(&mut self, enabled: bool) -> Result<()> {
@@ -69,6 +57,22 @@ fn launch_agent_path() -> Result<PathBuf> {
     Ok(home_directory()?
         .join("Library/LaunchAgents")
         .join(LAUNCH_AGENT_NAME))
+}
+
+fn write_settings(settings: &AppSettings, path: &PathBuf) -> Result<()> {
+    let directory = path
+        .parent()
+        .context("The settings file has no parent directory")?;
+    fs::create_dir_all(directory)
+        .with_context(|| format!("Could not create {}", directory.display()))?;
+
+    let temporary_path = path.with_extension("json.tmp");
+    let contents = serde_json::to_string_pretty(settings)?;
+    fs::write(&temporary_path, format!("{contents}\n"))
+        .with_context(|| format!("Could not write {}", temporary_path.display()))?;
+    fs::rename(&temporary_path, path)
+        .with_context(|| format!("Could not replace {}", path.display()))?;
+    Ok(())
 }
 
 fn home_directory() -> Result<PathBuf> {
@@ -100,7 +104,7 @@ fn install_launch_agent() -> Result<()> {
 <plist version=\"1.0\">\n\
 <dict>\n\
   <key>Label</key>\n\
-  <string>com.jeremy-chandler.github-image-upload</string>\n\
+  <string>{LAUNCH_AGENT_LABEL}</string>\n\
   <key>ProgramArguments</key>\n\
   <array>\n\
     <string>{}</string>\n\

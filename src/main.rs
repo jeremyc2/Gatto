@@ -1,15 +1,19 @@
 mod app;
+mod diagnostics;
 mod github;
+mod log_viewer;
 mod menu_bar;
 mod model;
 mod settings;
+mod window_limits;
 
 use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::{AppContext as _, Focusable as _, Hsla, WindowBounds, WindowOptions, px, rgb, size};
 
 use crate::{
     app::UploaderApp,
-    menu_bar::{MenuAction, MenuBar},
+    diagnostics::Diagnostics,
+    menu_bar::{MenuAction, MenuBar, MenuBarController},
 };
 
 fn main() {
@@ -20,28 +24,36 @@ fn main() {
         apply_dark_theme(cx);
         app::init_keybindings(cx);
         set_dock_visible(true);
+        let diagnostics = Diagnostics::new();
+        diagnostics.info("Application started.");
+        let menu_bar_controller = MenuBarController::default();
 
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(620.), px(780.)), cx)),
+            window_min_size: Some(size(px(520.), px(600.))),
             ..Default::default()
         };
 
         let (window_handle, view) = gpui_kit::open_window(window_options, cx, |window, cx| {
-            window.set_window_title("GitHub Image Upload");
+            window.set_window_title("Gatto");
+            window_limits::set_maximum_content_size(window, 920., 1040.);
             window.on_window_should_close(cx, |_, cx| {
                 cx.hide();
                 set_dock_visible(false);
                 false
             });
 
-            let view = cx.new(|cx| UploaderApp::new(window, cx));
+            let diagnostics = diagnostics.clone();
+            let menu_bar_controller = menu_bar_controller.clone();
+            let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar_controller, cx));
             let focus = view.read(cx).focus_handle(cx);
             window.focus(&focus, cx);
             view
         })
-        .expect("Could not open the GitHub Image Upload window");
+        .expect("Could not open the Gatto window");
 
-        let (menu_bar, menu_events) = match MenuBar::install() {
+        let quick_paste_visible = view.read(cx).has_pinned_repository();
+        let (menu_bar, menu_events) = match MenuBar::install(quick_paste_visible) {
             Ok(menu_bar) => menu_bar,
             Err(error) => {
                 view.update(cx, |this, cx| {
@@ -51,12 +63,12 @@ fn main() {
                 return;
             }
         };
+        menu_bar_controller.attach(menu_bar);
 
         cx.spawn(async move |cx| {
             // Keep the native status item alive for the entire application lifetime.
-            let menu_bar = menu_bar;
             while let Ok(event) = menu_events.recv().await {
-                let Some(action) = menu_bar.action_for(&event) else {
+                let Some(action) = menu_bar_controller.action_for(&event) else {
                     continue;
                 };
 
@@ -67,6 +79,16 @@ fn main() {
                             cx.activate(true);
                             let _ = window_handle.update(cx, |_, window, _| {
                                 window.activate_window();
+                            });
+                        });
+                    }
+                    MenuAction::QuickPaste => {
+                        cx.update(|cx| {
+                            set_dock_visible(true);
+                            cx.activate(true);
+                            let _ = window_handle.update(cx, |_, window, cx| {
+                                window.activate_window();
+                                window.dispatch_action(Box::new(app::QuickPaste), cx);
                             });
                         });
                     }
