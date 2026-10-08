@@ -7,8 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-07
+
 ### Added
 
+- Required GitHub organization setting; the app asks for it on first launch and
+  loads that organization's repositories.
+- Dock icon while the window is open, alongside the menu bar item.
+- Dark-only theme with an accent color palette.
+- App icon built with Icon Composer, shared by the Dock, menu bar, and app window.
 - Manually triggered release workflow publishing an ad-hoc signed Apple Silicon
   `GitHub Image Upload.app` bundle archive and SHA-256 checksum to a
   commit-specific GitHub prerelease from `main`.
@@ -18,14 +25,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Automated dependency update configuration.
 - A committed Cargo lockfile, dependency source/license policy, and manually
   triggered RustSec/OSV supply-chain scanning.
-- Settings page with a required, persistent upload repository and Start at Login.
-- App version and build commit hash in Settings.
-- Menu bar action for opening Settings.
+- App Preferences page with a persistent organization, pinned repositories, and Start at Login.
+- App version and build commit hash in App Preferences.
+- Menu bar action for opening App Preferences.
 - Explicit copy buttons for the uploaded URL and Markdown image snippet.
 - Command+Shift+C and Command+Shift+M shortcuts for copying the uploaded URL and
   Markdown image snippet, with shortcut hints in the copy button tooltips.
 
 ### Changed
+
+- Renamed Settings to App Preferences.
+- The main screen scrolls when the window is small, and long text wraps.
+- Status messages appear only for warnings, errors, and copy confirmations.
 
 - Updated GPUI Kit from 0.7.0 to 0.7.1, including its compatible GPUI 0.3.8
   snapshot.

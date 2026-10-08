@@ -17,7 +17,7 @@ platform integration, persistent settings, and shared state.
 - `src/settings.rs` persists the configured repository and manages the per-user macOS
   LaunchAgent used by Start at Login.
 - `build.rs` records the current Git commit hash in the compiled application.
-- `packaging/Info.plist` configures a packaged application as a menu bar accessory.
+- `packaging/Info.plist` and `packaging/AppIcon.icns` provide the packaged application's metadata and icon.
 
 ## Data flow
 
@@ -51,12 +51,12 @@ User explicitly copies the preferred value
 The staged image remains available after an upload error so the user can retry
 without selecting it again.
 
-## Settings and local state
+## App Preferences and local state
 
 The configured repository (`owner/name`) is saved as JSON under the current user's
 `Library/Application Support/GitHub Image Upload` directory. The GitHub token and
 image bytes are never written there. Until a repository is set, the main screen
-only points the user to Settings.
+only points the user to App Preferences.
 
 Start at Login is represented by the exact file
 `~/Library/LaunchAgents/com.jeremy-chandler.github-image-upload.plist`. Enabling the

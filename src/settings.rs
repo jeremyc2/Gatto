@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,8 @@ const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.github-image-upload.plist";
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AppSettings {
-    pub repository: Option<String>,
+    pub organization: Option<String>,
+    pub pinned_repositories: BTreeSet<String>,
     #[serde(skip)]
     pub start_at_login: bool,
 }

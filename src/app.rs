@@ -1,25 +1,28 @@
-use std::{path::PathBuf, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, StyledExt as _,
     button::{Button, ButtonVariants as _},
     checkbox::Checkbox,
+    combobox::{Combobox, ComboboxEvent, ComboboxState},
     h_flex,
     input::{Input, InputState},
     kbd::Kbd,
+    searchable_list::SearchableVec,
     spinner::Spinner,
     v_flex,
 };
 use gpui_kit::{
     App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity, ExternalPaths,
-    FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyBinding, Keystroke, ObjectFit,
-    ParentElement as _, PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, StyledImage as _, Window, actions, div, img, prelude::FluentBuilder as _, px,
+    FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _, IntoElement, KeyBinding,
+    Keystroke, ObjectFit, ParentElement as _, PathPromptOptions, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Window, actions,
+    div, img, prelude::FluentBuilder as _, px,
 };
 
 use crate::{
     github,
-    model::{Repository, StagedImage, parse_repository},
+    model::{Repository, StagedImage, parse_organization},
     settings::AppSettings,
 };
 
@@ -32,6 +35,8 @@ const KEY_CONTEXT: &str = "GitHubImageUpload";
 const UNSUPPORTED_MESSAGE: &str =
     "Unsupported format. Please paste or drop a PNG, JPEG, GIF, or WebP image.";
 
+type RepositoryPicker = ComboboxState<SearchableVec<String>>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LoadState {
     NeedsSetup,
@@ -42,7 +47,6 @@ enum LoadState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StatusKind {
-    Info,
     Success,
     Warning,
     Error,
@@ -60,18 +64,22 @@ struct UploadResult {
 }
 
 pub struct UploaderApp {
-    repository_input: Entity<InputState>,
-    repository: Option<Repository>,
+    organization_input: Entity<InputState>,
+    repository_picker: Entity<RepositoryPicker>,
+    repositories: HashMap<String, Repository>,
+    selected_repository: Option<Repository>,
     token: Option<String>,
     load_state: LoadState,
     staged_image: Option<StagedImage>,
     upload_result: Option<UploadResult>,
     uploading: bool,
-    status: InlineStatus,
+    status: Option<InlineStatus>,
     settings: AppSettings,
     settings_status: Option<InlineStatus>,
     settings_open: bool,
+    app_icon: Arc<Image>,
     focus_handle: FocusHandle,
+    _repository_subscription: Subscription,
 }
 
 impl UploaderApp {
@@ -82,35 +90,55 @@ impl UploaderApp {
                 AppSettings::default(),
                 Some(InlineStatus {
                     kind: StatusKind::Error,
-                    message: format!("Settings could not be loaded: {error}").into(),
+                    message: format!("App preferences could not be loaded: {error}").into(),
                 }),
             ),
         };
-        let initial_repository = settings.repository.clone().unwrap_or_default();
-        let repository_input = cx.new(|cx| {
+        let initial_organization = settings.organization.clone().unwrap_or_default();
+        let organization_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("owner/name")
-                .default_value(initial_repository)
+                .placeholder("organization")
+                .default_value(initial_organization)
         });
+        let repository_picker = cx.new(|cx| {
+            ComboboxState::new(SearchableVec::new(Vec::<String>::new()), vec![], window, cx)
+                .searchable(true)
+        });
+        let subscription = cx.subscribe(
+            &repository_picker,
+            |this: &mut Self, _, event: &ComboboxEvent<SearchableVec<String>>, cx| {
+                if let ComboboxEvent::Change(values) = event {
+                    this.selected_repository = values
+                        .first()
+                        .and_then(|name| this.repositories.get(name))
+                        .cloned();
+                    cx.notify();
+                }
+            },
+        );
 
         let mut this = Self {
-            repository_input,
-            repository: None,
+            organization_input,
+            repository_picker,
+            repositories: HashMap::new(),
+            selected_repository: None,
             token: None,
             load_state: LoadState::NeedsSetup,
             staged_image: None,
             upload_result: None,
             uploading: false,
-            status: InlineStatus {
-                kind: StatusKind::Info,
-                message: "".into(),
-            },
+            status: None,
             settings,
             settings_status,
             settings_open: false,
+            app_icon: Arc::new(Image::from_bytes(
+                ImageFormat::Png,
+                include_bytes!("../packaging/app-icon.png").to_vec(),
+            )),
             focus_handle: cx.focus_handle(),
+            _repository_subscription: subscription,
         };
-        this.load_repository(window, cx);
+        this.load_repositories(window, cx);
         this
     }
 
@@ -124,58 +152,60 @@ impl UploaderApp {
         error: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
-        self.status = InlineStatus {
+        self.status = Some(InlineStatus {
             kind: StatusKind::Error,
             message: error.into(),
-        };
+        });
         cx.notify();
     }
 
-    fn load_repository(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn load_repositories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.token = None;
-        self.repository = None;
-        let Some(full_name) = self.settings.repository.clone() else {
+        self.selected_repository = None;
+        self.repositories.clear();
+        self.repository_picker.update(cx, |picker, cx| {
+            picker.set_selected_indices([], window, cx);
+            picker.set_items(SearchableVec::new(Vec::<String>::new()), window, cx);
+        });
+        self.status = None;
+        let Some(organization) = self.settings.organization.clone() else {
             self.load_state = LoadState::NeedsSetup;
-            self.status = InlineStatus {
-                kind: StatusKind::Info,
-                message: "Set a repository in Settings to get started.".into(),
-            };
             cx.notify();
             return;
         };
 
         self.load_state = LoadState::Loading;
-        self.status = InlineStatus {
-            kind: StatusKind::Info,
-            message: format!("Connecting to {full_name}…").into(),
-        };
         cx.notify();
 
         cx.spawn_in(window, async move |this, window| {
-            let requested = full_name.clone();
+            let requested = organization.clone();
             let result = window
-                .background_spawn(async move { github::load_session(&full_name) })
+                .background_spawn(async move { github::load_session(&organization) })
                 .await;
-            let _ = this.update_in(window, move |this, _, cx| {
-                if this.settings.repository.as_deref() != Some(requested.as_str()) {
+            let _ = this.update_in(window, move |this, window, cx| {
+                if this.settings.organization.as_deref() != Some(requested.as_str()) {
                     return;
                 }
                 match result {
                     Ok(session) => {
-                        this.repository = Some(session.repository);
+                        this.repositories = session
+                            .repositories
+                            .into_iter()
+                            .map(|repository| (repository.name.clone(), repository))
+                            .collect();
+                        let names = this.sorted_repository_names();
                         this.token = Some(session.token);
                         this.load_state = LoadState::Ready;
-                        this.status = InlineStatus {
-                            kind: StatusKind::Info,
-                            message: "Choose, paste, or drop an image to continue.".into(),
-                        };
+                        this.repository_picker.update(cx, |picker, cx| {
+                            picker.set_items(SearchableVec::new(names), window, cx);
+                        });
                     }
                     Err(error) => {
                         this.load_state = LoadState::Failed;
-                        this.status = InlineStatus {
+                        this.status = Some(InlineStatus {
                             kind: StatusKind::Error,
                             message: error.to_string().into(),
-                        };
+                        });
                     }
                 }
                 cx.notify();
@@ -272,10 +302,7 @@ impl UploaderApp {
     ) {
         match result {
             Ok(image) => {
-                self.status = InlineStatus {
-                    kind: StatusKind::Info,
-                    message: format!("{} is ready to upload.", image.name).into(),
-                };
+                self.status = None;
                 self.staged_image = Some(image);
                 self.upload_result = None;
             }
@@ -293,24 +320,24 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.status = InlineStatus {
+        let message = message.into();
+        self.status = Some(InlineStatus {
             kind: StatusKind::Warning,
-            message: message.into(),
-        };
+            message: message.clone(),
+        });
         cx.notify();
 
-        let expected = self.status.message.clone();
+        let expected = message;
         cx.spawn_in(window, async move |this, window| {
             window
                 .background_executor()
                 .timer(Duration::from_secs(4))
                 .await;
             let _ = this.update_in(window, move |this, _, cx| {
-                if this.status.kind == StatusKind::Warning && this.status.message == expected {
-                    this.status = InlineStatus {
-                        kind: StatusKind::Info,
-                        message: "Choose, paste, or drop an image to continue.".into(),
-                    };
+                if this.status.as_ref().is_some_and(|status| {
+                    status.kind == StatusKind::Warning && status.message == expected
+                }) {
+                    this.status = None;
                     cx.notify();
                 }
             });
@@ -324,7 +351,7 @@ impl UploaderApp {
         }
         let (Some(token), Some(repository), Some(image)) = (
             self.token.clone(),
-            self.repository.clone(),
+            self.selected_repository.clone(),
             self.staged_image.clone(),
         ) else {
             return;
@@ -332,10 +359,7 @@ impl UploaderApp {
 
         self.uploading = true;
         self.upload_result = None;
-        self.status = InlineStatus {
-            kind: StatusKind::Info,
-            message: format!("Uploading {} to {}…", image.name, repository.full_name).into(),
-        };
+        self.status = None;
         let uploaded_image_id = image.preview.id();
         let image_name = image.name.clone();
         cx.notify();
@@ -359,16 +383,12 @@ impl UploaderApp {
                             markdown: markdown_image(&image_name, &url),
                             url,
                         });
-                        this.status = InlineStatus {
-                            kind: StatusKind::Success,
-                            message: "Upload complete. Copy the URL or Markdown below.".into(),
-                        };
                     }
                     Err(error) => {
-                        this.status = InlineStatus {
+                        this.status = Some(InlineStatus {
                             kind: StatusKind::Error,
                             message: error.to_string().into(),
-                        };
+                        });
                     }
                 }
                 cx.notify();
@@ -382,10 +402,10 @@ impl UploaderApp {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(result.url.clone()));
-        self.status = InlineStatus {
+        self.status = Some(InlineStatus {
             kind: StatusKind::Success,
             message: "URL copied to the clipboard.".into(),
-        };
+        });
         cx.notify();
     }
 
@@ -399,22 +419,90 @@ impl UploaderApp {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(result.markdown.clone()));
-        self.status = InlineStatus {
+        self.status = Some(InlineStatus {
             kind: StatusKind::Success,
             message: "Markdown image snippet copied to the clipboard.".into(),
-        };
+        });
         cx.notify();
     }
 
-    fn save_repository(
+    fn sorted_repository_names(&self) -> Vec<String> {
+        let mut names = self.repositories.keys().cloned().collect::<Vec<_>>();
+        names.sort_by(|left, right| {
+            let left_pinned = self.settings.pinned_repositories.contains(left);
+            let right_pinned = self.settings.pinned_repositories.contains(right);
+            right_pinned
+                .cmp(&left_pinned)
+                .then_with(|| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()))
+        });
+        names
+    }
+
+    fn refresh_repository_picker(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let names = self.sorted_repository_names();
+        let selected_values = self
+            .selected_repository
+            .as_ref()
+            .map(|selected| vec![selected.name.clone()])
+            .unwrap_or_default();
+        self.repository_picker.update(cx, |picker, cx| {
+            picker.set_items(SearchableVec::new(names), window, cx);
+            picker.set_selected_values(&selected_values, window, cx);
+        });
+    }
+
+    fn pin_selected_repository(
         &mut self,
         _: &gpui_kit::ClickEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let value = self.repository_input.read(cx).value();
-        let repository = match parse_repository(&value) {
-            Ok(repository) => repository,
+        let Some(repository) = self.selected_repository.as_ref() else {
+            return;
+        };
+        let name = repository.name.clone();
+        if !self.settings.pinned_repositories.insert(name.clone()) {
+            return;
+        }
+        if let Err(error) = self.settings.save() {
+            self.settings.pinned_repositories.remove(&name);
+            self.settings_status = Some(InlineStatus {
+                kind: StatusKind::Error,
+                message: format!("Could not save preferences: {error}").into(),
+            });
+        } else {
+            self.settings_status = None;
+            self.refresh_repository_picker(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn unpin_repository(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings.pinned_repositories.remove(name) {
+            return;
+        }
+        if let Err(error) = self.settings.save() {
+            self.settings.pinned_repositories.insert(name.to_owned());
+            self.settings_status = Some(InlineStatus {
+                kind: StatusKind::Error,
+                message: format!("Could not save preferences: {error}").into(),
+            });
+        } else {
+            self.settings_status = None;
+            self.refresh_repository_picker(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn save_organization(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = self.organization_input.read(cx).value();
+        let organization = match parse_organization(&value) {
+            Ok(organization) => organization,
             Err(error) => {
                 self.settings_status = Some(InlineStatus {
                     kind: StatusKind::Error,
@@ -425,36 +513,24 @@ impl UploaderApp {
             }
         };
 
-        let previous = self.settings.repository.replace(repository.clone());
+        let previous = self.settings.organization.replace(organization.clone());
         if let Err(error) = self.settings.save() {
-            self.settings.repository = previous;
+            self.settings.organization = previous;
             self.settings_status = Some(InlineStatus {
                 kind: StatusKind::Error,
-                message: format!("Could not save settings: {error}").into(),
+                message: format!("Could not save preferences: {error}").into(),
             });
             cx.notify();
             return;
         }
 
-        self.settings_status = Some(InlineStatus {
-            kind: StatusKind::Success,
-            message: format!("Repository set to {repository}.").into(),
-        });
-        self.load_repository(window, cx);
+        self.settings_status = None;
+        self.load_repositories(window, cx);
     }
 
     fn set_start_at_login(&mut self, enabled: bool, cx: &mut Context<Self>) {
         match self.settings.set_start_at_login(enabled) {
-            Ok(()) => {
-                self.settings_status = Some(InlineStatus {
-                    kind: StatusKind::Success,
-                    message: if enabled {
-                        "The app will start when you log in.".into()
-                    } else {
-                        "Start at Login is off.".into()
-                    },
-                });
-            }
+            Ok(()) => self.settings_status = None,
             Err(error) => {
                 self.settings_status = Some(InlineStatus {
                     kind: StatusKind::Error,
@@ -465,46 +541,51 @@ impl UploaderApp {
         cx.notify();
     }
 
-    fn render_repository_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let name = self.settings.repository.clone().unwrap_or_default();
-        h_flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
+    fn render_repository_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let disabled = self.load_state != LoadState::Ready;
+        let organization = self.settings.organization.clone().unwrap_or_default();
+        v_flex()
+            .gap_2()
             .child(
-                v_flex()
-                    .gap_1()
+                h_flex()
+                    .items_center()
+                    .justify_between()
                     .child(div().text_sm().font_semibold().child("Repository"))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(name),
-                    ),
+                    .when(self.load_state == LoadState::Loading, |row| {
+                        row.child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(Spinner::new().xsmall())
+                                .child("Loading repositories"),
+                        )
+                    })
+                    .when(self.load_state == LoadState::Failed, |row| {
+                        row.child(
+                            Button::new("retry-repositories")
+                                .small()
+                                .outline()
+                                .icon(IconName::RefreshCw)
+                                .label("Retry")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.load_repositories(window, cx);
+                                })),
+                        )
+                    }),
             )
-            .when(self.load_state == LoadState::Loading, |row| {
-                row.child(
-                    h_flex()
-                        .gap_2()
-                        .items_center()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(Spinner::new().xsmall())
-                        .child("Connecting"),
-                )
-            })
-            .when(self.load_state == LoadState::Failed, |row| {
-                row.child(
-                    Button::new("retry-repository")
-                        .small()
-                        .outline()
-                        .icon(IconName::RefreshCw)
-                        .label("Retry")
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.load_repository(window, cx);
-                        })),
-                )
-            })
+            .child(
+                Combobox::new(&self.repository_picker)
+                    .placeholder(if disabled {
+                        "Repositories unavailable".to_owned()
+                    } else {
+                        format!("Search {organization} repositories…")
+                    })
+                    .search_placeholder("Type to filter repositories…")
+                    .disabled(disabled)
+                    .w_full(),
+            )
     }
 
     fn render_setup_prompt(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -515,22 +596,28 @@ impl UploaderApp {
             .rounded_xl()
             .border_2()
             .border_dashed()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().muted.opacity(0.22))
+            .border_color(cx.theme().primary.opacity(0.4))
+            .bg(cx.theme().primary.opacity(0.06))
             .p_6()
-            .child(Icon::new(IconName::Settings).size(px(30.)))
-            .child(div().text_sm().font_semibold().child("Choose a repository"))
+            .child(
+                Icon::new(IconName::Settings)
+                    .size(px(30.))
+                    .text_color(cx.theme().primary),
+            )
+            .child(div().text_sm().font_semibold().child("Set an organization"))
             .child(
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
-                    .child("Images are uploaded through a repository you choose in Settings."),
+                    .child(
+                        "Enter a GitHub organization in App Preferences to load its repositories.",
+                    ),
             )
             .child(
                 Button::new("setup-open-settings")
                     .primary()
                     .small()
-                    .label("Open Settings")
+                    .label("Open App Preferences")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_settings(cx);
                     })),
@@ -543,24 +630,30 @@ impl UploaderApp {
         div()
             .id("image-drop-zone")
             .w_full()
-            .h(px(150.))
+            .min_h(px(150.))
             .rounded_xl()
             .border_2()
             .border_dashed()
-            .border_color(if self.status.kind == StatusKind::Warning {
-                cx.theme().warning
-            } else if has_image {
-                cx.theme().primary.opacity(0.7)
-            } else {
-                cx.theme().border
-            })
+            .border_color(
+                if self
+                    .status
+                    .as_ref()
+                    .is_some_and(|s| s.kind == StatusKind::Warning)
+                {
+                    cx.theme().warning
+                } else if has_image {
+                    cx.theme().primary.opacity(0.8)
+                } else {
+                    cx.theme().primary.opacity(0.4)
+                },
+            )
             .bg(if has_image {
-                cx.theme().primary.opacity(0.055)
+                cx.theme().primary.opacity(0.1)
             } else {
-                cx.theme().muted.opacity(0.22)
+                cx.theme().primary.opacity(0.05)
             })
             .cursor_pointer()
-            .hover(|style| style.bg(cx.theme().muted.opacity(0.42)))
+            .hover(|style| style.bg(cx.theme().primary.opacity(0.14)))
             .drag_over::<ExternalPaths>(|style, _, _, cx| {
                 style
                     .border_color(cx.theme().primary)
@@ -578,8 +671,11 @@ impl UploaderApp {
             .flex()
             .items_center()
             .justify_center()
+            .overflow_hidden()
             .child(
                 v_flex()
+                    .w_full()
+                    .px_4()
                     .items_center()
                     .gap_3()
                     .child(
@@ -597,9 +693,12 @@ impl UploaderApp {
                     )
                     .child(
                         h_flex()
+                            .flex_wrap()
+                            .justify_center()
                             .gap_1()
                             .items_center()
                             .text_sm()
+                            .text_center()
                             .child("Press")
                             .child(Kbd::new(Keystroke::parse("cmd-v").expect("valid shortcut")))
                             .child("or drop an image here"),
@@ -607,6 +706,7 @@ impl UploaderApp {
                     .child(
                         div()
                             .text_xs()
+                            .text_center()
                             .text_color(cx.theme().muted_foreground)
                             .child("or click to select a PNG, JPEG, GIF, or WebP file"),
                     ),
@@ -654,13 +754,11 @@ impl UploaderApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let color = match status.kind {
-            StatusKind::Info => cx.theme().muted_foreground,
             StatusKind::Success => cx.theme().success,
             StatusKind::Warning => cx.theme().warning,
             StatusKind::Error => cx.theme().danger,
         };
         let icon = match status.kind {
-            StatusKind::Info => IconName::Info,
             StatusKind::Success => IconName::CircleCheck,
             StatusKind::Warning | StatusKind::Error => IconName::TriangleAlert,
         };
@@ -678,11 +776,7 @@ impl UploaderApp {
             .text_xs()
             .text_color(color)
             .child(Icon::new(icon).small())
-            .child(div().flex_1().child(status.message.clone()))
-    }
-
-    fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        self.render_inline_status(&self.status, cx)
+            .child(div().flex_1().min_w_0().child(status.message.clone()))
     }
 
     fn render_upload_result(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -788,6 +882,25 @@ impl UploaderApp {
             .id("settings-page")
             .size_full()
             .overflow_y_scroll()
+            .child(self.render_settings_content(cx))
+    }
+
+    fn render_settings_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let selected_is_pinned = self
+            .selected_repository
+            .as_ref()
+            .is_some_and(|repository| self.settings.pinned_repositories.contains(&repository.name));
+        let can_pin = self.selected_repository.is_some() && !selected_is_pinned;
+        let pinned_repositories = self
+            .settings
+            .pinned_repositories
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        v_flex()
+            .flex_none()
+            .p_6()
             .gap_5()
             .child(
                 h_flex()
@@ -796,12 +909,12 @@ impl UploaderApp {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(div().font_semibold().text_lg().child("Settings"))
+                            .child(div().font_semibold().text_lg().child("App Preferences"))
                             .child(
                                 div()
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child("Settings are saved automatically."),
+                                    .child("Preferences are saved automatically."),
                             ),
                     )
                     .child(
@@ -822,22 +935,84 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("Repository"))
+                    .child(div().font_semibold().text_sm().child("Organization"))
                     .child(
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Images are uploaded through this repository, as owner/name."),
+                            .child("Required. Repositories are loaded from this GitHub organization."),
                     )
-                    .child(Input::new(&self.repository_input))
+                    .child(Input::new(&self.organization_input))
                     .child(
-                        Button::new("save-repository")
+                        Button::new("save-organization")
                             .primary()
                             .small()
-                            .label("Save repository")
-                            .on_click(cx.listener(Self::save_repository)),
+                            .label("Save organization")
+                            .on_click(cx.listener(Self::save_organization)),
                     ),
             )
+            .when(self.settings.organization.is_some(), |page| {
+                page.child(
+                    v_flex()
+                        .gap_3()
+                        .rounded_lg()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .p_4()
+                        .child(div().font_semibold().text_sm().child("Pinned repositories"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Pinned repositories appear first in the repository picker."),
+                        )
+                        .child(self.render_repository_picker(cx))
+                        .child(
+                            Button::new("pin-selected-repository")
+                                .outline()
+                                .small()
+                                .label(if selected_is_pinned {
+                                    "Repository is pinned"
+                                } else {
+                                    "Pin selected repository"
+                                })
+                                .disabled(!can_pin)
+                                .on_click(cx.listener(Self::pin_selected_repository)),
+                        )
+                        .when(pinned_repositories.is_empty(), |card| {
+                            card.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("No pinned repositories yet."),
+                            )
+                        })
+                        .children(pinned_repositories.into_iter().map(|repository| {
+                            let repository_for_action = repository.clone();
+                            h_flex()
+                                .items_center()
+                                .justify_between()
+                                .rounded_md()
+                                .bg(cx.theme().muted.opacity(0.28))
+                                .px_3()
+                                .py_2()
+                                .child(div().text_sm().child(repository))
+                                .child(
+                                    Button::new(format!("unpin-{repository_for_action}"))
+                                        .ghost()
+                                        .small()
+                                        .label("Unpin")
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.unpin_repository(
+                                                &repository_for_action,
+                                                window,
+                                                cx,
+                                            );
+                                        })),
+                                )
+                        })),
+                )
+            })
             .child(
                 v_flex()
                     .gap_3()
@@ -895,7 +1070,6 @@ impl UploaderApp {
             .when_some(self.settings_status.as_ref(), |settings, status| {
                 settings.child(self.render_inline_status(status, cx))
             })
-            .child(div().flex_1())
     }
 }
 
@@ -908,7 +1082,7 @@ impl Focusable for UploaderApp {
 impl Render for UploaderApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_send = self.load_state == LoadState::Ready
-            && self.repository.is_some()
+            && self.selected_repository.is_some()
             && self.staged_image.is_some()
             && !self.uploading;
 
@@ -917,9 +1091,7 @@ impl Render for UploaderApp {
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_paste))
             .size_full()
-            .bg(cx.theme().background)
-            .p_6()
-            .gap_5();
+            .bg(cx.theme().background);
 
         if self.settings_open {
             root.child(self.render_settings(cx)).into_any_element()
@@ -928,77 +1100,94 @@ impl Render for UploaderApp {
             let root = root
                 .on_action(cx.listener(Self::copy_upload_url))
                 .on_action(cx.listener(Self::copy_upload_markdown));
-            root.child(
-                h_flex()
-                    .gap_3()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        h_flex()
-                            .gap_3()
-                            .items_center()
-                            .child(
-                                div()
-                                    .size_10()
-                                    .rounded_lg()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .bg(cx.theme().primary)
-                                    .text_color(cx.theme().primary_foreground)
-                                    .child(Icon::new(IconName::Github).size(px(22.))),
-                            )
-                            .child(
-                                v_flex()
-                                    .child(
-                                        div()
-                                            .text_lg()
-                                            .font_semibold()
-                                            .child("GitHub Image Upload"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Upload an image for GitHub Markdown"),
-                                    ),
-                            ),
-                    )
-                    .child(
-                        Button::new("open-settings")
-                            .outline()
-                            .small()
-                            .label("Settings")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.show_settings(cx);
-                            })),
-                    ),
-            )
-            .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
-            .when(!needs_setup, |root| {
-                root.child(self.render_repository_header(cx))
-                    .child(self.render_drop_zone(cx))
-                    .child(self.render_preview(cx))
-                    .child(self.render_upload_result(cx))
-            })
-            .child(div().flex_1())
-            .child(self.render_status(cx))
-            .child(
-                Button::new("send-image")
-                    .primary()
-                    .large()
-                    .w_full()
-                    .label(if self.uploading {
-                        "Uploading…"
-                    } else {
-                        "Upload image"
-                    })
-                    .icon(IconName::ArrowUp)
-                    .loading(self.uploading)
-                    .disabled(!can_send)
-                    .on_click(cx.listener(Self::send)),
-            )
-            .into_any_element()
+            let content = v_flex()
+                .id("main-page")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .child(
+                    v_flex()
+                        .flex_none()
+                        .gap_5()
+                        .px_6()
+                        .pt_6()
+                        .pb_5()
+                        .child(
+                            h_flex()
+                                .gap_3()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    h_flex()
+                                        .gap_3()
+                                        .items_center()
+                                        .child(
+                                            img(self.app_icon.clone())
+                                                .size_10()
+                                                .object_fit(ObjectFit::Contain),
+                                        )
+                                        .child(
+                                            v_flex()
+                                                .child(
+                                                    div()
+                                                        .text_lg()
+                                                        .font_semibold()
+                                                        .child("GitHub Image Upload"),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .child(
+                                                            "Upload an image for GitHub Markdown",
+                                                        ),
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    Button::new("open-settings")
+                                        .outline()
+                                        .small()
+                                        .label("App Preferences")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.show_settings(cx);
+                                        })),
+                                ),
+                        )
+                        .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
+                        .when(!needs_setup, |root| {
+                            root.child(self.render_repository_picker(cx))
+                                .child(self.render_drop_zone(cx))
+                                .child(self.render_preview(cx))
+                                .child(self.render_upload_result(cx))
+                        }),
+                );
+            root.child(content)
+                .child(
+                    v_flex()
+                        .gap_3()
+                        .px_6()
+                        .pb_6()
+                        .when_some(self.status.as_ref(), |column, status| {
+                            column.child(self.render_inline_status(status, cx))
+                        })
+                        .child(
+                            Button::new("send-image")
+                                .primary()
+                                .large()
+                                .w_full()
+                                .label(if self.uploading {
+                                    "Uploading…"
+                                } else {
+                                    "Upload image"
+                                })
+                                .icon(IconName::ArrowUp)
+                                .loading(self.uploading)
+                                .disabled(!can_send)
+                                .on_click(cx.listener(Self::send)),
+                        ),
+                )
+                .into_any_element()
         }
     }
 }

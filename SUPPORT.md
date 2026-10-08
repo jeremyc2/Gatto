@@ -8,7 +8,7 @@ opening a new one.
 
 When reporting a problem, include:
 
-- The app version and commit shown in **Settings → About**.
+- The app version and commit shown in **App Preferences → About**.
 - The macOS version and Mac architecture.
 - The output of `rustc --version`, `cargo --version`, and `gh --version` when the
   problem concerns local development.

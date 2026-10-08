@@ -10,24 +10,16 @@ use gpui_kit::{Image, ImageFormat};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Repository {
     pub id: u64,
-    pub full_name: String,
+    pub name: String,
 }
 
-/// Validates an `owner/name` repository reference and returns it trimmed.
-pub fn parse_repository(value: &str) -> Result<String> {
+/// Validates a GitHub organization login and returns it trimmed.
+pub fn parse_organization(value: &str) -> Result<String> {
     let value = value.trim();
-    let valid_part = |part: &str, allow_dot: bool| {
-        !part.is_empty()
-            && part.chars().all(|c| {
-                c.is_ascii_alphanumeric() || c == '-' || c == '_' || (allow_dot && c == '.')
-            })
-    };
-    match value.split_once('/') {
-        Some((owner, name)) if valid_part(owner, false) && valid_part(name, true) => {
-            Ok(value.to_owned())
-        }
-        _ => bail!("Enter the repository as owner/name, for example octocat/hello-world."),
+    if value.is_empty() || !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        bail!("Enter a GitHub organization name.");
     }
+    Ok(value.to_owned())
 }
 
 #[derive(Clone)]

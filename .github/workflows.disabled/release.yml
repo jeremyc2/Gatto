@@ -57,9 +57,10 @@ jobs:
         run: |
           set -euo pipefail
           bundle="dist/$APP_NAME"
-          mkdir -p "$bundle/Contents/MacOS"
+          mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
           plutil -lint packaging/Info.plist
           cp packaging/Info.plist "$bundle/Contents/Info.plist"
+          cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
           cp "target/$TARGET/release/github-image-upload" "$bundle/Contents/MacOS/"
           # Ad-hoc signature seals Info.plist into the bundle; Developer ID signing replaces this later.
           codesign --force --sign - "$bundle"

@@ -1,7 +1,7 @@
 # GitHub Image Upload
 
 A lightweight macOS menu bar app for uploading images to GitHub's native
-user-attachment storage. Set a repository in Settings, paste, drop, or select an
+user-attachment storage. Set an organization in App Preferences, paste, drop, or select an
 image, then copy either the resulting URL or a ready-to-paste Markdown image
 snippet.
 
@@ -27,15 +27,16 @@ required as described below. Intel Macs currently require a local build.
 
 ## Features
 
-- Lives in the macOS menu bar.
+- Lives in the macOS menu bar, and appears in the Dock while its window is open.
+- Uses a dark theme only, with the same icon in the menu bar, Dock, and app window.
 - Accepts clipboard images, drag-and-drop, and image files.
-- Uploads through a repository you set in Settings, public or private, using the
+- Uploads through a repository from an organization you set in App Preferences, public or private, using the
   active GitHub CLI account.
 - Uploads PNG, JPEG, GIF, and WebP images.
 - Shows the returned GitHub attachment URL without changing the clipboard.
 - Provides explicit copy buttons for the URL and a Markdown image snippet.
 - Can start automatically at macOS login.
-- Shows the build's app version and Git commit hash in Settings.
+- Shows the build's app version and Git commit hash in App Preferences.
 - Preserves the staged image when GitHub returns an error so the upload can be retried.
 
 ## Prerequisites
@@ -96,7 +97,7 @@ gh auth status
 ```
 
 Choose `GitHub.com` and HTTPS during login. The authenticated account must be able
-to read the repository you plan to configure in Settings.
+to read the repositories of the organization you plan to configure in App Preferences.
 
 ## Project setup
 
@@ -114,13 +115,14 @@ Start a development build with:
 cargo run
 ```
 
-The app appears in the macOS menu bar. Closing its window hides the window without
-quitting the app; use the menu bar item to show it again or quit.
+The app appears in the macOS menu bar and the Dock. Closing its window hides the
+window and the Dock icon without quitting the app; use the menu bar item to show
+it again or quit.
 
 ## Using the app
 
-1. Open the app from the menu bar and, on first launch, set a repository in
-   Settings. The app does nothing until one is set.
+1. Open the app from the menu bar and, on first launch, set an organization in
+   App Preferences. The app does nothing until one is set.
 2. Paste an image, drag one into the window, or choose an image file.
 3. Upload the image.
 4. Review the returned URL and Markdown image snippet.
@@ -134,12 +136,14 @@ On the uploader screen, press **Command+Shift+C** to copy the uploaded URL or
 **Command+Shift+M** to copy the Markdown image snippet. These shortcuts do nothing
 until an upload result is available.
 
-## Settings
+## App Preferences
 
-Open Settings from the app window or choose **Settings…** from the menu bar icon.
+Open App Preferences from the app window or choose **App Preferences** from the menu bar icon.
 
-- Enter the repository as `owner/name` and save it. It is stored in the current
-  user's Application Support folder.
+- Enter your GitHub organization and save it. It is required, and it is stored in
+  the current user's Application Support folder.
+- Select a repository and pin it to place it ahead of unpinned repositories in the
+  repository picker.
 - Enable **Start at Login** to install a per-user macOS LaunchAgent. If the app is
   moved after enabling this setting, turn the setting off and on again so the
   saved executable path is refreshed.
@@ -147,8 +151,8 @@ Open Settings from the app window or choose **Settings…** from the menu bar ic
   build time. Builds made outside a Git checkout show `unknown` unless
   `GIT_COMMIT_HASH` is supplied to the build.
 
-The app looks up the repository through `gh api`, including private repositories
-available to the active GitHub CLI account.
+The app lists the organization's repositories through `gh api`, including private
+repositories available to the active GitHub CLI account.
 
 ## Development commands
 
@@ -210,7 +214,7 @@ Xcode license or reinstalling the tools may be necessary.
 ### The repository cannot be loaded
 
 Run `gh auth status`, confirm the correct GitHub account is active, and verify that
-it can access the repository set in Settings. For SAML-protected organizations,
+it can access the organization set in App Preferences. For SAML-protected organizations,
 authorize the token for single sign-on through GitHub.
 
 ### Uploads fail

@@ -18,8 +18,8 @@ pub enum GithubError {
     CliUnavailable,
     #[error("{AUTH_HELP}")]
     Unauthenticated,
-    #[error("Could not load repository: {0}")]
-    RepositoryLookup(String),
+    #[error("Could not load repositories: {0}")]
+    RepositoryList(String),
     #[error("Upload failed: {0}")]
     Upload(String),
 }
@@ -27,13 +27,16 @@ pub enum GithubError {
 #[derive(Clone)]
 pub struct GithubSession {
     pub token: String,
-    pub repository: Repository,
+    pub repositories: Vec<Repository>,
 }
 
-pub fn load_session(full_name: &str) -> Result<GithubSession, GithubError> {
+pub fn load_session(organization: &str) -> Result<GithubSession, GithubError> {
     let token = read_token()?;
-    let repository = read_repository(full_name)?;
-    Ok(GithubSession { token, repository })
+    let repositories = read_repositories(organization)?;
+    Ok(GithubSession {
+        token,
+        repositories,
+    })
 }
 
 pub fn upload(token: &str, repository_id: u64, image: &StagedImage) -> Result<String, GithubError> {
@@ -109,35 +112,51 @@ fn read_token() -> Result<String, GithubError> {
     Ok(token)
 }
 
-fn read_repository(full_name: &str) -> Result<Repository, GithubError> {
-    let route = format!("repos/{full_name}");
+fn read_repositories(organization: &str) -> Result<Vec<Repository>, GithubError> {
+    let route = format!("orgs/{organization}/repos?per_page=100&type=all");
     let output = Command::new("gh")
-        .args(["api", "--method", "GET", &route, "--jq", ".id"])
+        .args([
+            "api",
+            "--paginate",
+            "--method",
+            "GET",
+            &route,
+            "--jq",
+            ".[] | [.id, .name] | @tsv",
+        ])
         .output()
         .map_err(|error| match error.kind() {
             io::ErrorKind::NotFound => GithubError::CliUnavailable,
-            _ => GithubError::RepositoryLookup(error.to_string()),
+            _ => GithubError::RepositoryList(error.to_string()),
         })?;
 
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(GithubError::RepositoryLookup(if detail.is_empty() {
-            format!("GitHub CLI could not access {full_name}")
+        return Err(GithubError::RepositoryList(if detail.is_empty() {
+            "GitHub CLI returned an error".into()
         } else {
             detail
         }));
     }
 
-    let id = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .parse()
-        .map_err(|_| {
-            GithubError::RepositoryLookup(format!("GitHub returned no ID for {full_name}"))
-        })?;
-    Ok(Repository {
-        id,
-        full_name: full_name.to_owned(),
-    })
+    let mut repositories = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (id, name) = line.split_once('\t')?;
+            Some(Repository {
+                id: id.parse().ok()?,
+                name: name.to_owned(),
+            })
+        })
+        .collect::<Vec<_>>();
+    repositories.sort_by_key(|repository| repository.name.to_ascii_lowercase());
+
+    if repositories.is_empty() {
+        return Err(GithubError::RepositoryList(format!(
+            "No accessible repositories were found for {organization}"
+        )));
+    }
+    Ok(repositories)
 }
 
 fn api_error(status: StatusCode, body: &str) -> String {

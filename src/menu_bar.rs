@@ -22,13 +22,13 @@ impl MenuBar {
     pub fn install() -> Result<(Self, async_channel::Receiver<MenuEvent>)> {
         let menu = Menu::new();
         let open = MenuItem::new("Open App", true, None);
-        let settings = MenuItem::new("Settings…", true, None);
+        let settings = MenuItem::new("App Preferences", true, None);
         let separator = PredefinedMenuItem::separator();
         let quit = MenuItem::new("Quit", true, None);
         menu.append_items(&[&open, &settings, &separator, &quit])
             .context("Could not create the menu bar menu")?;
 
-        let icon = github_mark_icon()?;
+        let icon = app_glyph_icon()?;
         let tray_builder = TrayIconBuilder::new()
             .with_tooltip("GitHub Image Upload")
             .with_menu(Box::new(menu));
@@ -69,29 +69,12 @@ impl MenuBar {
     }
 }
 
-fn github_mark_icon() -> Result<Icon> {
-    const SIZE: u32 = 22;
-    let mut rgba = vec![0_u8; (SIZE * SIZE * 4) as usize];
-    let center = 10.5_f32;
+fn app_glyph_icon() -> Result<Icon> {
+    static GLYPH: &[u8] = include_bytes!("../packaging/menu-bar-icon.png");
 
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let xf = x as f32;
-            let yf = y as f32;
-            let head = ((xf - center) / 7.4).powi(2) + ((yf - 10.0) / 6.5).powi(2) <= 1.0;
-            let left_ear = yf <= 6.0 && (4.0..=9.0).contains(&xf) && yf >= xf - 4.0;
-            let right_ear = yf <= 6.0 && (12.0..=17.0).contains(&xf) && yf >= 17.0 - xf;
-            let body = (13.0..=20.5).contains(&yf) && (xf - center).abs() <= 4.6;
-            let left_leg = yf >= 18.0 && (5.0..=10.5).contains(&xf);
-            let right_leg = yf >= 18.0 && (10.5..=16.0).contains(&xf);
-            let tail =
-                xf <= 6.0 && (13.0..=17.0).contains(&yf) && (yf - (17.8 - xf * 0.55)).abs() <= 1.4;
-            if head || left_ear || right_ear || body || left_leg || right_leg || tail {
-                let index = ((y * SIZE + x) * 4) as usize;
-                rgba[index..index + 4].copy_from_slice(&[0, 0, 0, 255]);
-            }
-        }
-    }
-
-    Icon::from_rgba(rgba, SIZE, SIZE).context("Could not create the GitHub menu bar icon")
+    let glyph = ::image::load_from_memory_with_format(GLYPH, ::image::ImageFormat::Png)
+        .context("Could not decode the menu bar icon")?
+        .into_rgba8();
+    let (width, height) = glyph.dimensions();
+    Icon::from_rgba(glyph.into_raw(), width, height).context("Could not create the menu bar icon")
 }
