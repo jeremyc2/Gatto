@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish macOS binary
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      TARGET: aarch64-apple-darwin
+      GIT_COMMIT_HASH: ${{ github.sha }}
+      CARGO_INCREMENTAL: 0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --target "$TARGET"
+          echo "rustc=$(rustc -V | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Cargo registry and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: release-${{ env.TARGET }}-${{ steps.toolchain.outputs.rustc }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            release-${{ env.TARGET }}-${{ steps.toolchain.outputs.rustc }}-
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "$TARGET"
+
+      - name: Package app bundle and checksum
+        shell: bash
+        env:
+          APP_NAME: GitHub Image Upload.app
+          # Keeps macOS tar from adding AppleDouble (._*) files to the archive.
+          COPYFILE_DISABLE: 1
+        run: |
+          set -euo pipefail
+          bundle="dist/$APP_NAME"
+          mkdir -p "$bundle/Contents/MacOS"
+          plutil -lint packaging/Info.plist
+          cp packaging/Info.plist "$bundle/Contents/Info.plist"
+          cp "target/$TARGET/release/github-image-upload" "$bundle/Contents/MacOS/"
+          # Ad-hoc signature seals Info.plist into the bundle; Developer ID signing replaces this later.
+          codesign --force --sign - "$bundle"
+          codesign --verify --strict --verbose=2 "$bundle"
+
+          archive="github-image-upload-${TARGET}.tar.gz"
+          tar -czf "dist/$archive" -C dist "$APP_NAME"
+          rm -rf "$bundle"
+          cd dist
+          shasum -a 256 "$archive" > SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: main-${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --target "$GIT_COMMIT_HASH" \
+              --title "Main build ${GIT_COMMIT_HASH:0:12}" \
+              --generate-notes \
+              --prerelease
+          fi

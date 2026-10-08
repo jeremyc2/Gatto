@@ -1,0 +1,56 @@
+name: Dependency security
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-policy:
+    name: RustSec, OSV, licenses, and sources
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install checksum-verified cargo-deny
+        env:
+          CARGO_DENY_VERSION: 0.20.2
+          CARGO_DENY_SHA256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+        run: |
+          archive="${RUNNER_TEMP}/cargo-deny.tar.gz"
+          curl --fail --silent --show-error --location \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            --output "${archive}"
+          printf '%s  %s\n' "${CARGO_DENY_SHA256}" "${archive}" | sha256sum --check --strict
+          tar --extract --gzip --file "${archive}" --directory "${RUNNER_TEMP}" \
+            --strip-components 1 cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl/cargo-deny
+          chmod 0755 "${RUNNER_TEMP}/cargo-deny"
+
+      - name: Check advisories, licenses, versions, and sources
+        run: >-
+          "${RUNNER_TEMP}/cargo-deny" --locked check --hide-inclusion-graph
+          advisories licenses bans sources
+
+      - name: Install checksum-verified OSV-Scanner
+        env:
+          OSV_SCANNER_VERSION: 2.6.0
+          OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+        run: |
+          scanner="${RUNNER_TEMP}/osv-scanner"
+          curl --fail --silent --show-error --location \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64" \
+            --output "${scanner}"
+          printf '%s  %s\n' "${OSV_SCANNER_SHA256}" "${scanner}" | sha256sum --check --strict
+          chmod 0755 "${scanner}"
+
+      - name: Scan the locked graph with OSV
+        run: >-
+          "${RUNNER_TEMP}/osv-scanner" scan source --lockfile Cargo.lock

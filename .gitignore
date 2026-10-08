@@ -1,0 +1,11 @@
+.DS_Store
+/target
+/dist
+*.app
+*.dSYM
+*.log
+.env
+.env.*
+!.env.example
+/.idea
+/.vscode

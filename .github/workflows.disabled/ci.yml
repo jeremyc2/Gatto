@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - LICENSE
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - LICENSE
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  quality:
+    name: Lint and test
+    needs: format
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        id: toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          echo "rustc=$(rustc -V | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Cargo registry and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ci-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.rustc }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ci-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.rustc }}-
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets

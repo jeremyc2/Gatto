@@ -1,0 +1,239 @@
+# GitHub Image Upload
+
+A lightweight macOS menu bar app for uploading images to GitHub's native
+user-attachment storage. Set a repository in Settings, paste, drop, or select an
+image, then copy either the resulting URL or a ready-to-paste Markdown image
+snippet.
+
+The app is written in Rust with GPUI and GPUI Kit. GPUI Kit is pinned to `0.7.1`;
+that release pins and re-exports its compatible GPUI `0.3.8` snapshot. The
+repository's `rust-toolchain.toml` tracks the stable Rust channel and installs
+the formatter and linter components.
+
+> This project currently supports macOS only.
+
+## Downloads
+
+Running the **Release** workflow manually on `main` (Actions → Release → Run
+workflow) publishes a GitHub prerelease tagged `main-<commit SHA>` in this
+repository's **Releases** page. Download
+`github-image-upload-aarch64-apple-darwin.tar.gz` for Apple Silicon Macs and extract
+it to get `GitHub Image Upload.app`. Move the app to `/Applications` before
+enabling Start at Login, because the login item records the app's location.
+`SHA256SUMS` contains the archive's SHA-256 checksum. The app is ad-hoc signed
+but not signed with a Developer ID or notarized, so macOS Gatekeeper blocks it
+when downloaded through a browser. GitHub CLI and authentication are still
+required as described below. Intel Macs currently require a local build.
+
+## Features
+
+- Lives in the macOS menu bar.
+- Accepts clipboard images, drag-and-drop, and image files.
+- Uploads through a repository you set in Settings, public or private, using the
+  active GitHub CLI account.
+- Uploads PNG, JPEG, GIF, and WebP images.
+- Shows the returned GitHub attachment URL without changing the clipboard.
+- Provides explicit copy buttons for the URL and a Markdown image snippet.
+- Can start automatically at macOS login.
+- Shows the build's app version and Git commit hash in Settings.
+- Preserves the staged image when GitHub returns an error so the upload can be retried.
+
+## Prerequisites
+
+You will need:
+
+- macOS 13 or newer.
+- Xcode Command Line Tools.
+- Rust installed through `rustup`.
+- [GitHub CLI](https://cli.github.com/) authenticated with an account that can
+  access the repository you want to upload through.
+
+### 1. Install the macOS developer tools
+
+```sh
+xcode-select --install
+```
+
+If macOS reports that the tools are already installed, no further action is
+needed. You can verify the selected developer directory with:
+
+```sh
+xcode-select -p
+```
+
+### 2. Install Rust
+
+Install Rust with the official `rustup` installer:
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Choose the default installation when prompted, then restart your terminal. Verify
+the installation:
+
+```sh
+rustc --version
+cargo --version
+rustup --version
+```
+
+Entering this repository makes `rustup` select the stable toolchain declared in
+`rust-toolchain.toml`. To ensure the required tools are available:
+
+```sh
+rustup component add rustfmt clippy
+```
+
+### 3. Install and authenticate GitHub CLI
+
+With [Homebrew](https://brew.sh/) installed:
+
+```sh
+brew install gh
+gh auth login
+gh auth status
+```
+
+Choose `GitHub.com` and HTTPS during login. The authenticated account must be able
+to read the repository you plan to configure in Settings.
+
+## Project setup
+
+Clone the repository, substituting its actual URL for the placeholder:
+
+```sh
+git clone <repository-url>
+cd github-image-upload
+cargo fetch
+```
+
+Start a development build with:
+
+```sh
+cargo run
+```
+
+The app appears in the macOS menu bar. Closing its window hides the window without
+quitting the app; use the menu bar item to show it again or quit.
+
+## Using the app
+
+1. Open the app from the menu bar and, on first launch, set a repository in
+   Settings. The app does nothing until one is set.
+2. Paste an image, drag one into the window, or choose an image file.
+3. Upload the image.
+4. Review the returned URL and Markdown image snippet.
+5. Choose **Copy URL** or **Copy Markdown**, then paste it into a GitHub issue,
+   pull request, discussion, or Markdown file.
+
+Nothing is copied automatically. The Markdown button copies a value such as
+`![screenshot.png](https://github.com/user-attachments/assets/…)`.
+
+On the uploader screen, press **Command+Shift+C** to copy the uploaded URL or
+**Command+Shift+M** to copy the Markdown image snippet. These shortcuts do nothing
+until an upload result is available.
+
+## Settings
+
+Open Settings from the app window or choose **Settings…** from the menu bar icon.
+
+- Enter the repository as `owner/name` and save it. It is stored in the current
+  user's Application Support folder.
+- Enable **Start at Login** to install a per-user macOS LaunchAgent. If the app is
+  moved after enabling this setting, turn the setting off and on again so the
+  saved executable path is refreshed.
+- The About section shows the package version and the Git commit hash captured at
+  build time. Builds made outside a Git checkout show `unknown` unless
+  `GIT_COMMIT_HASH` is supplied to the build.
+
+The app looks up the repository through `gh api`, including private repositories
+available to the active GitHub CLI account.
+
+## Development commands
+
+```sh
+# Verify formatting without changing files
+cargo fmt --all -- --check
+
+# Check the project without producing a release binary
+cargo check --all-targets
+
+# Run the Rust linter
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Run automated tests
+cargo test --all-targets
+
+# Audit advisories, licenses, and dependency sources
+cargo install --locked cargo-deny --version 0.20.2
+cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
+
+# Create an optimized binary
+cargo build --release
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+## Project layout
+
+```text
+src/main.rs       Application entry point and GPUI startup
+src/app.rs        Main window, interactions, and upload state
+src/github.rs     GitHub CLI integration and attachment uploads
+src/menu_bar.rs   macOS menu bar behavior
+src/model.rs      Shared application models
+src/settings.rs   Repository setting and macOS login startup
+build.rs          Build-time Git commit metadata
+packaging/        macOS application metadata
+.github/          Continuous integration and contribution templates
+```
+
+## Project documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy and dependency audit](SECURITY.md)
+- [Support guide](SUPPORT.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
+- [License](LICENSE)
+
+## Troubleshooting
+
+### Rust linker or SDK errors
+
+Install or update the Xcode Command Line Tools, then confirm `xcode-select -p`
+prints a valid developer directory. After a macOS or Xcode upgrade, accepting the
+Xcode license or reinstalling the tools may be necessary.
+
+### The repository cannot be loaded
+
+Run `gh auth status`, confirm the correct GitHub account is active, and verify that
+it can access the repository set in Settings. For SAML-protected organizations,
+authorize the token for single sign-on through GitHub.
+
+### Uploads fail
+
+Confirm the staged file is a supported image and that `gh auth token` succeeds.
+GitHub's user-attachment upload endpoint is undocumented and may change without
+notice; the app displays the returned error and keeps the image staged for retrying.
+
+## Security and privacy
+
+The app obtains the active token from GitHub CLI when needed and does not persist
+it in project configuration. Image bytes are sent directly to GitHub's attachment
+service. Do not upload secrets or images you are not permitted to share.
+
+The committed `Cargo.lock` preserves the versions and registry checksums that were
+audited. Dependency source and license policy lives in `deny.toml`, and automated
+security scans run on dependency changes and every week. For the latest audit
+results or to report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Community and license
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Changes are documented in
+[CHANGELOG.md](CHANGELOG.md).
+
+This project is available under the [MIT License](LICENSE).
