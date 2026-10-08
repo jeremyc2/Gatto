@@ -14,16 +14,15 @@ the formatter and linter components.
 
 ## Downloads
 
-Running the **Release** workflow manually on `main` (Actions → Release → Run
-workflow) publishes a GitHub prerelease tagged `main-<commit SHA>` in this
+Releases are built, signed with a Developer ID certificate, and notarized on the
+maintainer's Mac (see [Releasing](#releasing)), then published on this
 repository's **Releases** page. Download
-`github-image-upload-aarch64-apple-darwin.tar.gz` for Apple Silicon Macs and extract
-it to get `GitHub Image Upload.app`. Move the app to `/Applications` before
+`github-image-upload-<version>-aarch64-apple-darwin.zip` for Apple Silicon Macs and
+unzip it to get `GitHub Image Upload.app`. Move the app to `/Applications` before
 enabling Start at Login, because the login item records the app's location.
-`SHA256SUMS` contains the archive's SHA-256 checksum. The app is ad-hoc signed
-but not signed with a Developer ID or notarized, so macOS Gatekeeper blocks it
-when downloaded through a browser. GitHub CLI and authentication are still
-required as described below. Intel Macs currently require a local build.
+`SHA256SUMS` contains the archive's SHA-256 checksum. GitHub CLI and
+authentication are still required as described below. Intel Macs currently require
+a local build.
 
 ## Features
 
@@ -179,6 +178,36 @@ cargo build --release
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
+## Releasing
+
+`scripts/release.sh` builds, signs, notarizes, staples, and publishes a GitHub
+release from a Mac. No signing secrets live in the repository or GitHub: the
+certificate stays in the login keychain and the notarization credentials in a
+keychain profile.
+
+One-time setup:
+
+1. In the Apple Developer account, create a **Developer ID Application**
+   certificate (Xcode → Settings → Accounts → Manage Certificates → + → Developer
+   ID Application). Check it with `security find-identity -v -p codesigning`.
+2. Create an app-specific password at account.apple.com, then store it:
+   ```sh
+   xcrun notarytool store-credentials github-image-upload-notary \
+     --apple-id <apple-id> --team-id <team-id>
+   ```
+   Enter the app-specific password when prompted.
+
+To release, bump the version in `Cargo.toml` and `packaging/Info.plist`, commit and
+push to `main`, then run:
+
+```sh
+./scripts/release.sh
+```
+
+The script refuses to run unless the tree is clean and pushed, and it asks before
+publishing `v<version>`. Set `SIGN_IDENTITY` if more than one Developer ID
+certificate is installed.
+
 ## Project layout
 
 ```text
@@ -189,6 +218,7 @@ src/menu_bar.rs   macOS menu bar behavior
 src/model.rs      Shared application models
 src/settings.rs   Repository setting and macOS login startup
 build.rs          Build-time Git commit metadata
+scripts/          Local signed-release script
 packaging/        macOS application metadata
 .github/          Continuous integration and contribution templates
 ```
