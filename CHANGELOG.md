@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-08
+
+### Fixed
+
+- Image uploads failing with "error sending request" on networks that re-sign HTTPS traffic with
+  a corporate certificate; the app now trusts the macOS system keychain.
+
 ## [0.3.0] - 2026-10-08
 
 ### Added
