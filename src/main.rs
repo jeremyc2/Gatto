@@ -6,14 +6,13 @@ mod log_viewer;
 mod menu_bar;
 mod model;
 mod settings;
+mod theme;
 mod window_limits;
 
 use std::{cell::RefCell, rc::Rc};
 
-use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Focusable as _, Hsla, WindowBounds, WindowOptions, px, rgb,
-    size,
+    AnyWindowHandle, AppContext as _, Focusable as _, WindowBounds, WindowOptions, px, size,
 };
 
 use crate::{
@@ -42,7 +41,8 @@ fn main() {
     application.run(move |cx| {
         cx.set_app_identity("com.jeremy-chandler.gatto", "Gatto");
         gpui_kit::init(cx);
-        apply_dark_theme(cx);
+        theme::force_dark_appearance();
+        theme::apply_dark_theme(cx);
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
         set_dock_visible(true);
@@ -80,7 +80,7 @@ fn main() {
             view
         })
         .expect("Could not open the Gatto window");
-        *reopen_window.borrow_mut() = Some(window_handle.into());
+        *reopen_window.borrow_mut() = Some(window_handle);
 
         let paste_actions_visible = view.read(cx).has_pinned_repository();
         let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {
@@ -158,47 +158,6 @@ fn main() {
         .detach();
     });
 }
-
-fn color(hex: u32) -> Hsla {
-    rgb(hex).into()
-}
-
-/// The app is dark-only; there is no light theme to switch to.
-fn apply_dark_theme(cx: &mut gpui_kit::App) {
-    force_dark_appearance();
-    Theme::change(ThemeMode::Dark, None, cx);
-    Theme::update(cx, |theme| {
-        theme.background = color(0x0e1017);
-        theme.border = color(0x2b2f45);
-        theme.primary = color(0x6c63ff);
-        theme.primary_hover = color(0x8279ff);
-        theme.primary_active = color(0x574edb);
-        theme.primary_foreground = color(0xffffff);
-        theme.button_primary = color(0x6c63ff);
-        theme.button_primary_hover = color(0x8279ff);
-        theme.button_primary_active = color(0x574edb);
-        theme.button_primary_foreground = color(0xffffff);
-        theme.ring = color(0x8b7bff);
-        theme.link = color(0x7fb2ff);
-        theme.success = color(0x3ddc97);
-        theme.warning = color(0xffb454);
-        theme.danger = color(0xff6b81);
-    });
-}
-
-#[cfg(target_os = "macos")]
-fn force_dark_appearance() {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSAppearance, NSAppearanceNameDarkAqua, NSApplication};
-
-    if let Some(main_thread) = MainThreadMarker::new() {
-        let appearance = unsafe { NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua) };
-        NSApplication::sharedApplication(main_thread).setAppearance(appearance.as_deref());
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn force_dark_appearance() {}
 
 /// Shows the Dock icon while the window is open; the menu bar item always stays.
 #[cfg(target_os = "macos")]

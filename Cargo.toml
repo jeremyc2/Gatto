@@ -1,11 +1,19 @@
 [package]
 name = "gatto"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 rust-version = "1.90"
 description = "A lightweight GPUI menu bar app for uploading GitHub image attachments"
 license = "MIT"
 readme = "README.md"
+
+[features]
+walkthrough-screenshots = ["gpui-kit/test-support"]
+
+[[bin]]
+name = "walkthrough-screenshots"
+path = "src/walkthrough_screenshots.rs"
+required-features = ["walkthrough-screenshots"]
 
 [dependencies]
 anyhow = "1"

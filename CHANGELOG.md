@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-09
+
+### Added
+
+- Added an app walkthrough with regenerated screenshots and a deterministic macOS command for updating them.
+
 ## [0.6.1] - 2026-10-09
 
 ### Fixed

@@ -103,6 +103,36 @@ enum MenuPasteMode {
     QuickCopy,
 }
 
+#[cfg(feature = "walkthrough-screenshots")]
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum WalkthroughScenario {
+    FirstRun,
+    Preferences,
+    ImageStaged,
+    UploadComplete,
+}
+
+#[cfg(feature = "walkthrough-screenshots")]
+#[allow(dead_code)]
+impl WalkthroughScenario {
+    pub(crate) const ALL: [Self; 4] = [
+        Self::FirstRun,
+        Self::Preferences,
+        Self::ImageStaged,
+        Self::UploadComplete,
+    ];
+
+    pub(crate) const fn file_name(self) -> &'static str {
+        match self {
+            Self::FirstRun => "01-first-run.png",
+            Self::Preferences => "02-preferences.png",
+            Self::ImageStaged => "03-image-staged.png",
+            Self::UploadComplete => "04-upload-complete.png",
+        }
+    }
+}
+
 pub struct UploaderApp {
     organization_input: Entity<InputState>,
     repository_picker: Entity<RepositoryPicker>,
@@ -153,6 +183,26 @@ impl UploaderApp {
         if settings_error.is_some() {
             diagnostics.error("Could not load application preferences; using defaults.");
         }
+        Self::with_settings(
+            window,
+            diagnostics,
+            menu_bar,
+            settings,
+            settings_error,
+            true,
+            cx,
+        )
+    }
+
+    fn with_settings(
+        window: &mut Window,
+        diagnostics: Diagnostics,
+        menu_bar: MenuBarController,
+        settings: AppSettings,
+        settings_error: Option<String>,
+        persist_repository_selection: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let initial_organization = settings.organization.clone().unwrap_or_default();
         let organization_input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -176,10 +226,10 @@ impl UploaderApp {
         });
         let subscription = cx.subscribe(
             &repository_picker,
-            |this: &mut Self,
-             _,
-             event: &ComboboxEvent<SearchableVec<SearchableGroup<String>>>,
-             cx| {
+            move |this: &mut Self,
+                  _,
+                  event: &ComboboxEvent<SearchableVec<SearchableGroup<String>>>,
+                  cx| {
                 if let ComboboxEvent::Change(values) = event {
                     this.selected_repository = values
                         .first()
@@ -193,7 +243,7 @@ impl UploaderApp {
                         .selected_repository
                         .as_ref()
                         .map(|repository| repository.id);
-                    if let Err(error) = this.settings.save() {
+                    if persist_repository_selection && let Err(error) = this.settings.save() {
                         this.diagnostics.error(format!(
                             "Could not remember the selected repository: {error}"
                         ));
@@ -242,7 +292,87 @@ impl UploaderApp {
         if let Some(error) = settings_error {
             window.push_notification(Notification::error(error), cx);
         }
-        this.restore_remembered_repository(window, cx);
+        if persist_repository_selection {
+            this.restore_remembered_repository(window, cx);
+        }
+        this
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn for_walkthrough(
+        scenario: WalkthroughScenario,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut settings = AppSettings::default();
+        if !matches!(scenario, WalkthroughScenario::FirstRun) {
+            settings.organization = Some("acme-labs".into());
+            settings.pinned_repositories.insert("gatto".into());
+            settings.last_repository = Some("gatto".into());
+            settings.last_repository_id = Some(1001);
+        }
+
+        let mut this = Self::with_settings(
+            window,
+            Diagnostics::new(),
+            MenuBarController::default(),
+            settings,
+            None,
+            false,
+            cx,
+        );
+
+        if matches!(scenario, WalkthroughScenario::FirstRun) {
+            return this;
+        }
+
+        for repository in [
+            Repository {
+                id: 1001,
+                name: "gatto".into(),
+            },
+            Repository {
+                id: 1002,
+                name: "developer-portal".into(),
+            },
+            Repository {
+                id: 1003,
+                name: "documentation".into(),
+            },
+        ] {
+            this.repositories
+                .insert(repository.name.clone(), repository);
+        }
+        this.selected_repository = this.repositories.get("gatto").cloned();
+        this.load_state = LoadState::Ready;
+        this.settings_open = matches!(scenario, WalkthroughScenario::Preferences);
+
+        if matches!(
+            scenario,
+            WalkthroughScenario::ImageStaged | WalkthroughScenario::UploadComplete
+        ) {
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("packaging/rocket-cat-transparent.png");
+            let mut image = StagedImage::from_path(path)
+                .expect("the walkthrough fixture image should always be valid");
+            image.name = "rocket-cat.png".into();
+            image.description = "Gatto rocket cat".into();
+
+            if matches!(scenario, WalkthroughScenario::UploadComplete) {
+                let url = "https://github.com/user-attachments/assets/01234567-89ab-cdef-0123-456789abcdef";
+                image.upload_state = AttachmentUploadState::Uploaded { url: url.into() };
+                this.upload_result = Some(UploadResult {
+                    images: vec![UploadedImage {
+                        url: url.into(),
+                        markdown: markdown_image(&image.description, url),
+                    }],
+                });
+            }
+            this.staged_images.push(image);
+        }
+
+        this.refresh_repository_picker(window, cx);
         this
     }
 
