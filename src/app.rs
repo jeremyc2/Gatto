@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{cell::Cell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc};
 
 use gpui_kit::assets::IconName as AssetIconName;
 use gpui_kit::component::{
@@ -12,6 +12,7 @@ use gpui_kit::component::{
     checkbox::Checkbox,
     clipboard::Clipboard,
     combobox::{Combobox, ComboboxEvent, ComboboxState},
+    dialog::{DialogAction, DialogClose, DialogFooter},
     h_flex,
     input::{Input, InputState},
     kbd::Kbd,
@@ -49,7 +50,8 @@ actions!(
         PasteToMarkdown,
         PasteToUrl,
         CopyUploadUrl,
-        CopyUploadMarkdown
+        CopyUploadMarkdown,
+        SwitchToBulkUpload
     ]
 );
 
@@ -120,6 +122,7 @@ pub struct UploaderApp {
     settings_open: bool,
     pending_paste_repository: Option<String>,
     pending_menu_paste: Option<MenuPasteMode>,
+    pending_replacement_images: Option<Vec<StagedImage>>,
     log_window: Option<AnyWindowHandle>,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
     menu_bar: MenuBarController,
@@ -205,6 +208,7 @@ impl UploaderApp {
             settings_open: false,
             pending_paste_repository: None,
             pending_menu_paste: None,
+            pending_replacement_images: None,
             log_window: None,
             preview_window: None,
             menu_bar,
@@ -688,11 +692,17 @@ impl UploaderApp {
         });
         let rename_view = cx.entity().downgrade();
         let rename_input = input.clone();
+        let select_initial_description = Rc::new(Cell::new(true));
 
         window.open_alert_dialog(cx, move |alert, window, cx| {
             let rename_input = rename_input.clone();
             let rename_view = rename_view.clone();
-            input.read(cx).focus_handle(cx).focus(window, cx);
+            if select_initial_description.replace(false) {
+                input.update(cx, |input, cx| {
+                    input.focus(window, cx);
+                    input.select_all(window, cx);
+                });
+            }
             alert
                 .width(px(440.))
                 .title("Set description")
@@ -739,13 +749,27 @@ impl UploaderApp {
         let Some(replacement) = images.first().cloned() else {
             return;
         };
+        self.pending_replacement_images = Some(images.clone());
         let view = cx.entity().downgrade();
-        window.open_alert_dialog(cx, move |alert, _, cx| {
+        let bulk_shortcut_focus = cx.focus_handle();
+        let focus_bulk_shortcut = Rc::new(Cell::new(true));
+        window.open_alert_dialog(cx, move |alert, window, cx| {
             let close_view = view.clone();
             let replace_view = view.clone();
             let replacement = replacement.clone();
             let bulk_view = view.clone();
             let bulk_images = images.clone();
+            let shortcut_bulk_view = view.clone();
+            let shortcut_bulk_images = images.clone();
+            let bulk_shortcut_focus = bulk_shortcut_focus.clone();
+
+            if focus_bulk_shortcut.replace(false) {
+                let bulk_shortcut_focus = bulk_shortcut_focus.clone();
+                window.defer(cx, move |window, cx| {
+                    bulk_shortcut_focus.focus(window, cx);
+                });
+            }
+
             alert
                 .width(px(460.))
                 .icon(
@@ -758,6 +782,19 @@ impl UploaderApp {
                 )
                 .child(
                     v_flex()
+                        .track_focus(&bulk_shortcut_focus)
+                        .on_action(move |_: &SwitchToBulkUpload, window, cx| {
+                            let _ = shortcut_bulk_view.update(cx, |this, cx| {
+                                this.pending_replacement_images = None;
+                                this.bulk_upload = true;
+                                this.append_staged_images(
+                                    shortcut_bulk_images.clone(),
+                                    window,
+                                    cx,
+                                );
+                            });
+                            window.close_dialog(cx);
+                        })
                         .gap_2()
                         .rounded_lg()
                         .border_1()
@@ -783,8 +820,12 @@ impl UploaderApp {
                                 .self_start()
                                 .flex_none()
                                 .label("Switch to bulk upload")
+                                .child(Kbd::new(
+                                    Keystroke::parse("b").expect("valid shortcut"),
+                                ))
                                 .on_click(move |_, window, cx| {
                                     let _ = bulk_view.update(cx, |this, cx| {
+                                        this.pending_replacement_images = None;
                                         this.bulk_upload = true;
                                         this.append_staged_images(
                                             bulk_images.clone(),
@@ -796,11 +837,23 @@ impl UploaderApp {
                                 }),
                         ),
                 )
-                .show_cancel(true)
-                .cancel_text("Cancel")
-                .ok_text("Replace image")
+                .footer(
+                    DialogFooter::new()
+                        .child(DialogClose::new().trigger(|button| {
+                            button.label("Cancel")
+                        }))
+                        .child(DialogAction::new().child(
+                            Button::new("replace-image")
+                                .primary()
+                                .label("Replace image")
+                                .child(Kbd::new(
+                                    Keystroke::parse("enter").expect("valid shortcut"),
+                                )),
+                        )),
+                )
                 .on_ok(move |_, window, cx| {
                     let _ = replace_view.update(cx, |this, cx| {
+                        this.pending_replacement_images = None;
                         this.replace_staged_image(replacement.clone(), window, cx);
                     });
                     true
@@ -809,9 +862,25 @@ impl UploaderApp {
                     let _ = close_view.update(cx, |this, _| {
                         this.pending_menu_paste = None;
                         this.pending_paste_repository = None;
+                        this.pending_replacement_images = None;
                     });
                 })
         });
+    }
+
+    fn switch_to_bulk_upload(
+        &mut self,
+        _: &SwitchToBulkUpload,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(images) = self.pending_replacement_images.take() else {
+            return;
+        };
+
+        self.bulk_upload = true;
+        self.append_staged_images(images, window, cx);
+        window.close_dialog(cx);
     }
 
     fn accept_pasted_image_result(
@@ -1574,31 +1643,18 @@ impl UploaderApp {
                     attachment.actions(
                         AttachmentActions::new()
                             .child(
-                                Button::new(format!("staged-image-menu-{image_id}"))
+                                Button::new(format!("set-staged-image-description-{image_id}"))
                                     .ghost()
                                     .small()
-                                    .icon(IconName::Ellipsis)
-                                    .accessibility_label("Image actions")
-                                    .tooltip("Image actions")
-                                    .on_click(|_, _, cx| cx.stop_propagation())
-                                    .dropdown_menu_with_anchor(
-                                        Anchor::TopRight,
-                                        move |menu, _, _| {
-                                            let rename_view = rename_view.clone();
-                                            menu.item(
-                                                PopupMenuItem::new("Set description").on_click(
-                                                    move |_, window, cx| {
-                                                        let _ =
-                                                            rename_view.update(cx, |this, cx| {
-                                                                this.open_description_dialog(
-                                                                    image_id, window, cx,
-                                                                );
-                                                            });
-                                                    },
-                                                ),
-                                            )
-                                        },
-                                    ),
+                                    .icon(AssetIconName::ALargeSmall)
+                                    .accessibility_label("Set description")
+                                    .tooltip("Set description")
+                                    .on_click(move |_, window, cx| {
+                                        cx.stop_propagation();
+                                        let _ = rename_view.update(cx, |this, cx| {
+                                            this.open_description_dialog(image_id, window, cx);
+                                        });
+                                    }),
                             )
                             .child(
                                 Button::new(format!("remove-staged-image-{image_id}"))
@@ -2074,6 +2130,7 @@ impl Render for UploaderApp {
             .on_action(cx.listener(Self::paste_and_preview_from_menu))
             .on_action(cx.listener(Self::paste_to_markdown_from_menu))
             .on_action(cx.listener(Self::paste_to_url_from_menu))
+            .on_action(cx.listener(Self::switch_to_bulk_upload))
             .size_full()
             .bg(cx.theme().background);
 
@@ -2218,6 +2275,7 @@ pub fn init_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-v", PasteImage, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-shift-c", CopyUploadUrl, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-shift-m", CopyUploadMarkdown, Some(KEY_CONTEXT)),
+        KeyBinding::new("b", SwitchToBulkUpload, Some("Dialog")),
     ]);
 }
 
