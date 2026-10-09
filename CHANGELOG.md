@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-08
+
+### Added
+
+- Full-size image preview window for staged images, with previous and next navigation, an image
+  position indicator, and left/right arrow key shortcuts.
+- Multiple staged images, each tracked with its own name, description, and uploaded URL.
+- Paste & Preview, Paste to Markdown, and Paste to URL actions in the menu bar, shown when a
+  repository is pinned.
+- Copy button in the Application logs window.
+- The last used repository is remembered in settings.
+
+### Changed
+
+- Status messages are now shown as notifications instead of inline text.
+- Main and Application logs windows can be hidden independently on macOS.
+
 ## [0.3.1] - 2026-10-08
 
 ### Fixed
