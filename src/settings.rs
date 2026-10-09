@@ -19,6 +19,14 @@ pub struct AppSettings {
 }
 
 impl AppSettings {
+    /// Returns the repository to restore at launch. A pinned repository is the
+    /// stable fallback for preferences saved before an explicit last selection.
+    pub fn preferred_repository(&self) -> Option<&str> {
+        self.last_repository
+            .as_deref()
+            .or_else(|| self.pinned_repositories.first().map(String::as_str))
+    }
+
     pub fn load() -> Result<Self> {
         let path = settings_path()?;
         let mut settings = if path.exists() {
@@ -45,6 +53,11 @@ impl AppSettings {
         }
         self.start_at_login = enabled;
         Ok(())
+    }
+
+    /// Removes every setting this app writes, including its per-user login item.
+    pub fn reset() -> Result<()> {
+        clear_persistence(&settings_path()?, &launch_agent_path()?)
     }
 }
 
@@ -125,10 +138,21 @@ fn install_launch_agent() -> Result<()> {
 
 fn remove_launch_agent() -> Result<()> {
     let path = launch_agent_path()?;
-    match fs::remove_file(&path) {
+    remove_file_if_present(&path).with_context(|| format!("Could not remove {}", path.display()))
+}
+
+fn clear_persistence(settings_path: &PathBuf, launch_agent_path: &PathBuf) -> Result<()> {
+    remove_file_if_present(settings_path)
+        .with_context(|| format!("Could not remove {}", settings_path.display()))?;
+    remove_file_if_present(launch_agent_path)
+        .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
+}
+
+fn remove_file_if_present(path: &PathBuf) -> Result<()> {
+    match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("Could not remove {}", path.display())),
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -139,4 +163,44 @@ fn escape_xml(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use super::{AppSettings, clear_persistence};
+
+    #[test]
+    fn restores_a_pinned_repository_when_no_last_repository_is_saved() {
+        let mut settings = AppSettings::default();
+        settings
+            .pinned_repositories
+            .insert("owner/repository".into());
+
+        assert_eq!(settings.preferred_repository(), Some("owner/repository"));
+    }
+
+    #[test]
+    fn clearing_persistence_removes_settings_and_login_item() {
+        let unique_id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after the Unix epoch")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("gatto-settings-test-{unique_id}"));
+        fs::create_dir_all(&directory).expect("test directory can be created");
+        let settings_path = directory.join("settings.json");
+        let launch_agent_path = directory.join("com.jeremy-chandler.gatto.plist");
+        fs::write(&settings_path, "{}").expect("settings file can be created");
+        fs::write(&launch_agent_path, "plist").expect("launch agent can be created");
+
+        clear_persistence(&settings_path, &launch_agent_path).expect("persistence can be cleared");
+
+        assert!(!settings_path.exists());
+        assert!(!launch_agent_path.exists());
+        fs::remove_dir(&directory).expect("test directory can be removed");
+    }
 }

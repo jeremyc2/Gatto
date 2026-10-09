@@ -66,6 +66,10 @@ setting writes a LaunchAgent containing the current executable's canonical path;
 disabling it removes that one file. The agent runs in the user's Aqua session at
 the next login. No privileged helper or system-wide service is installed.
 
+The **Reset app** preference removes both of these per-user files and returns
+the in-memory UI to first-run setup. It does not modify GitHub CLI
+authentication, which is managed outside of Gatto.
+
 The build script accepts an explicit `GIT_COMMIT_HASH` environment value or asks
 the local Git executable for the current short commit. It falls back to `unknown`
 when neither source is available.

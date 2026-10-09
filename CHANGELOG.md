@@ -13,6 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Bulk upload mode for staging and uploading multiple images at once, including a prompt to switch
   modes when adding several images to an existing draft.
+- Reset app option that clears local Gatto data and returns the app to first-run setup.
 
 ### Changed
 

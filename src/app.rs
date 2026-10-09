@@ -120,6 +120,7 @@ pub struct UploaderApp {
     staged_images: Vec<StagedImage>,
     bulk_upload: bool,
     paste_generation: u64,
+    state_generation: u64,
     upload_result: Option<UploadResult>,
     uploading: bool,
     settings: AppSettings,
@@ -216,6 +217,7 @@ impl UploaderApp {
             staged_images: Vec::new(),
             bulk_upload: false,
             paste_generation: 0,
+            state_generation: 0,
             upload_result: None,
             uploading: false,
             settings,
@@ -388,12 +390,16 @@ impl UploaderApp {
         cx.notify();
 
         let diagnostics = self.diagnostics.clone();
+        let state_generation = self.state_generation;
         cx.spawn_in(window, async move |this, window| {
             let requested = organization.clone();
             let result = window
                 .background_spawn(async move { github::load_session(&organization, &diagnostics) })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
+                if this.state_generation != state_generation {
+                    return;
+                }
                 if this.settings.organization.as_deref() != Some(requested.as_str()) {
                     return;
                 }
@@ -462,15 +468,10 @@ impl UploaderApp {
     }
 
     fn restore_remembered_repository(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(repository) = self
-            .settings
-            .last_repository
-            .as_ref()
-            .map(|name| Repository {
-                id: self.settings.last_repository_id.unwrap_or_default(),
-                name: name.clone(),
-            })
-        else {
+        let Some(repository) = self.settings.preferred_repository().map(|name| Repository {
+            id: self.settings.last_repository_id.unwrap_or_default(),
+            name: name.to_owned(),
+        }) else {
             return;
         };
 
@@ -512,6 +513,7 @@ impl UploaderApp {
                 "Choose an image".into()
             }),
         });
+        let state_generation = self.state_generation;
 
         cx.spawn_in(window, async move |this, window| {
             let Some(paths) = prompt.await.ok().and_then(Result::ok).flatten() else {
@@ -526,6 +528,9 @@ impl UploaderApp {
                 })
                 .await;
             let _ = this.update_in(window, |this, window, cx| {
+                if this.state_generation != state_generation {
+                    return;
+                }
                 this.accept_image_results(results, window, cx);
             });
         })
@@ -576,7 +581,13 @@ impl UploaderApp {
             } else {
                 paths.into_iter().take(1).collect()
             };
-            Self::load_dropped_paths(cx.entity().downgrade(), paths, window, cx);
+            Self::load_dropped_paths(
+                cx.entity().downgrade(),
+                self.state_generation,
+                paths,
+                window,
+                cx,
+            );
             return;
         }
 
@@ -587,6 +598,7 @@ impl UploaderApp {
 
     fn load_dropped_paths(
         view: gpui_kit::WeakEntity<Self>,
+        state_generation: u64,
         paths: Vec<PathBuf>,
         window: &mut Window,
         cx: &mut App,
@@ -604,6 +616,9 @@ impl UploaderApp {
             .spawn(cx, async move |window| {
                 let results = task.await;
                 let _ = view.update_in(window, |this, window, cx| {
+                    if this.state_generation != state_generation {
+                        return;
+                    }
                     this.accept_image_results(results, window, cx);
                 });
             })
@@ -1035,6 +1050,7 @@ impl UploaderApp {
         cx.notify();
 
         let diagnostics = self.diagnostics.clone();
+        let state_generation = self.state_generation;
         cx.spawn_in(window, async move |this, window| {
             let results = window
                 .background_spawn(async move {
@@ -1049,6 +1065,9 @@ impl UploaderApp {
                 })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
+                if this.state_generation != state_generation {
+                    return;
+                }
                 this.uploading = false;
                 let mut uploaded = Vec::new();
                 let mut failures = Vec::new();
@@ -1161,11 +1180,15 @@ impl UploaderApp {
         cx.notify();
 
         let diagnostics = self.diagnostics.clone();
+        let state_generation = self.state_generation;
         cx.spawn_in(window, async move |this, window| {
             let result = window
                 .background_spawn(async move { github::load_token(&diagnostics) })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
+                if this.state_generation != state_generation {
+                    return;
+                }
                 this.loading_token = false;
                 match result {
                     Ok(token) => {
@@ -1205,6 +1228,7 @@ impl UploaderApp {
         cx.notify();
 
         let diagnostics = self.diagnostics.clone();
+        let state_generation = self.state_generation;
         cx.spawn_in(window, async move |this, window| {
             let result = window
                 .background_spawn(async move {
@@ -1212,6 +1236,9 @@ impl UploaderApp {
                 })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
+                if this.state_generation != state_generation {
+                    return;
+                }
                 this.loading_repository = false;
                 match result {
                     Ok(id) => {
@@ -1415,6 +1442,81 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn confirm_reset(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let uploader = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let uploader = uploader.clone();
+            alert
+                .width(px(440.))
+                .title("Reset Gatto?")
+                .description(
+                    "This clears all Gatto data on this device and returns the app to its first-run state. This can’t be undone.",
+                )
+                .show_cancel(true)
+                .cancel_text("Cancel")
+                .ok_text("Reset app")
+                .on_ok(move |_, window, cx| {
+                    match uploader.update(cx, |this, cx| this.reset_app(window, cx)) {
+                        Ok(Ok(())) => true,
+                        Ok(Err(error)) => {
+                            window.push_notification(
+                                Notification::error(format!("Could not reset the app: {error}")),
+                                cx,
+                            );
+                            false
+                        }
+                        Err(_) => true,
+                    }
+                })
+        });
+    }
+
+    fn reset_app(&mut self, window: &mut Window, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        AppSettings::reset()?;
+
+        self.settings = AppSettings::default();
+        self.organization_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        self.repositories.clear();
+        self.selected_repository = None;
+        self.token = None;
+        self.loading_token = false;
+        self.loading_repository = false;
+        self.load_state = LoadState::NeedsSetup;
+        self.paste_generation = self.paste_generation.wrapping_add(1);
+        self.state_generation = self.state_generation.wrapping_add(1);
+        self.staged_images.clear();
+        self.bulk_upload = false;
+        self.pending_paste_repository = None;
+        self.pending_menu_paste = None;
+        self.pending_replacement_images = None;
+        self.upload_result = None;
+        self.uploading = false;
+        self.repository_picker.update(cx, |picker, cx| {
+            picker.set_selected_indices([], window, cx);
+            picker.set_items(
+                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
+                window,
+                cx,
+            );
+        });
+        self.menu_bar.set_paste_actions_visible(false);
+        self.diagnostics
+            .info("Reset app state and cleared saved preferences.");
+        window.push_notification(
+            Notification::success("App reset. Set up Gatto to continue."),
+            cx,
+        );
+        cx.notify();
+        Ok(())
+    }
+
     fn open_log_window(
         &mut self,
         _: &gpui_kit::ClickEvent,
@@ -1571,8 +1673,8 @@ impl UploaderApp {
             )
             .child(
                 Combobox::new(&self.repository_picker)
-                    .placeholder(if disabled {
-                        "Repositories unavailable".to_owned()
+                    .placeholder(if self.load_state == LoadState::Loading {
+                        String::new()
                     } else {
                         format!("Search {organization} repositories…")
                     })
@@ -1653,6 +1755,7 @@ impl UploaderApp {
     fn render_drop_zone(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity().downgrade();
         let bulk_upload = self.bulk_upload;
+        let state_generation = self.state_generation;
         let uploading = self.uploading;
         let has_staged_images = !self.staged_images.is_empty();
         div()
@@ -1679,7 +1782,7 @@ impl UploaderApp {
                         } else {
                             paths.paths().iter().take(1).cloned().collect()
                         };
-                        Self::load_dropped_paths(view.clone(), paths, window, cx);
+                        Self::load_dropped_paths(view.clone(), state_generation, paths, window, cx);
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.choose_file(window, cx);
@@ -2268,6 +2371,29 @@ impl UploaderApp {
                             .child(
                                 "Uses a per-user macOS LaunchAgent and takes effect at the next login.",
                             ),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .p_4()
+                    .child(div().font_semibold().text_sm().child("Reset app"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Return Gatto to its first-run state."),
+                    )
+                    .child(
+                        Button::new("reset-app")
+                            .outline()
+                            .small()
+                            .self_start()
+                            .label("Reset app")
+                            .on_click(cx.listener(Self::confirm_reset)),
                     ),
             )
             .child(
