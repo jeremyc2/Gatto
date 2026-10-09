@@ -30,9 +30,9 @@ Paste, drop, or file selection
       Validate image data
              |
              v
-      Stage image in memory
+      Stage attachment in memory
              |
-             +------> Show preview and metadata
+             +------> Show preview state and metadata
              |
              v
 Request upload to the configured repository
@@ -44,14 +44,15 @@ Read active token from GitHub CLI
 Send bytes to GitHub attachment service
              |
              v
-Show returned URL and Markdown image snippet
+Mark the attachment uploaded or failed
              |
              v
-User explicitly copies the preferred value
+Add Markdown copy control to uploaded attachment
 ```
 
-The staged image remains available after an upload error so the user can retry
-without selecting it again.
+Attachments remain available after success or failure. Failed attachments can be retried without
+selecting them again, and uploaded attachments retain their preview, description editor, and
+Markdown copy control.
 
 ## App Preferences and local state
 

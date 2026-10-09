@@ -13,7 +13,7 @@ use gpui_kit::{
     Styled as _, Window, actions, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
 
-use crate::model::StagedImage;
+use crate::{model::StagedImage, window_limits};
 
 actions!(
     image_preview,
@@ -186,7 +186,7 @@ impl ImagePreview {
     }
 
     fn close_preview(&mut self, _: &ClosePreview, window: &mut Window, _: &mut Context<Self>) {
-        window.remove_window();
+        window_limits::hide(window);
     }
 
     fn mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {

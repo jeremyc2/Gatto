@@ -18,9 +18,12 @@ use crate::{
 };
 
 fn main() {
-    let application = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
+    let application = gpui_kit::application()
+        .with_assets(gpui_kit::assets::AllAssets)
+        .with_quit_mode(gpui_kit::QuitMode::Explicit);
 
     application.run(|cx| {
+        cx.set_app_identity("com.jeremy-chandler.gatto", "Gatto");
         gpui_kit::init(cx);
         apply_dark_theme(cx);
         app::init_keybindings(cx);
@@ -97,33 +100,22 @@ fn main() {
                             });
                         });
                     }
-                    MenuAction::PasteAndPreview => {
+                    MenuAction::PreviewFromClipboard => {
                         cx.update(|cx| {
                             set_dock_visible(true);
                             cx.activate(true);
                             let _ = window_handle.update(cx, |_, window, cx| {
                                 window.activate_window();
-                                window.dispatch_action(Box::new(app::PasteAndPreview), cx);
+                                window.dispatch_action(Box::new(app::PreviewFromClipboard), cx);
                             });
                         });
                     }
-                    MenuAction::PasteToMarkdown => {
+                    MenuAction::QuickCopy => {
                         cx.update(|cx| {
-                            set_dock_visible(true);
-                            cx.activate(true);
+                            set_dock_visible(false);
                             let _ = window_handle.update(cx, |_, window, cx| {
-                                window.activate_window();
-                                window.dispatch_action(Box::new(app::PasteToMarkdown), cx);
-                            });
-                        });
-                    }
-                    MenuAction::PasteToUrl => {
-                        cx.update(|cx| {
-                            set_dock_visible(true);
-                            cx.activate(true);
-                            let _ = window_handle.update(cx, |_, window, cx| {
-                                window.activate_window();
-                                window.dispatch_action(Box::new(app::PasteToUrl), cx);
+                                window_limits::hide(window);
+                                window.dispatch_action(Box::new(app::QuickCopy), cx);
                             });
                         });
                     }

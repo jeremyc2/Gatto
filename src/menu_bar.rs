@@ -9,9 +9,8 @@ use tray_icon::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuAction {
     Open,
-    PasteAndPreview,
-    PasteToMarkdown,
-    PasteToUrl,
+    PreviewFromClipboard,
+    QuickCopy,
     Settings,
     Quit,
 }
@@ -21,9 +20,8 @@ pub struct MenuBar {
     menu: Menu,
     open_id: MenuId,
     paste_preview_id: MenuId,
-    paste_markdown_id: MenuId,
     paste_url_id: MenuId,
-    paste_items: [MenuItem; 3],
+    paste_items: [MenuItem; 2],
     paste_separator: PredefinedMenuItem,
     paste_actions_visible: bool,
     settings_id: MenuId,
@@ -36,9 +34,8 @@ impl MenuBar {
     ) -> Result<(Self, async_channel::Receiver<MenuEvent>)> {
         let menu = Menu::new();
         let open = MenuItem::new("Open App", true, None);
-        let paste_preview = MenuItem::new("Paste & Preview", true, None);
-        let paste_markdown = MenuItem::new("Paste to Markdown", true, None);
-        let paste_url = MenuItem::new("Paste to URL", true, None);
+        let paste_preview = MenuItem::new("Preview from Clipboard", true, None);
+        let paste_url = MenuItem::new("Quick Copy", true, None);
         let settings = MenuItem::new("App Preferences", true, None);
         let paste_separator = PredefinedMenuItem::separator();
         let settings_separator = PredefinedMenuItem::separator();
@@ -47,13 +44,8 @@ impl MenuBar {
         menu.append(&open)
             .context("Could not create the menu bar menu")?;
         if paste_actions_visible {
-            menu.append_items(&[
-                &paste_separator,
-                &paste_preview,
-                &paste_markdown,
-                &paste_url,
-            ])
-            .context("Could not create the Paste menu items")?;
+            menu.append_items(&[&paste_separator, &paste_preview, &paste_url])
+                .context("Could not create the Paste menu items")?;
         }
         menu.append_items(&[&settings_separator, &settings, &quit_separator, &quit])
             .context("Could not create the menu bar menu")?;
@@ -81,9 +73,8 @@ impl MenuBar {
                 menu,
                 open_id: open.id().clone(),
                 paste_preview_id: paste_preview.id().clone(),
-                paste_markdown_id: paste_markdown.id().clone(),
                 paste_url_id: paste_url.id().clone(),
-                paste_items: [paste_preview, paste_markdown, paste_url],
+                paste_items: [paste_preview, paste_url],
                 paste_separator,
                 paste_actions_visible,
                 settings_id: settings.id().clone(),
@@ -97,11 +88,9 @@ impl MenuBar {
         if event.id == self.open_id {
             Some(MenuAction::Open)
         } else if event.id == self.paste_preview_id {
-            Some(MenuAction::PasteAndPreview)
-        } else if event.id == self.paste_markdown_id {
-            Some(MenuAction::PasteToMarkdown)
+            Some(MenuAction::PreviewFromClipboard)
         } else if event.id == self.paste_url_id {
-            Some(MenuAction::PasteToUrl)
+            Some(MenuAction::QuickCopy)
         } else if event.id == self.settings_id {
             Some(MenuAction::Settings)
         } else if event.id == self.quit_id {
@@ -121,7 +110,6 @@ impl MenuBar {
                     &self.paste_separator,
                     &self.paste_items[0],
                     &self.paste_items[1],
-                    &self.paste_items[2],
                 ],
                 1,
             )
@@ -130,7 +118,6 @@ impl MenuBar {
                 .remove(&self.paste_separator)
                 .and_then(|_| self.menu.remove(&self.paste_items[0]))
                 .and_then(|_| self.menu.remove(&self.paste_items[1]))
-                .and_then(|_| self.menu.remove(&self.paste_items[2]))
         };
         if result.is_ok() {
             self.paste_actions_visible = visible;

@@ -6,8 +6,7 @@
 
 A lightweight macOS menu bar app for uploading images to GitHub's native
 user-attachment storage. Set an organization in App Preferences, paste, drop, or select an
-image, then copy either the resulting URL or a ready-to-paste Markdown image
-snippet.
+image, then copy a ready-to-paste Markdown image snippet from the uploaded attachment.
 
 The app is written in Rust with GPUI and GPUI Kit. GPUI Kit is pinned to `0.7.1`;
 that release pins and re-exports its compatible GPUI `0.3.8` snapshot. The
@@ -36,13 +35,14 @@ a local build.
 - Uploads through a repository from an organization you set in App Preferences, public or private, using the
   active GitHub CLI account.
 - Uploads PNG, JPEG, GIF, and WebP images.
-- Shows the returned GitHub attachment URL without changing the clipboard.
-- Provides explicit copy buttons for the URL and a Markdown image snippet.
+- Keeps previewed, uploaded, and failed images together as status-aware attachments.
+- Adds a Markdown copy button to each attachment after it uploads.
 - Can start automatically at macOS login.
 - Shows the build's app version and Git commit hash in App Preferences.
 - Preserves the staged image when GitHub returns an error so the upload can be retried.
 - Includes an **Application logs** window with a copy button for troubleshooting.
-- Provides a menu bar **Quick Paste** action for clipboard images and pinned repositories.
+- Provides menu bar actions for previewing a clipboard image or uploading and copying its URL in
+  the background with a native macOS notification.
 
 ## Prerequisites
 
@@ -136,21 +136,22 @@ it again or quit.
    App Preferences. The app does nothing until one is set.
 2. Paste an image, drag one into the window, or choose an image file.
 3. Upload the image.
-4. Review the returned URL and Markdown image snippet.
-5. Choose **Copy URL** or **Copy Markdown**, then paste it into a GitHub issue,
+4. Wait for the attachment status to change to **Uploaded**.
+5. Use the attachment's copy button, then paste the Markdown into a GitHub issue,
    pull request, discussion, or Markdown file.
 
-For a faster path, pin a repository in App Preferences, copy an image, then choose
-**Quick Paste** from the menu bar icon. The app opens with that image staged and the first
-pinned repository selected, ready for **Upload image**. When multiple repositories are pinned,
-Quick Paste uses the alphabetically first one. The menu item appears only while at least one
-repository is pinned.
+For a faster path, pin a repository in App Preferences, copy an image, then choose **Quick Copy**
+from the menu bar icon. Gatto uploads without opening its window, copies the resulting URL, and
+sends a native macOS notification when it finishes. When multiple repositories are pinned, Quick
+Copy uses the most recently selected pinned repository, falling back to the alphabetically first
+one. Choose **Preview from Clipboard** when you want to stage the image in the app instead. These
+menu items appear only while at least one repository is pinned.
 
-Nothing is copied automatically. The Markdown button copies a value such as
+Normal uploads do not change the clipboard. An uploaded attachment's copy button copies a value such as
 `![screenshot.png](https://github.com/user-attachments/assets/…)`.
 
-On the uploader screen, press **Command+Shift+C** to copy the uploaded URL or
-**Command+Shift+M** to copy the Markdown image snippet. These shortcuts do nothing
+On the uploader screen, press **Command+Shift+C** to copy all uploaded URLs or
+**Command+Shift+M** to copy all uploaded Markdown image snippets. These shortcuts do nothing
 until an upload result is available.
 
 ## App Preferences

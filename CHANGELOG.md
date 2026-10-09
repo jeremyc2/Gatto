@@ -7,6 +7,29 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-09
+
+### Added
+
+- Copy all uploaded Markdown snippets from the bulk attachment list, joined by newlines.
+
+### Changed
+
+- Uploaded results now remain in the attachment list with color-coded preview, uploading,
+  uploaded, and failed states; each uploaded attachment owns its Markdown copy button instead of
+  rendering a separate URL/Markdown success panel.
+- Renamed Paste & Preview to Preview from Clipboard and Paste to URL to Quick Copy. Quick Copy now
+  copies Markdown, runs in the background, and reports completion through a native macOS
+  notification. Unsaved image drafts are labeled Draft, and the organization save button reflects
+  whether the current value is already saved.
+
+### Fixed
+
+- Secondary windows are hidden and retained when closed, including the preview Escape shortcut,
+  so closing a preview or Application logs window cannot tear down the main bundled app.
+- Quick Copy discards its staged images and results after upload, so later clipboard previews do
+  not prompt to replace an image from a completed Quick Copy.
+
 ## [0.5.0] - 2026-10-09
 
 ### Added

@@ -27,6 +27,16 @@ pub fn hide(window: &Window) {
 #[cfg(not(target_os = "macos"))]
 pub fn hide(_: &Window) {}
 
+/// Intercepts a native close request and keeps the GPUI window alive.
+///
+/// Retaining utility windows avoids AppKit/GPUI teardown differences between
+/// `cargo run` and a signed app bundle. Opening the utility again simply
+/// activates the existing hidden window.
+pub fn hide_instead_of_close(window: &Window) -> bool {
+    hide(window);
+    false
+}
+
 /// GPUI exposes the minimum size directly. macOS maximum size support is set
 /// through the underlying NSWindow until GPUI exposes the matching option.
 #[cfg(target_os = "macos")]
@@ -51,3 +61,33 @@ pub fn set_maximum_content_size(window: &Window, width: f64, height: f64) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn set_maximum_content_size(_: &Window, _: f64, _: f64) {}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::{
+        AppContext as _, Context, IntoElement, Render, TestAppContext, VisualTestContext, Window,
+        div,
+    };
+
+    use super::hide_instead_of_close;
+
+    struct UtilityWindow;
+
+    impl Render for UtilityWindow {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+        }
+    }
+
+    #[gpui_kit::test]
+    fn utility_window_close_requests_are_intercepted(cx: &mut TestAppContext) {
+        let handle = cx.add_window(|window, cx| {
+            window.on_window_should_close(cx, |window, _| hide_instead_of_close(window));
+            UtilityWindow
+        });
+        let mut window = VisualTestContext::from_window(handle.into(), cx);
+
+        assert!(!window.simulate_close());
+        assert!(cx.update_window(handle.into(), |_, _, _| ()).is_ok());
+    }
+}

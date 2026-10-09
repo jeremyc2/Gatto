@@ -32,11 +32,44 @@ pub struct StagedImage {
     pub id: u64,
     pub name: String,
     pub description: String,
-    pub uploaded_url: Option<String>,
+    pub upload_state: AttachmentUploadState,
     pub mime_type: String,
     pub bytes: Arc<Vec<u8>>,
     pub preview: Arc<Image>,
     pub pixel_size: (u32, u32),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum AttachmentUploadState {
+    #[default]
+    Preview,
+    Uploading,
+    Uploaded {
+        url: String,
+    },
+    Failed {
+        message: String,
+    },
+}
+
+impl AttachmentUploadState {
+    pub fn is_uploaded(&self) -> bool {
+        matches!(self, Self::Uploaded { .. })
+    }
+
+    pub fn uploaded_url(&self) -> Option<&str> {
+        match self {
+            Self::Uploaded { url } => Some(url),
+            _ => None,
+        }
+    }
+
+    pub fn failure_message(&self) -> Option<&str> {
+        match self {
+            Self::Failed { message } => Some(message),
+            _ => None,
+        }
+    }
 }
 
 impl StagedImage {
@@ -67,7 +100,7 @@ impl StagedImage {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             description: name.clone(),
             name,
-            uploaded_url: None,
+            upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
             bytes,
@@ -103,7 +136,7 @@ impl StagedImage {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             description: name.clone(),
             name,
-            uploaded_url: None,
+            upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
             bytes,
@@ -143,4 +176,24 @@ fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<(u32, u32)>
     let image = ::image::load_from_memory_with_format(bytes, image_format)
         .context("The image data is corrupt or unreadable")?;
     Ok((image.width(), image.height()))
+}
+
+#[cfg(test)]
+mod attachment_upload_state_tests {
+    use super::AttachmentUploadState;
+
+    #[test]
+    fn only_uploaded_state_exposes_a_url() {
+        let uploaded = AttachmentUploadState::Uploaded {
+            url: "https://example.com/image".into(),
+        };
+        let failed = AttachmentUploadState::Failed {
+            message: "network error".into(),
+        };
+
+        assert!(uploaded.is_uploaded());
+        assert_eq!(uploaded.uploaded_url(), Some("https://example.com/image"));
+        assert_eq!(failed.failure_message(), Some("network error"));
+        assert!(!failed.is_uploaded());
+    }
 }
