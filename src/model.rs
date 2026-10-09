@@ -28,6 +28,7 @@ pub struct StagedImage {
     pub mime_type: String,
     pub bytes: Arc<Vec<u8>>,
     pub preview: Arc<Image>,
+    pub pixel_size: (u32, u32),
 }
 
 impl StagedImage {
@@ -45,7 +46,7 @@ impl StagedImage {
     pub fn from_clipboard(image: &Image) -> Result<Self> {
         let format = supported_gpui_format(image.format)
             .context("Unsupported format. Please paste or drop an image file (PNG/JPEG).")?;
-        validate_image_bytes(&image.bytes, format)?;
+        let pixel_size = validate_image_bytes(&image.bytes, format)?;
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -59,6 +60,7 @@ impl StagedImage {
             mime_type: format.mime_type().to_owned(),
             preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
             bytes,
+            pixel_size,
         })
     }
 
@@ -84,13 +86,14 @@ impl StagedImage {
             }
         }
 
-        validate_image_bytes(&bytes, format)?;
+        let pixel_size = validate_image_bytes(&bytes, format)?;
         let bytes = Arc::new(bytes);
         Ok(Self {
             name,
             mime_type: format.mime_type().to_owned(),
             preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
             bytes,
+            pixel_size,
         })
     }
 
@@ -111,7 +114,7 @@ fn supported_gpui_format(format: ImageFormat) -> Option<ImageFormat> {
     }
 }
 
-fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<()> {
+fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<(u32, u32)> {
     if bytes.is_empty() {
         bail!("The image is empty.");
     }
@@ -123,7 +126,7 @@ fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<()> {
         ImageFormat::Webp => ::image::ImageFormat::WebP,
         _ => bail!("Unsupported format. Please paste or drop an image file (PNG/JPEG)."),
     };
-    ::image::load_from_memory_with_format(bytes, image_format)
+    let image = ::image::load_from_memory_with_format(bytes, image_format)
         .context("The image data is corrupt or unreadable")?;
-    Ok(())
+    Ok((image.width(), image.height()))
 }

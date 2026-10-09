@@ -1,11 +1,12 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use gpui_kit::assets::IconName as AssetIconName;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, StyledExt as _,
     WindowExt as _,
     attachment::{
-        Attachment, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentStatus,
-        AttachmentTitle,
+        Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia,
+        AttachmentStatus, AttachmentTitle,
     },
     button::{Button, ButtonVariants as _},
     checkbox::Checkbox,
@@ -30,6 +31,7 @@ use gpui_kit::{
 use crate::{
     diagnostics::Diagnostics,
     github,
+    image_preview::ImagePreview,
     log_viewer::LogViewer,
     menu_bar::MenuBarController,
     model::{Repository, StagedImage, parse_organization},
@@ -92,6 +94,7 @@ pub struct UploaderApp {
     pending_paste_repository: Option<String>,
     pending_menu_paste: Option<MenuPasteMode>,
     log_window: Option<AnyWindowHandle>,
+    preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
     menu_bar: MenuBarController,
     diagnostics: Diagnostics,
     header_mark: Arc<Image>,
@@ -158,6 +161,7 @@ impl UploaderApp {
             pending_paste_repository: None,
             pending_menu_paste: None,
             log_window: None,
+            preview_window: None,
             menu_bar,
             diagnostics,
             header_mark: Arc::new(Image::from_bytes(
@@ -826,6 +830,66 @@ impl UploaderApp {
         }
     }
 
+    fn open_image_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(image) = self.staged_image.as_ref() else {
+            return;
+        };
+        let preview_image = image.preview.clone();
+        let preview_name = image.name.clone();
+        let pixel_size = image.pixel_size;
+
+        if let Some((preview_window, preview)) = self.preview_window.clone() {
+            let title = preview_name.clone();
+            if preview_window
+                .update(cx, move |_, window, _| {
+                    window.set_window_title(&format!("{title} — Gatto Preview"));
+                    window.activate_window();
+                })
+                .is_ok()
+            {
+                preview.update(cx, |preview, cx| {
+                    preview.show(preview_image, preview_name, pixel_size, cx);
+                });
+                return;
+            }
+            self.preview_window = None;
+        }
+
+        let uploader = cx.entity().downgrade();
+        let window_title = format!("{preview_name} — Gatto Preview");
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::centered(size(px(980.), px(720.)), cx)),
+            window_min_size: Some(size(px(420.), px(320.))),
+            ..Default::default()
+        };
+        let result = gpui_kit::open_window(options, cx, move |window, cx| {
+            window.set_window_title(&window_title);
+            window_limits::set_maximum_content_size(window, 2200., 1600.);
+            window.on_window_should_close(cx, move |_, cx| {
+                let _ = uploader.update(cx, |this, _| {
+                    this.preview_window = None;
+                });
+                true
+            });
+            let preview =
+                cx.new(|cx| ImagePreview::new(preview_image, preview_name, pixel_size, cx));
+            let focus = preview.read(cx).focus_handle(cx);
+            window.focus(&focus, cx);
+            preview
+        });
+        match result {
+            Ok((handle, preview)) => self.preview_window = Some((handle, preview)),
+            Err(error) => {
+                self.diagnostics
+                    .error(format!("Could not open image preview: {error}"));
+                window.push_notification(
+                    Notification::error("Could not open the image preview."),
+                    cx,
+                );
+            }
+        }
+    }
+
     fn render_repository_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let disabled = self.load_state != LoadState::Ready;
         let organization = self.settings.organization.clone().unwrap_or_default();
@@ -947,7 +1011,7 @@ impl UploaderApp {
                     .items_center()
                     .gap_3()
                     .child(
-                        Icon::new(IconName::Plus)
+                        Icon::new(AssetIconName::Image)
                             .size(px(30.))
                             .text_color(cx.theme().muted_foreground),
                     )
@@ -983,11 +1047,13 @@ impl UploaderApp {
             } else {
                 AttachmentStatus::Pending
             };
-            let view = cx.entity().downgrade();
+            let preview_view = cx.entity().downgrade();
+            let remove_view = cx.entity().downgrade();
             Attachment::new()
                 .id("staged-image-attachment")
                 .large()
                 .w_full()
+                .cursor_pointer()
                 .status(status)
                 .media(AttachmentMedia::new().src(source))
                 .content(
@@ -995,15 +1061,29 @@ impl UploaderApp {
                         .title(AttachmentTitle::new(title))
                         .description(AttachmentDescription::new(detail)),
                 )
+                .on_click(move |_, window, cx| {
+                    let _ = preview_view.update(cx, |this, cx| {
+                        this.open_image_preview(window, cx);
+                    });
+                })
                 .when(!self.uploading, |attachment| {
-                    attachment
-                        .tooltip("Remove staged image")
-                        .on_remove(move |_, _, cx| {
-                            let _ = view.update(cx, |this, cx| {
-                                this.pending_menu_paste = None;
-                                this.clear_staged_image("Discarded the staged image.", cx);
-                            });
-                        })
+                    attachment.actions(
+                        AttachmentActions::new().child(
+                            Button::new("remove-staged-image")
+                                .ghost()
+                                .small()
+                                .icon(IconName::Close)
+                                .accessibility_label("Remove staged image")
+                                .tooltip("Remove staged image")
+                                .on_click(move |_, _, cx| {
+                                    cx.stop_propagation();
+                                    let _ = remove_view.update(cx, |this, cx| {
+                                        this.pending_menu_paste = None;
+                                        this.clear_staged_image("Discarded the staged image.", cx);
+                                    });
+                                }),
+                        ),
+                    )
                 })
                 .into_any_element()
         });

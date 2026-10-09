@@ -1,6 +1,7 @@
 mod app;
 mod diagnostics;
 mod github;
+mod image_preview;
 mod log_viewer;
 mod menu_bar;
 mod model;
@@ -17,12 +18,13 @@ use crate::{
 };
 
 fn main() {
-    let application = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+    let application = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
 
     application.run(|cx| {
         gpui_kit::init(cx);
         apply_dark_theme(cx);
         app::init_keybindings(cx);
+        image_preview::init_keybindings(cx);
         set_dock_visible(true);
         let diagnostics = Diagnostics::new();
         diagnostics.info("Application started.");
