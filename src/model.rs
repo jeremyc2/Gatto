@@ -1,11 +1,16 @@
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context as _, Result, bail};
 use gpui_kit::{Image, ImageFormat};
+
+static NEXT_STAGED_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Repository {
@@ -24,7 +29,10 @@ pub fn parse_organization(value: &str) -> Result<String> {
 
 #[derive(Clone)]
 pub struct StagedImage {
+    pub id: u64,
     pub name: String,
+    pub description: String,
+    pub uploaded_url: Option<String>,
     pub mime_type: String,
     pub bytes: Arc<Vec<u8>>,
     pub preview: Arc<Image>,
@@ -56,7 +64,10 @@ impl StagedImage {
         let bytes = Arc::new(image.bytes.clone());
 
         Ok(Self {
+            id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
+            description: name.clone(),
             name,
+            uploaded_url: None,
             mime_type: format.mime_type().to_owned(),
             preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
             bytes,
@@ -89,7 +100,10 @@ impl StagedImage {
         let pixel_size = validate_image_bytes(&bytes, format)?;
         let bytes = Arc::new(bytes);
         Ok(Self {
+            id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
+            description: name.clone(),
             name,
+            uploaded_url: None,
             mime_type: format.mime_type().to_owned(),
             preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
             bytes,

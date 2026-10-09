@@ -15,13 +15,15 @@ use gpui_kit::component::{
     h_flex,
     input::{Input, InputState},
     kbd::Kbd,
+    menu::{DropdownMenu as _, PopupMenuItem},
     notification::Notification,
-    searchable_list::SearchableVec,
+    searchable_list::{SearchableGroup, SearchableVec},
     spinner::Spinner,
+    switch::Switch,
     v_flex,
 };
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity,
+    Anchor, AnyWindowHandle, App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity,
     ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
     IntoElement, KeyBinding, Keystroke, ObjectFit, ParentElement as _, PathPromptOptions, Render,
     SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
@@ -55,7 +57,7 @@ const KEY_CONTEXT: &str = "Gatto";
 const UNSUPPORTED_MESSAGE: &str =
     "Unsupported format. Please paste or drop a PNG, JPEG, GIF, or WebP image.";
 
-type RepositoryPicker = ComboboxState<SearchableVec<String>>;
+type RepositoryPicker = ComboboxState<SearchableVec<SearchableGroup<String>>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LoadState {
@@ -66,9 +68,33 @@ enum LoadState {
 }
 
 #[derive(Clone)]
-struct UploadResult {
+struct UploadedImage {
+    id: u64,
     url: String,
     markdown: String,
+}
+
+#[derive(Clone)]
+struct UploadResult {
+    images: Vec<UploadedImage>,
+}
+
+impl UploadResult {
+    fn urls(&self) -> String {
+        self.images
+            .iter()
+            .map(|image| image.url.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn markdown(&self) -> String {
+        self.images
+            .iter()
+            .map(|image| image.markdown.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,7 +111,8 @@ pub struct UploaderApp {
     selected_repository: Option<Repository>,
     token: Option<String>,
     load_state: LoadState,
-    staged_image: Option<StagedImage>,
+    staged_images: Vec<StagedImage>,
+    bulk_upload: bool,
     paste_generation: u64,
     upload_result: Option<UploadResult>,
     uploading: bool,
@@ -129,17 +156,34 @@ impl UploaderApp {
                 .default_value(initial_organization)
         });
         let repository_picker = cx.new(|cx| {
-            ComboboxState::new(SearchableVec::new(Vec::<String>::new()), vec![], window, cx)
-                .searchable(true)
+            ComboboxState::new(
+                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
+                vec![],
+                window,
+                cx,
+            )
+            .searchable(true)
         });
         let subscription = cx.subscribe(
             &repository_picker,
-            |this: &mut Self, _, event: &ComboboxEvent<SearchableVec<String>>, cx| {
+            |this: &mut Self,
+             _,
+             event: &ComboboxEvent<SearchableVec<SearchableGroup<String>>>,
+             cx| {
                 if let ComboboxEvent::Change(values) = event {
                     this.selected_repository = values
                         .first()
                         .and_then(|name| this.repositories.get(name))
                         .cloned();
+                    this.settings.last_repository = this
+                        .selected_repository
+                        .as_ref()
+                        .map(|repository| repository.name.clone());
+                    if let Err(error) = this.settings.save() {
+                        this.diagnostics.error(format!(
+                            "Could not remember the selected repository: {error}"
+                        ));
+                    }
                     cx.notify();
                 }
             },
@@ -152,7 +196,8 @@ impl UploaderApp {
             selected_repository: None,
             token: None,
             load_state: LoadState::NeedsSetup,
-            staged_image: None,
+            staged_images: Vec::new(),
+            bulk_upload: false,
             paste_generation: 0,
             upload_result: None,
             uploading: false,
@@ -224,10 +269,16 @@ impl UploaderApp {
         cx: &mut Context<Self>,
     ) {
         self.settings_open = false;
-        self.reset_image_draft("Menu paste cleared the previous image draft.", cx);
         self.pending_menu_paste = Some(mode);
 
-        let Some(repository_name) = self.settings.pinned_repositories.first().cloned() else {
+        let repository_name = self
+            .settings
+            .last_repository
+            .as_ref()
+            .filter(|name| self.settings.pinned_repositories.contains(*name))
+            .cloned()
+            .or_else(|| self.settings.pinned_repositories.first().cloned());
+        let Some(repository_name) = repository_name else {
             self.pending_menu_paste = None;
             self.warn(
                 "Paste actions need a pinned repository. Pin one in App Preferences first.",
@@ -275,21 +326,13 @@ impl UploaderApp {
     /// Clears a pasted image when the main window is hidden, or when the user
     /// explicitly discards it. Incrementing the generation keeps a pending
     /// clipboard conversion from restoring an image after it was cleared.
-    pub fn clear_staged_image(&mut self, reason: &str, cx: &mut Context<Self>) {
+    pub fn clear_staged_images(&mut self, reason: &str, cx: &mut Context<Self>) {
         self.paste_generation = self.paste_generation.wrapping_add(1);
         self.pending_menu_paste = None;
         self.pending_paste_repository = None;
-        if self.staged_image.take().is_some() {
-            self.diagnostics.info(reason);
-            cx.notify();
-        }
-    }
-
-    fn reset_image_draft(&mut self, reason: &str, cx: &mut Context<Self>) {
-        let had_upload_result = self.upload_result.take().is_some();
-        let had_staged_image = self.staged_image.is_some();
-        self.clear_staged_image(reason, cx);
-        if had_upload_result && !had_staged_image {
+        if !self.staged_images.is_empty() {
+            self.staged_images.clear();
+            self.upload_result = None;
             self.diagnostics.info(reason);
             cx.notify();
         }
@@ -316,7 +359,11 @@ impl UploaderApp {
         self.repositories.clear();
         self.repository_picker.update(cx, |picker, cx| {
             picker.set_selected_indices([], window, cx);
-            picker.set_items(SearchableVec::new(Vec::<String>::new()), window, cx);
+            picker.set_items(
+                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
+                window,
+                cx,
+            );
         });
         let Some(organization) = self.settings.organization.clone() else {
             self.diagnostics
@@ -353,11 +400,11 @@ impl UploaderApp {
                             .into_iter()
                             .map(|repository| (repository.name.clone(), repository))
                             .collect();
-                        let names = this.sorted_repository_names();
+                        let groups = this.repository_groups();
                         this.token = Some(session.token);
                         this.load_state = LoadState::Ready;
                         this.repository_picker.update(cx, |picker, cx| {
-                            picker.set_items(SearchableVec::new(names), window, cx);
+                            picker.set_items(SearchableVec::new(groups), window, cx);
                         });
                         if let Some(repository_name) = this.pending_paste_repository.take() {
                             if this.select_repository(&repository_name, window, cx) {
@@ -376,6 +423,14 @@ impl UploaderApp {
                                     cx,
                                 );
                             }
+                        } else if let Some(repository_name) = this
+                            .settings
+                            .last_repository
+                            .clone()
+                            .filter(|name| this.repositories.contains_key(name))
+                            .or_else(|| this.settings.pinned_repositories.first().cloned())
+                        {
+                            this.select_repository(&repository_name, window, cx);
                         }
                         this.try_complete_menu_paste(window, cx);
                     }
@@ -395,28 +450,32 @@ impl UploaderApp {
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.diagnostics.info("Opened the image file picker.");
+        let multiple = self.bulk_upload;
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
-            multiple: false,
-            prompt: Some("Choose an image".into()),
+            multiple,
+            prompt: Some(if multiple {
+                "Choose images".into()
+            } else {
+                "Choose an image".into()
+            }),
         });
 
         cx.spawn_in(window, async move |this, window| {
-            let Some(path) = prompt
-                .await
-                .ok()
-                .and_then(Result::ok)
-                .flatten()
-                .and_then(|paths| paths.into_iter().next())
-            else {
+            let Some(paths) = prompt.await.ok().and_then(Result::ok).flatten() else {
                 return;
             };
-            let result = window
-                .background_spawn(async move { StagedImage::from_path(path) })
+            let results = window
+                .background_spawn(async move {
+                    paths
+                        .into_iter()
+                        .map(StagedImage::from_path)
+                        .collect::<Vec<_>>()
+                })
                 .await;
             let _ = this.update_in(window, |this, window, cx| {
-                this.accept_image_result(result, window, cx);
+                this.accept_image_results(results, window, cx);
             });
         })
         .detach();
@@ -424,6 +483,14 @@ impl UploaderApp {
 
     fn on_paste(&mut self, _: &PasteImage, window: &mut Window, cx: &mut Context<Self>) {
         if self.load_state == LoadState::NeedsSetup {
+            return;
+        }
+        if self.uploading {
+            self.warn(
+                "Wait for the current upload to finish before adding images.",
+                window,
+                cx,
+            );
             return;
         }
         let Some(clipboard) = cx.read_from_clipboard() else {
@@ -437,7 +504,6 @@ impl UploaderApp {
             ClipboardEntry::Image(image) => Some(image.clone()),
             _ => None,
         }) {
-            self.paste_generation = self.paste_generation.wrapping_add(1);
             let paste_generation = self.paste_generation;
             let task = cx.background_spawn(async move { StagedImage::from_clipboard(&image) });
             cx.spawn_in(window, async move |this, window| {
@@ -450,11 +516,16 @@ impl UploaderApp {
             return;
         }
 
-        if let Some(path) = clipboard.entries().iter().find_map(|entry| match entry {
-            ClipboardEntry::ExternalPaths(paths) => paths.paths().first().cloned(),
+        if let Some(paths) = clipboard.entries().iter().find_map(|entry| match entry {
+            ClipboardEntry::ExternalPaths(paths) => Some(paths.paths().to_vec()),
             _ => None,
         }) {
-            Self::load_dropped_path(cx.entity().downgrade(), path, window, cx);
+            let paths = if self.bulk_upload {
+                paths
+            } else {
+                paths.into_iter().take(1).collect()
+            };
+            Self::load_dropped_paths(cx.entity().downgrade(), paths, window, cx);
             return;
         }
 
@@ -463,18 +534,26 @@ impl UploaderApp {
         self.warn(UNSUPPORTED_MESSAGE, window, cx);
     }
 
-    fn load_dropped_path(
+    fn load_dropped_paths(
         view: gpui_kit::WeakEntity<Self>,
-        path: PathBuf,
+        paths: Vec<PathBuf>,
         window: &mut Window,
         cx: &mut App,
     ) {
-        let task = cx.background_spawn(async move { StagedImage::from_path(path) });
+        if paths.is_empty() {
+            return;
+        }
+        let task = cx.background_spawn(async move {
+            paths
+                .into_iter()
+                .map(StagedImage::from_path)
+                .collect::<Vec<_>>()
+        });
         window
             .spawn(cx, async move |window| {
-                let result = task.await;
+                let results = task.await;
                 let _ = view.update_in(window, |this, window, cx| {
-                    this.accept_image_result(result, window, cx);
+                    this.accept_image_results(results, window, cx);
                 });
             })
             .detach();
@@ -486,23 +565,253 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match result {
-            Ok(image) => {
-                self.diagnostics.info("Staged an image for upload.");
-                self.staged_image = Some(image);
-                self.upload_result = None;
-            }
-            Err(error) => {
-                self.pending_menu_paste = None;
-                self.pending_paste_repository = None;
-                self.diagnostics
-                    .error(format!("Image staging failed: {error}"));
-                self.warn(error.to_string(), window, cx);
-                return;
+        self.accept_image_results(vec![result], window, cx);
+    }
+
+    fn accept_image_results(
+        &mut self,
+        results: Vec<anyhow::Result<StagedImage>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut images = Vec::new();
+        let mut errors = Vec::new();
+        for result in results {
+            match result {
+                Ok(image) => images.push(image),
+                Err(error) => {
+                    self.diagnostics
+                        .error(format!("Image staging failed: {error}"));
+                    errors.push(error.to_string());
+                }
             }
         }
+
+        if images.is_empty() {
+            self.pending_menu_paste = None;
+            self.pending_paste_repository = None;
+            if let Some(error) = errors.first() {
+                self.warn(error.clone(), window, cx);
+            }
+            return;
+        }
+        if !errors.is_empty() {
+            self.warn(
+                format!(
+                    "Added {} image{}; {} file{} could not be read.",
+                    images.len(),
+                    if images.len() == 1 { "" } else { "s" },
+                    errors.len(),
+                    if errors.len() == 1 { "" } else { "s" },
+                ),
+                window,
+                cx,
+            );
+        }
+        self.stage_images(images, window, cx);
+    }
+
+    fn stage_images(
+        &mut self,
+        images: Vec<StagedImage>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.bulk_upload || self.staged_images.is_empty() {
+            self.append_staged_images(images, window, cx);
+        } else {
+            self.open_replace_image_dialog(images, window, cx);
+        }
+    }
+
+    fn append_staged_images(
+        &mut self,
+        mut images: Vec<StagedImage>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let added = images.len();
+        self.staged_images.append(&mut images);
+        self.sync_upload_result();
+        self.diagnostics.info(format!(
+            "Staged {added} image{} for upload.",
+            if added == 1 { "" } else { "s" }
+        ));
         self.try_complete_menu_paste(window, cx);
         cx.notify();
+    }
+
+    fn replace_staged_image(
+        &mut self,
+        image: StagedImage,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.staged_images.clear();
+        self.append_staged_images(vec![image], window, cx);
+    }
+
+    fn change_image_description(
+        &mut self,
+        image_id: u64,
+        requested_name: &str,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let image = self
+            .staged_images
+            .iter_mut()
+            .find(|image| image.id == image_id)
+            .ok_or_else(|| anyhow::anyhow!("That image is no longer staged."))?;
+        image.description = requested_name.to_owned();
+        let description = image.description.clone();
+        self.sync_upload_result();
+        self.diagnostics
+            .info(format!("Changed image description to {description}."));
+        cx.notify();
+        Ok(())
+    }
+
+    fn open_description_dialog(
+        &mut self,
+        image_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(image) = self.staged_images.iter().find(|image| image.id == image_id) else {
+            return;
+        };
+        let current_description = image.description.clone();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Descriptive image name")
+                .default_value(current_description)
+        });
+        let rename_view = cx.entity().downgrade();
+        let rename_input = input.clone();
+
+        window.open_alert_dialog(cx, move |alert, window, cx| {
+            let rename_input = rename_input.clone();
+            let rename_view = rename_view.clone();
+            input.read(cx).focus_handle(cx).focus(window, cx);
+            alert
+                .width(px(440.))
+                .title("Set description")
+                .description(
+                    "This description is used as the Markdown alt text. It does not rename the file sent to GitHub.",
+                )
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .child(div().text_xs().font_semibold().child("Alt text"))
+                        .child(Input::new(&input).w_full()),
+                )
+                .show_cancel(true)
+                .cancel_text("Cancel")
+                .ok_text("Save description")
+                .on_ok(move |_, window, cx| {
+                    let requested_name = rename_input.read(cx).value().to_string();
+                    match rename_view.update(cx, |this, cx| {
+                        this.change_image_description(image_id, &requested_name, cx)
+                    }) {
+                        Ok(Ok(())) => true,
+                        Ok(Err(error)) => {
+                            window.push_notification(
+                                Notification::warning(error.to_string()),
+                                cx,
+                            );
+                            false
+                        }
+                        Err(_) => true,
+                    }
+                })
+        });
+    }
+
+    fn open_replace_image_dialog(
+        &mut self,
+        images: Vec<StagedImage>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            window.close_dialog(cx);
+        }
+        let Some(replacement) = images.first().cloned() else {
+            return;
+        };
+        let view = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, cx| {
+            let close_view = view.clone();
+            let replace_view = view.clone();
+            let replacement = replacement.clone();
+            let bulk_view = view.clone();
+            let bulk_images = images.clone();
+            alert
+                .width(px(460.))
+                .icon(
+                    Icon::new(IconName::CircleAlert)
+                        .text_color(cx.theme().warning),
+                )
+                .title("Replace the current image?")
+                .description(
+                    "This will override the current image. To do more than one image at a time, switch to bulk upload.",
+                )
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .rounded_lg()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .bg(cx.theme().muted.opacity(0.18))
+                        .p_3()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_semibold()
+                                .child("Want to keep both images?"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Turn on bulk upload and add this image to the batch."),
+                        )
+                        .child(
+                            Button::new("switch-to-bulk-upload")
+                                .secondary()
+                                .small()
+                                .self_start()
+                                .flex_none()
+                                .label("Switch to bulk upload")
+                                .on_click(move |_, window, cx| {
+                                    let _ = bulk_view.update(cx, |this, cx| {
+                                        this.bulk_upload = true;
+                                        this.append_staged_images(
+                                            bulk_images.clone(),
+                                            window,
+                                            cx,
+                                        );
+                                    });
+                                    window.close_dialog(cx);
+                                }),
+                        ),
+                )
+                .show_cancel(true)
+                .cancel_text("Cancel")
+                .ok_text("Replace image")
+                .on_ok(move |_, window, cx| {
+                    let _ = replace_view.update(cx, |this, cx| {
+                        this.replace_staged_image(replacement.clone(), window, cx);
+                    });
+                    true
+                })
+                .on_close(move |_, _, cx| {
+                    let _ = close_view.update(cx, |this, _| {
+                        this.pending_menu_paste = None;
+                        this.pending_paste_repository = None;
+                    });
+                })
+        });
     }
 
     fn accept_pasted_image_result(
@@ -539,7 +848,7 @@ impl UploaderApp {
         let Some(mode) = self.pending_menu_paste else {
             return;
         };
-        if self.staged_image.is_none()
+        if self.staged_images.is_empty()
             || self.load_state != LoadState::Ready
             || self.selected_repository.is_none()
         {
@@ -553,6 +862,21 @@ impl UploaderApp {
         }
     }
 
+    fn sync_upload_result(&mut self) {
+        let images = self
+            .staged_images
+            .iter()
+            .filter_map(|image| {
+                image.uploaded_url.as_ref().map(|url| UploadedImage {
+                    id: image.id,
+                    url: url.clone(),
+                    markdown: markdown_image(&image.description, url),
+                })
+            })
+            .collect::<Vec<_>>();
+        self.upload_result = (!images.is_empty()).then_some(UploadResult { images });
+    }
+
     fn send_image(
         &mut self,
         copy_after_upload: Option<MenuPasteMode>,
@@ -562,65 +886,137 @@ impl UploaderApp {
         if self.uploading {
             return;
         }
-        let (Some(token), Some(repository), Some(image)) = (
-            self.token.clone(),
-            self.selected_repository.clone(),
-            self.staged_image.clone(),
-        ) else {
+        let (Some(token), Some(repository)) =
+            (self.token.clone(), self.selected_repository.clone())
+        else {
             return;
         };
+        if self.staged_images.is_empty() {
+            return;
+        }
+        let images = self
+            .staged_images
+            .iter()
+            .filter(|image| image.uploaded_url.is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+        let upload_count = images.len();
+        if upload_count == 0 {
+            return;
+        }
 
         self.uploading = true;
-        self.upload_result = None;
-        let uploaded_image_id = image.preview.id();
-        let image_name = image.name.clone();
-        self.diagnostics.info("Started image upload.");
+        self.diagnostics.info(format!(
+            "Started uploading {upload_count} image{}.",
+            if upload_count == 1 { "" } else { "s" }
+        ));
         cx.notify();
 
         let diagnostics = self.diagnostics.clone();
         cx.spawn_in(window, async move |this, window| {
-            let result = window
+            let results = window
                 .background_spawn(async move {
-                    github::upload(&token, repository.id, &image, &diagnostics)
+                    images
+                        .into_iter()
+                        .map(|image| {
+                            let result =
+                                github::upload(&token, repository.id, &image, &diagnostics);
+                            (image.id, image.name, image.description, result)
+                        })
+                        .collect::<Vec<_>>()
                 })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
                 this.uploading = false;
-                match result {
-                    Ok(url) => {
-                        this.diagnostics
-                            .info("Image upload completed successfully.");
-                        if this
-                            .staged_image
-                            .as_ref()
-                            .is_some_and(|staged| staged.preview.id() == uploaded_image_id)
-                        {
-                            this.staged_image = None;
+                let mut uploaded = Vec::new();
+                let mut failures = Vec::new();
+                for (id, name, description, result) in results {
+                    match result {
+                        Ok(url) => {
+                            if let Some(image) =
+                                this.staged_images.iter_mut().find(|image| image.id == id)
+                            {
+                                image.uploaded_url = Some(url.clone());
+                            }
+                            uploaded.push(UploadedImage {
+                                id,
+                                markdown: markdown_image(&description, &url),
+                                url,
+                            });
                         }
-                        let markdown = markdown_image(&image_name, &url);
-                        let copied_message = match copy_after_upload {
-                            Some(MenuPasteMode::Markdown) => {
-                                cx.write_to_clipboard(ClipboardItem::new_string(markdown.clone()));
-                                this.diagnostics
-                                    .info("Uploaded the image and copied its Markdown snippet.");
-                                "Image uploaded; Markdown copied to the clipboard."
-                            }
-                            Some(MenuPasteMode::Url) => {
-                                cx.write_to_clipboard(ClipboardItem::new_string(url.clone()));
-                                this.diagnostics
-                                    .info("Uploaded the image and copied its URL.");
-                                "Image uploaded; URL copied to the clipboard."
-                            }
-                            Some(MenuPasteMode::Preview) | None => "Image uploaded successfully.",
-                        };
-                        this.upload_result = Some(UploadResult { markdown, url });
-                        window.push_notification(Notification::success(copied_message), cx);
+                        Err(error) => failures.push((name, error.to_string())),
                     }
-                    Err(error) => {
+                }
+
+                if uploaded.is_empty() {
+                    if let Some((_, error)) = failures.first() {
                         this.diagnostics
-                            .error(format!("Image upload failed: {error}"));
-                        window.push_notification(Notification::error(error.to_string()), cx);
+                            .error(format!("Image batch upload failed: {error}"));
+                        window.push_notification(Notification::error(error.clone()), cx);
                     }
+                    cx.notify();
+                    return;
+                }
+
+                let upload_result = UploadResult { images: uploaded };
+                let uploaded_count = upload_result.images.len();
+                let urls = upload_result.urls();
+                let markdown = upload_result.markdown();
+                match copy_after_upload {
+                    Some(MenuPasteMode::Markdown) => {
+                        cx.write_to_clipboard(ClipboardItem::new_string(markdown));
+                        this.diagnostics.info(format!(
+                            "Uploaded {uploaded_count} image{} and copied Markdown.",
+                            if uploaded_count == 1 { "" } else { "s" }
+                        ));
+                    }
+                    Some(MenuPasteMode::Url) => {
+                        cx.write_to_clipboard(ClipboardItem::new_string(urls));
+                        this.diagnostics.info(format!(
+                            "Uploaded {uploaded_count} image{} and copied URLs.",
+                            if uploaded_count == 1 { "" } else { "s" }
+                        ));
+                    }
+                    Some(MenuPasteMode::Preview) | None => {
+                        this.diagnostics.info(format!(
+                            "Uploaded {uploaded_count} image{} successfully.",
+                            if uploaded_count == 1 { "" } else { "s" }
+                        ));
+                    }
+                }
+                this.sync_upload_result();
+
+                if failures.is_empty() {
+                    let message = match copy_after_upload {
+                        Some(MenuPasteMode::Markdown) => {
+                            format!(
+                                "{uploaded_count} image{} uploaded; Markdown copied.",
+                                if uploaded_count == 1 { "" } else { "s" }
+                            )
+                        }
+                        Some(MenuPasteMode::Url) => {
+                            format!(
+                                "{uploaded_count} image{} uploaded; URL{} copied.",
+                                if uploaded_count == 1 { "" } else { "s" },
+                                if uploaded_count == 1 { "" } else { "s" }
+                            )
+                        }
+                        Some(MenuPasteMode::Preview) | None => {
+                            format!(
+                                "{uploaded_count} image{} uploaded successfully.",
+                                if uploaded_count == 1 { "" } else { "s" }
+                            )
+                        }
+                    };
+                    window.push_notification(Notification::success(message), cx);
+                } else {
+                    let failed_count = failures.len();
+                    window.push_notification(
+                        Notification::warning(format!(
+                            "{uploaded_count} uploaded; {failed_count} failed and remain staged."
+                        )),
+                        cx,
+                    );
                 }
                 cx.notify();
             });
@@ -632,10 +1028,10 @@ impl UploaderApp {
         let Some(result) = &self.upload_result else {
             return;
         };
-        cx.write_to_clipboard(ClipboardItem::new_string(result.url.clone()));
+        cx.write_to_clipboard(ClipboardItem::new_string(result.urls()));
         self.diagnostics
-            .info("Copied uploaded image URL to the clipboard.");
-        window.push_notification(Notification::success("URL copied to the clipboard."), cx);
+            .info("Copied uploaded image URLs to the clipboard.");
+        window.push_notification(Notification::success("URLs copied to the clipboard."), cx);
     }
 
     fn copy_upload_markdown(
@@ -647,25 +1043,29 @@ impl UploaderApp {
         let Some(result) = &self.upload_result else {
             return;
         };
-        cx.write_to_clipboard(ClipboardItem::new_string(result.markdown.clone()));
+        cx.write_to_clipboard(ClipboardItem::new_string(result.markdown()));
         self.diagnostics
-            .info("Copied uploaded Markdown image snippet to the clipboard.");
+            .info("Copied uploaded Markdown image snippets to the clipboard.");
         window.push_notification(
-            Notification::success("Markdown image snippet copied to the clipboard."),
+            Notification::success("Markdown image snippets copied to the clipboard."),
             cx,
         );
     }
 
-    fn sorted_repository_names(&self) -> Vec<String> {
+    fn repository_groups(&self) -> Vec<SearchableGroup<String>> {
         let mut names = self.repositories.keys().cloned().collect::<Vec<_>>();
-        names.sort_by(|left, right| {
-            let left_pinned = self.settings.pinned_repositories.contains(left);
-            let right_pinned = self.settings.pinned_repositories.contains(right);
-            right_pinned
-                .cmp(&left_pinned)
-                .then_with(|| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()))
-        });
-        names
+        names.sort_by_key(|name| name.to_ascii_lowercase());
+        let (pinned, remaining): (Vec<_>, Vec<_>) = names
+            .into_iter()
+            .partition(|name| self.settings.pinned_repositories.contains(name));
+        let mut groups = Vec::new();
+        if !pinned.is_empty() {
+            groups.push(SearchableGroup::new("📌  Pinned repositories").items(pinned));
+        }
+        if !remaining.is_empty() {
+            groups.push(SearchableGroup::new("All repositories").items(remaining));
+        }
+        groups
     }
 
     fn select_repository(
@@ -685,14 +1085,14 @@ impl UploaderApp {
     }
 
     fn refresh_repository_picker(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let names = self.sorted_repository_names();
+        let groups = self.repository_groups();
         let selected_values = self
             .selected_repository
             .as_ref()
             .map(|selected| vec![selected.name.clone()])
             .unwrap_or_default();
         self.repository_picker.update(cx, |picker, cx| {
-            picker.set_items(SearchableVec::new(names), window, cx);
+            picker.set_items(SearchableVec::new(groups), window, cx);
             picker.set_selected_values(&selected_values, window, cx);
         });
     }
@@ -830,13 +1230,21 @@ impl UploaderApp {
         }
     }
 
-    fn open_image_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(image) = self.staged_image.as_ref() else {
+    fn open_image_preview(
+        &mut self,
+        selected_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(image) = self
+            .staged_images
+            .iter()
+            .find(|image| image.id == selected_id)
+        else {
             return;
         };
-        let preview_image = image.preview.clone();
         let preview_name = image.name.clone();
-        let pixel_size = image.pixel_size;
+        let preview_images = self.staged_images.clone();
 
         if let Some((preview_window, preview)) = self.preview_window.clone() {
             let title = preview_name.clone();
@@ -848,7 +1256,7 @@ impl UploaderApp {
                 .is_ok()
             {
                 preview.update(cx, |preview, cx| {
-                    preview.show(preview_image, preview_name, pixel_size, cx);
+                    preview.show(preview_images, selected_id, cx);
                 });
                 return;
             }
@@ -871,8 +1279,7 @@ impl UploaderApp {
                 });
                 true
             });
-            let preview =
-                cx.new(|cx| ImagePreview::new(preview_image, preview_name, pixel_size, cx));
+            let preview = cx.new(|cx| ImagePreview::new(preview_images, selected_id, cx));
             let focus = preview.read(cx).focus_handle(cx);
             window.focus(&focus, cx);
             preview
@@ -894,6 +1301,7 @@ impl UploaderApp {
         let disabled = self.load_state != LoadState::Ready;
         let organization = self.settings.organization.clone().unwrap_or_default();
         v_flex()
+            .w_full()
             .gap_2()
             .child(
                 h_flex()
@@ -975,31 +1383,40 @@ impl UploaderApp {
 
     fn render_drop_zone(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity().downgrade();
+        let bulk_upload = self.bulk_upload;
+        let uploading = self.uploading;
+        let has_staged_images = !self.staged_images.is_empty();
         div()
             .id("image-drop-zone")
             .w_full()
-            .min_h(px(150.))
+            .min_h(px(if has_staged_images { 112. } else { 150. }))
             .rounded_xl()
             .border_2()
             .border_dashed()
             .border_color(cx.theme().primary.opacity(0.4))
             .bg(cx.theme().primary.opacity(0.05))
-            .cursor_pointer()
-            .hover(|style| style.bg(cx.theme().primary.opacity(0.14)))
-            .drag_over::<ExternalPaths>(|style, _, _, cx| {
-                style
-                    .border_color(cx.theme().primary)
-                    .bg(cx.theme().primary.opacity(0.1))
+            .when(!uploading, |zone| {
+                zone.cursor_pointer()
+                    .hover(|style| style.bg(cx.theme().primary.opacity(0.14)))
+                    .drag_over::<ExternalPaths>(|style, _, _, cx| {
+                        style
+                            .border_color(cx.theme().primary)
+                            .bg(cx.theme().primary.opacity(0.1))
+                    })
+                    .can_drop(|value, _, _| value.downcast_ref::<ExternalPaths>().is_some())
+                    .on_drop(move |paths: &ExternalPaths, window, cx| {
+                        let paths = if bulk_upload {
+                            paths.paths().to_vec()
+                        } else {
+                            paths.paths().iter().take(1).cloned().collect()
+                        };
+                        Self::load_dropped_paths(view.clone(), paths, window, cx);
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.choose_file(window, cx);
+                    }))
             })
-            .can_drop(|value, _, _| value.downcast_ref::<ExternalPaths>().is_some())
-            .on_drop(move |paths: &ExternalPaths, window, cx| {
-                if let Some(path) = paths.paths().first().cloned() {
-                    Self::load_dropped_path(view.clone(), path, window, cx);
-                }
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.choose_file(window, cx);
-            }))
+            .when(uploading, |zone| zone.opacity(0.55))
             .flex()
             .items_center()
             .justify_center()
@@ -1025,32 +1442,119 @@ impl UploaderApp {
                             .text_center()
                             .child("Press")
                             .child(Kbd::new(Keystroke::parse("cmd-v").expect("valid shortcut")))
-                            .child("or drop an image here"),
+                            .child(if bulk_upload {
+                                "or drop images here"
+                            } else {
+                                "or drop an image here"
+                            }),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_center()
                             .text_color(cx.theme().muted_foreground)
-                            .child("or click to select a PNG, JPEG, GIF, or WebP file"),
+                            .child(if bulk_upload {
+                                "or click to select one or more PNG, JPEG, GIF, or WebP files"
+                            } else {
+                                "or click to select a PNG, JPEG, GIF, or WebP file"
+                            }),
                     ),
             )
     }
 
-    fn render_attachment(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let attachment = self.staged_image.as_ref().map(|image| {
+    fn render_bulk_upload_control(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.entity().downgrade();
+        let has_batch = self.staged_images.len() > 1;
+        let disabled = self.uploading || has_batch;
+        h_flex()
+            .w_full()
+            .min_w_0()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .rounded_lg()
+            .border_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().muted.opacity(0.18))
+            .px_3()
+            .py_2()
+            .child(
+                v_flex()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(div().text_sm().font_semibold().child("Bulk upload"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .whitespace_normal()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(if has_batch {
+                                "Upload or remove the batch before turning this off."
+                            } else {
+                                "Keep multiple images in one upload batch."
+                            }),
+                    ),
+            )
+            .child(
+                Switch::new("bulk-upload-switch")
+                    .checked(self.bulk_upload)
+                    .disabled(disabled)
+                    .accessibility_label("Bulk upload")
+                    .tooltip(if has_batch {
+                        "Upload or remove the batch before turning bulk upload off"
+                    } else {
+                        "Keep multiple images in one upload batch"
+                    })
+                    .on_change(move |checked, _, cx| {
+                        let checked = *checked;
+                        let _ = view.update(cx, |this, cx| {
+                            this.bulk_upload = checked;
+                            cx.notify();
+                        });
+                    }),
+            )
+    }
+
+    fn remove_staged_image(&mut self, id: u64, cx: &mut Context<Self>) {
+        let previous_len = self.staged_images.len();
+        self.staged_images.retain(|image| image.id != id);
+        if self.staged_images.len() != previous_len {
+            self.sync_upload_result();
+            self.pending_menu_paste = None;
+            self.pending_paste_repository = None;
+            self.diagnostics.info("Removed a staged image.");
+            cx.notify();
+        }
+    }
+
+    fn render_attachments(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let count = self.staged_images.len();
+        let has_uploaded_images = self
+            .staged_images
+            .iter()
+            .any(|image| image.uploaded_url.is_some());
+        let attachments = self.staged_images.iter().map(|image| {
+            let image_id = image.id;
             let source = image.preview.clone();
-            let title = image.name.clone();
-            let detail = format!("{} · {}", image.formatted_size(), image.mime_type);
-            let status = if self.uploading {
+            let title = image.description.clone();
+            let detail = format!(
+                "{} · {} · {}",
+                image.name,
+                image.formatted_size(),
+                image.mime_type
+            );
+            let status = if image.uploaded_url.is_some() {
+                AttachmentStatus::Complete
+            } else if self.uploading {
                 AttachmentStatus::Uploading
             } else {
                 AttachmentStatus::Pending
             };
             let preview_view = cx.entity().downgrade();
+            let rename_view = cx.entity().downgrade();
             let remove_view = cx.entity().downgrade();
             Attachment::new()
-                .id("staged-image-attachment")
+                .id(format!("staged-image-attachment-{image_id}"))
                 .large()
                 .w_full()
                 .cursor_pointer()
@@ -1063,43 +1567,133 @@ impl UploaderApp {
                 )
                 .on_click(move |_, window, cx| {
                     let _ = preview_view.update(cx, |this, cx| {
-                        this.open_image_preview(window, cx);
+                        this.open_image_preview(image_id, window, cx);
                     });
                 })
                 .when(!self.uploading, |attachment| {
                     attachment.actions(
-                        AttachmentActions::new().child(
-                            Button::new("remove-staged-image")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Close)
-                                .accessibility_label("Remove staged image")
-                                .tooltip("Remove staged image")
-                                .on_click(move |_, _, cx| {
-                                    cx.stop_propagation();
-                                    let _ = remove_view.update(cx, |this, cx| {
-                                        this.pending_menu_paste = None;
-                                        this.clear_staged_image("Discarded the staged image.", cx);
-                                    });
-                                }),
-                        ),
+                        AttachmentActions::new()
+                            .child(
+                                Button::new(format!("staged-image-menu-{image_id}"))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Ellipsis)
+                                    .accessibility_label("Image actions")
+                                    .tooltip("Image actions")
+                                    .on_click(|_, _, cx| cx.stop_propagation())
+                                    .dropdown_menu_with_anchor(
+                                        Anchor::TopRight,
+                                        move |menu, _, _| {
+                                            let rename_view = rename_view.clone();
+                                            menu.item(
+                                                PopupMenuItem::new("Set description").on_click(
+                                                    move |_, window, cx| {
+                                                        let _ =
+                                                            rename_view.update(cx, |this, cx| {
+                                                                this.open_description_dialog(
+                                                                    image_id, window, cx,
+                                                                );
+                                                            });
+                                                    },
+                                                ),
+                                            )
+                                        },
+                                    ),
+                            )
+                            .child(
+                                Button::new(format!("remove-staged-image-{image_id}"))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Close)
+                                    .accessibility_label("Remove staged image")
+                                    .tooltip("Remove staged image")
+                                    .on_click(move |_, _, cx| {
+                                        cx.stop_propagation();
+                                        let _ = remove_view.update(cx, |this, cx| {
+                                            this.remove_staged_image(image_id, cx);
+                                        });
+                                    }),
+                            ),
                     )
                 })
                 .into_any_element()
         });
 
-        v_flex().when_some(attachment, |container, attachment| {
-            container.child(attachment)
-        })
+        v_flex()
+            .gap_2()
+            .when(count > 1, |list| {
+                list.child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_semibold()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(format!("{count} images ready")),
+                        )
+                        .when(!self.uploading, |row| {
+                            row.child(
+                                Button::new("remove-all-staged-images")
+                                    .ghost()
+                                    .small()
+                                    .label(if has_uploaded_images {
+                                        "Reset"
+                                    } else {
+                                        "Remove all"
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.clear_staged_images(
+                                            "Discarded all staged images.",
+                                            cx,
+                                        );
+                                    })),
+                            )
+                        }),
+                )
+            })
+            .children(attachments)
     }
 
     fn render_upload_result(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let result = self.upload_result.as_ref().map(|result| {
-            let url = result.url.clone();
-            let markdown = result.markdown.clone();
+            let image_count = result.images.len();
+            let urls = result.urls();
+            let markdown = result.markdown();
+            let url_lines = result
+                .images
+                .iter()
+                .map(|image| {
+                    div()
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(image.url.clone())
+                        .into_any_element()
+                })
+                .collect::<Vec<_>>();
+            let markdown_lines = result
+                .images
+                .iter()
+                .map(|image| {
+                    div()
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(image.markdown.clone())
+                        .into_any_element()
+                })
+                .collect::<Vec<_>>();
             let url_view = cx.entity().downgrade();
             let markdown_view = cx.entity().downgrade();
+            let description_view = cx.entity().downgrade();
+            let description_items = result
+                .images
+                .iter()
+                .enumerate()
+                .map(|(index, image)| (image.id, index + 1))
+                .collect::<Vec<_>>();
             v_flex()
+                .w_full()
                 .gap_3()
                 .rounded_lg()
                 .border_1()
@@ -1110,17 +1704,43 @@ impl UploaderApp {
                     h_flex()
                         .items_center()
                         .justify_between()
-                        .child(div().text_sm().font_semibold().child("Uploaded image"))
+                        .child(div().text_sm().font_semibold().child(if image_count == 1 {
+                            "Uploaded image".to_owned()
+                        } else {
+                            format!("Uploaded {image_count} images")
+                        }))
                         .child(
-                            Button::new("dismiss-upload-result")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Close)
-                                .tooltip("Dismiss upload result")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.upload_result = None;
-                                    cx.notify();
-                                })),
+                            h_flex()
+                                .gap_1()
+                                .child(
+                                    Button::new("uploaded-image-actions")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::Ellipsis)
+                                        .accessibility_label("Uploaded image actions")
+                                        .tooltip("Uploaded image actions")
+                                        .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+                                            description_items.iter().fold(menu, |menu, (id, index)| {
+                                                let description_view = description_view.clone();
+                                                let id = *id;
+                                                let label = if image_count == 1 { "Set description".to_owned() } else { format!("Set description for image {index}") };
+                                                menu.item(PopupMenuItem::new(label).on_click(move |_, window, cx| {
+                                                    let _ = description_view.update(cx, |this, cx| this.open_description_dialog(id, window, cx));
+                                                }))
+                                            })
+                                        }),
+                                )
+                                .child(
+                                    Button::new("dismiss-upload-result")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::Close)
+                                        .tooltip("Dismiss upload result")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.upload_result = None;
+                                            cx.notify();
+                                        })),
+                                ),
                         ),
                 )
                 .child(
@@ -1131,7 +1751,7 @@ impl UploaderApp {
                                 .text_xs()
                                 .font_semibold()
                                 .text_color(cx.theme().muted_foreground)
-                                .child("URL"),
+                                .child(if image_count == 1 { "URL" } else { "URLs" }),
                         )
                         .child(
                             h_flex()
@@ -1140,6 +1760,7 @@ impl UploaderApp {
                                 .child(
                                     div()
                                         .flex_1()
+                                        .min_w_0()
                                         .overflow_hidden()
                                         .rounded_md()
                                         .border_1()
@@ -1148,22 +1769,22 @@ impl UploaderApp {
                                         .px_3()
                                         .py_2()
                                         .text_xs()
-                                        .child(url.clone()),
+                                        .child(v_flex().gap_1().children(url_lines)),
                                 )
                                 .child(
                                     Clipboard::new("copy-upload-url")
                                         .small()
-                                        .value(url)
-                                        .tooltip("Copy URL (Command+Shift+C)")
-                                        .accessibility_label("Copy uploaded image URL")
+                                        .value(urls)
+                                        .tooltip("Copy URLs (Command+Shift+C)")
+                                        .accessibility_label("Copy uploaded image URLs")
                                         .on_copied(move |_, window, cx| {
                                             let _ = url_view.update(cx, |this, _| {
                                                 this.diagnostics.info(
-                                                    "Copied uploaded image URL to the clipboard.",
+                                                    "Copied uploaded image URLs to the clipboard.",
                                                 );
                                             });
                                             window.push_notification(
-                                                Notification::success("URL copied to the clipboard."),
+                                                Notification::success("URLs copied to the clipboard."),
                                                 cx,
                                             );
                                         }),
@@ -1178,7 +1799,11 @@ impl UploaderApp {
                                 .text_xs()
                                 .font_semibold()
                                 .text_color(cx.theme().muted_foreground)
-                                .child("Markdown image"),
+                                .child(if image_count == 1 {
+                                    "Markdown image"
+                                } else {
+                                    "Markdown images"
+                                }),
                         )
                         .child(
                             h_flex()
@@ -1187,6 +1812,7 @@ impl UploaderApp {
                                 .child(
                                     div()
                                         .flex_1()
+                                        .min_w_0()
                                         .overflow_hidden()
                                         .rounded_md()
                                         .border_1()
@@ -1195,23 +1821,23 @@ impl UploaderApp {
                                         .px_3()
                                         .py_2()
                                         .text_xs()
-                                        .child(markdown.clone()),
+                                        .child(v_flex().gap_1().children(markdown_lines)),
                                 )
                                 .child(
                                     Clipboard::new("copy-upload-markdown")
                                         .small()
                                         .value(markdown)
                                         .tooltip("Copy Markdown (Command+Shift+M)")
-                                        .accessibility_label("Copy uploaded image Markdown")
+                                        .accessibility_label("Copy uploaded image Markdown snippets")
                                         .on_copied(move |_, window, cx| {
                                             let _ = markdown_view.update(cx, |this, _| {
                                                 this.diagnostics.info(
-                                                    "Copied uploaded Markdown image snippet to the clipboard.",
+                                                    "Copied uploaded Markdown image snippets to the clipboard.",
                                                 );
                                             });
                                             window.push_notification(
                                                 Notification::success(
-                                                    "Markdown image snippet copied to the clipboard.",
+                                                    "Markdown image snippets copied to the clipboard.",
                                                 ),
                                                 cx,
                                             );
@@ -1295,6 +1921,7 @@ impl UploaderApp {
                         Button::new("save-organization")
                             .primary()
                             .small()
+                            .self_start()
                             .label("Save organization")
                             .on_click(cx.listener(Self::save_organization)),
                     ),
@@ -1319,6 +1946,7 @@ impl UploaderApp {
                             Button::new("pin-selected-repository")
                                 .outline()
                                 .small()
+                                .self_start()
                                 .label(if selected_is_pinned {
                                     "Repository is pinned"
                                 } else {
@@ -1428,8 +2056,16 @@ impl Render for UploaderApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_send = self.load_state == LoadState::Ready
             && self.selected_repository.is_some()
-            && self.staged_image.is_some()
+            && self
+                .staged_images
+                .iter()
+                .any(|image| image.uploaded_url.is_none())
             && !self.uploading;
+        let staged_count = self
+            .staged_images
+            .iter()
+            .filter(|image| image.uploaded_url.is_none())
+            .count();
 
         let root = v_flex()
             .key_context(KEY_CONTEXT)
@@ -1524,24 +2160,39 @@ impl Render for UploaderApp {
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
                         .when(!needs_setup, |root| {
                             root.child(self.render_repository_picker(cx))
+                                .when(
+                                    !self.uploading
+                                        && self
+                                            .staged_images
+                                            .iter()
+                                            .all(|image| image.uploaded_url.is_none()),
+                                    |root| root.child(self.render_bulk_upload_control(cx)),
+                                )
                                 .child(self.render_drop_zone(cx))
-                                .child(self.render_attachment(cx))
+                                .child(self.render_attachments(cx))
                                 .child(self.render_upload_result(cx))
                         }),
                 );
             root.child(content)
                 .child(
-                    v_flex().gap_3().px_6().pb_6().child(
+                    v_flex().items_end().gap_3().px_6().py_3().child(
                         Button::new("send-image")
                             .primary()
                             .large()
-                            .w_full()
                             .label(if self.uploading {
-                                "Uploading…"
+                                if staged_count == 1 {
+                                    "Uploading image…".to_owned()
+                                } else {
+                                    format!("Uploading {staged_count} images…")
+                                }
+                            } else if staged_count == 1 {
+                                "Upload image".to_owned()
+                            } else if staged_count > 1 {
+                                format!("Upload {staged_count} images")
                             } else {
-                                "Upload image"
+                                "Upload images".to_owned()
                             })
-                            .icon(IconName::ArrowUp)
+                            .icon(AssetIconName::Upload)
                             .loading(self.uploading)
                             .disabled(!can_send)
                             .on_click(cx.listener(Self::send)),
@@ -1568,4 +2219,36 @@ pub fn init_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-shift-c", CopyUploadUrl, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-shift-m", CopyUploadMarkdown, Some(KEY_CONTEXT)),
     ]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bulk_upload_result_preserves_order_with_newline_separators() {
+        let result = UploadResult {
+            images: vec![
+                UploadedImage {
+                    id: 1,
+                    url: "https://example.com/first".into(),
+                    markdown: "![first](https://example.com/first)".into(),
+                },
+                UploadedImage {
+                    id: 2,
+                    url: "https://example.com/second".into(),
+                    markdown: "![second](https://example.com/second)".into(),
+                },
+            ],
+        };
+
+        assert_eq!(
+            result.urls(),
+            "https://example.com/first\nhttps://example.com/second"
+        );
+        assert_eq!(
+            result.markdown(),
+            "![first](https://example.com/first)\n![second](https://example.com/second)"
+        );
+    }
 }

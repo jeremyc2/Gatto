@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
-    ActiveTheme as _, Sizable as _, StyledExt as _,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _,
     button::{Button, ButtonVariants as _},
     h_flex,
 };
@@ -10,10 +10,22 @@ use gpui_kit::{
     App, Bounds, Context, Corners, CursorStyle, FocusHandle, Focusable, Image,
     InteractiveElement as _, IntoElement, KeyBinding, MouseButton, MouseDownEvent, MouseMoveEvent,
     ParentElement as _, PinchEvent, Pixels, Point, Render, ScrollWheelEvent, SharedString,
-    Styled as _, Window, actions, canvas, div, point, px, size,
+    Styled as _, Window, actions, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
 
-actions!(image_preview, [ZoomIn, ZoomOut, FitImage, ClosePreview]);
+use crate::model::StagedImage;
+
+actions!(
+    image_preview,
+    [
+        ZoomIn,
+        ZoomOut,
+        FitImage,
+        PreviousImage,
+        NextImage,
+        ClosePreview
+    ]
+);
 
 const KEY_CONTEXT: &str = "ImagePreview";
 const MIN_ZOOM: f32 = 0.1;
@@ -28,26 +40,46 @@ struct DragState {
 }
 
 pub struct ImagePreview {
-    image: Arc<Image>,
-    name: SharedString,
-    pixel_size: (u32, u32),
+    images: Vec<PreviewImage>,
+    current_index: usize,
     zoom: f32,
     offset: Point<Pixels>,
     drag: Option<DragState>,
     focus_handle: FocusHandle,
 }
 
-impl ImagePreview {
-    pub fn new(
-        image: Arc<Image>,
-        name: impl Into<SharedString>,
-        pixel_size: (u32, u32),
-        cx: &mut Context<Self>,
-    ) -> Self {
+#[derive(Clone)]
+struct PreviewImage {
+    id: u64,
+    image: Arc<Image>,
+    name: SharedString,
+    pixel_size: (u32, u32),
+}
+
+impl From<StagedImage> for PreviewImage {
+    fn from(image: StagedImage) -> Self {
         Self {
-            image,
-            name: name.into(),
-            pixel_size,
+            id: image.id,
+            image: image.preview,
+            name: image.name.into(),
+            pixel_size: image.pixel_size,
+        }
+    }
+}
+
+impl ImagePreview {
+    pub fn new(images: Vec<StagedImage>, selected_id: u64, cx: &mut Context<Self>) -> Self {
+        let images = images
+            .into_iter()
+            .map(PreviewImage::from)
+            .collect::<Vec<_>>();
+        let current_index = images
+            .iter()
+            .position(|image| image.id == selected_id)
+            .unwrap_or_default();
+        Self {
+            images,
+            current_index,
             zoom: 1.,
             offset: point(px(0.), px(0.)),
             drag: None,
@@ -55,17 +87,33 @@ impl ImagePreview {
         }
     }
 
-    pub fn show(
-        &mut self,
-        image: Arc<Image>,
-        name: impl Into<SharedString>,
-        pixel_size: (u32, u32),
-        cx: &mut Context<Self>,
-    ) {
-        self.image = image;
-        self.name = name.into();
-        self.pixel_size = pixel_size;
+    pub fn show(&mut self, images: Vec<StagedImage>, selected_id: u64, cx: &mut Context<Self>) {
+        self.images = images.into_iter().map(PreviewImage::from).collect();
+        self.current_index = self
+            .images
+            .iter()
+            .position(|image| image.id == selected_id)
+            .unwrap_or_default();
         self.fit(cx);
+    }
+
+    fn current(&self) -> Option<&PreviewImage> {
+        self.images.get(self.current_index)
+    }
+
+    fn update_window_title(&self, window: &mut Window) {
+        if let Some(image) = self.current() {
+            window.set_window_title(&format!("{} — Gatto Preview", image.name));
+        }
+    }
+
+    fn select_image(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.images.len() || index == self.current_index {
+            return;
+        }
+        self.current_index = index;
+        self.fit(cx);
+        self.update_window_title(window);
     }
 
     fn viewport_center(window: &Window) -> Point<Pixels> {
@@ -127,6 +175,16 @@ impl ImagePreview {
         self.fit(cx);
     }
 
+    fn previous_image(&mut self, _: &PreviousImage, window: &mut Window, cx: &mut Context<Self>) {
+        if self.current_index > 0 {
+            self.select_image(self.current_index - 1, window, cx);
+        }
+    }
+
+    fn next_image(&mut self, _: &NextImage, window: &mut Window, cx: &mut Context<Self>) {
+        self.select_image(self.current_index + 1, window, cx);
+    }
+
     fn close_preview(&mut self, _: &ClosePreview, window: &mut Window, _: &mut Context<Self>) {
         window.remove_window();
     }
@@ -179,15 +237,22 @@ impl ImagePreview {
     }
 
     fn render_image(&self) -> impl IntoElement {
-        let image = self.image.clone();
-        let (natural_width, natural_height) = self.pixel_size;
+        let current = self.current().cloned();
         let zoom = self.zoom;
         let offset = self.offset;
 
         canvas(
-            move |_, window, cx| image.use_render_image(window, cx),
+            move |_, window, cx| {
+                current.as_ref().and_then(|image| {
+                    image
+                        .image
+                        .clone()
+                        .use_render_image(window, cx)
+                        .map(|render_image| (render_image, image.pixel_size))
+                })
+            },
             move |bounds, render_image, window, _| {
-                let Some(render_image) = render_image else {
+                let Some((render_image, (natural_width, natural_height))) = render_image else {
                     return;
                 };
                 let natural_width = natural_width.max(1) as f32;
@@ -233,6 +298,14 @@ impl Render for ImagePreview {
             CursorStyle::OpenHand
         };
         let zoom_label = format!("{:.0}%", self.zoom * 100.);
+        let image_count = self.images.len();
+        let image_name = self
+            .current()
+            .map(|image| image.name.clone())
+            .unwrap_or_else(|| "Image preview".into());
+        let position_label = format!("{} of {}", self.current_index + 1, image_count);
+        let can_go_back = self.current_index > 0;
+        let can_go_forward = self.current_index + 1 < image_count;
 
         div()
             .key_context(KEY_CONTEXT)
@@ -240,6 +313,8 @@ impl Render for ImagePreview {
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::fit_image))
+            .on_action(cx.listener(Self::previous_image))
+            .on_action(cx.listener(Self::next_image))
             .on_action(cx.listener(Self::close_preview))
             .size_full()
             .flex()
@@ -261,12 +336,57 @@ impl Render for ImagePreview {
                             .truncate()
                             .text_sm()
                             .font_semibold()
-                            .child(self.name.clone()),
+                            .child(image_name),
                     )
                     .child(
                         h_flex()
                             .items_center()
                             .gap_1()
+                            .when(image_count > 1, |toolbar| {
+                                toolbar
+                                    .child(
+                                        Button::new("preview-previous-image")
+                                            .ghost()
+                                            .small()
+                                            .icon(IconName::ChevronLeft)
+                                            .accessibility_label("Previous image")
+                                            .tooltip("Previous image")
+                                            .disabled(!can_go_back)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                if this.current_index > 0 {
+                                                    this.select_image(
+                                                        this.current_index - 1,
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }
+                                            })),
+                                    )
+                                    .child(
+                                        div()
+                                            .w(px(48.))
+                                            .text_center()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(position_label),
+                                    )
+                                    .child(
+                                        Button::new("preview-next-image")
+                                            .ghost()
+                                            .small()
+                                            .icon(IconName::ChevronRight)
+                                            .accessibility_label("Next image")
+                                            .tooltip("Next image")
+                                            .disabled(!can_go_forward)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.select_image(
+                                                    this.current_index + 1,
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    )
+                            })
                             .child(
                                 Button::new("preview-zoom-out")
                                     .ghost()
@@ -333,6 +453,8 @@ pub fn init_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-+", ZoomIn, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd--", ZoomOut, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-0", FitImage, Some(KEY_CONTEXT)),
+        KeyBinding::new("left", PreviousImage, Some(KEY_CONTEXT)),
+        KeyBinding::new("right", NextImage, Some(KEY_CONTEXT)),
         KeyBinding::new("escape", ClosePreview, Some(KEY_CONTEXT)),
     ]);
 }

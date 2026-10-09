@@ -46,7 +46,7 @@ fn main() {
             let close_view = view.clone();
             window.on_window_should_close(cx, move |window, cx| {
                 close_view.update(cx, |this, cx| {
-                    this.clear_staged_image(
+                    this.clear_staged_images(
                         "Closed the main window; discarded the staged image.",
                         cx,
                     );

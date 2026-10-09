@@ -12,6 +12,7 @@ const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 pub struct AppSettings {
     pub organization: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
+    pub last_repository: Option<String>,
     #[serde(skip)]
     pub start_at_login: bool,
 }
