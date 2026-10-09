@@ -1,0 +1,5 @@
+interface:
+  display_name: "Changelog"
+  short_description: "Prepare the next changelog entry and semantic version bump"
+policy:
+  allow_implicit_invocation: false

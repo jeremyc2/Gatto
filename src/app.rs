@@ -26,9 +26,10 @@ use gpui_kit::component::{
 use gpui_kit::{
     Anchor, AnyWindowHandle, App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity,
     ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
-    IntoElement, KeyBinding, Keystroke, ObjectFit, ParentElement as _, PathPromptOptions, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
-    Window, WindowBounds, WindowOptions, actions, div, img, prelude::FluentBuilder as _, px, size,
+    IntoElement, KeyBinding, Keystroke, MouseButton, ObjectFit, ParentElement as _,
+    PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    StyledImage as _, Subscription, Window, WindowBounds, WindowOptions, actions, div, img,
+    prelude::FluentBuilder as _, px, size,
 };
 
 use crate::{
@@ -64,6 +65,7 @@ type RepositoryPicker = ComboboxState<SearchableVec<SearchableGroup<String>>>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LoadState {
     NeedsSetup,
+    Idle,
     Loading,
     Ready,
     Failed,
@@ -112,6 +114,8 @@ pub struct UploaderApp {
     repositories: HashMap<String, Repository>,
     selected_repository: Option<Repository>,
     token: Option<String>,
+    loading_token: bool,
+    loading_repository: bool,
     load_state: LoadState,
     staged_images: Vec<StagedImage>,
     bulk_upload: bool,
@@ -182,6 +186,10 @@ impl UploaderApp {
                         .selected_repository
                         .as_ref()
                         .map(|repository| repository.name.clone());
+                    this.settings.last_repository_id = this
+                        .selected_repository
+                        .as_ref()
+                        .map(|repository| repository.id);
                     if let Err(error) = this.settings.save() {
                         this.diagnostics.error(format!(
                             "Could not remember the selected repository: {error}"
@@ -198,7 +206,13 @@ impl UploaderApp {
             repositories: HashMap::new(),
             selected_repository: None,
             token: None,
-            load_state: LoadState::NeedsSetup,
+            loading_token: false,
+            loading_repository: false,
+            load_state: if settings.organization.is_some() {
+                LoadState::Idle
+            } else {
+                LoadState::NeedsSetup
+            },
             staged_images: Vec::new(),
             bulk_upload: false,
             paste_generation: 0,
@@ -223,7 +237,7 @@ impl UploaderApp {
         if let Some(error) = settings_error {
             window.push_notification(Notification::error(error), cx);
         }
-        this.load_repositories(window, cx);
+        this.restore_remembered_repository(window, cx);
         this
     }
 
@@ -305,7 +319,7 @@ impl UploaderApp {
             "Menu paste requested with pinned repository {repository_name}."
         ));
         self.pending_paste_repository = Some(repository_name.clone());
-        if self.load_state == LoadState::Ready {
+        if matches!(self.load_state, LoadState::Idle | LoadState::Ready) {
             if !self.select_repository(&repository_name, window, cx) {
                 self.pending_paste_repository = None;
                 self.pending_menu_paste = None;
@@ -358,17 +372,7 @@ impl UploaderApp {
     }
 
     fn load_repositories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.token = None;
-        self.selected_repository = None;
         self.repositories.clear();
-        self.repository_picker.update(cx, |picker, cx| {
-            picker.set_selected_indices([], window, cx);
-            picker.set_items(
-                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
-                window,
-                cx,
-            );
-        });
         let Some(organization) = self.settings.organization.clone() else {
             self.diagnostics
                 .info("Repository loading is waiting for an organization setting.");
@@ -435,6 +439,11 @@ impl UploaderApp {
                             .or_else(|| this.settings.pinned_repositories.first().cloned())
                         {
                             this.select_repository(&repository_name, window, cx);
+                        } else {
+                            this.selected_repository = None;
+                            this.repository_picker.update(cx, |picker, cx| {
+                                picker.set_selected_indices([], window, cx);
+                            });
                         }
                         this.try_complete_menu_paste(window, cx);
                     }
@@ -450,6 +459,44 @@ impl UploaderApp {
             });
         })
         .detach();
+    }
+
+    fn restore_remembered_repository(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(repository) = self
+            .settings
+            .last_repository
+            .as_ref()
+            .map(|name| Repository {
+                id: self.settings.last_repository_id.unwrap_or_default(),
+                name: name.clone(),
+            })
+        else {
+            return;
+        };
+
+        self.repositories
+            .insert(repository.name.clone(), repository.clone());
+        self.selected_repository = Some(repository.clone());
+        self.repository_picker.update(cx, |picker, cx| {
+            picker.set_items(
+                SearchableVec::new(vec![
+                    SearchableGroup::new("Selected repository")
+                        .items(vec![repository.name.clone()]),
+                ]),
+                window,
+                cx,
+            );
+            picker.set_selected_values(&[repository.name], window, cx);
+        });
+        self.diagnostics.info(
+            "Restored the previously selected repository without loading the repository list.",
+        );
+    }
+
+    fn load_repositories_when_opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.load_state == LoadState::Idle {
+            self.load_repositories(window, cx);
+        }
     }
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -918,7 +965,7 @@ impl UploaderApp {
             return;
         };
         if self.staged_images.is_empty()
-            || self.load_state != LoadState::Ready
+            || !matches!(self.load_state, LoadState::Idle | LoadState::Ready)
             || self.selected_repository.is_none()
         {
             return;
@@ -955,14 +1002,20 @@ impl UploaderApp {
         if self.uploading {
             return;
         }
-        let (Some(token), Some(repository)) =
-            (self.token.clone(), self.selected_repository.clone())
-        else {
+        let Some(repository) = self.selected_repository.clone() else {
             return;
         };
         if self.staged_images.is_empty() {
             return;
         }
+        if repository.id == 0 {
+            self.load_repository_id_then_send(copy_after_upload, window, cx);
+            return;
+        }
+        let Some(token) = self.token.clone() else {
+            self.load_token_then_send(copy_after_upload, window, cx);
+            return;
+        };
         let images = self
             .staged_images
             .iter()
@@ -1088,6 +1141,101 @@ impl UploaderApp {
                     );
                 }
                 cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn load_token_then_send(
+        &mut self,
+        copy_after_upload: Option<MenuPasteMode>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.loading_token {
+            return;
+        }
+        self.loading_token = true;
+        self.diagnostics
+            .info("Checking GitHub authentication before uploading.");
+        cx.notify();
+
+        let diagnostics = self.diagnostics.clone();
+        cx.spawn_in(window, async move |this, window| {
+            let result = window
+                .background_spawn(async move { github::load_token(&diagnostics) })
+                .await;
+            let _ = this.update_in(window, move |this, window, cx| {
+                this.loading_token = false;
+                match result {
+                    Ok(token) => {
+                        this.token = Some(token);
+                        this.send_image(copy_after_upload, window, cx);
+                    }
+                    Err(error) => {
+                        this.diagnostics
+                            .error(format!("GitHub authentication failed: {error}"));
+                        window.push_notification(Notification::error(error.to_string()), cx);
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn load_repository_id_then_send(
+        &mut self,
+        copy_after_upload: Option<MenuPasteMode>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.loading_repository {
+            return;
+        }
+        let (Some(organization), Some(repository)) = (
+            self.settings.organization.clone(),
+            self.selected_repository.clone(),
+        ) else {
+            return;
+        };
+        self.loading_repository = true;
+        self.diagnostics
+            .info("Resolving the remembered repository before uploading.");
+        cx.notify();
+
+        let diagnostics = self.diagnostics.clone();
+        cx.spawn_in(window, async move |this, window| {
+            let result = window
+                .background_spawn(async move {
+                    github::load_repository_id(&organization, &repository.name, &diagnostics)
+                })
+                .await;
+            let _ = this.update_in(window, move |this, window, cx| {
+                this.loading_repository = false;
+                match result {
+                    Ok(id) => {
+                        if let Some(repository) = this.selected_repository.as_mut() {
+                            repository.id = id;
+                            this.repositories
+                                .insert(repository.name.clone(), repository.clone());
+                            this.settings.last_repository_id = Some(id);
+                            if let Err(error) = this.settings.save() {
+                                this.diagnostics.error(format!(
+                                    "Could not remember the selected repository: {error}"
+                                ));
+                            }
+                        }
+                        this.send_image(copy_after_upload, window, cx);
+                    }
+                    Err(error) => {
+                        this.diagnostics.error(format!(
+                            "Could not resolve the remembered repository: {error}"
+                        ));
+                        window.push_notification(Notification::error(error.to_string()), cx);
+                        cx.notify();
+                    }
+                }
             });
         })
         .detach();
@@ -1226,8 +1374,27 @@ impl UploaderApp {
         };
 
         let previous = self.settings.organization.replace(organization.clone());
+        let previous_repository = self.settings.last_repository.clone();
+        let previous_repository_id = self.settings.last_repository_id;
+        if previous.as_deref() != Some(organization.as_str()) {
+            self.settings.last_repository = None;
+            self.settings.last_repository_id = None;
+            self.selected_repository = None;
+            self.repositories.clear();
+            self.repository_picker.update(cx, |picker, cx| {
+                picker.set_selected_indices([], window, cx);
+                picker.set_items(
+                    SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
+                    window,
+                    cx,
+                );
+            });
+        }
         if let Err(error) = self.settings.save() {
             self.settings.organization = previous;
+            self.settings.last_repository = previous_repository;
+            self.settings.last_repository_id = previous_repository_id;
+            self.restore_remembered_repository(window, cx);
             window.push_notification(
                 Notification::error(format!("Could not save preferences: {error}")),
                 cx,
@@ -1367,8 +1534,9 @@ impl UploaderApp {
     }
 
     fn render_repository_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let disabled = self.load_state != LoadState::Ready;
+        let disabled = matches!(self.load_state, LoadState::NeedsSetup | LoadState::Loading);
         let organization = self.settings.organization.clone().unwrap_or_default();
+        let view = cx.entity();
         v_flex()
             .w_full()
             .gap_2()
@@ -1410,6 +1578,38 @@ impl UploaderApp {
                     })
                     .search_placeholder("Type to filter repositories…")
                     .disabled(disabled)
+                    .render_trigger(move |trigger, _, _| {
+                        let repository_name = trigger
+                            .selection()
+                            .first()
+                            .map(|(_, repository)| SharedString::from(repository.clone()))
+                            .unwrap_or_else(|| {
+                                trigger
+                                    .placeholder()
+                                    .cloned()
+                                    .unwrap_or_else(|| "Select a repository".into())
+                            });
+                        let view = view.clone();
+                        h_flex()
+                            .w_full()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .truncate()
+                                    .child(repository_name),
+                            )
+                            .child(Icon::new(IconName::ChevronDown).xsmall())
+                            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    this.load_repositories_when_opened(window, cx);
+                                });
+                            })
+                    })
                     .w_full(),
             )
     }
@@ -2110,13 +2310,14 @@ impl Focusable for UploaderApp {
 
 impl Render for UploaderApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let can_send = self.load_state == LoadState::Ready
-            && self.selected_repository.is_some()
+        let can_send = self.selected_repository.is_some()
             && self
                 .staged_images
                 .iter()
                 .any(|image| image.uploaded_url.is_none())
-            && !self.uploading;
+            && !self.uploading
+            && !self.loading_token
+            && !self.loading_repository;
         let staged_count = self
             .staged_images
             .iter()

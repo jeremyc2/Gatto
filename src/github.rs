@@ -50,6 +50,42 @@ pub fn load_session(
     })
 }
 
+/// Reads the active GitHub CLI token without requesting any repositories.
+pub fn load_token(diagnostics: &Diagnostics) -> Result<String, GithubError> {
+    read_token(diagnostics)
+}
+
+/// Resolves one remembered repository without loading the organization's full list.
+pub fn load_repository_id(
+    organization: &str,
+    repository: &str,
+    diagnostics: &Diagnostics,
+) -> Result<u64, GithubError> {
+    let route = format!("repos/{organization}/{repository}");
+    diagnostics.info("Resolving the remembered repository through GitHub CLI.");
+    let output = run_gh(
+        ["api", "--method", "GET", &route, "--jq", ".id"],
+        diagnostics,
+    )
+    .map_err(|error| match error.kind() {
+        io::ErrorKind::NotFound => GithubError::CliUnavailable,
+        _ => GithubError::RepositoryList(error.to_string()),
+    })?;
+    if !output.status.success() {
+        log_gh_failure("GitHub CLI repository request", &output, diagnostics);
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(GithubError::RepositoryList(if detail.is_empty() {
+            "GitHub CLI returned an error".into()
+        } else {
+            detail
+        }));
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse()
+        .map_err(|_| GithubError::RepositoryList("GitHub returned an invalid repository ID".into()))
+}
+
 pub fn upload(
     token: &str,
     repository_id: u64,

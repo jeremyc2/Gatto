@@ -13,6 +13,7 @@ pub struct AppSettings {
     pub organization: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
     pub last_repository: Option<String>,
+    pub last_repository_id: Option<u64>,
     #[serde(skip)]
     pub start_at_login: bool,
 }

@@ -7,6 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
+### Added
+
+- Bulk upload mode for staging and uploading multiple images at once, including a prompt to switch
+  modes when adding several images to an existing draft.
+
+### Changed
+
+- The previously selected repository is restored immediately at launch; GitHub authentication and
+  the full repository list now load only when needed for an upload or repository selection.
+- Staged image descriptions now open directly in an editor, and the replacement dialog supports
+  keyboard shortcuts.
+
 ## [0.4.1] - 2026-10-09
 
 ### Fixed
