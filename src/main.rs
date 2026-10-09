@@ -8,8 +8,13 @@ mod model;
 mod settings;
 mod window_limits;
 
+use std::{cell::RefCell, rc::Rc};
+
 use gpui_kit::component::{Theme, ThemeMode};
-use gpui_kit::{AppContext as _, Focusable as _, Hsla, WindowBounds, WindowOptions, px, rgb, size};
+use gpui_kit::{
+    AnyWindowHandle, AppContext as _, Focusable as _, Hsla, WindowBounds, WindowOptions, px, rgb,
+    size,
+};
 
 use crate::{
     app::UploaderApp,
@@ -21,8 +26,20 @@ fn main() {
     let application = gpui_kit::application()
         .with_assets(gpui_kit::assets::AllAssets)
         .with_quit_mode(gpui_kit::QuitMode::Explicit);
+    let reopen_window = Rc::new(RefCell::new(None::<AnyWindowHandle>));
+    let reopen_window_callback = reopen_window.clone();
+    application.on_reopen(move |cx| {
+        let Some(window_handle) = *reopen_window_callback.borrow() else {
+            return;
+        };
+        set_dock_visible(true);
+        cx.activate(true);
+        let _ = window_handle.update(cx, |_, window, _| {
+            window.activate_window();
+        });
+    });
 
-    application.run(|cx| {
+    application.run(move |cx| {
         cx.set_app_identity("com.jeremy-chandler.gatto", "Gatto");
         gpui_kit::init(cx);
         apply_dark_theme(cx);
@@ -63,6 +80,7 @@ fn main() {
             view
         })
         .expect("Could not open the Gatto window");
+        *reopen_window.borrow_mut() = Some(window_handle.into());
 
         let paste_actions_visible = view.read(cx).has_pinned_repository();
         let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {

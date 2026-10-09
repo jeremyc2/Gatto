@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-09
+
+### Fixed
+
+- Clicking the Dock icon reopens and activates the main screen after its window has been hidden.
+
 ## [0.6.0] - 2026-10-09
 
 ### Added

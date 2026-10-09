@@ -1,6 +1,6 @@
 [package]
 name = "gatto"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 rust-version = "1.90"
 description = "A lightweight GPUI menu bar app for uploading GitHub image attachments"
