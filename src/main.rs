@@ -42,14 +42,14 @@ fn main() {
             let menu_bar_controller = menu_bar_controller.clone();
             let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar_controller, cx));
             let close_view = view.clone();
-            window.on_window_should_close(cx, move |_, cx| {
+            window.on_window_should_close(cx, move |window, cx| {
                 close_view.update(cx, |this, cx| {
                     this.clear_staged_image(
                         "Closed the main window; discarded the staged image.",
                         cx,
                     );
                 });
-                cx.hide();
+                window_limits::hide(window);
                 set_dock_visible(false);
                 false
             });
@@ -59,12 +59,18 @@ fn main() {
         })
         .expect("Could not open the Gatto window");
 
-        let quick_paste_visible = view.read(cx).has_pinned_repository();
-        let (menu_bar, menu_events) = match MenuBar::install(quick_paste_visible) {
+        let paste_actions_visible = view.read(cx).has_pinned_repository();
+        let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {
             Ok(menu_bar) => menu_bar,
             Err(error) => {
-                view.update(cx, |this, cx| {
-                    this.report_menu_bar_error(format!("Menu bar setup failed: {error}"), cx);
+                let _ = window_handle.update(cx, |_, window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.report_menu_bar_error(
+                            format!("Menu bar setup failed: {error}"),
+                            window,
+                            cx,
+                        );
+                    });
                 });
                 // The window remains usable if macOS refuses to create a status item.
                 return;
@@ -89,13 +95,33 @@ fn main() {
                             });
                         });
                     }
-                    MenuAction::QuickPaste => {
+                    MenuAction::PasteAndPreview => {
                         cx.update(|cx| {
                             set_dock_visible(true);
                             cx.activate(true);
                             let _ = window_handle.update(cx, |_, window, cx| {
                                 window.activate_window();
-                                window.dispatch_action(Box::new(app::QuickPaste), cx);
+                                window.dispatch_action(Box::new(app::PasteAndPreview), cx);
+                            });
+                        });
+                    }
+                    MenuAction::PasteToMarkdown => {
+                        cx.update(|cx| {
+                            set_dock_visible(true);
+                            cx.activate(true);
+                            let _ = window_handle.update(cx, |_, window, cx| {
+                                window.activate_window();
+                                window.dispatch_action(Box::new(app::PasteToMarkdown), cx);
+                            });
+                        });
+                    }
+                    MenuAction::PasteToUrl => {
+                        cx.update(|cx| {
+                            set_dock_visible(true);
+                            cx.activate(true);
+                            let _ = window_handle.update(cx, |_, window, cx| {
+                                window.activate_window();
+                                window.dispatch_action(Box::new(app::PasteToUrl), cx);
                             });
                         });
                     }

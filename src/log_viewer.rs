@@ -1,8 +1,11 @@
 use gpui_kit::{
-    App, ClipboardItem, Context, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, Window,
+    App, Context, FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, Styled as _, Window,
     component::scroll::ScrollableElement as _,
-    component::{ActiveTheme as _, Sizable as _, StyledExt as _, button::Button, h_flex, v_flex},
+    component::{
+        ActiveTheme as _, Sizable as _, StyledExt as _, WindowExt as _, button::Button,
+        clipboard::Clipboard, h_flex, notification::Notification, v_flex,
+    },
     div,
 };
 
@@ -28,14 +31,6 @@ impl LogViewer {
         self.lines = self.diagnostics.lines();
         cx.notify();
     }
-
-    fn copy_all(&mut self, _: &gpui_kit::ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
-        cx.write_to_clipboard(ClipboardItem::new_string(self.diagnostics.text()));
-        self.diagnostics
-            .info("Copied application log to the clipboard.");
-        self.lines = self.diagnostics.lines();
-        cx.notify();
-    }
 }
 
 impl Focusable for LogViewer {
@@ -51,6 +46,9 @@ impl Render for LogViewer {
         } else {
             self.lines.clone()
         };
+        let log_text = self.diagnostics.text();
+        let diagnostics = self.diagnostics.clone();
+        let view = cx.entity().downgrade();
 
         v_flex()
             .track_focus(&self.focus_handle)
@@ -96,11 +94,26 @@ impl Render for LogViewer {
                                     .on_click(cx.listener(Self::refresh)),
                             )
                             .child(
-                                Button::new("copy-all-logs")
+                                Clipboard::new("copy-all-logs")
                                     .small()
-                                    .outline()
-                                    .label("Copy all")
-                                    .on_click(cx.listener(Self::copy_all)),
+                                    .value(log_text)
+                                    .tooltip("Copy all application logs")
+                                    .accessibility_label("Copy all application logs")
+                                    .on_copied(move |_, window, cx| {
+                                        diagnostics
+                                            .info("Copied application log to the clipboard.");
+                                        let lines = diagnostics.lines();
+                                        let _ = view.update(cx, |this, cx| {
+                                            this.lines = lines;
+                                            cx.notify();
+                                        });
+                                        window.push_notification(
+                                            Notification::success(
+                                                "Application logs copied to the clipboard.",
+                                            ),
+                                            cx,
+                                        );
+                                    }),
                             ),
                     ),
             )

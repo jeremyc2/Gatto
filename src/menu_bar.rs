@@ -9,7 +9,9 @@ use tray_icon::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuAction {
     Open,
-    QuickPaste,
+    PasteAndPreview,
+    PasteToMarkdown,
+    PasteToUrl,
     Settings,
     Quit,
 }
@@ -18,30 +20,42 @@ pub struct MenuBar {
     _tray: TrayIcon,
     menu: Menu,
     open_id: MenuId,
-    quick_paste_id: MenuId,
-    quick_paste: MenuItem,
-    quick_paste_visible: bool,
+    paste_preview_id: MenuId,
+    paste_markdown_id: MenuId,
+    paste_url_id: MenuId,
+    paste_items: [MenuItem; 3],
+    paste_separator: PredefinedMenuItem,
+    paste_actions_visible: bool,
     settings_id: MenuId,
     quit_id: MenuId,
 }
 
 impl MenuBar {
     pub fn install(
-        quick_paste_visible: bool,
+        paste_actions_visible: bool,
     ) -> Result<(Self, async_channel::Receiver<MenuEvent>)> {
         let menu = Menu::new();
         let open = MenuItem::new("Open App", true, None);
-        let quick_paste = MenuItem::new("Quick Paste", true, None);
+        let paste_preview = MenuItem::new("Paste & Preview", true, None);
+        let paste_markdown = MenuItem::new("Paste to Markdown", true, None);
+        let paste_url = MenuItem::new("Paste to URL", true, None);
         let settings = MenuItem::new("App Preferences", true, None);
-        let separator = PredefinedMenuItem::separator();
+        let paste_separator = PredefinedMenuItem::separator();
+        let settings_separator = PredefinedMenuItem::separator();
+        let quit_separator = PredefinedMenuItem::separator();
         let quit = MenuItem::new("Quit", true, None);
         menu.append(&open)
             .context("Could not create the menu bar menu")?;
-        if quick_paste_visible {
-            menu.append(&quick_paste)
-                .context("Could not create the Quick Paste menu item")?;
+        if paste_actions_visible {
+            menu.append_items(&[
+                &paste_separator,
+                &paste_preview,
+                &paste_markdown,
+                &paste_url,
+            ])
+            .context("Could not create the Paste menu items")?;
         }
-        menu.append_items(&[&settings, &separator, &quit])
+        menu.append_items(&[&settings_separator, &settings, &quit_separator, &quit])
             .context("Could not create the menu bar menu")?;
 
         let icon = app_glyph_icon()?;
@@ -66,9 +80,12 @@ impl MenuBar {
                 _tray: tray,
                 menu,
                 open_id: open.id().clone(),
-                quick_paste_id: quick_paste.id().clone(),
-                quick_paste,
-                quick_paste_visible,
+                paste_preview_id: paste_preview.id().clone(),
+                paste_markdown_id: paste_markdown.id().clone(),
+                paste_url_id: paste_url.id().clone(),
+                paste_items: [paste_preview, paste_markdown, paste_url],
+                paste_separator,
+                paste_actions_visible,
                 settings_id: settings.id().clone(),
                 quit_id: quit.id().clone(),
             },
@@ -79,8 +96,12 @@ impl MenuBar {
     pub fn action_for(&self, event: &MenuEvent) -> Option<MenuAction> {
         if event.id == self.open_id {
             Some(MenuAction::Open)
-        } else if event.id == self.quick_paste_id {
-            Some(MenuAction::QuickPaste)
+        } else if event.id == self.paste_preview_id {
+            Some(MenuAction::PasteAndPreview)
+        } else if event.id == self.paste_markdown_id {
+            Some(MenuAction::PasteToMarkdown)
+        } else if event.id == self.paste_url_id {
+            Some(MenuAction::PasteToUrl)
         } else if event.id == self.settings_id {
             Some(MenuAction::Settings)
         } else if event.id == self.quit_id {
@@ -90,24 +111,35 @@ impl MenuBar {
         }
     }
 
-    fn set_quick_paste_visible(&mut self, visible: bool) {
-        if self.quick_paste_visible == visible {
+    fn set_paste_actions_visible(&mut self, visible: bool) {
+        if self.paste_actions_visible == visible {
             return;
         }
         let result = if visible {
-            // Keep Quick Paste directly below Open App.
-            self.menu.insert(&self.quick_paste, 1)
+            self.menu.insert_items(
+                &[
+                    &self.paste_separator,
+                    &self.paste_items[0],
+                    &self.paste_items[1],
+                    &self.paste_items[2],
+                ],
+                1,
+            )
         } else {
-            self.menu.remove(&self.quick_paste)
+            self.menu
+                .remove(&self.paste_separator)
+                .and_then(|_| self.menu.remove(&self.paste_items[0]))
+                .and_then(|_| self.menu.remove(&self.paste_items[1]))
+                .and_then(|_| self.menu.remove(&self.paste_items[2]))
         };
         if result.is_ok() {
-            self.quick_paste_visible = visible;
+            self.paste_actions_visible = visible;
         }
     }
 }
 
-/// A UI-thread handle that lets the application add or remove Quick Paste as
-/// the pinned-repository setting changes.
+/// A UI-thread handle that lets the application add or remove the paste action
+/// group as the pinned-repository setting changes.
 #[derive(Clone, Default)]
 pub struct MenuBarController {
     menu_bar: Rc<RefCell<Option<MenuBar>>>,
@@ -125,9 +157,9 @@ impl MenuBarController {
             .and_then(|menu_bar| menu_bar.action_for(event))
     }
 
-    pub fn set_quick_paste_visible(&self, visible: bool) {
+    pub fn set_paste_actions_visible(&self, visible: bool) {
         if let Some(menu_bar) = self.menu_bar.borrow_mut().as_mut() {
-            menu_bar.set_quick_paste_visible(visible);
+            menu_bar.set_paste_actions_visible(visible);
         }
     }
 }
