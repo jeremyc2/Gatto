@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-09
+
+### Fixed
+
+- Restored GitHub attachment upload query parameters after the reqwest 0.13 dependency update.
+
 ## [0.4.0] - 2026-10-08
 
 ### Added
