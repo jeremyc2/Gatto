@@ -59,14 +59,13 @@ modifier keys.
 When multiple repositories are pinned, Quick Copy uses the most recently selected pinned
 repository, falling back to the alphabetically first pinned repository.
 
-## Keyboard copy actions
+## Keyboard copy action
 
-After at least one upload succeeds, the uploader supports these keyboard actions:
+After at least one upload succeeds, the uploader supports this keyboard action:
 
-- **Command+Shift+C** copies every uploaded URL, separated by newlines.
 - **Command+Shift+M** copies every uploaded Markdown image snippet, separated by newlines.
 
-These shortcuts act on completed uploads in the open window. The optional global Quick Copy
+This shortcut acts on completed uploads in the open window. The optional global Quick Copy
 shortcut is different: it reads a new image from the clipboard and performs a background upload.
 
 ## Automate Gatto with custom URLs

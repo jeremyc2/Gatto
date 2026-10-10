@@ -167,9 +167,8 @@ action, Quick Copy requires an organization and at least one pinned repository.
 Normal uploads do not change the clipboard. An uploaded attachment's copy button copies a value such as
 `![screenshot.png](https://github.com/user-attachments/assets/…)`.
 
-On the uploader screen, press **Command+Shift+C** to copy all uploaded URLs or
-**Command+Shift+M** to copy all uploaded Markdown image snippets. These shortcuts do nothing
-until an upload result is available.
+On the uploader screen, press **Command+Shift+M** to copy all uploaded Markdown image snippets.
+This shortcut does nothing until an upload result is available.
 
 ## App Preferences
 

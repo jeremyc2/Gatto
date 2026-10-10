@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-10
+
+### Changed
+
+- Removed the Command+Shift+C URL-copy shortcut. When multiple uploads are available, the uploader
+  now shows a Command+Shift+M hint for copying all uploaded Markdown snippets.
+
 ## [0.8.0] - 2026-10-10
 
 ### Added

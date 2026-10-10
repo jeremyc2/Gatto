@@ -48,7 +48,6 @@ actions!(
         PasteImage,
         PreviewFromClipboard,
         QuickCopy,
-        CopyUploadUrl,
         CopyUploadMarkdown,
         SwitchToBulkUpload
     ]
@@ -78,7 +77,6 @@ enum LoadState {
 
 #[derive(Clone)]
 struct UploadedImage {
-    url: String,
     markdown: String,
 }
 
@@ -88,14 +86,6 @@ struct UploadResult {
 }
 
 impl UploadResult {
-    fn urls(&self) -> String {
-        self.images
-            .iter()
-            .map(|image| image.url.as_str())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
     fn markdown(&self) -> String {
         self.images
             .iter()
@@ -397,7 +387,6 @@ impl UploaderApp {
                 image.upload_state = AttachmentUploadState::Uploaded { url: url.into() };
                 this.upload_result = Some(UploadResult {
                     images: vec![UploadedImage {
-                        url: url.into(),
                         markdown: markdown_image(&image.description, url),
                     }],
                 });
@@ -1222,7 +1211,6 @@ impl UploaderApp {
             .iter()
             .filter_map(|image| {
                 image.upload_state.uploaded_url().map(|url| UploadedImage {
-                    url: url.to_owned(),
                     markdown: markdown_image(&image.description, url),
                 })
             })
@@ -1307,7 +1295,6 @@ impl UploaderApp {
                             }
                             uploaded.push(UploadedImage {
                                 markdown: markdown_image(&description, &url),
-                                url,
                             });
                         }
                         Err(error) => {
@@ -1544,16 +1531,6 @@ impl UploaderApp {
             });
         })
         .detach();
-    }
-
-    fn copy_upload_url(&mut self, _: &CopyUploadUrl, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(result) = &self.upload_result else {
-            return;
-        };
-        cx.write_to_clipboard(ClipboardItem::new_string(result.urls()));
-        self.diagnostics
-            .info("Copied uploaded image URLs to the clipboard.");
-        self.finish_copy("URLs copied to the clipboard.", window, cx);
     }
 
     fn copy_upload_markdown(
@@ -2634,6 +2611,25 @@ impl UploaderApp {
                         ),
                 )
             })
+            .when(
+                self.upload_result
+                    .as_ref()
+                    .is_some_and(|result| result.images.len() > 1),
+                |list| {
+                    list.child(
+                        h_flex()
+                            .items_center()
+                            .gap_1()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Press")
+                            .child(Kbd::new(
+                                Keystroke::parse("cmd-shift-m").expect("valid shortcut"),
+                            ))
+                            .child("to copy all uploaded Markdown snippets."),
+                    )
+                },
+            )
             .children(attachments)
     }
 
@@ -2898,9 +2894,7 @@ impl Render for UploaderApp {
             root.child(self.render_settings(cx)).into_any_element()
         } else {
             let needs_setup = self.load_state == LoadState::NeedsSetup;
-            let root = root
-                .on_action(cx.listener(Self::copy_upload_url))
-                .on_action(cx.listener(Self::copy_upload_markdown));
+            let root = root.on_action(cx.listener(Self::copy_upload_markdown));
             let content = v_flex()
                 .id("main-page")
                 .flex_1()
@@ -3023,7 +3017,6 @@ pub fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("cmd-v", PasteImage, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-v", PasteImage, Some(KEY_CONTEXT)),
-        KeyBinding::new("cmd-shift-c", CopyUploadUrl, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-shift-m", CopyUploadMarkdown, Some(KEY_CONTEXT)),
         KeyBinding::new("b", SwitchToBulkUpload, Some("Dialog")),
     ]);
@@ -3036,24 +3029,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bulk_upload_result_preserves_order_with_newline_separators() {
+    fn bulk_upload_result_preserves_markdown_order_with_newline_separators() {
         let result = UploadResult {
             images: vec![
                 UploadedImage {
-                    url: "https://example.com/first".into(),
                     markdown: "![first](https://example.com/first)".into(),
                 },
                 UploadedImage {
-                    url: "https://example.com/second".into(),
                     markdown: "![second](https://example.com/second)".into(),
                 },
             ],
         };
 
-        assert_eq!(
-            result.urls(),
-            "https://example.com/first\nhttps://example.com/second"
-        );
         assert_eq!(
             result.markdown(),
             "![first](https://example.com/first)\n![second](https://example.com/second)"
