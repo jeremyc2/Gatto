@@ -2611,25 +2611,24 @@ impl UploaderApp {
                         ),
                 )
             })
-            .when(
-                self.upload_result
-                    .as_ref()
-                    .is_some_and(|result| result.images.len() > 1),
-                |list| {
-                    list.child(
-                        h_flex()
-                            .items_center()
-                            .gap_1()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Press")
-                            .child(Kbd::new(
-                                Keystroke::parse("cmd-shift-m").expect("valid shortcut"),
-                            ))
-                            .child("to copy all uploaded Markdown snippets."),
-                    )
-                },
-            )
+            .when_some(self.upload_result.as_ref(), |list, result| {
+                list.child(
+                    h_flex()
+                        .id("upload-markdown-copy-hint")
+                        .debug_selector(|| "upload-markdown-copy-hint".into())
+                        .items_center()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Press")
+                        .child(Kbd::new(Keystroke::parse("cmd-c").expect("valid shortcut")))
+                        .child(if result.images.len() == 1 {
+                            "to copy the uploaded Markdown snippet."
+                        } else {
+                            "to copy all uploaded Markdown snippets."
+                        }),
+                )
+            })
             .children(attachments)
     }
 
@@ -3017,7 +3016,7 @@ pub fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("cmd-v", PasteImage, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-v", PasteImage, Some(KEY_CONTEXT)),
-        KeyBinding::new("cmd-shift-m", CopyUploadMarkdown, Some(KEY_CONTEXT)),
+        KeyBinding::new("cmd-c", CopyUploadMarkdown, Some(KEY_CONTEXT)),
         KeyBinding::new("b", SwitchToBulkUpload, Some("Dialog")),
     ]);
 }
@@ -3045,6 +3044,84 @@ mod tests {
             result.markdown(),
             "![first](https://example.com/first)\n![second](https://example.com/second)"
         );
+    }
+
+    #[gpui_kit::test]
+    fn markdown_copy_hint_and_shortcut_work_for_single_and_bulk_uploads(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            init_keybindings(cx);
+        });
+        let captured = Rc::new(std::cell::RefCell::new(None));
+        let capture = captured.clone();
+        let (_, cx) = cx.add_window_view(move |window, cx| {
+            let view = cx.new(|cx| {
+                let mut app = UploaderApp::with_settings(
+                    window,
+                    Diagnostics::new(),
+                    AppControllers::default(),
+                    AppSettings {
+                        organization: Some("acme-labs".into()),
+                        ..AppSettings::default()
+                    },
+                    None,
+                    false,
+                    cx,
+                );
+                app.load_state = LoadState::Ready;
+                app
+            });
+            *capture.borrow_mut() = Some(view.clone());
+            gpui_kit::base::Root::new(view, window, cx)
+        });
+        let view = captured.borrow().clone().unwrap();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(cx.debug_bounds("upload-markdown-copy-hint").is_none());
+
+        let image_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packaging/rocket-cat-transparent.png");
+        for bulk_upload in [false, true] {
+            let markdown = "![first](https://example.com/first)";
+            let expected = if bulk_upload {
+                format!("{markdown}\n![second](https://example.com/second)")
+            } else {
+                markdown.to_owned()
+            };
+            cx.update(|window, cx| {
+                view.update(cx, |app, cx| {
+                    app.bulk_upload = bulk_upload;
+                    app.staged_images.clear();
+                    let mut image = StagedImage::from_path(image_path.clone()).unwrap();
+                    image.id = 1;
+                    image.description = "first".into();
+                    image.upload_state = AttachmentUploadState::Uploaded {
+                        url: "https://example.com/first".into(),
+                    };
+                    app.staged_images.push(image);
+                    if bulk_upload {
+                        let mut image = StagedImage::from_path(image_path.clone()).unwrap();
+                        image.id = 2;
+                        image.description = "second".into();
+                        image.upload_state = AttachmentUploadState::Uploaded {
+                            url: "https://example.com/second".into(),
+                        };
+                        app.staged_images.push(image);
+                    }
+                    app.sync_upload_result();
+                    app.focus_handle.focus(window, cx);
+                    cx.notify();
+                });
+                window.draw(cx).clear(cx);
+            });
+            assert!(cx.debug_bounds("upload-markdown-copy-hint").is_some());
+            cx.simulate_keystrokes("cmd-c");
+            cx.update(|_, cx| {
+                assert_eq!(
+                    cx.read_from_clipboard().and_then(|item| item.text()),
+                    Some(expected.clone()),
+                );
+            });
+        }
     }
 
     #[gpui_kit::test]

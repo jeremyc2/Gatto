@@ -63,7 +63,10 @@ repository, falling back to the alphabetically first pinned repository.
 
 After at least one upload succeeds, the uploader supports this keyboard action:
 
-- **Command+Shift+M** copies every uploaded Markdown image snippet, separated by newlines.
+- **Command+C** copies every uploaded Markdown image snippet, separated by newlines.
+
+For a single upload, it copies just that image's Markdown snippet. A shortcut hint appears after
+at least one upload succeeds, in both single-image and bulk upload mode.
 
 This shortcut acts on completed uploads in the open window. The optional global Quick Copy
 shortcut is different: it reads a new image from the clipboard and performs a background upload.

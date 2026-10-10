@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-10
+
+### Changed
+
+- Changed the Markdown copy shortcut from Command+Shift+M to Command+C for single and bulk uploads.
+- Show the Markdown copy shortcut hint after any successful upload, including a single image.
+
 ## [0.8.1] - 2026-10-10
 
 ### Changed
