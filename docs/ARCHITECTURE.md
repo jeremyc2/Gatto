@@ -15,6 +15,7 @@ platform integration, persistent settings, and shared state.
 - `src/diagnostics.rs` owns the bounded, in-memory troubleshooting event log.
 - `src/log_viewer.rs` renders that event log in its own application window.
 - `src/menu_bar.rs` owns the macOS status item and open/settings/quit actions.
+- `src/global_shortcut.rs` validates and registers the optional system-wide Quick Copy shortcut.
 - `src/custom_url.rs` validates `gatto://` action URLs before they are dispatched through the same
   action path as the menu bar.
 - `src/model.rs` contains shared repository, image, and upload-state models.
@@ -58,10 +59,10 @@ Markdown copy control.
 
 ## App Preferences and local state
 
-The configured repository (`owner/name`) is saved as JSON under the current user's
-`Library/Application Support/Gatto` directory. The GitHub token and
-image bytes are never written there. Until a repository is set, the main screen
-only points the user to App Preferences.
+The organization, repository selections, shortcut configuration, and general preferences are
+saved as JSON under the current user's `Library/Application Support/Gatto` directory. The GitHub
+token and image bytes are never written there. Until an organization is set, the main screen only
+points the user to App Preferences.
 
 Start at Login is represented by the exact file
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the
@@ -72,6 +73,10 @@ the next login. No privileged helper or system-wide service is installed.
 The **Reset app** preference removes both of these per-user files and returns
 the in-memory UI to first-run setup. It does not modify GitHub CLI
 authentication, which is managed outside of Gatto.
+
+The global Quick Copy shortcut uses macOS hotkey registration rather than global keyboard event
+monitoring, so it does not require Accessibility permission. The shortcut is opt-in, must contain
+at least two modifiers, and is unregistered when disabled or when the app resets.
 
 The build script accepts an explicit `GIT_COMMIT_HASH` environment value or asks
 the local Git executable for the current short commit. It falls back to `unknown`
@@ -93,9 +98,9 @@ the minimum supported Rust version in `Cargo.toml`.
 - Image content is sent to GitHub and otherwise remains local to the process.
 - Custom action URLs do not accept parameters; repository selection remains controlled by saved
   app preferences.
-- Upload results are copied only after the user presses a copy button.
-- Persistent settings contain the repository name only; Start at Login stores the
-  executable path in a per-user LaunchAgent.
+- Upload results are copied after an explicit copy action or a user-configured Quick Copy action.
+- Persistent settings contain repository names and app preferences, never tokens or image bytes;
+  Start at Login stores the executable path in a per-user LaunchAgent.
 - Logs and errors should never include tokens or raw image bytes.
 - Diagnostic events are retained only in memory (up to 500 entries) and are lost on quit.
 - GitHub's attachment endpoint is undocumented, so failures must be handled as an

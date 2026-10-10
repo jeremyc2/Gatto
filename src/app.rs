@@ -24,7 +24,7 @@ use gpui_kit::component::{
 use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity,
     ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
-    IntoElement, KeyBinding, Keystroke, MouseButton, ObjectFit, ParentElement as _,
+    IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton, ObjectFit, ParentElement as _,
     PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
     StyledImage as _, Subscription, SystemNotification, Window, WindowBounds, WindowOptions,
     actions, div, img, prelude::FluentBuilder as _, px, size,
@@ -33,6 +33,7 @@ use gpui_kit::{
 use crate::{
     diagnostics::Diagnostics,
     github,
+    global_shortcut::{GlobalShortcutController, canonicalize_shortcut, shortcut_from_keystroke},
     image_preview::ImagePreview,
     log_viewer::LogViewer,
     menu_bar::MenuBarController,
@@ -56,8 +57,15 @@ actions!(
 const KEY_CONTEXT: &str = "Gatto";
 const UNSUPPORTED_MESSAGE: &str =
     "Unsupported format. Please paste or drop a PNG, JPEG, GIF, or WebP image.";
+const WALKTHROUGH_URL: &str = "https://github.com/jeremyc2/Gatto/blob/main/docs/WALKTHROUGH.md";
 
 type RepositoryPicker = ComboboxState<SearchableVec<SearchableGroup<String>>>;
+
+#[derive(Default)]
+struct AppControllers {
+    menu_bar: MenuBarController,
+    global_shortcut: GlobalShortcutController,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LoadState {
@@ -135,6 +143,7 @@ impl WalkthroughScenario {
 
 pub struct UploaderApp {
     organization_input: Entity<InputState>,
+    global_shortcut_input: Entity<InputState>,
     repository_picker: Entity<RepositoryPicker>,
     repositories: HashMap<String, Repository>,
     selected_repository: Option<Repository>,
@@ -150,16 +159,19 @@ pub struct UploaderApp {
     uploading: bool,
     settings: AppSettings,
     settings_open: bool,
+    recording_global_shortcut: bool,
     pending_paste_repository: Option<String>,
     pending_menu_paste: Option<MenuPasteMode>,
     pending_replacement_images: Option<Vec<StagedImage>>,
     log_window: Option<AnyWindowHandle>,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
     menu_bar: MenuBarController,
+    global_shortcut: GlobalShortcutController,
     diagnostics: Diagnostics,
     header_mark: Arc<Image>,
     focus_handle: FocusHandle,
     _organization_subscription: Subscription,
+    _global_shortcut_subscription: Subscription,
     _repository_subscription: Subscription,
 }
 
@@ -168,6 +180,7 @@ impl UploaderApp {
         window: &mut Window,
         diagnostics: Diagnostics,
         menu_bar: MenuBarController,
+        global_shortcut: GlobalShortcutController,
         cx: &mut Context<Self>,
     ) -> Self {
         let (settings, settings_error) = match AppSettings::load() {
@@ -186,7 +199,10 @@ impl UploaderApp {
         Self::with_settings(
             window,
             diagnostics,
-            menu_bar,
+            AppControllers {
+                menu_bar,
+                global_shortcut,
+            },
             settings,
             settings_error,
             true,
@@ -197,13 +213,14 @@ impl UploaderApp {
     fn with_settings(
         window: &mut Window,
         diagnostics: Diagnostics,
-        menu_bar: MenuBarController,
+        controllers: AppControllers,
         settings: AppSettings,
         settings_error: Option<String>,
         persist_repository_selection: bool,
         cx: &mut Context<Self>,
     ) -> Self {
         let initial_organization = settings.organization.clone().unwrap_or_default();
+        let initial_shortcut = settings.global_quick_copy_shortcut.clone();
         let organization_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("organization")
@@ -211,6 +228,17 @@ impl UploaderApp {
         });
         let organization_subscription =
             cx.subscribe(&organization_input, |_: &mut Self, _, event, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
+        let global_shortcut_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Command+Shift+U")
+                .default_value(initial_shortcut)
+        });
+        let global_shortcut_subscription =
+            cx.subscribe(&global_shortcut_input, |_: &mut Self, _, event, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
                 }
@@ -255,6 +283,7 @@ impl UploaderApp {
 
         let mut this = Self {
             organization_input,
+            global_shortcut_input,
             repository_picker,
             repositories: HashMap::new(),
             selected_repository: None,
@@ -274,12 +303,14 @@ impl UploaderApp {
             uploading: false,
             settings,
             settings_open: false,
+            recording_global_shortcut: false,
             pending_paste_repository: None,
             pending_menu_paste: None,
             pending_replacement_images: None,
             log_window: None,
             preview_window: None,
-            menu_bar,
+            menu_bar: controllers.menu_bar,
+            global_shortcut: controllers.global_shortcut,
             diagnostics,
             header_mark: Arc::new(Image::from_bytes(
                 ImageFormat::Png,
@@ -287,6 +318,7 @@ impl UploaderApp {
             )),
             focus_handle: cx.focus_handle(),
             _organization_subscription: organization_subscription,
+            _global_shortcut_subscription: global_shortcut_subscription,
             _repository_subscription: subscription,
         };
         if let Some(error) = settings_error {
@@ -294,6 +326,7 @@ impl UploaderApp {
         }
         if persist_repository_selection {
             this.restore_remembered_repository(window, cx);
+            this.restore_global_shortcut(window, cx);
         }
         this
     }
@@ -316,7 +349,7 @@ impl UploaderApp {
         let mut this = Self::with_settings(
             window,
             Diagnostics::new(),
-            MenuBarController::default(),
+            AppControllers::default(),
             settings,
             None,
             false,
@@ -382,6 +415,37 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn restore_global_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings.global_quick_copy_shortcut_enabled {
+            return;
+        }
+        match self
+            .global_shortcut
+            .set_shortcut(Some(&self.settings.global_quick_copy_shortcut))
+        {
+            Ok(Some(canonical)) => {
+                self.settings.global_quick_copy_shortcut = canonical.clone();
+                self.global_shortcut_input.update(cx, |input, cx| {
+                    input.set_value(canonical, window, cx);
+                });
+                self.diagnostics
+                    .info("Registered the global Quick Copy shortcut.");
+            }
+            Ok(None) => {}
+            Err(error) => {
+                self.settings.global_quick_copy_shortcut_enabled = false;
+                let _ = self.settings.save();
+                self.diagnostics.error(format!(
+                    "Could not restore the global Quick Copy shortcut: {error}"
+                ));
+                window.push_notification(
+                    Notification::error(format!("Global Quick Copy shortcut disabled: {error}")),
+                    cx,
+                );
+            }
+        }
+    }
+
     pub fn has_pinned_repository(&self) -> bool {
         !self.settings.pinned_repositories.is_empty()
     }
@@ -407,6 +471,15 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.uploading
+            || self.loading_token
+            || self.loading_repository
+            || self.pending_menu_paste.is_some()
+        {
+            self.diagnostics
+                .info("Ignored a clipboard action because another one is in progress.");
+            return;
+        }
         self.settings_open = false;
         if mode != MenuPasteMode::Preview {
             self.clear_staged_images("Cleared the previous images for a clipboard action.", cx);
@@ -518,6 +591,13 @@ impl UploaderApp {
         };
 
         self.load_state = LoadState::Loading;
+        self.repository_picker.update(cx, |picker, cx| {
+            picker.set_items(
+                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
+                window,
+                cx,
+            );
+        });
         self.diagnostics.info(format!(
             "Loading repositories for organization {organization}."
         ));
@@ -1473,7 +1553,7 @@ impl UploaderApp {
         cx.write_to_clipboard(ClipboardItem::new_string(result.urls()));
         self.diagnostics
             .info("Copied uploaded image URLs to the clipboard.");
-        window.push_notification(Notification::success("URLs copied to the clipboard."), cx);
+        self.finish_copy("URLs copied to the clipboard.", window, cx);
     }
 
     fn copy_upload_markdown(
@@ -1488,8 +1568,9 @@ impl UploaderApp {
         cx.write_to_clipboard(ClipboardItem::new_string(result.markdown()));
         self.diagnostics
             .info("Copied uploaded Markdown image snippets to the clipboard.");
-        window.push_notification(
-            Notification::success("Markdown image snippets copied to the clipboard."),
+        self.finish_copy(
+            "Markdown image snippets copied to the clipboard.",
+            window,
             cx,
         );
     }
@@ -1506,10 +1587,21 @@ impl UploaderApp {
         cx.write_to_clipboard(ClipboardItem::new_string(result.markdown()));
         self.diagnostics
             .info("Copied uploaded image Markdown snippets to the clipboard.");
-        window.push_notification(
-            Notification::success("Uploaded Markdown snippets copied to the clipboard."),
+        self.finish_copy(
+            "Uploaded Markdown snippets copied to the clipboard.",
+            window,
             cx,
         );
+    }
+
+    fn finish_copy(&mut self, message: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.close_window_after_copy {
+            self.diagnostics
+                .info("Closing the main window after copying an upload result.");
+            window.defer(cx, |window, _| window_limits::request_close(window));
+        } else {
+            window.push_notification(Notification::success(message), cx);
+        }
     }
 
     fn repository_groups(&self) -> Vec<SearchableGroup<String>> {
@@ -1520,7 +1612,7 @@ impl UploaderApp {
             .partition(|name| self.settings.pinned_repositories.contains(name));
         let mut groups = Vec::new();
         if !pinned.is_empty() {
-            groups.push(SearchableGroup::new("📌  Pinned repositories").items(pinned));
+            groups.push(SearchableGroup::new("Pinned repositories").items(pinned));
         }
         if !remaining.is_empty() {
             groups.push(SearchableGroup::new("All repositories").items(remaining));
@@ -1658,12 +1750,224 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn start_global_shortcut_recording(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.recording_global_shortcut {
+            self.cancel_global_shortcut_recording(window, cx);
+            return;
+        }
+
+        if self.settings.global_quick_copy_shortcut_enabled
+            && let Err(error) = self.global_shortcut.set_shortcut(None)
+        {
+            window.push_notification(Notification::error(error.to_string()), cx);
+            return;
+        }
+
+        self.recording_global_shortcut = true;
+        window.focus(&self.focus_handle, cx);
+        cx.notify();
+    }
+
+    fn record_global_shortcut(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.recording_global_shortcut {
+            return;
+        }
+
+        window.prevent_default();
+        cx.stop_propagation();
+        if event.is_held {
+            return;
+        }
+        if event.keystroke.key == "escape" {
+            self.cancel_global_shortcut_recording(window, cx);
+            return;
+        }
+
+        let canonical = match shortcut_from_keystroke(&event.keystroke) {
+            Ok(shortcut) => shortcut,
+            Err(error) => {
+                window.push_notification(Notification::error(error.to_string()), cx);
+                return;
+            }
+        };
+        let previous = self.settings.global_quick_copy_shortcut.clone();
+
+        if self.settings.global_quick_copy_shortcut_enabled
+            && let Err(error) = self.global_shortcut.set_shortcut(Some(&canonical))
+        {
+            let _ = self.global_shortcut.set_shortcut(Some(&previous));
+            self.recording_global_shortcut = false;
+            window.push_notification(Notification::error(error.to_string()), cx);
+            cx.notify();
+            return;
+        }
+
+        self.settings.global_quick_copy_shortcut = canonical.clone();
+        if let Err(error) = self.settings.save() {
+            if self.settings.global_quick_copy_shortcut_enabled {
+                let _ = self.global_shortcut.set_shortcut(Some(&previous));
+            }
+            self.settings.global_quick_copy_shortcut = previous;
+            self.recording_global_shortcut = false;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        self.global_shortcut_input.update(cx, |input, cx| {
+            input.set_value(canonical, window, cx);
+        });
+        self.diagnostics
+            .info("Saved the global Quick Copy shortcut.");
+        window.push_notification(Notification::success("Global shortcut saved."), cx);
+        self.recording_global_shortcut = false;
+        cx.notify();
+    }
+
+    fn cancel_global_shortcut_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.recording_global_shortcut {
+            return;
+        }
+
+        self.recording_global_shortcut = false;
+        if self.settings.global_quick_copy_shortcut_enabled
+            && let Err(error) = self
+                .global_shortcut
+                .set_shortcut(Some(&self.settings.global_quick_copy_shortcut))
+        {
+            self.settings.global_quick_copy_shortcut_enabled = false;
+            let _ = self.settings.save();
+            self.diagnostics.error(format!(
+                "Could not restore the global Quick Copy shortcut: {error}"
+            ));
+            window.push_notification(
+                Notification::error(format!("Global Quick Copy shortcut disabled: {error}")),
+                cx,
+            );
+        }
+        cx.notify();
+    }
+
+    pub fn prepare_to_hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_global_shortcut_recording(window, cx);
+    }
+
+    fn close_settings(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cancel_global_shortcut_recording(window, cx);
+        self.settings_open = false;
+        cx.notify();
+    }
+
+    fn set_global_shortcut_enabled(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if enabled == self.settings.global_quick_copy_shortcut_enabled {
+            return;
+        }
+
+        let raw_shortcut = self.global_shortcut_input.read(cx).value();
+        let canonical = if enabled {
+            match canonicalize_shortcut(&raw_shortcut) {
+                Ok(shortcut) => shortcut,
+                Err(error) => {
+                    window.push_notification(Notification::error(error.to_string()), cx);
+                    return;
+                }
+            }
+        } else {
+            self.settings.global_quick_copy_shortcut.clone()
+        };
+        let previous_shortcut = self.settings.global_quick_copy_shortcut.clone();
+
+        let update = if enabled {
+            self.global_shortcut.set_shortcut(Some(&canonical))
+        } else {
+            self.global_shortcut.set_shortcut(None)
+        };
+        if let Err(error) = update {
+            window.push_notification(Notification::error(error.to_string()), cx);
+            return;
+        }
+
+        self.settings.global_quick_copy_shortcut_enabled = enabled;
+        self.settings.global_quick_copy_shortcut = canonical.clone();
+        if let Err(error) = self.settings.save() {
+            let rollback = if enabled {
+                self.global_shortcut.set_shortcut(None)
+            } else {
+                self.global_shortcut.set_shortcut(Some(&previous_shortcut))
+            };
+            if let Err(rollback_error) = rollback {
+                self.diagnostics.error(format!(
+                    "Could not restore the previous global shortcut: {rollback_error}"
+                ));
+            }
+            self.settings.global_quick_copy_shortcut_enabled = !enabled;
+            self.settings.global_quick_copy_shortcut = previous_shortcut;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+            return;
+        }
+
+        self.global_shortcut_input.update(cx, |input, cx| {
+            input.set_value(canonical, window, cx);
+        });
+        self.diagnostics.info(if enabled {
+            "Enabled the global Quick Copy shortcut."
+        } else {
+            "Disabled the global Quick Copy shortcut."
+        });
+        cx.notify();
+    }
+
+    fn set_close_window_after_copy(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous = self.settings.close_window_after_copy;
+        self.settings.close_window_after_copy = enabled;
+        if let Err(error) = self.settings.save() {
+            self.settings.close_window_after_copy = previous;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+        }
+        cx.notify();
+    }
+
     fn confirm_reset(
         &mut self,
         _: &gpui_kit::ClickEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.cancel_global_shortcut_recording(window, cx);
         let uploader = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let uploader = uploader.clone();
@@ -1693,11 +1997,16 @@ impl UploaderApp {
     }
 
     fn reset_app(&mut self, window: &mut Window, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        self.global_shortcut.set_shortcut(None)?;
         AppSettings::reset()?;
 
         self.settings = AppSettings::default();
         self.organization_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
+        });
+        let default_shortcut = self.settings.global_quick_copy_shortcut.clone();
+        self.global_shortcut_input.update(cx, |input, cx| {
+            input.set_value(default_shortcut, window, cx);
         });
         self.repositories.clear();
         self.selected_repository = None;
@@ -1714,6 +2023,7 @@ impl UploaderApp {
         self.pending_replacement_images = None;
         self.upload_result = None;
         self.uploading = false;
+        self.recording_global_shortcut = false;
         self.repository_picker.update(cx, |picker, cx| {
             picker.set_selected_indices([], window, cx);
             picker.set_items(
@@ -1784,6 +2094,16 @@ impl UploaderApp {
         }
     }
 
+    fn open_walkthrough(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.diagnostics.info("Opened the Gatto walkthrough.");
+        cx.open_url(WALKTHROUGH_URL);
+    }
+
     fn open_image_preview(
         &mut self,
         selected_id: u64,
@@ -1851,8 +2171,13 @@ impl UploaderApp {
         }
     }
 
-    fn render_repository_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let disabled = matches!(self.load_state, LoadState::NeedsSetup | LoadState::Loading);
+    fn render_repository_picker(
+        &self,
+        heading: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let disabled = self.load_state == LoadState::NeedsSetup;
+        let loading = self.load_state == LoadState::Loading;
         let organization = self.settings.organization.clone().unwrap_or_default();
         let view = cx.entity();
         v_flex()
@@ -1862,25 +2187,15 @@ impl UploaderApp {
                 h_flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_sm().font_semibold().child("Repository"))
-                    .when(self.load_state == LoadState::Loading, |row| {
-                        row.child(
-                            h_flex()
-                                .gap_2()
-                                .items_center()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(Spinner::new().xsmall())
-                                .child("Loading repositories"),
-                        )
-                    })
+                    .child(div().text_sm().font_semibold().child(heading))
                     .when(self.load_state == LoadState::Failed, |row| {
                         row.child(
                             Button::new("retry-repositories")
                                 .small()
                                 .outline()
                                 .icon(IconName::RefreshCw)
-                                .label("Retry")
+                                .tooltip("Retry")
+                                .accessibility_label("Retry loading repositories")
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.load_repositories(window, cx);
                                 })),
@@ -1889,14 +2204,29 @@ impl UploaderApp {
             )
             .child(
                 Combobox::new(&self.repository_picker)
-                    .placeholder(if self.load_state == LoadState::Loading {
-                        String::new()
-                    } else {
-                        format!("Search {organization} repositories…")
-                    })
+                    .placeholder(format!("Search {organization} repositories…"))
                     .search_placeholder("Type to filter repositories…")
                     .disabled(disabled)
+                    .empty(move |_, cx| {
+                        if loading {
+                            v_flex()
+                                .debug_selector(|| "repository-picker-loading".to_owned())
+                                .items_center()
+                                .justify_center()
+                                .py_6()
+                                .child(Spinner::new().large())
+                                .into_any_element()
+                        } else {
+                            h_flex()
+                                .justify_center()
+                                .py_6()
+                                .text_color(cx.theme().muted_foreground.opacity(0.6))
+                                .child(Icon::new(IconName::Inbox).size(px(28.)))
+                                .into_any_element()
+                        }
+                    })
                     .render_trigger(move |trigger, _, _| {
+                        let trigger_is_open = trigger.is_open();
                         let repository_name = trigger
                             .selection()
                             .first()
@@ -1922,6 +2252,13 @@ impl UploaderApp {
                                     .child(repository_name),
                             )
                             .child(Icon::new(IconName::ChevronDown).xsmall())
+                            .debug_selector(move || {
+                                if trigger_is_open {
+                                    "repository-picker-trigger-open".to_owned()
+                                } else {
+                                    "repository-picker-trigger-closed".to_owned()
+                                }
+                            })
                             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                                 view.update(cx, |this, cx| {
                                     this.load_repositories_when_opened(window, cx);
@@ -2067,31 +2404,19 @@ impl UploaderApp {
             .px_3()
             .py_2()
             .child(
-                v_flex()
+                div()
                     .min_w_0()
-                    .gap_0p5()
-                    .child(div().text_sm().font_semibold().child("Bulk upload"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .whitespace_normal()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(if has_batch {
-                                "Upload or remove the batch before turning this off."
-                            } else {
-                                "Keep multiple images in one upload batch."
-                            }),
-                    ),
+                    .text_sm()
+                    .font_semibold()
+                    .child("Bulk upload"),
             )
             .child(
                 Switch::new("bulk-upload-switch")
                     .checked(self.bulk_upload)
                     .disabled(disabled)
                     .accessibility_label("Bulk upload")
-                    .tooltip(if has_batch {
-                        "Upload or remove the batch before turning bulk upload off"
-                    } else {
-                        "Keep multiple images in one upload batch"
+                    .when(has_batch, |toggle| {
+                        toggle.tooltip("Finish or remove the batch first")
                     })
                     .on_change(move |checked, _, cx| {
                         let checked = *checked;
@@ -2203,8 +2528,8 @@ impl UploaderApp {
                                     .ghost()
                                     .small()
                                     .icon(AssetIconName::ALargeSmall)
-                                    .accessibility_label("Set description")
-                                    .tooltip("Set description")
+                                    .accessibility_label("Edit description")
+                                    .tooltip("Edit description")
                                     .on_click(move |_, window, cx| {
                                         cx.stop_propagation();
                                         let _ = rename_view.update(cx, |this, cx| {
@@ -2225,17 +2550,16 @@ impl UploaderApp {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 markdown.clone(),
                                             ));
-                                            let _ = copy_view.update(cx, |this, _| {
+                                            let _ = copy_view.update(cx, |this, cx| {
                                                 this.diagnostics.info(
                                                     "Copied an uploaded image's Markdown to the clipboard.",
                                                 );
-                                            });
-                                            window.push_notification(
-                                                Notification::success(
+                                                this.finish_copy(
                                                     "Markdown copied to the clipboard.",
-                                                ),
-                                                cx,
-                                            );
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
                                         }),
                                 )
                             })
@@ -2245,7 +2569,7 @@ impl UploaderApp {
                                     .small()
                                     .icon(IconName::Close)
                                     .accessibility_label("Remove staged image")
-                                    .tooltip("Remove staged image")
+                                    .tooltip("Remove")
                                     .on_click(move |_, _, cx| {
                                         cx.stop_propagation();
                                         let _ = remove_view.update(cx, |this, cx| {
@@ -2337,7 +2661,6 @@ impl UploaderApp {
             .is_ok_and(|organization| {
                 self.settings.organization.as_deref() == Some(organization.as_str())
             });
-
         v_flex()
             .flex_none()
             .p_6()
@@ -2346,26 +2669,13 @@ impl UploaderApp {
                 h_flex()
                     .justify_between()
                     .items_center()
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(div().font_semibold().text_lg().child("App Preferences"))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Preferences are saved automatically."),
-                            ),
-                    )
+                    .child(div().font_semibold().text_lg().child("App Preferences"))
                     .child(
                         Button::new("close-settings")
                             .outline()
                             .small()
                             .label("Done")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings_open = false;
-                                cx.notify();
-                            })),
+                            .on_click(cx.listener(Self::close_settings)),
                     ),
             )
             .child(
@@ -2375,12 +2685,16 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("Organization"))
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Required. Repositories are loaded from this GitHub organization."),
+                        v_flex()
+                            .gap_0p5()
+                            .child(div().font_semibold().text_sm().child("GitHub organization"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Required."),
+                            ),
                     )
                     .child(Input::new(&self.organization_input))
                     .child(
@@ -2405,27 +2719,17 @@ impl UploaderApp {
                         .border_1()
                         .border_color(cx.theme().border)
                         .p_4()
-                        .child(div().font_semibold().text_sm().child("Pinned repositories"))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child("Pinned repositories appear first in the repository picker."),
-                        )
-                        .child(self.render_repository_picker(cx))
-                        .child(
-                            Button::new("pin-selected-repository")
-                                .outline()
-                                .small()
-                                .self_start()
-                                .label(if selected_is_pinned {
-                                    "Repository is pinned"
-                                } else {
-                                    "Pin selected repository"
-                                })
-                                .disabled(!can_pin)
-                                .on_click(cx.listener(Self::pin_selected_repository)),
-                        )
+                        .child(self.render_repository_picker("Pinned repositories", cx))
+                        .when(can_pin, |card| {
+                            card.child(
+                                Button::new("pin-selected-repository")
+                                    .outline()
+                                    .small()
+                                    .self_start()
+                                    .label("Pin")
+                                    .on_click(cx.listener(Self::pin_selected_repository)),
+                            )
+                        })
                         .when(pinned_repositories.is_empty(), |card| {
                             card.child(
                                 div()
@@ -2467,6 +2771,50 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
+                    .child(div().font_semibold().text_sm().child("Quick Copy shortcut"))
+                    .child(
+                        Checkbox::new("enable-global-quick-copy-shortcut")
+                            .label("Enable")
+                            .checked(self.settings.global_quick_copy_shortcut_enabled)
+                            .on_click(cx.listener(|this, checked, window, cx| {
+                                this.set_global_shortcut_enabled(*checked, window, cx);
+                            })),
+                    )
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(Input::new(&self.global_shortcut_input).readonly(true)),
+                            )
+                            .child(
+                                Button::new("record-global-quick-copy-shortcut")
+                                    .outline()
+                                    .label(if self.recording_global_shortcut {
+                                        "Press shortcut…"
+                                    } else {
+                                        "Record shortcut"
+                                    })
+                                    .on_click(cx.listener(Self::start_global_shortcut_recording)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("At least two modifiers are required."),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .p_4()
                     .child(div().font_semibold().text_sm().child("General"))
                     .child(
                         Checkbox::new("start-at-login")
@@ -2477,27 +2825,12 @@ impl UploaderApp {
                             })),
                     )
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(
-                                "Uses a per-user macOS LaunchAgent and takes effect at the next login.",
-                            ),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .gap_3()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .p_4()
-                    .child(div().font_semibold().text_sm().child("Reset app"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Return Gatto to its first-run state."),
+                        Checkbox::new("close-window-after-copy")
+                            .label("Close the window after copy")
+                            .checked(self.settings.close_window_after_copy)
+                            .on_click(cx.listener(|this, checked, window, cx| {
+                                this.set_close_window_after_copy(*checked, window, cx);
+                            })),
                     )
                     .child(
                         Button::new("reset-app")
@@ -2529,12 +2862,6 @@ impl UploaderApp {
                             .text_xs()
                             .child("Commit")
                             .child(option_env!("GIT_COMMIT_HASH").unwrap_or("unknown")),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Authentication is managed by GitHub CLI."),
                     ),
             )
     }
@@ -2556,15 +2883,10 @@ impl Render for UploaderApp {
             && !self.uploading
             && !self.loading_token
             && !self.loading_repository;
-        let staged_count = self
-            .staged_images
-            .iter()
-            .filter(|image| !image.upload_state.is_uploaded())
-            .count();
-
         let root = v_flex()
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
+            .capture_key_down(cx.listener(Self::record_global_shortcut))
             .on_action(cx.listener(Self::on_paste))
             .on_action(cx.listener(Self::paste_and_preview_from_menu))
             .on_action(cx.listener(Self::quick_copy_from_menu))
@@ -2608,23 +2930,7 @@ impl Render for UploaderApp {
                                         .flex_1()
                                         .min_w_0()
                                         .gap_3()
-                                        .child(
-                                            v_flex()
-                                                .child(
-                                                    div().text_lg().font_semibold().child("Gatto"),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .max_w_full()
-                                                        .min_w_0()
-                                                        .text_xs()
-                                                        .whitespace_normal()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child(
-                                                            "Upload an image for GitHub Markdown",
-                                                        ),
-                                                ),
-                                        )
+                                        .child(div().text_lg().font_semibold().child("Gatto"))
                                         .child(
                                             h_flex()
                                                 .w_full()
@@ -2634,8 +2940,10 @@ impl Render for UploaderApp {
                                                 .child(
                                                     Button::new("open-logs")
                                                         .outline()
-                                                        .small()
-                                                        .label("Application logs")
+                                                        .xsmall()
+                                                        .icon(AssetIconName::Logs)
+                                                        .accessibility_label("Application logs")
+                                                        .tooltip("Logs")
                                                         .on_click(
                                                             cx.listener(Self::open_log_window),
                                                         ),
@@ -2643,18 +2951,31 @@ impl Render for UploaderApp {
                                                 .child(
                                                     Button::new("open-settings")
                                                         .outline()
-                                                        .small()
-                                                        .label("App Preferences")
+                                                        .xsmall()
+                                                        .icon(IconName::Settings)
+                                                        .accessibility_label("App Preferences")
+                                                        .tooltip("Preferences")
                                                         .on_click(cx.listener(|this, _, _, cx| {
                                                             this.show_settings(cx);
                                                         })),
+                                                )
+                                                .child(
+                                                    Button::new("open-walkthrough")
+                                                        .outline()
+                                                        .xsmall()
+                                                        .icon(AssetIconName::CircleQuestionMark)
+                                                        .accessibility_label("Open walkthrough")
+                                                        .tooltip("Help")
+                                                        .on_click(
+                                                            cx.listener(Self::open_walkthrough),
+                                                        ),
                                                 ),
                                         ),
                                 ),
                         )
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
                         .when(!needs_setup, |root| {
-                            root.child(self.render_repository_picker(cx))
+                            root.child(self.render_repository_picker("Repository", cx))
                                 .when(
                                     !self.uploading
                                         && self
@@ -2674,17 +2995,9 @@ impl Render for UploaderApp {
                             .primary()
                             .large()
                             .label(if self.uploading {
-                                if staged_count == 1 {
-                                    "Uploading image…".to_owned()
-                                } else {
-                                    format!("Uploading {staged_count} images…")
-                                }
-                            } else if staged_count == 1 {
-                                "Upload image".to_owned()
-                            } else if staged_count > 1 {
-                                format!("Upload {staged_count} images")
+                                "Uploading…".to_owned()
                             } else {
-                                "Upload images".to_owned()
+                                "Upload".to_owned()
                             })
                             .icon(AssetIconName::Upload)
                             .loading(self.uploading)
@@ -2718,6 +3031,8 @@ pub fn init_keybindings(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    use gpui_kit::{Modifiers, TestAppContext};
+
     use super::*;
 
     #[test]
@@ -2743,5 +3058,83 @@ mod tests {
             result.markdown(),
             "![first](https://example.com/first)\n![second](https://example.com/second)"
         );
+    }
+
+    #[gpui_kit::test]
+    fn repository_picker_click_survives_the_loading_transition(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let settings = AppSettings {
+            organization: Some("acme-labs".into()),
+            ..AppSettings::default()
+        };
+        let (view, cx) = cx.add_window_view(move |window, cx| {
+            let mut app = UploaderApp::with_settings(
+                window,
+                Diagnostics::new(),
+                AppControllers::default(),
+                settings,
+                None,
+                false,
+                cx,
+            );
+            app.load_state = LoadState::Ready;
+            app
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+
+        let trigger = cx
+            .debug_bounds("repository-picker-trigger-closed")
+            .expect("the repository picker trigger should be visible");
+        cx.simulate_mouse_down(trigger.center(), MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Loading;
+                app.repository_picker.update(cx, |picker, cx| {
+                    picker.set_items(
+                        SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
+                        window,
+                        cx,
+                    );
+                });
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_mouse_up(trigger.center(), MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+
+        assert!(
+            cx.debug_bounds("repository-picker-trigger-open").is_some(),
+            "the repository picker should open even while repositories are loading"
+        );
+        assert!(
+            cx.debug_bounds("repository-picker-loading").is_some(),
+            "the open repository picker should show its loading indicator"
+        );
+
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                app.repositories.insert(
+                    "gatto".into(),
+                    Repository {
+                        id: 1,
+                        name: "gatto".into(),
+                    },
+                );
+                let groups = app.repository_groups();
+                app.repository_picker.update(cx, |picker, cx| {
+                    picker.set_items(SearchableVec::new(groups), window, cx);
+                });
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+
+        assert!(
+            cx.debug_bounds("repository-picker-trigger-open").is_some(),
+            "loaded repository items should replace the spinner without closing the picker"
+        );
+        assert!(cx.debug_bounds("repository-picker-loading").is_none());
     }
 }

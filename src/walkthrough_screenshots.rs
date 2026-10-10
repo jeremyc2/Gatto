@@ -3,6 +3,7 @@
 mod app;
 mod diagnostics;
 mod github;
+mod global_shortcut;
 mod image_preview;
 mod log_viewer;
 mod menu_bar;

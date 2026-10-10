@@ -3,7 +3,7 @@ use gpui_kit::{
     Render, Styled as _, Window,
     component::scroll::ScrollableElement as _,
     component::{
-        ActiveTheme as _, Sizable as _, StyledExt as _, WindowExt as _, button::Button,
+        ActiveTheme as _, IconName, Sizable as _, StyledExt as _, WindowExt as _, button::Button,
         clipboard::Clipboard, h_flex, notification::Notification, v_flex,
     },
     div,
@@ -71,17 +71,7 @@ impl Render for LogViewer {
                         v_flex()
                             .flex_1()
                             .min_w_0()
-                            .gap_1()
-                            .child(div().text_lg().font_semibold().child("Application logs"))
-                            .child(
-                                div()
-                                    .max_w_full()
-                                    .min_w_0()
-                                    .text_xs()
-                                    .whitespace_normal()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Stored only while the app is running. Tokens and image data are excluded."),
-                            ),
+                            .child(div().text_lg().font_semibold().child("Application logs")),
                     )
                     .child(
                         h_flex()
@@ -90,14 +80,16 @@ impl Render for LogViewer {
                                 Button::new("refresh-logs")
                                     .small()
                                     .outline()
-                                    .label("Refresh")
+                                    .icon(IconName::RefreshCw)
+                                    .tooltip("Refresh")
+                                    .accessibility_label("Refresh application logs")
                                     .on_click(cx.listener(Self::refresh)),
                             )
                             .child(
                                 Clipboard::new("copy-all-logs")
                                     .small()
                                     .value(log_text)
-                                    .tooltip("Copy all application logs")
+                                    .tooltip("Copy")
                                     .accessibility_label("Copy all application logs")
                                     .on_copied(move |_, window, cx| {
                                         diagnostics

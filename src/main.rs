@@ -2,6 +2,7 @@ mod app;
 mod custom_url;
 mod diagnostics;
 mod github;
+mod global_shortcut;
 mod image_preview;
 mod log_viewer;
 mod menu_bar;
@@ -21,6 +22,7 @@ use crate::{
     app::UploaderApp,
     custom_url::CustomUrlAction,
     diagnostics::Diagnostics,
+    global_shortcut::GlobalShortcutController,
     menu_bar::{MenuAction, MenuBar, MenuBarController},
 };
 
@@ -58,6 +60,14 @@ fn main() {
         let diagnostics = Diagnostics::new();
         diagnostics.info("Application started.");
         let menu_bar_controller = MenuBarController::default();
+        let global_shortcut_controller = GlobalShortcutController::default();
+        let shortcut_events = match global_shortcut_controller.install() {
+            Ok(events) => Some(events),
+            Err(error) => {
+                diagnostics.error(format!("Global shortcut setup failed: {error}"));
+                None
+            }
+        };
 
         let window_options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(620.), px(780.)), cx)),
@@ -71,10 +81,20 @@ fn main() {
 
             let diagnostics = diagnostics.clone();
             let menu_bar_controller = menu_bar_controller.clone();
-            let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar_controller, cx));
+            let global_shortcut_controller = global_shortcut_controller.clone();
+            let view = cx.new(|cx| {
+                UploaderApp::new(
+                    window,
+                    diagnostics,
+                    menu_bar_controller,
+                    global_shortcut_controller,
+                    cx,
+                )
+            });
             let close_view = view.clone();
             window.on_window_should_close(cx, move |window, cx| {
                 close_view.update(cx, |this, cx| {
+                    this.prepare_to_hide(window, cx);
                     this.clear_staged_images(
                         "Closed the main window; discarded the staged image.",
                         cx,
@@ -111,6 +131,27 @@ fn main() {
             }
         })
         .detach();
+
+        if let Some(shortcut_events) = shortcut_events {
+            let shortcut_window = window_handle;
+            let shortcut_view = view.clone();
+            let shortcut_controller = global_shortcut_controller.clone();
+            cx.spawn(async move |cx| {
+                while let Ok(id) = shortcut_events.recv().await {
+                    if shortcut_controller.is_registered_event(id) {
+                        cx.update(|cx| {
+                            perform_action(
+                                MenuAction::QuickCopy,
+                                shortcut_window,
+                                &shortcut_view,
+                                cx,
+                            )
+                        });
+                    }
+                }
+            })
+            .detach();
+        }
 
         let paste_actions_visible = view.read(cx).has_pinned_repository();
         let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {

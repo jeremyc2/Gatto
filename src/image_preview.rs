@@ -350,7 +350,7 @@ impl Render for ImagePreview {
                                             .small()
                                             .icon(IconName::ChevronLeft)
                                             .accessibility_label("Previous image")
-                                            .tooltip("Previous image")
+                                            .tooltip("Previous")
                                             .disabled(!can_go_back)
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 if this.current_index > 0 {
@@ -376,7 +376,7 @@ impl Render for ImagePreview {
                                             .small()
                                             .icon(IconName::ChevronRight)
                                             .accessibility_label("Next image")
-                                            .tooltip("Next image")
+                                            .tooltip("Next")
                                             .disabled(!can_go_forward)
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.select_image(
@@ -423,7 +423,7 @@ impl Render for ImagePreview {
                                     .small()
                                     .icon(IconName::Maximize2)
                                     .accessibility_label("Fit image")
-                                    .tooltip("Fit image")
+                                    .tooltip("Fit to window")
                                     .on_click(cx.listener(|this, _, _, cx| this.fit(cx))),
                             ),
                     ),

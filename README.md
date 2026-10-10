@@ -43,6 +43,9 @@ a local build.
 - Includes an **Application logs** window with a copy button for troubleshooting.
 - Provides menu bar actions for previewing a clipboard image or uploading and copying its Markdown
   in the background with a native macOS notification.
+- Can run Quick Copy from an optional, customizable global keyboard shortcut without requiring
+  Accessibility permission.
+- Opens the full walkthrough in the default browser from the main window's help icon.
 
 ## Prerequisites
 
@@ -179,6 +182,11 @@ Open App Preferences from the app window or choose **App Preferences** from the 
 - Enable **Start at Login** to install a per-user macOS LaunchAgent. If the app is
   moved after enabling this setting, turn the setting off and on again so the
   saved executable path is refreshed.
+- Enable the global Quick Copy shortcut to upload the clipboard image from any app. The shortcut is
+  off by default, starts with `Command+Shift+U`, and requires at least two modifier keys when
+  customized. Gatto uses the macOS hotkey API, so this does not require Accessibility permission.
+- Enable **Close the window after copy** to hide Gatto after copying an uploaded URL or Markdown
+  snippet from the main window.
 - The About section shows the package version and the Git commit hash captured at
   build time. Builds made outside a Git checkout show `unknown` unless
   `GIT_COMMIT_HASH` is supplied to the build.
@@ -253,6 +261,7 @@ src/github.rs     GitHub CLI integration and attachment uploads
 src/diagnostics.rs In-memory troubleshooting event log
 src/log_viewer.rs Application logs window
 src/menu_bar.rs   macOS menu bar behavior
+src/global_shortcut.rs System-wide Quick Copy shortcut registration
 src/model.rs      Shared application models
 src/settings.rs   Repository setting and macOS login startup
 build.rs          Build-time Git commit metadata

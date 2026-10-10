@@ -27,6 +27,30 @@ pub fn hide(window: &Window) {
 #[cfg(not(target_os = "macos"))]
 pub fn hide(_: &Window) {}
 
+/// Asks AppKit to close the native window so GPUI's existing close handler can
+/// apply the same hide-and-clean-up behavior as the title-bar close button.
+#[cfg(target_os = "macos")]
+pub fn request_close(window: &Window) {
+    use objc2_app_kit::NSView;
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+        return;
+    };
+    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
+        return;
+    };
+
+    // GPUI's AppKit handle is a valid NSView for as long as the GPUI window is alive.
+    let view = unsafe { &*(handle.ns_view.cast::<NSView>().as_ptr()) };
+    if let Some(native_window) = view.window() {
+        native_window.performClose(None);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_close(_: &Window) {}
+
 /// Intercepts a native close request and keeps the GPUI window alive.
 ///
 /// Retaining utility windows avoids AppKit/GPUI teardown differences between

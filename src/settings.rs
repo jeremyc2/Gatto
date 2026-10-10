@@ -3,19 +3,44 @@ use std::{collections::BTreeSet, env, fs, path::PathBuf};
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 
+use crate::global_shortcut::DEFAULT_QUICK_COPY_SHORTCUT;
+
 const APPLICATION_SUPPORT_DIRECTORY: &str = "Gatto";
 const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.gatto.plist";
 const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AppSettings {
     pub organization: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
     pub last_repository: Option<String>,
     pub last_repository_id: Option<u64>,
+    #[serde(default = "default_quick_copy_shortcut")]
+    pub global_quick_copy_shortcut: String,
+    pub global_quick_copy_shortcut_enabled: bool,
+    pub close_window_after_copy: bool,
     #[serde(skip)]
     pub start_at_login: bool,
+}
+
+fn default_quick_copy_shortcut() -> String {
+    DEFAULT_QUICK_COPY_SHORTCUT.to_owned()
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            organization: None,
+            pinned_repositories: BTreeSet::new(),
+            last_repository: None,
+            last_repository_id: None,
+            global_quick_copy_shortcut: default_quick_copy_shortcut(),
+            global_quick_copy_shortcut_enabled: false,
+            close_window_after_copy: false,
+            start_at_login: false,
+        }
+    }
 }
 
 impl AppSettings {
@@ -202,5 +227,22 @@ mod tests {
         assert!(!settings_path.exists());
         assert!(!launch_agent_path.exists());
         fs::remove_dir(&directory).expect("test directory can be removed");
+    }
+
+    #[test]
+    fn older_settings_receive_safe_defaults_for_new_preferences() {
+        let settings: AppSettings = serde_json::from_str(
+            r#"{
+                "organization": "acme",
+                "pinned_repositories": [],
+                "last_repository": null,
+                "last_repository_id": null
+            }"#,
+        )
+        .expect("older settings should remain compatible");
+
+        assert_eq!(settings.global_quick_copy_shortcut, "Command+Shift+U");
+        assert!(!settings.global_quick_copy_shortcut_enabled);
+        assert!(!settings.close_window_after_copy);
     }
 }
