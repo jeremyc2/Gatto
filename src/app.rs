@@ -15,6 +15,7 @@ use gpui_kit::component::{
     h_flex,
     input::{Input, InputEvent, InputState},
     kbd::Kbd,
+    link::Link,
     notification::Notification,
     searchable_list::{SearchableGroup, SearchableVec},
     spinner::Spinner,
@@ -57,6 +58,7 @@ const KEY_CONTEXT: &str = "Gatto";
 const UNSUPPORTED_MESSAGE: &str =
     "Unsupported format. Please paste or drop a PNG, JPEG, GIF, or WebP image.";
 const WALKTHROUGH_URL: &str = "https://github.com/jeremyc2/Gatto/blob/main/docs/WALKTHROUGH.md";
+const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
 
 type RepositoryPicker = ComboboxState<SearchableVec<SearchableGroup<String>>>;
 
@@ -2857,6 +2859,27 @@ impl UploaderApp {
                             .text_xs()
                             .child("Commit")
                             .child(option_env!("GIT_COMMIT_HASH").unwrap_or("unknown")),
+                    )
+                    .child(
+                        h_flex()
+                            .justify_between()
+                            .items_start()
+                            .text_xs()
+                            .child("Repository")
+                            .child(
+                                v_flex()
+                                    .items_end()
+                                    .child(
+                                        Link::new("repository-link")
+                                            .href(REPOSITORY_URL)
+                                            .child("GitHub"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child("Jeremy Chandler"),
+                                    ),
+                            ),
                     ),
             )
     }

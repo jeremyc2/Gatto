@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-10
+
+### Added
+
+- Added a Settings link to the Gatto GitHub repository with author attribution.
+
 ## [0.8.2] - 2026-10-10
 
 ### Changed
