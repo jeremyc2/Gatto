@@ -7,10 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-10
+
 ### Added
 
-- Added an optional, customizable global Quick Copy keyboard shortcut that uses the macOS hotkey
-  API without requiring Accessibility permission.
+- Added an optional global Quick Copy keyboard shortcut with a built-in shortcut recorder and
+  macOS hotkey registration that does not require Accessibility permission.
 - Added a preference to close the main window after copying uploaded URLs or Markdown snippets.
 - Added a help icon that opens the repository walkthrough in the default browser.
 
@@ -18,9 +20,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - `cargo run` now starts the Gatto app directly even though the repository also contains the
   walkthrough screenshot generator.
-- Replaced the main-window Application Logs and App Preferences text buttons with compact icons
-  and tooltips.
-- Expanded the walkthrough to document the custom `gatto://` URL scheme and every supported action.
+- Replaced wordy actions and supporting text throughout the main window, App Preferences, and
+  Application Logs with compact icons, concise labels, and contextual tooltips.
+- Simplified pinned-repository management and clarified the organization, Quick Copy, and general
+  preference groups.
+- Expanded the walkthrough to cover GitHub CLI setup, the shortcut recorder, the custom `gatto://`
+  URL scheme, and every supported action, with updated screenshots.
 
 ### Fixed
 
