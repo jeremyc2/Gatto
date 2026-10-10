@@ -15,6 +15,8 @@ platform integration, persistent settings, and shared state.
 - `src/diagnostics.rs` owns the bounded, in-memory troubleshooting event log.
 - `src/log_viewer.rs` renders that event log in its own application window.
 - `src/menu_bar.rs` owns the macOS status item and open/settings/quit actions.
+- `src/custom_url.rs` validates `gatto://` action URLs before they are dispatched through the same
+  action path as the menu bar.
 - `src/model.rs` contains shared repository, image, and upload-state models.
 - `src/settings.rs` persists the configured repository and manages the per-user macOS
   LaunchAgent used by Start at Login.
@@ -89,6 +91,8 @@ the minimum supported Rust version in `Cargo.toml`.
 - Authentication remains delegated to GitHub CLI.
 - Tokens are requested only when needed and are not written to application config.
 - Image content is sent to GitHub and otherwise remains local to the process.
+- Custom action URLs do not accept parameters; repository selection remains controlled by saved
+  app preferences.
 - Upload results are copied only after the user presses a copy button.
 - Persistent settings contain the repository name only; Start at Login stores the
   executable path in a per-user LaunchAgent.

@@ -495,6 +495,18 @@ impl UploaderApp {
         );
     }
 
+    pub fn report_custom_url_error(
+        &mut self,
+        error: impl Into<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let error = error.into();
+        self.diagnostics
+            .error(format!("Could not handle a custom URL: {error}"));
+        window.push_notification(Notification::error(error), cx);
+    }
+
     fn load_repositories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.repositories.clear();
         let Some(organization) = self.settings.organization.clone() else {

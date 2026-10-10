@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-10
+
+### Added
+
+- Added `gatto://` URLs for opening the app, previewing the clipboard, running Quick Copy, and
+  opening App Preferences from macOS automation.
+
 ## [0.6.2] - 2026-10-09
 
 ### Added

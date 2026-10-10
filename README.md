@@ -41,8 +41,8 @@ a local build.
 - Shows the build's app version and Git commit hash in App Preferences.
 - Preserves the staged image when GitHub returns an error so the upload can be retried.
 - Includes an **Application logs** window with a copy button for troubleshooting.
-- Provides menu bar actions for previewing a clipboard image or uploading and copying its URL in
-  the background with a native macOS notification.
+- Provides menu bar actions for previewing a clipboard image or uploading and copying its Markdown
+  in the background with a native macOS notification.
 
 ## Prerequisites
 
@@ -141,11 +141,25 @@ it again or quit.
    pull request, discussion, or Markdown file.
 
 For a faster path, pin a repository in App Preferences, copy an image, then choose **Quick Copy**
-from the menu bar icon. Gatto uploads without opening its window, copies the resulting URL, and
+from the menu bar icon. Gatto uploads without opening its window, copies the resulting Markdown, and
 sends a native macOS notification when it finishes. When multiple repositories are pinned, Quick
 Copy uses the most recently selected pinned repository, falling back to the alphabetically first
 one. Choose **Preview from Clipboard** when you want to stage the image in the app instead. These
 menu items appear only while at least one repository is pinned.
+
+The same actions are available to Shortcuts, shell scripts, launchers, and other macOS automation
+through Gatto's custom URL scheme:
+
+```text
+gatto://open
+gatto://preview
+gatto://quick-copy
+gatto://settings
+```
+
+For example, `open "gatto://quick-copy"` uploads the clipboard image through the preferred pinned
+repository and copies its Markdown without leaving the app window open. As with the menu bar
+action, Quick Copy requires an organization and at least one pinned repository.
 
 Normal uploads do not change the clipboard. An uploaded attachment's copy button copies a value such as
 `![screenshot.png](https://github.com/user-attachments/assets/…)`.

@@ -1,4 +1,5 @@
 mod app;
+mod custom_url;
 mod diagnostics;
 mod github;
 mod image_preview;
@@ -12,11 +13,13 @@ mod window_limits;
 use std::{cell::RefCell, rc::Rc};
 
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Focusable as _, WindowBounds, WindowOptions, px, size,
+    AnyWindowHandle, App, AppContext as _, Entity, Focusable as _, WindowBounds, WindowOptions, px,
+    size,
 };
 
 use crate::{
     app::UploaderApp,
+    custom_url::CustomUrlAction,
     diagnostics::Diagnostics,
     menu_bar::{MenuAction, MenuBar, MenuBarController},
 };
@@ -36,6 +39,12 @@ fn main() {
         let _ = window_handle.update(cx, |_, window, _| {
             window.activate_window();
         });
+    });
+    let (custom_url_sender, custom_url_events) = async_channel::unbounded();
+    application.on_open_urls(move |urls| {
+        for url in urls {
+            let _ = custom_url_sender.try_send(url);
+        }
     });
 
     application.run(move |cx| {
@@ -82,6 +91,27 @@ fn main() {
         .expect("Could not open the Gatto window");
         *reopen_window.borrow_mut() = Some(window_handle);
 
+        let custom_url_window = window_handle;
+        let custom_url_view = view.clone();
+        cx.spawn(async move |cx| {
+            while let Ok(url) = custom_url_events.recv().await {
+                cx.update(|cx| match CustomUrlAction::parse(&url) {
+                    Ok(action) => {
+                        perform_action(action.into(), custom_url_window, &custom_url_view, cx)
+                    }
+                    Err(error) => {
+                        show_main_window(custom_url_window, cx);
+                        let _ = custom_url_window.update(cx, |_, window, cx| {
+                            custom_url_view.update(cx, |this, cx| {
+                                this.report_custom_url_error(error.to_string(), window, cx);
+                            });
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+
         let paste_actions_visible = view.read(cx).has_pinned_repository();
         let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {
             Ok(menu_bar) => menu_bar,
@@ -107,55 +137,62 @@ fn main() {
                 let Some(action) = menu_bar_controller.action_for(&event) else {
                     continue;
                 };
-
-                match action {
-                    MenuAction::Open => {
-                        cx.update(|cx| {
-                            set_dock_visible(true);
-                            cx.activate(true);
-                            let _ = window_handle.update(cx, |_, window, _| {
-                                window.activate_window();
-                            });
-                        });
-                    }
-                    MenuAction::PreviewFromClipboard => {
-                        cx.update(|cx| {
-                            set_dock_visible(true);
-                            cx.activate(true);
-                            let _ = window_handle.update(cx, |_, window, cx| {
-                                window.activate_window();
-                                window.dispatch_action(Box::new(app::PreviewFromClipboard), cx);
-                            });
-                        });
-                    }
-                    MenuAction::QuickCopy => {
-                        cx.update(|cx| {
-                            set_dock_visible(false);
-                            let _ = window_handle.update(cx, |_, window, cx| {
-                                window_limits::hide(window);
-                                window.dispatch_action(Box::new(app::QuickCopy), cx);
-                            });
-                        });
-                    }
-                    MenuAction::Settings => {
-                        let view = view.clone();
-                        cx.update(|cx| {
-                            set_dock_visible(true);
-                            cx.activate(true);
-                            view.update(cx, |this, cx| this.show_settings(cx));
-                            let _ = window_handle.update(cx, |_, window, _| {
-                                window.activate_window();
-                            });
-                        });
-                    }
-                    MenuAction::Quit => {
-                        cx.update(|cx| cx.quit());
-                        break;
-                    }
+                if action == MenuAction::Quit {
+                    cx.update(|cx| cx.quit());
+                    break;
                 }
+                cx.update(|cx| perform_action(action, window_handle, &view, cx));
             }
         })
         .detach();
+    });
+}
+
+impl From<CustomUrlAction> for MenuAction {
+    fn from(action: CustomUrlAction) -> Self {
+        match action {
+            CustomUrlAction::Open => Self::Open,
+            CustomUrlAction::Preview => Self::PreviewFromClipboard,
+            CustomUrlAction::QuickCopy => Self::QuickCopy,
+            CustomUrlAction::Settings => Self::Settings,
+        }
+    }
+}
+
+fn perform_action(
+    action: MenuAction,
+    window_handle: AnyWindowHandle,
+    view: &Entity<UploaderApp>,
+    cx: &mut App,
+) {
+    match action {
+        MenuAction::Open => show_main_window(window_handle, cx),
+        MenuAction::PreviewFromClipboard => {
+            show_main_window(window_handle, cx);
+            let _ = window_handle.update(cx, |_, window, cx| {
+                window.dispatch_action(Box::new(app::PreviewFromClipboard), cx);
+            });
+        }
+        MenuAction::QuickCopy => {
+            set_dock_visible(false);
+            let _ = window_handle.update(cx, |_, window, cx| {
+                window_limits::hide(window);
+                window.dispatch_action(Box::new(app::QuickCopy), cx);
+            });
+        }
+        MenuAction::Settings => {
+            show_main_window(window_handle, cx);
+            view.update(cx, |this, cx| this.show_settings(cx));
+        }
+        MenuAction::Quit => cx.quit(),
+    }
+}
+
+fn show_main_window(window_handle: AnyWindowHandle, cx: &mut App) {
+    set_dock_visible(true);
+    cx.activate(true);
+    let _ = window_handle.update(cx, |_, window, _| {
+        window.activate_window();
     });
 }
 
