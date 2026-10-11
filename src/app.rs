@@ -226,7 +226,7 @@ impl UploaderApp {
             });
         let global_shortcut_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Command+Shift+U")
+                .placeholder("Command+Shift+G")
                 .default_value(initial_shortcut)
         });
         let global_shortcut_subscription =

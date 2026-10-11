@@ -52,9 +52,9 @@ After pinning a repository, copy an image and use one of these actions from Gatt
 - **Preview from Clipboard** stages the image in the main window.
 - **Quick Copy** uploads it in the background, copies its Markdown, and sends a macOS notification when it finishes.
 
-You can also enable and customize a global Quick Copy keyboard shortcut in App Preferences. Click
-**Record shortcut**, then press the chord you want to use. The shortcut must contain at least two
-modifier keys.
+You can also set a global Quick Copy keyboard shortcut in App Preferences. Once enabled it starts
+as **Command+Shift+G**, and you can change it to any shortcut you prefer: click **Record shortcut**,
+then press the chord you want to use. The shortcut must contain at least two modifier keys.
 
 When multiple repositories are pinned, Quick Copy uses the most recently selected pinned
 repository, falling back to the alphabetically first pinned repository.

@@ -183,7 +183,7 @@ Open App Preferences from the app window or choose **App Preferences** from the 
   moved after enabling this setting, turn the setting off and on again so the
   saved executable path is refreshed.
 - Enable the global Quick Copy shortcut to upload the clipboard image from any app. The shortcut is
-  off by default, starts with `Command+Shift+U`, and requires at least two modifier keys when
+  off by default, starts with `Command+Shift+G`, and requires at least two modifier keys when
   customized. Gatto uses the macOS hotkey API, so this does not require Accessibility permission.
 - Enable **Close the window after copy** to hide Gatto after copying an uploaded URL or Markdown
   snippet from the main window.

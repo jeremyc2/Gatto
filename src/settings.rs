@@ -241,7 +241,7 @@ mod tests {
         )
         .expect("older settings should remain compatible");
 
-        assert_eq!(settings.global_quick_copy_shortcut, "Command+Shift+U");
+        assert_eq!(settings.global_quick_copy_shortcut, "Command+Shift+G");
         assert!(!settings.global_quick_copy_shortcut_enabled);
         assert!(!settings.close_window_after_copy);
     }

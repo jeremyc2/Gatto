@@ -7,7 +7,7 @@ use global_hotkey::{
 };
 use gpui_kit::Keystroke;
 
-pub const DEFAULT_QUICK_COPY_SHORTCUT: &str = "Command+Shift+U";
+pub const DEFAULT_QUICK_COPY_SHORTCUT: &str = "Command+Shift+G";
 
 struct GlobalShortcutState {
     manager: GlobalHotKeyManager,
@@ -130,7 +130,7 @@ fn parse_shortcut(shortcut: &str) -> Result<HotKey> {
     }
     let hotkey = shortcut
         .parse::<HotKey>()
-        .map_err(|_| anyhow::anyhow!("Use a shortcut such as Command+Shift+U."))?;
+        .map_err(|_| anyhow::anyhow!("Use a shortcut such as Command+Shift+G."))?;
     let modifier_count = [
         Modifiers::SUPER,
         Modifiers::CONTROL,
@@ -181,12 +181,12 @@ mod tests {
     #[test]
     fn canonicalizes_a_user_friendly_shortcut() {
         assert_eq!(
-            canonicalize_shortcut("cmd + shift + u").unwrap(),
-            "Command+Shift+U"
+            canonicalize_shortcut("cmd + shift + g").unwrap(),
+            "Command+Shift+G"
         );
         assert_eq!(
             canonicalize_shortcut(DEFAULT_QUICK_COPY_SHORTCUT).unwrap(),
-            "Command+Shift+U"
+            "Command+Shift+G"
         );
     }
 
