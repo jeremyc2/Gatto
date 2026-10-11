@@ -7,6 +7,28 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-11
+
+### Added
+
+- Added Rooftops, a three-level black-cat platformer opened by clicking the cat in the main window.
+- Added cat-face coins, rats and owls, lantern checkpoints, parallax rooftops, and illuminated
+  apartments with animated residents to Rooftops.
+- Added a results screen with coins, kills, deaths, and active play time, plus a
+  high-resolution scorecard download to Downloads.
+- Added Rooftops documentation and walkthrough screenshots.
+
+### Changed
+
+- Made the cat in the main window visibly interactive on hover.
+
+### Fixed
+
+- Improved Rooftops rendering performance and kept its status and completion prompts readable over
+  the scrolling scene.
+- Prevented score values from clipping in the results screen and walkthrough screenshots.
+- Corrected the cat's ear placement to match its profile view during gameplay and on scorecards.
+
 ## [0.9.1] - 2026-10-11
 
 ### Fixed

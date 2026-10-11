@@ -7,6 +7,8 @@ mod image_preview;
 mod log_viewer;
 mod menu_bar;
 mod model;
+mod rooftops;
+mod rooftops_score;
 mod settings;
 mod theme;
 mod window_limits;

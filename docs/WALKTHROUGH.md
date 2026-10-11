@@ -102,4 +102,4 @@ From the repository root, run:
 ./scripts/update-walkthrough-screenshots.sh
 ```
 
-The script renders the production GPUI interface through its off-screen Metal renderer using fixed, in-memory example data. It does not read or modify Gatto preferences, contact GitHub, use UI automation, or require Screen Recording permission. The command is macOS-only and overwrites the PNG files under `docs/images/walkthrough/`.
+The script renders the production GPUI interface through its off-screen Metal renderer using fixed, in-memory example data. It does not read or modify Gatto preferences, contact GitHub, use UI automation, or require Screen Recording permission. The command is macOS-only and overwrites the PNG files under `docs/images/walkthrough/`, including the [Rooftops Easter egg](EASTER_EGG.md), its results screen, and the exported score image.

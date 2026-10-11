@@ -23,8 +23,8 @@ use gpui_kit::component::{
     v_flex,
 };
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext as _, ClipboardEntry, ClipboardItem, Context, Entity,
-    ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
+    AnyWindowHandle, App, AppContext as _, BoxShadow, ClipboardEntry, ClipboardItem, Context,
+    Entity, ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
     IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton, ObjectFit, ParentElement as _,
     PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
     StyledImage as _, Subscription, SystemNotification, Window, WindowBounds, WindowOptions,
@@ -161,6 +161,7 @@ pub struct UploaderApp {
     global_shortcut: GlobalShortcutController,
     diagnostics: Diagnostics,
     header_mark: Arc<Image>,
+    rooftops_window: Option<AnyWindowHandle>,
     focus_handle: FocusHandle,
     _organization_subscription: Subscription,
     _global_shortcut_subscription: Subscription,
@@ -308,6 +309,7 @@ impl UploaderApp {
                 ImageFormat::Png,
                 include_bytes!("../packaging/rocket-cat-transparent.png").to_vec(),
             )),
+            rooftops_window: None,
             focus_handle: cx.focus_handle(),
             _organization_subscription: organization_subscription,
             _global_shortcut_subscription: global_shortcut_subscription,
@@ -2022,6 +2024,42 @@ impl UploaderApp {
         Ok(())
     }
 
+    fn open_rooftops(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(handle) = self.rooftops_window
+            && handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_ok()
+        {
+            return;
+        }
+        match gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::centered(size(px(960.), px(600.)), cx)),
+                window_min_size: Some(size(px(680.), px(440.))),
+                ..Default::default()
+            },
+            cx,
+            |window, cx| {
+                window.set_window_title("Rooftops");
+                let game = cx.new(|cx| crate::rooftops::Rooftops::new(window, cx));
+                window.focus(&game.read(cx).focus_handle(cx), cx);
+                game
+            },
+        ) {
+            Ok((handle, _)) => self.rooftops_window = Some(handle),
+            Err(error) => {
+                self.diagnostics
+                    .error(format!("Could not open Rooftops: {error}"));
+                window.push_notification(Notification::error("Could not open Rooftops."), cx);
+            }
+        }
+    }
+
     fn open_log_window(
         &mut self,
         _: &gpui_kit::ClickEvent,
@@ -2936,10 +2974,29 @@ impl Render for UploaderApp {
                                 .items_start()
                                 .gap_4()
                                 .child(
-                                    img(self.header_mark.clone())
-                                        .size(px(72.))
+                                    div()
+                                        .id("rooftops-entry")
                                         .flex_shrink_0()
-                                        .object_fit(ObjectFit::Contain),
+                                        .rounded_full()
+                                        .cursor_pointer()
+                                        .hover(|style| {
+                                            style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
+                                                BoxShadow::new(
+                                                    px(0.),
+                                                    px(0.),
+                                                    cx.theme().primary.opacity(0.18),
+                                                )
+                                                .blur_radius(px(16.))
+                                                .spread_radius(px(2.)),
+                                            ])
+                                        })
+                                        .on_click(cx.listener(Self::open_rooftops))
+                                        .child(
+                                            img(self.header_mark.clone())
+                                                .size(px(72.))
+                                                .flex_shrink_0()
+                                                .object_fit(ObjectFit::Contain),
+                                        ),
                                 )
                                 .child(
                                     v_flex()

@@ -273,6 +273,7 @@ packaging/        macOS application metadata
 ## Project documentation
 
 - [App walkthrough](docs/WALKTHROUGH.md)
+- [Rooftops Easter egg](docs/EASTER_EGG.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy and dependency audit](SECURITY.md)
