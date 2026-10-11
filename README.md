@@ -4,9 +4,9 @@
   <img src="packaging/rocket-cat-transparent.png" alt="Gatto, a cat with rocket boosters" width="220">
 </p>
 
-A lightweight macOS menu bar app for uploading images to GitHub's native
-user-attachment storage. Set an organization in App Preferences, paste, drop, or select an
-image, then copy a ready-to-paste Markdown image snippet from the uploaded attachment.
+Lightweight app for adding images to GitHub Pull Requests and GitHub Issues. Configure
+your GitHub organization in App Preferences, paste, drag-and-drop, or select an image,
+then copy a Markdown image snippet from the uploaded attachment.
 
 The app is written in Rust with GPUI and GPUI Kit. GPUI Kit is pinned to `0.7.1`;
 that release pins and re-exports its compatible GPUI `0.3.8` snapshot. The
