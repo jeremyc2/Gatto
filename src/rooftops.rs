@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use crate::rooftops_score::Score;
 use gpui_kit::component::{
@@ -8,9 +8,9 @@ use gpui_kit::component::{
 };
 
 use gpui_kit::{
-    App, AppContext as _, Context, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
-    KeyDownEvent, KeyUpEvent, ParentElement as _, Render, Styled as _, Subscription, Window, div,
-    px, rgb,
+    App, AppContext as _, Context, FocusHandle, Focusable, Image, ImageFormat,
+    InteractiveElement as _, IntoElement, KeyDownEvent, KeyUpEvent, ParentElement as _, Render,
+    Styled as _, Subscription, Window, div, img, px, rgb,
 };
 
 const STEP: f32 = 1. / 120.;
@@ -509,6 +509,7 @@ pub struct Rooftops {
     last_frame: Option<Instant>,
     remainder: f32,
     camera: f32,
+    coin_art: Arc<Image>,
     save_message: Option<String>,
     saving: bool,
     #[cfg(feature = "walkthrough-screenshots")]
@@ -534,12 +535,32 @@ impl Rooftops {
             this.remainder = 0.;
             cx.notify();
         });
+        // Match the other utility windows: avoid native window teardown in
+        // bundled builds. Reset the run before hiding the retained window.
+        let game = cx.entity().downgrade();
+        window.on_window_should_close(cx, move |window, cx| {
+            let _ = game.update(cx, |game, cx| {
+                game.run = Run::new();
+                game.last_frame = None;
+                game.remainder = 0.;
+                game.camera = 0.;
+                game.save_message = None;
+                game.saving = false;
+                #[cfg(feature = "walkthrough-screenshots")]
+                {
+                    game.preview = false;
+                }
+                cx.notify();
+            });
+            crate::window_limits::hide_instead_of_close(window)
+        });
         Self {
             run: Run::new(),
             focus,
             last_frame: None,
             remainder: 0.,
             camera: 0.,
+            coin_art: kitten_coin_art(),
             save_message: None,
             saving: false,
             #[cfg(feature = "walkthrough-screenshots")]
@@ -828,22 +849,26 @@ fn circle(x: f32, y: f32, diameter: f32, color: u32, scale: f32) -> gpui_kit::Di
     block(x, y, diameter, diameter, color, scale).rounded_full()
 }
 
-fn cat_coin(x: f32, y: f32, scale: f32) -> impl IntoElement {
-    div()
+fn kitten_coin_art() -> Arc<Image> {
+    // Prefilter the fine engraving before it becomes a small GPU texture,
+    // retaining the transparent edge and avoiding speckled highlights.
+    let artwork = image::load_from_memory(include_bytes!("../packaging/kitten-coin.png"))
+        .expect("embedded kitten coin must be a valid PNG")
+        .resize_exact(112, 112, image::imageops::FilterType::Lanczos3);
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    artwork
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .expect("embedded kitten coin must encode as PNG");
+    Arc::new(Image::from_bytes(ImageFormat::Png, bytes.into_inner()))
+}
+
+fn cat_coin(x: f32, y: f32, scale: f32, artwork: &Arc<Image>) -> impl IntoElement {
+    img(artwork.clone())
         .absolute()
-        .left(px((x - 10.) * scale))
-        .top(px((y - 10.) * scale))
-        .w(px(20. * scale))
-        .h(px(20. * scale))
-        .child(circle(0., 1., 20., 0x946337, scale))
-        .child(circle(0., 0., 20., 0xe9b964, scale))
-        .child(circle(2., 2., 16., 0xffdc93, scale))
-        .child(circle(4.5, 7., 11., 0xa76c38, scale))
-        .child(block(5., 4., 4., 7., 0xa76c38, scale).rounded_t(px(scale)))
-        .child(block(11., 4., 4., 7., 0xa76c38, scale).rounded_t(px(scale)))
-        .child(block(7., 10., 2., 2., 0xffe9b7, scale))
-        .child(block(11., 10., 2., 2., 0xffe9b7, scale))
-        .child(block(9., 13., 2., 1., 0xffe9b7, scale))
+        .left(px((x - 14.) * scale))
+        .top(px((y - 14.) * scale))
+        .w(px(28. * scale))
+        .h(px(28. * scale))
 }
 
 type Joint = (f32, f32);
@@ -1712,7 +1737,7 @@ impl Render for Rooftops {
             if !(-25. ..w + 25.).contains(&x) {
                 continue;
             }
-            scene = scene.child(cat_coin(x, coin.y, scale));
+            scene = scene.child(cat_coin(x, coin.y, scale, &self.coin_art));
         }
         for enemy in run.enemies.iter().filter(|enemy| !enemy.defeated) {
             let (x, y) = enemy.position(&run.roofs, run.time);
@@ -1814,13 +1839,12 @@ impl Render for Rooftops {
                 .bg(rgb(SKY))
                 .border_1()
                 .border_color(rgb(0x343247))
-                .child(
-                    div()
-                        .relative()
-                        .w(px(20.))
-                        .h(px(20.))
-                        .child(cat_coin(10., 10., 1.)),
-                )
+                .child(div().relative().w(px(28.)).h(px(28.)).child(cat_coin(
+                    14.,
+                    14.,
+                    1.,
+                    &self.coin_art,
+                )))
                 .child(
                     div()
                         .text_sm()
@@ -1869,6 +1893,50 @@ impl Render for Rooftops {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui_kit::test]
+    fn closing_rooftops_retains_the_window_and_resets_the_game(cx: &mut gpui_kit::TestAppContext) {
+        let (view, window) = cx.add_window_view(Rooftops::new);
+        window.update(|_, cx| {
+            view.update(cx, |game, _| {
+                game.run = Run::for_level(2);
+                game.run.elapsed = 42.;
+                game.run.banked_returns = 3;
+                game.run.banked_kills = 5;
+                game.run.input.right = true;
+                game.run.buffer = 0.1;
+                game.camera = 800.;
+                game.save_message = Some("Saved previous score".into());
+                game.saving = true;
+                game.last_frame = Some(Instant::now());
+                game.remainder = STEP / 2.;
+                game.run.coins[0].collected = true;
+            });
+        });
+        assert!(
+            !window.simulate_close(),
+            "Rooftops must hide instead of destroying its native window"
+        );
+        window.update(|_, cx| {
+            view.update(cx, |game, _| {
+                assert!(!game.run.input.right);
+                assert_eq!(game.run.buffer, 0.);
+                assert!(game.last_frame.is_none());
+                assert_eq!(game.remainder, 0.);
+                assert_eq!(game.run.level, 0);
+                assert!(game.run.coins.iter().all(|coin| !coin.collected));
+                assert_eq!(game.run.score().coins, 0);
+                assert_eq!(game.run.score().deaths, 0);
+                assert_eq!(game.run.score().kills, 0);
+                assert_eq!(game.run.elapsed, 0.);
+                assert_eq!(game.run.x, Run::new().x);
+                assert_eq!(game.run.y, Run::new().y);
+                assert_eq!(game.camera, 0.);
+                assert!(game.save_message.is_none());
+                assert!(!game.saving);
+            });
+        });
+    }
 
     #[gpui_kit::test]
     fn play_time_excludes_pauses_and_completion(cx: &mut gpui_kit::TestAppContext) {

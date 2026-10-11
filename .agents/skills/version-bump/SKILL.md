@@ -1,5 +1,5 @@
 ---
-name: changelog
+name: version-bump
 description: Update CHANGELOG.md and make the next semantic version release-ready.
 disable-model-invocation: true
 ---

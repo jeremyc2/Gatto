@@ -1,7 +1,8 @@
 # Rooftops Easter egg
 
 Click the cat logo in Gatto's main window to open Rooftops, a black-cat
-platformer with three levels. Close the game window to return to the app.
+platformer with three levels. Close the game window to return to the app. Closing resets and hides the game;
+click the cat logo again to start a fresh run.
 
 ![A black cat jumping toward cat-face coins above illuminated apartments](images/walkthrough/rooftops-1.png)
 
@@ -25,8 +26,8 @@ Landing lights the buildings, revealing residents through their windows
 vacuuming, playing piano, gardening, cooking, dancing, or stargazing.
 Dark windows have closed blinds or shutters; lit windows leave the residents
 fully visible. Three skyline layers scroll at different speeds
-to create the parallax effect. The scene uses native GPUI elements and the app's
-existing dependencies.
+to create the parallax effect. The scene uses native GPUI elements, an embedded gold-kitten coin sprite,
+and the app's existing dependencies.
 
 ![A mid-level owl encounter above narrow rooftops](images/walkthrough/rooftops-2.png)
 

@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-11
+
+### Changed
+
+- Updated Rooftops coins with a clearer baby-kitten design and ornate gold detailing.
+
+### Fixed
+
+- Applied the app's window-teardown workaround to Rooftops to address crashes when
+  closing its window in bundled builds. Closing resets the game, so reopening
+  starts a fresh run.
+
 ## [0.10.0] - 2026-10-11
 
 ### Added
