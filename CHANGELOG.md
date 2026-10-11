@@ -7,6 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-11
+
+### Changed
+
+- Clarified that images are uploaded directly to GitHub and Gatto has no backend
+  or image-hosting service of its own.
+- Expanded setup, bulk upload, preview, recovery, uninstall, release, and
+  architecture documentation, with guidance for contributors.
+- Corrected security guidance for Quick Copy, supported versions, and disabled
+  CI and dependency-scanning workflows.
+
 ## [0.10.1] - 2026-10-11
 
 ### Changed

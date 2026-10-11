@@ -20,7 +20,7 @@ through `rustup`, and GitHub CLI as described in the README. Then fetch the Rust
 dependencies:
 
 ```sh
-cargo fetch
+cargo fetch --locked
 ```
 
 The repository uses the stable Rust toolchain selected by `rust-toolchain.toml`.
@@ -50,6 +50,7 @@ credentials or image content.
 Before opening a pull request, run:
 
 ```sh
+cargo install --locked cargo-deny --version 0.20.2
 cargo fmt --all -- --check
 cargo check --all-targets
 cargo clippy --all-targets --all-features -- -D warnings
@@ -59,6 +60,40 @@ cargo deny --locked check --hide-inclusion-graph advisories licenses bans source
 
 Apply formatting with `cargo fmt --all`. Please resolve warnings rather than
 silencing them unless there is a documented reason.
+
+## Documentation and manual verification
+
+Keep documentation aligned with the implementation:
+
+- [README](README.md): install/setup, feature overview, and entry points to the guides.
+- [Walkthrough](docs/WALKTHROUGH.md): visible workflows and keyboard controls.
+- [Architecture](docs/ARCHITECTURE.md): module responsibilities, state, and integration boundaries.
+- [Release guide](docs/RELEASING.md): packaging and publication procedure.
+- [Support](SUPPORT.md) and [Security](SECURITY.md): recovery, persistence, authentication, and dependency policy.
+- [Rooftops](docs/EASTER_EGG.md): game controls and score export.
+- [Changelog](CHANGELOG.md): user-visible changes under **Unreleased**.
+
+For UI changes, regenerate walkthrough images on macOS with
+`./scripts/update-walkthrough-screenshots.sh`, then inspect the resulting PNGs.
+The feature-gated screenshot binary uses fixed in-memory examples and does not
+contact GitHub or change saved preferences. Check relative links and image paths
+when moving or adding documentation.
+
+For behavior changes, manually exercise the affected workflow with non-sensitive
+images and an accessible test repository. Relevant paths include first-run setup,
+paste/drop/file selection, a partially failed batch and retry, Markdown copying,
+tray and global shortcut actions, and closing/reopening utility windows. Check
+bundled builds for window lifecycle or custom URL changes; `cargo run` does not
+register the packaged URL scheme. Reset and login-item checks modify your local
+preferences, so use a disposable macOS user if those settings need to be preserved.
+
+### Automation status
+
+The CI and dependency-security workflow definitions currently live in
+`.github/workflows.disabled/`. They are inactive, including manual security runs;
+contributors must perform the checks above locally. Dependabot's weekly update
+configuration remains in `.github/dependabot.yml`. Restoring workflow files to
+`.github/workflows/` is a separate repository change.
 
 ## Dependencies
 

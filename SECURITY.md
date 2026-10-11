@@ -48,10 +48,12 @@ documented analysis.
 - Direct unmaintained dependencies, known vulnerabilities, unsoundness advisories,
   and yanked releases fail dependency-policy checks.
 - Dependabot checks Cargo packages and GitHub Actions weekly.
-- The dependency-security workflow is run manually from the Actions tab and uses
-  checksum-verified scanner binaries.
-- GitHub Actions are pinned to immutable commit hashes, use read-only permissions,
-  and do not persist checkout credentials.
+- CI and dependency-security definitions are stored in
+  `.github/workflows.disabled/` and do not run in GitHub Actions. The retained
+  security definition uses checksum-verified scanner binaries and a manual
+  trigger if restored to `.github/workflows/`. Run policy scans locally meanwhile.
+- Actions in the retained workflow definitions are pinned to immutable commit
+  hashes, use read-only permissions, and do not persist checkout credentials.
 - New dependencies require justification and review under
   [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -70,8 +72,10 @@ working tree.
 
 ## Local settings and clipboard behavior
 
-- The app does not copy an upload result automatically. A clipboard write occurs
-  only after the user chooses **Copy URL** or **Copy Markdown**.
+- Normal uploads do not change the clipboard. **Copy Markdown**, **Copy all**,
+  and **Command+C** explicitly copy completed results. **Quick Copy**, invoked
+  through the menu bar, custom URL, or enabled global shortcut, uploads a
+  clipboard image and automatically copies its Markdown on success.
 - Pinned repository names are stored in
   `~/Library/Application Support/Gatto/settings.json`. Tokens, image
   bytes, and upload URLs are not persisted there.
@@ -94,13 +98,14 @@ owner, include an expiry or removal condition, and be recorded in this file.
 
 ## Supported versions
 
-Until the first stable release, security fixes are applied to the latest `0.1.x`
-release and the default development branch.
+Until the first stable release, security fixes are applied to the latest `0.x`
+release and the default development branch. Upgrade to the latest release when
+reporting a problem; earlier pre-1.0 releases do not receive separate backports.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.1.x   | Yes       |
-| Older   | No        |
+| Latest 0.x release and `main` | Yes |
+| Earlier releases | No |
 
 ## Reporting a vulnerability
 
@@ -122,8 +127,7 @@ before publishing details.
 
 Dependency reports should include the package name and version, advisory or CVE
 identifier, dependency path, affected feature or platform, and the first known
-fixed version. Reports involving GitHub's undocumented attachment endpoint should
-also explain whether credentials or private attachment URLs can be exposed.
+fixed version.
 
 ## Sensitive data
 

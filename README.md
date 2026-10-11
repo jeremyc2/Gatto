@@ -57,6 +57,8 @@ a local build.
 - Uploads PNG, JPEG, GIF, and WebP images.
 - Keeps previewed, uploaded, and failed images together as status-aware attachments.
 - Adds a Markdown copy button to each attachment after it uploads.
+- Supports bulk uploads, per-image descriptions, partial-failure retries, and copying all results.
+- Opens a separate image preview with zoom, pan, and previous/next navigation.
 - Can start automatically at macOS login.
 - Shows the build's app version and Git commit hash in App Preferences.
 - Preserves the staged image when GitHub returns an error so the upload can be retried.
@@ -66,10 +68,15 @@ a local build.
 - Can run Quick Copy from an optional, customizable global keyboard shortcut without requiring
   Accessibility permission.
 - Opens the full walkthrough in the default browser from the main window's help icon.
+- Supports `gatto://` automation actions and includes the Rooftops game behind the cat logo.
 
 ## Prerequisites
 
-You will need:
+To use a downloaded release, you need macOS 13 or newer and an authenticated
+GitHub CLI installation (step 3 below). Xcode and Rust are only needed to build
+from source.
+
+For a local build, you will need:
 
 - macOS 13 or newer.
 - Xcode Command Line Tools.
@@ -135,11 +142,11 @@ custom install location, launch the app with `GH_PATH=/absolute/path/to/gh` set 
 
 ## Project setup
 
-Clone the repository, substituting its actual URL for the placeholder:
+Clone the repository:
 
 ```sh
-git clone <repository-url>
-cd gatto
+git clone https://github.com/jeremyc2/Gatto.git
+cd Gatto
 cargo fetch
 ```
 
@@ -150,13 +157,15 @@ cargo run
 ```
 
 The app appears in the macOS menu bar and the Dock. Closing its window hides the
-window and the Dock icon without quitting the app; use the menu bar item to show
-it again or quit.
+window and the Dock icon without quitting the app; use the menu bar item or Dock
+icon to show it again. Closing the main window discards staged images and upload
+results, so copy anything you need first. Use **Quit** in the menu bar to exit.
 
 ## Using the app
 
 1. Open the app from the menu bar and, on first launch, set an organization in
-   App Preferences. The app does nothing until one is set.
+   App Preferences. Enter the organization login, such as `acme`, rather than a
+   URL or `owner/repository`. Uploads require an organization.
 2. Paste an image, drag one into the window, or choose an image file.
 3. Upload the image.
 4. Wait for the attachment status to change to **Uploaded**.
@@ -184,6 +193,11 @@ For example, `open "gatto://quick-copy"` uploads the clipboard image through the
 repository and copies its Markdown without leaving the app window open. As with the menu bar
 action, Quick Copy requires an organization and at least one pinned repository.
 
+See the [walkthrough](docs/WALKTHROUGH.md#bulk-uploads-and-retries) for bulk uploads,
+retry behavior, descriptions, and full-size preview controls. Quick Copy replaces
+the current staged images and clears its results after completion or failure;
+normal uploads keep their attachments available while the window remains open.
+
 Normal uploads do not change the clipboard. An uploaded attachment's copy button copies a value such as
 `![screenshot.png](https://github.com/user-attachments/assets/…)`.
 
@@ -205,8 +219,8 @@ Open App Preferences from the app window or choose **App Preferences** from the 
 - Enable the global Quick Copy shortcut to upload the clipboard image from any app. The shortcut is
   off by default, starts with `Command+Shift+G`, and requires at least two modifier keys when
   customized. Gatto uses the macOS hotkey API, so this does not require Accessibility permission.
-- Enable **Close the window after copy** to hide Gatto after copying an uploaded URL or Markdown
-  snippet from the main window.
+- Enable **Close the window after copy** to hide Gatto after copying uploaded Markdown
+  from the main window. Closing clears the attachment list, including uncopied results.
 - The About section shows the package version and the Git commit hash captured at
   build time. Builds made outside a Git checkout show `unknown` unless
   `GIT_COMMIT_HASH` is supplied to the build.
@@ -216,6 +230,19 @@ Open App Preferences from the app window or choose **App Preferences** from the 
 
 The app lists the organization's repositories through `gh api`, including private
 repositories available to the active GitHub CLI account.
+
+### Reset and uninstall
+
+**App Preferences → Reset app** asks for confirmation, removes saved preferences
+and the login item, disables the global shortcut, and clears the main upload
+state. It does not sign you out of GitHub CLI or delete images already hosted by
+GitHub.
+
+To uninstall, reset the app first, choose **Quit** from the menu bar, and move
+`Gatto.app` to the Trash. If the app cannot open, quit it and remove its settings
+and login item manually using the exact paths in
+[the support guide](SUPPORT.md#local-data-and-recovery). Rooftops scorecards saved
+to Downloads are separate files; keep or remove them as you prefer.
 
 ## Development commands
 
@@ -240,7 +267,9 @@ cargo deny --locked check --hide-inclusion-graph advisories licenses bans source
 cargo build --release
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+These checks currently run locally: the workflow definitions are stored in
+`.github/workflows.disabled/`, so GitHub Actions does not execute them. See
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## Releasing
 
@@ -270,25 +299,21 @@ push to `main`, then run:
 
 The script refuses to run unless the tree is clean and pushed, and it asks before
 publishing `v<version>`. Set `SIGN_IDENTITY` if more than one Developer ID
-certificate is installed.
+certificate is installed. For prerequisites, verification, artifact locations,
+and recovery from an interrupted release, see the [release guide](docs/RELEASING.md).
 
 ## Project layout
 
-```text
-src/main.rs       Application entry point and GPUI startup
-src/app.rs        Main window, interactions, and upload state
-src/github.rs     GitHub CLI integration and attachment uploads
-src/diagnostics.rs In-memory troubleshooting event log
-src/log_viewer.rs Application logs window
-src/menu_bar.rs   macOS menu bar behavior
-src/global_shortcut.rs System-wide Quick Copy shortcut registration
-src/model.rs      Shared application models
-src/settings.rs   Repository setting and macOS login startup
-build.rs          Build-time Git commit metadata
-scripts/          Local signed-release script
-packaging/        macOS application metadata
-.github/          Continuous integration and contribution templates
-```
+The repository is organized into a few main areas:
+
+- [`src/`](src/) — the Rust application, including its interface, GitHub uploads,
+  and macOS integration.
+- [`docs/`](docs/) — walkthroughs, architecture, and contributor guidance.
+- [`scripts/`](scripts/) and [`packaging/`](packaging/) — tools and assets for
+  building, packaging, and releasing the app.
+- [`.github/`](.github/) — automated checks and contribution templates.
+
+For how the app's parts work together, see the [architecture overview](docs/ARCHITECTURE.md).
 
 ## Project documentation
 
@@ -296,6 +321,7 @@ packaging/        macOS application metadata
 - [Rooftops Easter egg](docs/EASTER_EGG.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contributing guide](CONTRIBUTING.md)
+- [Release guide](docs/RELEASING.md)
 - [Security policy and dependency audit](SECURITY.md)
 - [Support guide](SUPPORT.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
@@ -320,9 +346,10 @@ error detail. Install Homebrew's `gh` in its normal location or set `GH_PATH` fo
 
 ### Uploads fail
 
-Confirm the staged file is a supported image and that `gh auth token` succeeds.
-GitHub's user-attachment upload endpoint is undocumented and may change without
-notice; the app displays the returned error and keeps the image staged for retrying.
+Confirm the staged file is a supported image and that
+`gh auth status --hostname github.com` succeeds. Retry with **Upload**; successful attachments are skipped.
+See [SUPPORT.md](SUPPORT.md) for account switching, clipboard, shortcut, and
+settings recovery. Avoid sharing the output of `gh auth token`, which is a secret.
 
 ## Security and privacy
 
@@ -331,15 +358,18 @@ mechanism, as described in [Where your images are stored](#where-your-images-are
 Gatto runs locally on your Mac, has no backend or server of its own, and does not
 host your images.
 
-The app obtains the active token from GitHub CLI when needed and does not persist
-it in project configuration. Image bytes are sent directly from your Mac to
+The app obtains the active token from GitHub CLI when needed, caches it in memory,
+and does not persist it in project configuration. Restart Gatto after switching
+GitHub CLI accounts. Image bytes are sent directly from your Mac to
 GitHub's attachment service. Do not upload secrets or images you are not permitted
 to share.
 
 The committed `Cargo.lock` preserves the versions and registry checksums that were
-audited. Dependency source and license policy lives in `deny.toml`, and automated
-security scans run on dependency changes and every week. For the latest audit
-results or to report a vulnerability, see [SECURITY.md](SECURITY.md).
+audited. Dependency source and license policy lives in `deny.toml`, and scanner
+workflow definitions are retained under
+`.github/workflows.disabled/`. Run dependency scans locally while those workflows
+are disabled; Dependabot is configured to check for updates weekly. For the
+recorded audit results or to report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Community and license
 

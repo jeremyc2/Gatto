@@ -4,25 +4,24 @@ Gatto is a single-process macOS menu bar application. GPUI owns the
 application and window lifecycle, while small modules isolate GitHub access,
 platform integration, persistent settings, and shared state.
 
-## Components
+## Responsibilities
 
-- `src/main.rs` starts GPUI and creates the application window.
-- `src/app.rs` renders the interface and coordinates user actions, repository
-  loading, image staging, uploads, explicit clipboard actions, settings, and
-  status messages.
-- `src/github.rs` calls GitHub CLI for authentication and repository lookup,
-  then sends image bytes to GitHub's user-attachment service.
-- `src/diagnostics.rs` owns the bounded, in-memory troubleshooting event log.
-- `src/log_viewer.rs` renders that event log in its own application window.
-- `src/menu_bar.rs` owns the macOS status item and open/settings/quit actions.
-- `src/global_shortcut.rs` validates and registers the optional system-wide Quick Copy shortcut.
-- `src/custom_url.rs` validates `gatto://` action URLs before they are dispatched through the same
-  action path as the menu bar.
-- `src/model.rs` contains shared repository, image, and upload-state models.
-- `src/settings.rs` persists the configured repository and manages the per-user macOS
-  LaunchAgent used by Start at Login.
-- `build.rs` records the current Git commit hash in the compiled application.
-- `packaging/Info.plist` and `packaging/AppIcon.icns` provide the packaged application's metadata and icon.
+The application separates these responsibilities within a single local process:
+
+- **Interface and upload state:** show repositories and image previews, coordinate
+  uploads and retries, and make uploaded links available to copy.
+- **GitHub access:** use GitHub CLI for authentication and repository lookup, then
+  send image bytes directly to GitHub's attachment service. Gatto has no backend
+  or server of its own.
+- **macOS integration:** provide menu bar actions, the optional global shortcut,
+  custom URL actions, and Start at Login. These entry points feed into the app's
+  shared action handling.
+- **Preferences and diagnostics:** persist local preferences and keep a bounded,
+  in-memory event log available in the Application logs window.
+
+Build and packaging tools supply version information, app metadata, and icons,
+and produce the signed release. See [Releasing](../README.md#releasing) for the
+release workflow.
 
 ## Data flow
 
@@ -57,10 +56,45 @@ Attachments remain available after success or failure. Failed attachments can be
 selecting them again, and uploaded attachments retain their preview, description editor, and
 Markdown copy control.
 
+## Loading, batches, and window lifecycle
+
+Launch restores the remembered repository name and ID from settings without a
+GitHub request. Opening the repository picker loads the organization's paginated
+repository list and token through `gh`; uploading can instead resolve just the
+remembered repository ID and token when needed. The token is cached in process
+memory. Restart Gatto after changing the active GitHub CLI account to avoid using
+a previously loaded session.
+
+Image validation, CLI calls, and blocking HTTP uploads run on background tasks.
+A batch uploads sequentially; each attachment transitions from preview or failed
+to uploading, then uploaded or failed. Retrying skips uploaded attachments. The
+copy result is rebuilt from successful attachments in their current order.
+Generation counters prevent stale task completions from restoring state after
+reset or draft replacement. Reset clears local state; it does not cancel an HTTP
+request already sent to GitHub or remove a remote attachment.
+
+The upload client uses a 15-second connection timeout and a 90-second request
+timeout. It sends original image bytes to
+`https://uploads.github.com/user-attachments/assets` with filename, content type,
+and numeric repository ID query parameters. Returned URLs must use HTTPS,
+`github.com`, and the `/user-attachments/assets/` path prefix. The endpoint is
+hard-coded for GitHub.com; GitHub Enterprise Server hosts are not configurable.
+
+Closing windows hides and retains them to avoid bundled AppKit/GPUI teardown
+crashes. The main window also clears staged attachments and copy results and
+hides the Dock icon. Dock reopening or a tray action activates the existing main
+window. Closing Rooftops resets the run; preview and log windows can be hidden
+independently. Quit ends the process.
+
+Quick Copy shares the uploader pipeline, replaces existing drafts, writes Markdown
+to the clipboard after successful uploads, sends a system notification, and clears
+its attachments after completion or failure. Unlike normal uploads, its failed
+images are not retained for retry.
+
 ## App Preferences and local state
 
 The organization, repository selections, shortcut configuration, and general preferences are
-saved as JSON under the current user's `Library/Application Support/Gatto` directory. The GitHub
+saved as JSON in `~/Library/Application Support/Gatto/settings.json`. The GitHub
 token and image bytes are never written there. Until an organization is set, the main screen only
 points the user to App Preferences.
 
@@ -103,5 +137,3 @@ the minimum supported Rust version in `Cargo.toml`.
   Start at Login stores the executable path in a per-user LaunchAgent.
 - Logs and errors should never include tokens or raw image bytes.
 - Diagnostic events are retained only in memory (up to 500 entries) and are lost on quit.
-- GitHub's attachment endpoint is undocumented, so failures must be handled as an
-  expected condition and surfaced without losing user state.

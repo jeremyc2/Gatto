@@ -45,6 +45,44 @@ Copy the generated Markdown and paste it into a GitHub issue, pull request, disc
 ![Gatto rocket cat](https://github.com/user-attachments/assets/…)
 ```
 
+## Bulk uploads and retries
+
+Enable **Bulk upload** before selecting or pasting several files. You can add more
+images to the same batch by dropping files or pasting again. In single-image mode,
+adding another image opens a replacement dialog; choose **Switch to bulk upload**
+(or press **B** in that dialog) to keep the existing image and add the new one.
+The bulk toggle is disabled during uploads and while more than one attachment
+remains; remove attachments until at most one remains to return to single-image mode.
+
+**Upload** sends each pending or failed attachment in order. Each attachment shows
+its own status. If part of a batch fails, successful uploads remain available to
+copy. Click **Upload** again to retry pending or failed images; already uploaded
+images are skipped. **Copy all** copies only successful uploads in attachment
+order, separated by newlines. Removing an attachment removes it from Gatto's
+current list; it does not delete the image from GitHub.
+
+Use **Edit description** to change an image's Markdown alt text. The default is
+its filename. This changes the copied Markdown, including after an upload; it
+does not rename the file uploaded to GitHub.
+
+Closing the main window clears its attachments and results. Copy your Markdown
+before closing; drafts and upload history are not saved between sessions.
+
+## Inspect an image
+
+Click an attachment's preview to open the separate preview window. Use its toolbar
+to zoom, fit the image, or move between images. Drag or scroll to pan, pinch to
+zoom, or hold **Command** or **Control** while scrolling to zoom around the pointer.
+The percentage is relative to the fitted image size.
+
+| Key | Preview action |
+| --- | --- |
+| **Command+=** or **Command+Plus** | Zoom in. |
+| **Command+Minus** | Zoom out. |
+| **Command+0** | Fit to window and reset pan. |
+| **← / →** | Previous / next image. |
+| **Escape** | Hide the preview window. |
+
 ## Faster clipboard uploads
 
 After pinning a repository, copy an image and use one of these actions from Gatto's menu bar icon:
@@ -53,7 +91,7 @@ After pinning a repository, copy an image and use one of these actions from Gatt
 - **Quick Copy** uploads it in the background, copies its Markdown, and sends a macOS notification when it finishes.
 
 You can also set a global Quick Copy keyboard shortcut in App Preferences. Once enabled it starts
-as **Command+Shift+G**, and you can change it to any shortcut you prefer: click **Record shortcut**,
+as **Command+Shift+G**, and you can change it to another supported chord: click **Record shortcut**,
 then press the chord you want to use. The shortcut must contain at least two modifier keys.
 
 When multiple repositories are pinned, Quick Copy uses the most recently selected pinned
@@ -91,8 +129,24 @@ open "gatto://quick-copy"
 
 Quick Copy requires a configured organization and at least one pinned repository. Gatto chooses
 the preferred pinned repository using the same rules as the menu bar and global keyboard shortcut.
+Install and open the packaged `Gatto.app` for macOS to register the URL scheme;
+`cargo run` alone does not install its bundle metadata.
+
 Action URLs intentionally accept no query parameters, fragments, repository names, or additional
 path components; repository selection remains controlled by App Preferences.
+
+## Reset preferences
+
+Use **App Preferences → Reset app** to return to first-run setup after confirming
+the reset. This removes Gatto preferences and Start at Login, disables its global
+shortcut, and clears the main upload state. GitHub CLI authentication and already
+uploaded GitHub images are unaffected. See [Support](../SUPPORT.md) for recovery
+when settings cannot be read.
+
+## Rooftops
+
+Click the cat logo in the main window to play the three-level platformer. The
+[Rooftops guide](EASTER_EGG.md) covers controls, checkpoints, and saving a scorecard.
 
 ## Updating these screenshots
 
