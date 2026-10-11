@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-11
+
+### Fixed
+
+- Fixed the default global Quick Copy shortcut to Command+Shift+G so it matches the documented shortcut and the app's built-in default.
+
 ## [0.9.0] - 2026-10-10
 
 ### Added
