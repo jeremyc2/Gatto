@@ -8,6 +8,26 @@ Lightweight app for adding images to GitHub Pull Requests and GitHub Issues. Con
 your GitHub organization in App Preferences, paste, drag-and-drop, or select an image,
 then copy a Markdown image snippet from the uploaded attachment.
 
+**Your images are stored by GitHub. Gatto runs locally on your Mac and has no
+backend or server of its own.** It uses the same image attachment mechanism as pasting an image into
+a GitHub issue description or pull request body on GitHub's website or in VS Code.
+Gatto gives you a friendlier UI for uploads that can otherwise be clunky or unreliable.
+
+## Where your images are stored
+
+When you upload an image with Gatto, it goes directly from your Mac to GitHub's
+image attachment storage. GitHub returns an image link that you can copy and use
+in an issue, pull request, or anywhere else you use Markdown. The image stays
+hosted by GitHub. Gatto has no backend or server: the app on your Mac communicates
+directly with GitHub.
+
+Behind the scenes, Gatto uses GitHub CLI to sign in with your existing GitHub
+account and GitHub's API to upload the image through the same attachment mechanism
+used when you paste images into issues and pull requests. Gatto makes that process
+easier to use without running a separate image storage service.
+
+## Platform and implementation
+
 The app is written in Rust with GPUI and GPUI Kit. GPUI Kit is pinned to `0.7.1`;
 that release pins and re-exports its compatible GPUI `0.3.8` snapshot. The
 repository's `rust-toolchain.toml` tracks the stable Rust channel and installs
@@ -306,9 +326,15 @@ notice; the app displays the returned error and keeps the image staged for retry
 
 ## Security and privacy
 
+Images are hosted by GitHub using its existing issue and pull request attachment
+mechanism, as described in [Where your images are stored](#where-your-images-are-stored).
+Gatto runs locally on your Mac, has no backend or server of its own, and does not
+host your images.
+
 The app obtains the active token from GitHub CLI when needed and does not persist
-it in project configuration. Image bytes are sent directly to GitHub's attachment
-service. Do not upload secrets or images you are not permitted to share.
+it in project configuration. Image bytes are sent directly from your Mac to
+GitHub's attachment service. Do not upload secrets or images you are not permitted
+to share.
 
 The committed `Cargo.lock` preserves the versions and registry checksums that were
 audited. Dependency source and license policy lives in `deny.toml`, and automated
