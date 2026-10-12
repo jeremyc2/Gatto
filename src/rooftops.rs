@@ -535,6 +535,22 @@ impl Rooftops {
             this.remainder = 0.;
             cx.notify();
         });
+        let game = cx.entity().downgrade();
+        window.on_window_should_close(cx, move |window, cx| {
+            let _ = game.update(cx, |game, cx| {
+                game.run = Run::new();
+                game.last_frame = None;
+                game.remainder = 0.;
+                game.camera = 0.;
+                game.save_message = None;
+                #[cfg(feature = "walkthrough-screenshots")]
+                {
+                    game.preview = false;
+                }
+                cx.notify();
+            });
+            crate::window_limits::close(window, cx)
+        });
         Self {
             run: Run::new(),
             focus,
@@ -1874,6 +1890,31 @@ impl Render for Rooftops {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[gpui_kit::test]
+    fn closing_resets_the_game_and_retains_the_same_window(cx: &mut gpui_kit::TestAppContext) {
+        let (view, cx) = cx.add_window_view(Rooftops::new);
+        cx.update(|_, cx| {
+            view.update(cx, |game, _| {
+                game.run.elapsed = 123.;
+                game.run.input.right = true;
+                game.camera = 500.;
+                game.save_message = Some("Old score".into());
+            });
+        });
+        for _ in 0..3 {
+            assert!(!cx.simulate_close());
+            cx.update(|_, cx| {
+                view.update(cx, |game, _| {
+                    assert_eq!(game.run.elapsed, 0.);
+                    assert!(!game.run.input.right);
+                    assert_eq!(game.camera, 0.);
+                    assert!(game.save_message.is_none());
+                });
+            });
+        }
+    }
 
     #[gpui_kit::test]
     fn play_time_excludes_pauses_and_completion(cx: &mut gpui_kit::TestAppContext) {

@@ -16,6 +16,8 @@ mod window_limits;
 
 use std::{cell::RefCell, rc::Rc};
 
+use window_limits::set_dock_visible;
+
 use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, Entity, Focusable as _, WindowBounds, WindowOptions, px,
     size,
@@ -219,8 +221,11 @@ impl MainWindow {
                         cx,
                     );
                 });
-                controller.0.borrow_mut().current = None;
-                true
+                let should_close = window_limits::close(window, cx);
+                if should_close {
+                    controller.0.borrow_mut().current = None;
+                }
+                should_close
             });
             window.focus(&view.read(cx).focus_handle(cx), cx);
             view
@@ -287,51 +292,3 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
         MenuAction::Quit => cx.quit(),
     }
 }
-
-/// Shows the Dock icon while the window is open; the menu bar item always stays.
-#[cfg(target_os = "macos")]
-fn set_dock_visible(visible: bool) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
-
-    if let Some(main_thread) = MainThreadMarker::new() {
-        let policy = if visible {
-            NSApplicationActivationPolicy::Regular
-        } else {
-            NSApplicationActivationPolicy::Accessory
-        };
-        NSApplication::sharedApplication(main_thread).setActivationPolicy(policy);
-    }
-    // Switching back from Accessory resets the Dock tile, so the icon is set again.
-    if visible {
-        set_dock_icon();
-    }
-}
-
-/// Sets the Dock icon explicitly when running outside an app bundle, which has no icon of its own.
-#[cfg(target_os = "macos")]
-fn set_dock_icon() {
-    use objc2::{AnyThread as _, MainThreadMarker};
-    use objc2_app_kit::{NSApplication, NSImage};
-    use objc2_foundation::NSData;
-
-    static ICON: &[u8] = include_bytes!("../packaging/AppIcon.icns");
-
-    let bundled = std::env::current_exe()
-        .is_ok_and(|path| path.to_string_lossy().contains(".app/Contents/MacOS/"));
-    if bundled {
-        return;
-    }
-
-    if let Some(main_thread) = MainThreadMarker::new() {
-        let data = NSData::with_bytes(ICON);
-        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
-            unsafe {
-                NSApplication::sharedApplication(main_thread).setApplicationIconImage(Some(&image))
-            };
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_dock_visible(_: bool) {}

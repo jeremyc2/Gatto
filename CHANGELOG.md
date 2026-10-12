@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-10-12
+
+### Fixed
+
+- Mitigated window-close crashes on Touch Bar Macs by hiding and reusing macOS
+  windows instead of destroying them. Closing still clears preview images and
+  resets Rooftops; reopening logs refreshes their contents. Dock reopening keeps
+  its main-page behavior, and Quick Copy remains entirely windowless.
+
 ## [0.10.3] - 2026-10-12
 
 ### Fixed

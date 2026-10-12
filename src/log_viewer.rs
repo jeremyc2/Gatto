@@ -28,6 +28,10 @@ impl LogViewer {
     }
 
     fn refresh(&mut self, _: &gpui_kit::ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        self.reload(cx);
+    }
+
+    pub fn reload(&mut self, cx: &mut Context<Self>) {
         self.lines = self.diagnostics.lines();
         cx.notify();
     }

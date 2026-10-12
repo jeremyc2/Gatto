@@ -97,6 +97,12 @@ impl ImagePreview {
         self.fit(cx);
     }
 
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.images.clear();
+        self.current_index = 0;
+        self.fit(cx);
+    }
+
     fn current(&self) -> Option<&PreviewImage> {
         self.images.get(self.current_index)
     }

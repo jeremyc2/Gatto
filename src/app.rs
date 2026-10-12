@@ -148,7 +148,7 @@ pub struct UploaderApp {
     pending_paste_repository: Option<String>,
     pending_menu_paste: bool,
     pending_replacement_images: Option<Vec<StagedImage>>,
-    log_window: Option<AnyWindowHandle>,
+    log_window: Option<(AnyWindowHandle, Entity<LogViewer>)>,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
     menu_bar: MenuBarController,
     global_shortcut: GlobalShortcutController,
@@ -1954,11 +1954,12 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(log_window) = self.log_window {
+        if let Some((log_window, log_view)) = self.log_window.clone() {
             if log_window
                 .update(cx, |_, window, _| window.activate_window())
                 .is_ok()
             {
+                log_view.update(cx, |logs, cx| logs.reload(cx));
                 return;
             }
             self.log_window = None;
@@ -1975,17 +1976,20 @@ impl UploaderApp {
         let result = gpui_kit::open_window(options, cx, move |window, cx| {
             window.set_window_title("Gatto Logs");
             window_limits::set_maximum_content_size(window, 1200., 1000.);
-            window.on_window_should_close(cx, move |_, cx| {
+            window.on_window_should_close(cx, move |window, cx| {
+                let should_close = window_limits::close(window, cx);
                 let _ = uploader.update(cx, |this, _| {
-                    this.log_window = None;
+                    if should_close {
+                        this.log_window = None;
+                    }
                     this.diagnostics.info("Closed the application logs window.");
                 });
-                true
+                should_close
             });
             cx.new(|cx| LogViewer::new(diagnostics, cx))
         });
         match result {
-            Ok((handle, _)) => self.log_window = Some(handle),
+            Ok(result) => self.log_window = Some(result),
             Err(error) => {
                 self.diagnostics.error(format!(
                     "Could not open the application logs window: {error}"
@@ -2053,14 +2057,19 @@ impl UploaderApp {
         let result = gpui_kit::open_window(options, cx, move |window, cx| {
             window.set_window_title(&window_title);
             window_limits::set_maximum_content_size(window, 2200., 1600.);
-            window.on_window_should_close(cx, move |_, cx| {
+            let preview = cx.new(|cx| ImagePreview::new(preview_images, selected_id, cx));
+            let close_preview = preview.downgrade();
+            window.on_window_should_close(cx, move |window, cx| {
+                let _ = close_preview.update(cx, |preview, cx| preview.clear(cx));
+                let should_close = window_limits::close(window, cx);
                 let _ = uploader.update(cx, |this, _| {
-                    this.preview_window = None;
+                    if should_close {
+                        this.preview_window = None;
+                    }
                     this.diagnostics.info("Closed the image preview window.");
                 });
-                true
+                should_close
             });
-            let preview = cx.new(|cx| ImagePreview::new(preview_images, selected_id, cx));
             let focus = preview.read(cx).focus_handle(cx);
             window.focus(&focus, cx);
             preview
