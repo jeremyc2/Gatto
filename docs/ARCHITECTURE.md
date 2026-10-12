@@ -93,6 +93,9 @@ Utility windows close independently: preview close releases its image references
 logs refresh on reopening, and Rooftops resets its run on close. Other platforms
 use native destruction.
 
+The rationale, trade-offs, and conditions for removing this workaround are recorded
+in [ADR 0001](adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md).
+
 Dock reopening activates existing presented windows without changing their pages.
 If none are presented, it opens the main page. AppKit visibility includes occluded
 and minimized windows; GPUI's drawing visibility is not used for this decision.

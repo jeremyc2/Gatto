@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-10-12
+
+### Changed
+
+- Documented the Touch Bar window-close workaround, its upstream GPUI issue,
+  validation limits, and requirements for safely restoring native window closing.
+
 ## [0.10.4] - 2026-10-12
 
 ### Fixed

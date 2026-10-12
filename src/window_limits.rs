@@ -27,6 +27,7 @@ pub fn is_presented(window: &Window) -> bool {
 /// Avoids GPUI/AppKit window teardown, which can abort Touch Bar Macs with
 /// `_NSTouchBarFinderObservation` removing an unregistered `nextResponder`
 /// observer (https://github.com/longbridge/gpui-kit/issues/3192).
+/// Decision and removal criteria: docs/adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md.
 /// Callers retain one handle per window type and reset transient state on close.
 #[cfg(target_os = "macos")]
 pub fn close(window: &Window, cx: &mut App) -> bool {
