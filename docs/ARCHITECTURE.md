@@ -62,8 +62,9 @@ Launch restores the remembered repository name and ID from settings without a
 GitHub request. Opening the repository picker loads the organization's paginated
 repository list and token through `gh`; uploading can instead resolve just the
 remembered repository ID and token when needed. The token is cached in process
-memory. Restart Gatto after changing the active GitHub CLI account to avoid using
-a previously loaded session.
+memory for the uploader window's lifetime. Reopen that window after changing the
+active GitHub CLI account to avoid using a previously loaded session. Quick Copy
+reads the current CLI token for each background job.
 
 Image validation, CLI calls, and blocking HTTP uploads run on background tasks.
 A batch uploads sequentially; each attachment transitions from preview or failed
@@ -80,16 +81,30 @@ and numeric repository ID query parameters. Returned URLs must use HTTPS,
 `github.com`, and the `/user-attachments/assets/` path prefix. The endpoint is
 hard-coded for GitHub.com; GitHub Enterprise Server hosts are not configurable.
 
-Closing windows hides and retains them to avoid bundled AppKit/GPUI teardown
-crashes. The main window also clears staged attachments and copy results and
-hides the Dock icon. Dock reopening or a tray action activates the existing main
-window. Closing Rooftops resets the run; preview and log windows can be hidden
-independently. Quit ends the process.
+Closing windows destroys them through GPUI's native lifecycle. Explicit quit
+mode keeps the menu bar process alive after the last window closes. A main-window
+controller retains shared diagnostics and menu/shortcut services and creates a new
+uploader view on demand, loading saved preferences. Main-window close cancels
+shortcut recording and discards staged attachments and copy results. Utility
+windows close independently, and Rooftops starts a fresh run when reopened.
 
-Quick Copy shares the uploader pipeline, replaces existing drafts, writes Markdown
-to the clipboard after successful uploads, sends a system notification, and clears
-its attachments after completion or failure. Unlike normal uploads, its failed
-images are not retained for retry.
+Dock reopening activates existing presented windows without changing their pages.
+If none are presented, it opens the main page. AppKit visibility includes occluded
+and minimized windows; GPUI's drawing visibility is not used for this decision.
+Native programmatic close requests run on the foreground executor outside a GPUI update,
+because AppKit's synchronous close callback otherwise re-borrows the application.
+The Dock icon hides when the last window is destroyed. Quit ends the process.
+
+Quick Copy runs through a process-lifetime background service with no window or
+view dependency. Menu, shortcut, and URL actions all invoke that service. It
+snapshots the clipboard, loads saved preferences, requires an organization and a
+pinned repository, validates the clipboard image (or first copied image file),
+and uses the same GitHub upload client and Markdown formatter as normal uploads.
+It prefers the last selected repository when pinned, otherwise the first pinned
+repository alphabetically. Success writes Markdown to the clipboard and sends a
+macOS notification. Failure sends a notification and preserves the clipboard.
+Concurrent Quick Copy requests are rejected while a job is running. Open windows
+and staged attachments are untouched, and closing a window cannot stop its job.
 
 ## App Preferences and local state
 

@@ -185,8 +185,8 @@ impl ImagePreview {
         self.select_image(self.current_index + 1, window, cx);
     }
 
-    fn close_preview(&mut self, _: &ClosePreview, window: &mut Window, _: &mut Context<Self>) {
-        window_limits::hide(window);
+    fn close_preview(&mut self, _: &ClosePreview, window: &mut Window, cx: &mut Context<Self>) {
+        window_limits::request_close(window, cx);
     }
 
     fn mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {

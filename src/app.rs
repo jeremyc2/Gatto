@@ -27,8 +27,8 @@ use gpui_kit::{
     Entity, ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
     IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton, ObjectFit, ParentElement as _,
     PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledImage as _, Subscription, SystemNotification, Window, WindowBounds, WindowOptions,
-    actions, div, img, prelude::FluentBuilder as _, px, size,
+    StyledImage as _, Subscription, Window, WindowBounds, WindowOptions, actions, div, img,
+    prelude::FluentBuilder as _, px, size,
 };
 
 use crate::{
@@ -48,7 +48,6 @@ actions!(
     [
         PasteImage,
         PreviewFromClipboard,
-        QuickCopy,
         CopyUploadMarkdown,
         SwitchToBulkUpload
     ]
@@ -95,12 +94,6 @@ impl UploadResult {
             .collect::<Vec<_>>()
             .join("\n")
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum MenuPasteMode {
-    Preview,
-    QuickCopy,
 }
 
 #[cfg(feature = "walkthrough-screenshots")]
@@ -153,7 +146,7 @@ pub struct UploaderApp {
     settings_open: bool,
     recording_global_shortcut: bool,
     pending_paste_repository: Option<String>,
-    pending_menu_paste: Option<MenuPasteMode>,
+    pending_menu_paste: bool,
     pending_replacement_images: Option<Vec<StagedImage>>,
     log_window: Option<AnyWindowHandle>,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
@@ -298,7 +291,7 @@ impl UploaderApp {
             settings_open: false,
             recording_global_shortcut: false,
             pending_paste_repository: None,
-            pending_menu_paste: None,
+            pending_menu_paste: false,
             pending_replacement_images: None,
             log_window: None,
             preview_window: None,
@@ -391,7 +384,7 @@ impl UploaderApp {
                 image.upload_state = AttachmentUploadState::Uploaded { url: url.into() };
                 this.upload_result = Some(UploadResult {
                     images: vec![UploadedImage {
-                        markdown: markdown_image(&image.description, url),
+                        markdown: crate::model::markdown_image(&image.description, url),
                     }],
                 });
             }
@@ -400,6 +393,13 @@ impl UploaderApp {
 
         this.refresh_repository_picker(window, cx);
         this
+    }
+
+    pub fn show_main_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_global_shortcut_recording(window, cx);
+        self.settings_open = false;
+        window.focus(&self.focus_handle, cx);
+        cx.notify();
     }
 
     pub fn show_settings(&mut self, cx: &mut Context<Self>) {
@@ -449,35 +449,23 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.paste_from_menu(MenuPasteMode::Preview, window, cx);
+        self.paste_from_menu(window, cx);
     }
 
-    fn quick_copy_from_menu(&mut self, _: &QuickCopy, window: &mut Window, cx: &mut Context<Self>) {
-        self.paste_from_menu(MenuPasteMode::QuickCopy, window, cx);
-    }
-
-    /// Stages the current clipboard image and chooses the first pinned repository
-    /// (alphabetically). Direct-copy modes upload as soon as both are ready.
-    fn paste_from_menu(
-        &mut self,
-        mode: MenuPasteMode,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    /// Stages the current clipboard image and prefers the last selected repository
+    /// when it is pinned, otherwise the first pinned repository alphabetically.
+    fn paste_from_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.uploading
             || self.loading_token
             || self.loading_repository
-            || self.pending_menu_paste.is_some()
+            || self.pending_menu_paste
         {
             self.diagnostics
                 .info("Ignored a clipboard action because another one is in progress.");
             return;
         }
         self.settings_open = false;
-        if mode != MenuPasteMode::Preview {
-            self.clear_staged_images("Cleared the previous images for a clipboard action.", cx);
-        }
-        self.pending_menu_paste = Some(mode);
+        self.pending_menu_paste = true;
 
         let repository_name = self
             .settings
@@ -492,7 +480,7 @@ impl UploaderApp {
                 window,
                 cx,
             );
-            self.pending_menu_paste = None;
+            self.pending_menu_paste = false;
             return;
         };
         if self.load_state == LoadState::NeedsSetup {
@@ -501,7 +489,7 @@ impl UploaderApp {
                 window,
                 cx,
             );
-            self.pending_menu_paste = None;
+            self.pending_menu_paste = false;
             return;
         }
 
@@ -517,7 +505,7 @@ impl UploaderApp {
                     window,
                     cx,
                 );
-                self.pending_menu_paste = None;
+                self.pending_menu_paste = false;
                 return;
             }
             self.pending_paste_repository = None;
@@ -531,12 +519,12 @@ impl UploaderApp {
         self.on_paste(&PasteImage, window, cx);
     }
 
-    /// Clears a pasted image when the main window is hidden, or when the user
+    /// Clears a pasted image when the main window is closed, or when the user
     /// explicitly discards it. Incrementing the generation keeps a pending
     /// clipboard conversion from restoring an image after it was cleared.
     pub fn clear_staged_images(&mut self, reason: &str, cx: &mut Context<Self>) {
         self.paste_generation = self.paste_generation.wrapping_add(1);
-        self.pending_menu_paste = None;
+        self.pending_menu_paste = false;
         self.pending_paste_repository = None;
         if !self.staged_images.is_empty() {
             self.staged_images.clear();
@@ -633,7 +621,7 @@ impl UploaderApp {
                                     "Menu paste selected pinned repository {repository_name}."
                                 ));
                             } else {
-                                this.pending_menu_paste = None;
+                                this.pending_menu_paste = false;
                                 this.diagnostics.error(
                                     "Menu paste could not find its pinned repository in the loaded list.",
                                 );
@@ -658,13 +646,13 @@ impl UploaderApp {
                                 picker.set_selected_indices([], window, cx);
                             });
                         }
-                        this.try_complete_menu_paste(window, cx);
+                        this.try_complete_menu_paste(cx);
                     }
                     Err(error) => {
                         this.diagnostics
                             .error(format!("Repository loading failed: {error}"));
                         this.load_state = LoadState::Failed;
-                        this.pending_menu_paste = None;
+                        this.pending_menu_paste = false;
                         window.push_notification(Notification::error(error.to_string()), cx);
                     }
                 }
@@ -758,7 +746,7 @@ impl UploaderApp {
         }
         let Some(clipboard) = cx.read_from_clipboard() else {
             self.warn(UNSUPPORTED_MESSAGE, window, cx);
-            self.pending_menu_paste = None;
+            self.pending_menu_paste = false;
             self.pending_paste_repository = None;
             return;
         };
@@ -799,7 +787,7 @@ impl UploaderApp {
         }
 
         self.warn(UNSUPPORTED_MESSAGE, window, cx);
-        self.pending_menu_paste = None;
+        self.pending_menu_paste = false;
         self.pending_paste_repository = None;
     }
 
@@ -864,7 +852,7 @@ impl UploaderApp {
             if let Some(error) = errors.first() {
                 self.warn(error.clone(), window, cx);
             }
-            self.pending_menu_paste = None;
+            self.pending_menu_paste = false;
             self.pending_paste_repository = None;
             return;
         }
@@ -900,7 +888,7 @@ impl UploaderApp {
     fn append_staged_images(
         &mut self,
         mut images: Vec<StagedImage>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let added = images.len();
@@ -910,7 +898,7 @@ impl UploaderApp {
             "Staged {added} image{} for upload.",
             if added == 1 { "" } else { "s" }
         ));
-        self.try_complete_menu_paste(window, cx);
+        self.try_complete_menu_paste(cx);
         cx.notify();
     }
 
@@ -1129,7 +1117,7 @@ impl UploaderApp {
                 })
                 .on_close(move |_, _, cx| {
                     let _ = close_view.update(cx, |this, _| {
-                        this.pending_menu_paste = None;
+                        this.pending_menu_paste = false;
                         this.pending_paste_repository = None;
                         this.pending_replacement_images = None;
                     });
@@ -1175,26 +1163,18 @@ impl UploaderApp {
     ) {
         let message: SharedString = message.into();
         self.diagnostics.warn(message.to_string());
-        if self.pending_menu_paste == Some(MenuPasteMode::QuickCopy) {
-            cx.show_system_notification(SystemNotification {
-                tag: "gatto-quick-copy".into(),
-                title: "Quick Copy needs attention".into(),
-                body: message,
-                actions: Vec::new(),
-            });
-        } else {
-            window.push_notification(Notification::warning(message), cx);
-        }
+
+        window.push_notification(Notification::warning(message), cx);
     }
 
     fn send(&mut self, _: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.send_image(None, window, cx);
+        self.send_image(window, cx);
     }
 
-    fn try_complete_menu_paste(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mode) = self.pending_menu_paste else {
+    fn try_complete_menu_paste(&mut self, cx: &mut Context<Self>) {
+        if !self.pending_menu_paste {
             return;
-        };
+        }
         if self.staged_images.is_empty()
             || !matches!(self.load_state, LoadState::Idle | LoadState::Ready)
             || self.selected_repository.is_none()
@@ -1202,11 +1182,8 @@ impl UploaderApp {
             return;
         }
 
-        self.pending_menu_paste = None;
-        match mode {
-            MenuPasteMode::Preview => cx.notify(),
-            MenuPasteMode::QuickCopy => self.send_image(Some(mode), window, cx),
-        }
+        self.pending_menu_paste = false;
+        cx.notify();
     }
 
     fn sync_upload_result(&mut self) {
@@ -1215,19 +1192,14 @@ impl UploaderApp {
             .iter()
             .filter_map(|image| {
                 image.upload_state.uploaded_url().map(|url| UploadedImage {
-                    markdown: markdown_image(&image.description, url),
+                    markdown: crate::model::markdown_image(&image.description, url),
                 })
             })
             .collect::<Vec<_>>();
         self.upload_result = (!images.is_empty()).then_some(UploadResult { images });
     }
 
-    fn send_image(
-        &mut self,
-        copy_after_upload: Option<MenuPasteMode>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn send_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.uploading {
             return;
         }
@@ -1238,11 +1210,11 @@ impl UploaderApp {
             return;
         }
         if repository.id == 0 {
-            self.load_repository_id_then_send(copy_after_upload, window, cx);
+            self.load_repository_id_then_send(window, cx);
             return;
         }
         let Some(token) = self.token.clone() else {
-            self.load_token_then_send(copy_after_upload, window, cx);
+            self.load_token_then_send(window, cx);
             return;
         };
         let images = self
@@ -1298,7 +1270,7 @@ impl UploaderApp {
                                     AttachmentUploadState::Uploaded { url: url.clone() };
                             }
                             uploaded.push(UploadedImage {
-                                markdown: markdown_image(&description, &url),
+                                markdown: crate::model::markdown_image(&description, &url),
                             });
                         }
                         Err(error) => {
@@ -1319,20 +1291,8 @@ impl UploaderApp {
                     if let Some((_, error)) = failures.first() {
                         this.diagnostics
                             .error(format!("Image batch upload failed: {error}"));
-                        if copy_after_upload == Some(MenuPasteMode::QuickCopy) {
-                            cx.show_system_notification(SystemNotification {
-                                tag: "gatto-quick-copy".into(),
-                                title: "Quick Copy failed".into(),
-                                body: error.clone().into(),
-                                actions: Vec::new(),
-                            });
-                            this.clear_staged_images(
-                                "Discarded staged images after Quick Copy failed.",
-                                cx,
-                            );
-                        } else {
-                            window.push_notification(Notification::error(error.clone()), cx);
-                        }
+
+                        window.push_notification(Notification::error(error.clone()), cx);
                     }
                     cx.notify();
                     return;
@@ -1340,54 +1300,14 @@ impl UploaderApp {
 
                 let upload_result = UploadResult { images: uploaded };
                 let uploaded_count = upload_result.images.len();
-                let markdown = upload_result.markdown();
-                match copy_after_upload {
-                    Some(MenuPasteMode::QuickCopy) => {
-                        cx.write_to_clipboard(ClipboardItem::new_string(markdown));
-                        this.diagnostics.info(format!(
-                            "Quick Copy uploaded {uploaded_count} image{} and copied Markdown.",
-                            if uploaded_count == 1 { "" } else { "s" }
-                        ));
-                    }
-                    Some(MenuPasteMode::Preview) | None => {
-                        this.diagnostics.info(format!(
-                            "Uploaded {uploaded_count} image{} successfully.",
-                            if uploaded_count == 1 { "" } else { "s" }
-                        ));
-                    }
-                }
-                if copy_after_upload == Some(MenuPasteMode::QuickCopy) {
-                    this.clear_staged_images(
-                        "Discarded staged images after Quick Copy.",
-                        cx,
-                    );
-                } else {
-                    this.sync_upload_result();
-                }
+                this.diagnostics.info(format!(
+                    "Uploaded {uploaded_count} image{} successfully.",
+                    if uploaded_count == 1 { "" } else { "s" },
+                ));
 
-                if copy_after_upload == Some(MenuPasteMode::QuickCopy) {
-                    let failed_count = failures.len();
-                    let body = if failures.is_empty() {
-                        format!(
-                            "{uploaded_count} Markdown snippet{} copied to the clipboard.",
-                            if uploaded_count == 1 { "" } else { "s" },
-                        )
-                    } else {
-                        format!(
-                            "{uploaded_count} uploaded and copied as Markdown; {failed_count} failed."
-                        )
-                    };
-                    cx.show_system_notification(SystemNotification {
-                        tag: "gatto-quick-copy".into(),
-                        title: if failures.is_empty() {
-                            "Quick Copy complete".into()
-                        } else {
-                            "Quick Copy incomplete".into()
-                        },
-                        body: body.into(),
-                        actions: Vec::new(),
-                    });
-                } else if failures.is_empty() {
+                this.sync_upload_result();
+
+                if failures.is_empty() {
                     let message = format!(
                         "{uploaded_count} image{} uploaded successfully.",
                         if uploaded_count == 1 { "" } else { "s" }
@@ -1408,12 +1328,7 @@ impl UploaderApp {
         .detach();
     }
 
-    fn load_token_then_send(
-        &mut self,
-        copy_after_upload: Option<MenuPasteMode>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn load_token_then_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.loading_token {
             return;
         }
@@ -1436,25 +1351,14 @@ impl UploaderApp {
                 match result {
                     Ok(token) => {
                         this.token = Some(token);
-                        this.send_image(copy_after_upload, window, cx);
+                        this.send_image(window, cx);
                     }
                     Err(error) => {
                         this.diagnostics
                             .error(format!("GitHub authentication failed: {error}"));
-                        if copy_after_upload == Some(MenuPasteMode::QuickCopy) {
-                            cx.show_system_notification(SystemNotification {
-                                tag: "gatto-quick-copy".into(),
-                                title: "Quick Copy failed".into(),
-                                body: error.to_string().into(),
-                                actions: Vec::new(),
-                            });
-                            this.clear_staged_images(
-                                "Discarded staged images after Quick Copy failed.",
-                                cx,
-                            );
-                        } else {
-                            window.push_notification(Notification::error(error.to_string()), cx);
-                        }
+
+                        window.push_notification(Notification::error(error.to_string()), cx);
+
                         cx.notify();
                     }
                 }
@@ -1463,12 +1367,7 @@ impl UploaderApp {
         .detach();
     }
 
-    fn load_repository_id_then_send(
-        &mut self,
-        copy_after_upload: Option<MenuPasteMode>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn load_repository_id_then_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.loading_repository {
             return;
         }
@@ -1509,26 +1408,15 @@ impl UploaderApp {
                                 ));
                             }
                         }
-                        this.send_image(copy_after_upload, window, cx);
+                        this.send_image(window, cx);
                     }
                     Err(error) => {
                         this.diagnostics.error(format!(
                             "Could not resolve the remembered repository: {error}"
                         ));
-                        if copy_after_upload == Some(MenuPasteMode::QuickCopy) {
-                            cx.show_system_notification(SystemNotification {
-                                tag: "gatto-quick-copy".into(),
-                                title: "Quick Copy failed".into(),
-                                body: error.to_string().into(),
-                                actions: Vec::new(),
-                            });
-                            this.clear_staged_images(
-                                "Discarded staged images after Quick Copy failed.",
-                                cx,
-                            );
-                        } else {
-                            window.push_notification(Notification::error(error.to_string()), cx);
-                        }
+
+                        window.push_notification(Notification::error(error.to_string()), cx);
+
                         cx.notify();
                     }
                 }
@@ -1579,7 +1467,7 @@ impl UploaderApp {
         if self.settings.close_window_after_copy {
             self.diagnostics
                 .info("Closing the main window after copying an upload result.");
-            window.defer(cx, |window, _| window_limits::request_close(window));
+            window.defer(cx, |window, cx| window_limits::request_close(window, cx));
         } else {
             window.push_notification(Notification::success(message), cx);
         }
@@ -1842,7 +1730,7 @@ impl UploaderApp {
         cx.notify();
     }
 
-    pub fn prepare_to_hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn prepare_to_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel_global_shortcut_recording(window, cx);
     }
 
@@ -2000,7 +1888,7 @@ impl UploaderApp {
         self.staged_images.clear();
         self.bulk_upload = false;
         self.pending_paste_repository = None;
-        self.pending_menu_paste = None;
+        self.pending_menu_paste = false;
         self.pending_replacement_images = None;
         self.upload_result = None;
         self.uploading = false;
@@ -2087,11 +1975,12 @@ impl UploaderApp {
         let result = gpui_kit::open_window(options, cx, move |window, cx| {
             window.set_window_title("Gatto Logs");
             window_limits::set_maximum_content_size(window, 1200., 1000.);
-            window.on_window_should_close(cx, move |window, cx| {
+            window.on_window_should_close(cx, move |_, cx| {
                 let _ = uploader.update(cx, |this, _| {
-                    this.diagnostics.info("Hid the application logs window.");
+                    this.log_window = None;
+                    this.diagnostics.info("Closed the application logs window.");
                 });
-                window_limits::hide_instead_of_close(window)
+                true
             });
             cx.new(|cx| LogViewer::new(diagnostics, cx))
         });
@@ -2164,11 +2053,12 @@ impl UploaderApp {
         let result = gpui_kit::open_window(options, cx, move |window, cx| {
             window.set_window_title(&window_title);
             window_limits::set_maximum_content_size(window, 2200., 1600.);
-            window.on_window_should_close(cx, move |window, cx| {
+            window.on_window_should_close(cx, move |_, cx| {
                 let _ = uploader.update(cx, |this, _| {
-                    this.diagnostics.info("Hid the image preview window.");
+                    this.preview_window = None;
+                    this.diagnostics.info("Closed the image preview window.");
                 });
-                window_limits::hide_instead_of_close(window)
+                true
             });
             let preview = cx.new(|cx| ImagePreview::new(preview_images, selected_id, cx));
             let focus = preview.read(cx).focus_handle(cx);
@@ -2450,7 +2340,7 @@ impl UploaderApp {
         self.staged_images.retain(|image| image.id != id);
         if self.staged_images.len() != previous_len {
             self.sync_upload_result();
-            self.pending_menu_paste = None;
+            self.pending_menu_paste = false;
             self.pending_paste_repository = None;
             self.diagnostics.info("Removed a staged image.");
             cx.notify();
@@ -2510,7 +2400,7 @@ impl UploaderApp {
             let markdown = image
                 .upload_state
                 .uploaded_url()
-                .map(|url| markdown_image(&image.description, url));
+                .map(|url| crate::model::markdown_image(&image.description, url));
             let failure_message = image
                 .upload_state
                 .failure_message()
@@ -2945,7 +2835,6 @@ impl Render for UploaderApp {
             .capture_key_down(cx.listener(Self::record_global_shortcut))
             .on_action(cx.listener(Self::on_paste))
             .on_action(cx.listener(Self::paste_and_preview_from_menu))
-            .on_action(cx.listener(Self::quick_copy_from_menu))
             .on_action(cx.listener(Self::switch_to_bulk_upload))
             .size_full()
             .bg(cx.theme().background);
@@ -3083,15 +2972,6 @@ impl Render for UploaderApp {
     }
 }
 
-fn markdown_image(file_name: &str, url: &str) -> String {
-    let alt_text = file_name
-        .replace('\\', "\\\\")
-        .replace('[', "\\[")
-        .replace(']', "\\]")
-        .replace(['\r', '\n'], " ");
-    format!("![{alt_text}]({url})")
-}
-
 pub fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("cmd-v", PasteImage, Some(KEY_CONTEXT)),
@@ -3124,6 +3004,31 @@ mod tests {
             result.markdown(),
             "![first](https://example.com/first)\n![second](https://example.com/second)"
         );
+    }
+
+    #[gpui_kit::test]
+    fn returning_to_main_page_leaves_preferences_and_restores_focus(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            UploaderApp::with_settings(
+                window,
+                Diagnostics::new(),
+                AppControllers::default(),
+                AppSettings::default(),
+                None,
+                false,
+                cx,
+            )
+        });
+        cx.update(|window, cx| {
+            view.update(cx, |this, cx| {
+                this.show_settings(cx);
+                assert!(this.settings_open);
+                this.show_main_page(window, cx);
+                assert!(!this.settings_open);
+                assert!(this.focus_handle.is_focused(window));
+            });
+        });
     }
 
     #[gpui_kit::test]

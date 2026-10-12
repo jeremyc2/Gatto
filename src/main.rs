@@ -7,6 +7,7 @@ mod image_preview;
 mod log_viewer;
 mod menu_bar;
 mod model;
+mod quick_copy;
 mod rooftops;
 mod rooftops_score;
 mod settings;
@@ -32,17 +33,13 @@ fn main() {
     let application = gpui_kit::application()
         .with_assets(gpui_kit::assets::AllAssets)
         .with_quit_mode(gpui_kit::QuitMode::Explicit);
-    let reopen_window = Rc::new(RefCell::new(None::<AnyWindowHandle>));
-    let reopen_window_callback = reopen_window.clone();
+    let main_window = Rc::new(RefCell::new(None::<MainWindow>));
+    let reopen_main = main_window.clone();
     application.on_reopen(move |cx| {
-        let Some(window_handle) = *reopen_window_callback.borrow() else {
-            return;
-        };
-        set_dock_visible(true);
-        cx.activate(true);
-        let _ = window_handle.update(cx, |_, window, _| {
-            window.activate_window();
-        });
+        let controller = reopen_main.borrow().clone();
+        if let Some(controller) = controller {
+            controller.reopen(cx);
+        }
     });
     let (custom_url_sender, custom_url_events) = async_channel::unbounded();
     application.on_open_urls(move |urls| {
@@ -59,6 +56,12 @@ fn main() {
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
         set_dock_visible(true);
+        cx.on_window_closed(|cx, _| {
+            if cx.windows().is_empty() {
+                set_dock_visible(false);
+            }
+        })
+        .detach();
         let diagnostics = Diagnostics::new();
         diagnostics.info("Application started.");
         let menu_bar_controller = MenuBarController::default();
@@ -71,60 +74,22 @@ fn main() {
             }
         };
 
-        let window_options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(620.), px(780.)), cx)),
-            window_min_size: Some(size(px(520.), px(600.))),
-            ..Default::default()
-        };
-
-        let (window_handle, view) = gpui_kit::open_window(window_options, cx, |window, cx| {
-            window.set_window_title("Gatto");
-            window_limits::set_maximum_content_size(window, 920., 1040.);
-
-            let diagnostics = diagnostics.clone();
-            let menu_bar_controller = menu_bar_controller.clone();
-            let global_shortcut_controller = global_shortcut_controller.clone();
-            let view = cx.new(|cx| {
-                UploaderApp::new(
-                    window,
-                    diagnostics,
-                    menu_bar_controller,
-                    global_shortcut_controller,
-                    cx,
-                )
-            });
-            let close_view = view.clone();
-            window.on_window_should_close(cx, move |window, cx| {
-                close_view.update(cx, |this, cx| {
-                    this.prepare_to_hide(window, cx);
-                    this.clear_staged_images(
-                        "Closed the main window; discarded the staged image.",
-                        cx,
-                    );
-                });
-                window_limits::hide(window);
-                set_dock_visible(false);
-                false
-            });
-            let focus = view.read(cx).focus_handle(cx);
-            window.focus(&focus, cx);
-            view
-        })
-        .expect("Could not open the Gatto window");
-        *reopen_window.borrow_mut() = Some(window_handle);
-
-        let custom_url_window = window_handle;
-        let custom_url_view = view.clone();
+        let controller = MainWindow::new(
+            diagnostics.clone(),
+            menu_bar_controller.clone(),
+            global_shortcut_controller.clone(),
+        );
+        let (window_handle, view) = controller.show(cx);
+        *main_window.borrow_mut() = Some(controller.clone());
+        let custom_url_main = controller.clone();
         cx.spawn(async move |cx| {
             while let Ok(url) = custom_url_events.recv().await {
                 cx.update(|cx| match CustomUrlAction::parse(&url) {
-                    Ok(action) => {
-                        perform_action(action.into(), custom_url_window, &custom_url_view, cx)
-                    }
+                    Ok(action) => perform_action(action.into(), &custom_url_main, cx),
                     Err(error) => {
-                        show_main_window(custom_url_window, cx);
-                        let _ = custom_url_window.update(cx, |_, window, cx| {
-                            custom_url_view.update(cx, |this, cx| {
+                        let (handle, view) = custom_url_main.show(cx);
+                        let _ = handle.update(cx, |_, window, cx| {
+                            view.update(cx, |this, cx| {
                                 this.report_custom_url_error(error.to_string(), window, cx);
                             });
                         });
@@ -135,20 +100,12 @@ fn main() {
         .detach();
 
         if let Some(shortcut_events) = shortcut_events {
-            let shortcut_window = window_handle;
-            let shortcut_view = view.clone();
+            let shortcut_main = controller.clone();
             let shortcut_controller = global_shortcut_controller.clone();
             cx.spawn(async move |cx| {
                 while let Ok(id) = shortcut_events.recv().await {
                     if shortcut_controller.is_registered_event(id) {
-                        cx.update(|cx| {
-                            perform_action(
-                                MenuAction::QuickCopy,
-                                shortcut_window,
-                                &shortcut_view,
-                                cx,
-                            )
-                        });
+                        cx.update(|cx| perform_action(MenuAction::QuickCopy, &shortcut_main, cx));
                     }
                 }
             })
@@ -184,7 +141,7 @@ fn main() {
                     cx.update(|cx| cx.quit());
                     break;
                 }
-                cx.update(|cx| perform_action(action, window_handle, &view, cx));
+                cx.update(|cx| perform_action(action, &controller, cx));
             }
         })
         .detach();
@@ -202,41 +159,133 @@ impl From<CustomUrlAction> for MenuAction {
     }
 }
 
-fn perform_action(
-    action: MenuAction,
-    window_handle: AnyWindowHandle,
-    view: &Entity<UploaderApp>,
-    cx: &mut App,
-) {
+#[derive(Clone)]
+struct MainWindow(Rc<RefCell<MainWindowState>>);
+
+struct MainWindowState {
+    current: Option<(AnyWindowHandle, Entity<UploaderApp>)>,
+    diagnostics: Diagnostics,
+    menu_bar: MenuBarController,
+    shortcut: GlobalShortcutController,
+    quick_copy: quick_copy::QuickCopy,
+}
+
+impl MainWindow {
+    fn new(
+        diagnostics: Diagnostics,
+        menu_bar: MenuBarController,
+        shortcut: GlobalShortcutController,
+    ) -> Self {
+        Self(Rc::new(RefCell::new(MainWindowState {
+            current: None,
+            quick_copy: quick_copy::QuickCopy::new(diagnostics.clone()),
+            diagnostics,
+            menu_bar,
+            shortcut,
+        })))
+    }
+
+    fn ensure(&self, cx: &mut App) -> (AnyWindowHandle, Entity<UploaderApp>) {
+        let current = self.0.borrow().current.clone();
+        if let Some((handle, view)) = current
+            && cx.windows().contains(&handle)
+        {
+            return (handle, view);
+        }
+        let (diagnostics, menu_bar, shortcut) = {
+            let state = self.0.borrow();
+            (
+                state.diagnostics.clone(),
+                state.menu_bar.clone(),
+                state.shortcut.clone(),
+            )
+        };
+        let controller = self.clone();
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::centered(size(px(620.), px(780.)), cx)),
+            window_min_size: Some(size(px(520.), px(600.))),
+            ..Default::default()
+        };
+        let result = gpui_kit::open_window(options, cx, move |window, cx| {
+            window.set_window_title("Gatto");
+            window_limits::set_maximum_content_size(window, 920., 1040.);
+            let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar, shortcut, cx));
+            let close_view = view.downgrade();
+            window.on_window_should_close(cx, move |window, cx| {
+                let _ = close_view.update(cx, |this, cx| {
+                    this.prepare_to_close(window, cx);
+                    this.clear_staged_images(
+                        "Closed the main window; discarded the staged image.",
+                        cx,
+                    );
+                });
+                controller.0.borrow_mut().current = None;
+                true
+            });
+            window.focus(&view.read(cx).focus_handle(cx), cx);
+            view
+        })
+        .expect("Could not open the Gatto window");
+        self.0.borrow_mut().current = Some(result.clone());
+        result
+    }
+
+    fn show(&self, cx: &mut App) -> (AnyWindowHandle, Entity<UploaderApp>) {
+        let (handle, view) = self.ensure(cx);
+        set_dock_visible(true);
+        cx.activate(true);
+        let _ = handle.update(cx, |_, window, _| window.activate_window());
+        (handle, view)
+    }
+
+    fn reopen(&self, cx: &mut App) {
+        let presented: Vec<_> = cx
+            .windows()
+            .into_iter()
+            .filter(|handle| {
+                handle
+                    .update(cx, |_, window, _| window_limits::is_presented(window))
+                    .unwrap_or(false)
+            })
+            .collect();
+        if !presented.is_empty() {
+            set_dock_visible(true);
+            cx.activate(true);
+            let target = cx
+                .active_window()
+                .filter(|handle| presented.contains(handle))
+                .unwrap_or(presented[0]);
+            let _ = target.update(cx, |_, window, _| window.activate_window());
+            return;
+        }
+        let (handle, view) = self.show(cx);
+        let _ = handle.update(cx, |_, window, cx| {
+            view.update(cx, |this, cx| this.show_main_page(window, cx));
+        });
+    }
+}
+
+fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
     match action {
-        MenuAction::Open => show_main_window(window_handle, cx),
+        MenuAction::Open => {
+            main.show(cx);
+        }
         MenuAction::PreviewFromClipboard => {
-            show_main_window(window_handle, cx);
-            let _ = window_handle.update(cx, |_, window, cx| {
+            let (handle, _) = main.show(cx);
+            let _ = handle.update(cx, |_, window, cx| {
                 window.dispatch_action(Box::new(app::PreviewFromClipboard), cx);
             });
         }
         MenuAction::QuickCopy => {
-            set_dock_visible(false);
-            let _ = window_handle.update(cx, |_, window, cx| {
-                window_limits::hide(window);
-                window.dispatch_action(Box::new(app::QuickCopy), cx);
-            });
+            let quick_copy = main.0.borrow().quick_copy.clone();
+            quick_copy.start(cx);
         }
         MenuAction::Settings => {
-            show_main_window(window_handle, cx);
+            let (_, view) = main.show(cx);
             view.update(cx, |this, cx| this.show_settings(cx));
         }
         MenuAction::Quit => cx.quit(),
     }
-}
-
-fn show_main_window(window_handle: AnyWindowHandle, cx: &mut App) {
-    set_dock_visible(true);
-    cx.activate(true);
-    let _ = window_handle.update(cx, |_, window, _| {
-        window.activate_window();
-    });
 }
 
 /// Shows the Dock icon while the window is open; the menu bar item always stays.

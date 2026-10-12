@@ -535,25 +535,6 @@ impl Rooftops {
             this.remainder = 0.;
             cx.notify();
         });
-        // Match the other utility windows: avoid native window teardown in
-        // bundled builds. Reset the run before hiding the retained window.
-        let game = cx.entity().downgrade();
-        window.on_window_should_close(cx, move |window, cx| {
-            let _ = game.update(cx, |game, cx| {
-                game.run = Run::new();
-                game.last_frame = None;
-                game.remainder = 0.;
-                game.camera = 0.;
-                game.save_message = None;
-                game.saving = false;
-                #[cfg(feature = "walkthrough-screenshots")]
-                {
-                    game.preview = false;
-                }
-                cx.notify();
-            });
-            crate::window_limits::hide_instead_of_close(window)
-        });
         Self {
             run: Run::new(),
             focus,
@@ -1893,50 +1874,6 @@ impl Render for Rooftops {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[gpui_kit::test]
-    fn closing_rooftops_retains_the_window_and_resets_the_game(cx: &mut gpui_kit::TestAppContext) {
-        let (view, window) = cx.add_window_view(Rooftops::new);
-        window.update(|_, cx| {
-            view.update(cx, |game, _| {
-                game.run = Run::for_level(2);
-                game.run.elapsed = 42.;
-                game.run.banked_returns = 3;
-                game.run.banked_kills = 5;
-                game.run.input.right = true;
-                game.run.buffer = 0.1;
-                game.camera = 800.;
-                game.save_message = Some("Saved previous score".into());
-                game.saving = true;
-                game.last_frame = Some(Instant::now());
-                game.remainder = STEP / 2.;
-                game.run.coins[0].collected = true;
-            });
-        });
-        assert!(
-            !window.simulate_close(),
-            "Rooftops must hide instead of destroying its native window"
-        );
-        window.update(|_, cx| {
-            view.update(cx, |game, _| {
-                assert!(!game.run.input.right);
-                assert_eq!(game.run.buffer, 0.);
-                assert!(game.last_frame.is_none());
-                assert_eq!(game.remainder, 0.);
-                assert_eq!(game.run.level, 0);
-                assert!(game.run.coins.iter().all(|coin| !coin.collected));
-                assert_eq!(game.run.score().coins, 0);
-                assert_eq!(game.run.score().deaths, 0);
-                assert_eq!(game.run.score().kills, 0);
-                assert_eq!(game.run.elapsed, 0.);
-                assert_eq!(game.run.x, Run::new().x);
-                assert_eq!(game.run.y, Run::new().y);
-                assert_eq!(game.camera, 0.);
-                assert!(game.save_message.is_none());
-                assert!(!game.saving);
-            });
-        });
-    }
 
     #[gpui_kit::test]
     fn play_time_excludes_pauses_and_completion(cx: &mut gpui_kit::TestAppContext) {

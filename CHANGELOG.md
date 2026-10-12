@@ -7,6 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-10-12
+
+### Fixed
+
+- Clicking the Dock icon opens the main page when no windows are open, while
+  preserving the current page of existing windows.
+- Windows now close independently instead of being hidden and retained, keeping
+  Gatto running after the last window closes and avoiding crashes from
+  programmatic close actions such as Close the window after copy.
+- Quick Copy uploads entirely in the background without creating a window or
+  disturbing staged images. Successful uploads copy Markdown and send a macOS
+  notification; missing configuration or upload failures notify without changing
+  the clipboard.
+
 ## [0.10.2] - 2026-10-11
 
 ### Changed

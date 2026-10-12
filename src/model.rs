@@ -178,6 +178,15 @@ fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<(u32, u32)>
     Ok((image.width(), image.height()))
 }
 
+pub fn markdown_image(file_name: &str, url: &str) -> String {
+    let alt_text = file_name
+        .replace('\\', "\\\\")
+        .replace('[', "\\[")
+        .replace(']', "\\]")
+        .replace(['\r', '\n'], " ");
+    format!("![{alt_text}]({url})")
+}
+
 #[cfg(test)]
 mod attachment_upload_state_tests {
     use super::AttachmentUploadState;

@@ -156,10 +156,11 @@ Start a development build with:
 cargo run
 ```
 
-The app appears in the macOS menu bar and the Dock. Closing its window hides the
-window and the Dock icon without quitting the app; use the menu bar item or Dock
-icon to show it again. Closing the main window discards staged images and upload
-results, so copy anything you need first. Use **Quit** in the menu bar to exit.
+The app appears in the macOS menu bar and the Dock. Closing a window destroys
+that window without quitting the app. After the last window closes, the Dock icon
+hides; use the menu bar item or click Gatto in the Dock to open the main page again.
+Closing the main window discards staged images and upload results, so copy
+anything you need first. Use **Quit** in the menu bar to exit.
 
 ## Using the app
 
@@ -190,13 +191,14 @@ gatto://settings
 ```
 
 For example, `open "gatto://quick-copy"` uploads the clipboard image through the preferred pinned
-repository and copies its Markdown without leaving the app window open. As with the menu bar
+repository and copies its Markdown entirely in the background, without creating a window. As with the menu bar
 action, Quick Copy requires an organization and at least one pinned repository.
 
 See the [walkthrough](docs/WALKTHROUGH.md#bulk-uploads-and-retries) for bulk uploads,
-retry behavior, descriptions, and full-size preview controls. Quick Copy replaces
-the current staged images and clears its results after completion or failure;
-normal uploads keep their attachments available while the window remains open.
+retry behavior, descriptions, and full-size preview controls. Quick Copy runs
+independently of the app window and its staged images. On failure it leaves the
+clipboard unchanged and sends a notification; normal uploads keep their
+attachments available while the window remains open.
 
 Normal uploads do not change the clipboard. An uploaded attachment's copy button copies a value such as
 `![screenshot.png](https://github.com/user-attachments/assets/…)`.
@@ -219,7 +221,7 @@ Open App Preferences from the app window or choose **App Preferences** from the 
 - Enable the global Quick Copy shortcut to upload the clipboard image from any app. The shortcut is
   off by default, starts with `Command+Shift+G`, and requires at least two modifier keys when
   customized. Gatto uses the macOS hotkey API, so this does not require Accessibility permission.
-- Enable **Close the window after copy** to hide Gatto after copying uploaded Markdown
+- Enable **Close the window after copy** to close Gatto’s window after copying uploaded Markdown
   from the main window. Closing clears the attachment list, including uncopied results.
 - The About section shows the package version and the Git commit hash captured at
   build time. Builds made outside a Git checkout show `unknown` unless
