@@ -81,19 +81,24 @@ and numeric repository ID query parameters. Returned URLs must use HTTPS,
 `github.com`, and the `/user-attachments/assets/` path prefix. The endpoint is
 hard-coded for GitHub.com; GitHub Enterprise Server hosts are not configurable.
 
-Closing windows destroys them through GPUI's native lifecycle. Explicit quit
-mode keeps the menu bar process alive after the last window closes. A main-window
-controller retains shared diagnostics and menu/shortcut services and creates a new
-uploader view on demand, loading saved preferences. Main-window close cancels
-shortcut recording and discards staged attachments and copy results. Utility
-windows close independently, and Rooftops starts a fresh run when reopened.
+On macOS, closing a window orders it out and vetoes native destruction. GPUI's
+window teardown can trigger an uncaught AppKit Touch Bar observer exception
+([upstream report](https://github.com/longbridge/gpui-kit/issues/3192)). Each window
+type retains and reuses one handle, so repeated closes do not accumulate windows.
+Explicit quit mode keeps the menu bar process alive after all windows are hidden.
+The main-window controller retains shared diagnostics and menu/shortcut services
+and creates the uploader view on first use, loading saved preferences. Main-window
+close cancels shortcut recording and discards staged attachments and copy results.
+Utility windows close independently: preview close releases its image references,
+logs refresh on reopening, and Rooftops resets its run on close. Other platforms
+use native destruction.
 
 Dock reopening activates existing presented windows without changing their pages.
 If none are presented, it opens the main page. AppKit visibility includes occluded
 and minimized windows; GPUI's drawing visibility is not used for this decision.
 Native programmatic close requests run on the foreground executor outside a GPUI update,
 because AppKit's synchronous close callback otherwise re-borrows the application.
-The Dock icon hides when the last window is destroyed. Quit ends the process.
+The Dock icon hides when no windows are presented. Quit ends the process.
 
 Quick Copy runs through a process-lifetime background service with no window or
 view dependency. Menu, shortcut, and URL actions all invoke that service. It

@@ -156,8 +156,9 @@ Start a development build with:
 cargo run
 ```
 
-The app appears in the macOS menu bar and the Dock. Closing a window destroys
-that window without quitting the app. After the last window closes, the Dock icon
+The app appears in the macOS menu bar and the Dock. Closing a window hides
+and retains it for reuse without quitting the app. This avoids a native window
+teardown crash on Touch Bar Macs. After the last window closes, the Dock icon
 hides; use the menu bar item or click Gatto in the Dock to open the main page again.
 Closing the main window discards staged images and upload results, so copy
 anything you need first. Use **Quit** in the menu bar to exit.
