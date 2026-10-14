@@ -12,7 +12,9 @@ let assets = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 guard let artwork = NSImage(contentsOf: assets.appendingPathComponent("dmg-artwork.png")) else {
     fatalError("Missing dmg-artwork.png")
 }
-let width = 800, height = 520
+// Leave enough room for Finder's icon selection bounds so the window cannot
+// pan past the artwork and expose a white strip on the right.
+let width = 840, height = 520
 
 for scale in [1, 2] {
     let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width * scale,
@@ -30,30 +32,19 @@ for scale in [1, 2] {
     artwork.draw(in: NSRect(x: 0, y: 0, width: width, height: height), from: .zero,
                  operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
 
-    // Finder fixes picture-background labels to black. The art fades to black
-    // here, so native unselected names blend in. Plain light names below them
-    // preserve contrast without glows, strokes, or panels. Finder's real names
-    // remain accessible and appear normally on selection.
+    // Finder fixes picture-background labels to black. Fade the area beneath
+    // the icons to black so their unselected names blend into the background.
+    // Finder's real names remain accessible and appear when selected.
     let labelFade = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
                                colors: [NSColor.black.withAlphaComponent(0).cgColor,
                                         NSColor.black.cgColor] as CFArray, locations: [0, 1])!
     context.cgContext.drawLinearGradient(labelFade, start: CGPoint(x: 0, y: 350),
                                         end: CGPoint(x: 0, y: 380), options: [.drawsAfterEndLocation])
-    let labelParagraph = NSMutableParagraphStyle()
-    labelParagraph.alignment = .center
-    for (label, x): (String, CGFloat) in [("Gatto", 110), ("Applications", 710)] {
-        (label as NSString).draw(in: NSRect(x: x - 85, y: 413, width: 170, height: 30),
-                                withAttributes: [.font: NSFont.systemFont(ofSize: 20),
-                                                 .foregroundColor: NSColor(srgbRed: 0.91, green: 0.95,
-                                                                           blue: 1, alpha: 1),
-                                                 .paragraphStyle: labelParagraph])
-    }
-
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = .center
-    ("Drag the app into the folder." as NSString).draw(
-        in: NSRect(x: 0, y: 472, width: width, height: 32),
-        withAttributes: [.font: NSFont.systemFont(ofSize: 22, weight: .medium),
+    ("Drag and Drop" as NSString).draw(
+        in: NSRect(x: 0, y: 438, width: width, height: 42),
+        withAttributes: [.font: NSFont.systemFont(ofSize: 28, weight: .semibold),
                          .foregroundColor: NSColor(srgbRed: 0.91, green: 0.95, blue: 1, alpha: 1),
                          .paragraphStyle: paragraph])
 

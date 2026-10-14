@@ -7,6 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-14
+
+### Changed
+
+- Simplified the DMG installation window to show "Drag and Drop" without
+  persistent names beneath the app and Applications icons.
+
+### Fixed
+
+- Prevented horizontal scrolling from exposing a white strip beside the DMG artwork.
+
 ## [0.11.0] - 2026-10-14
 
 ### Changed

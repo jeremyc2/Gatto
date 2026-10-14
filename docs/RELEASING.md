@@ -100,6 +100,8 @@ failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Preview the installation window
 
+![Gatto's drag-to-Applications installation window](images/dmg-install.png)
+
 Build a local DMG from an existing app bundle without signing, notarizing, or publishing:
 
 ```sh
@@ -118,7 +120,6 @@ recorded in [the artwork notes](../packaging/dmg-artwork.md).
 The Applications shortcut uses the system's actual folder icon.
 `packaging/configure-dmg.applescript` positions the real Finder icons over the
 artwork; keep those coordinates aligned if you change the design. The background
-includes both standard and Retina resolutions. Plain light labels are typeset in
-the black lower band without outlines or shadows; Finder's black unselected
-labels blend into that band. Native names remain accessible and appear when an
-icon is selected. Keep the visible label centers aligned with the Finder icons.
+includes both standard and Retina resolutions. Finder's black unselected icon
+names blend into the lower black band; native names remain accessible and appear
+when an icon is selected.

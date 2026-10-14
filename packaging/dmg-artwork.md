@@ -7,7 +7,9 @@ loose luminous sketch marks. Floating paw doodles have been removed.
 
 Final image: `dmg-artwork.png`. The app-header illustration is not reused.
 Finder supplies the real app icon and the standard Applications folder shortcut.
-The instruction is 22 points; visible plain light names are 20 points.
+The sole instruction, “Drag and Drop,” is 28 points.
+The 840 × 520-point window leaves room for Finder's icon bounds without
+horizontal scrolling.
 
 The app-to-folder layout was checked against [CleanMyMac's installation
 guide](https://macpaw.com/support/cleanmymac/knowledgebase/installation-activation)
@@ -15,10 +17,8 @@ and Firefox DMG screenshots. The artwork is original rather than a copy.
 
 Finder draws picture-background filenames in black; see [DropDMG's layout
 notes](https://c-command.com/dropdmg/manual#layouts). The lower artwork fades to
-black, concealing native unselected names. Plain light names are typeset farther
-below the icons without shadows or outlines. Native names remain accessible and
-appear normally when an icon is selected. Keep the painted names aligned with
-the icons when changing the layout.
+black, concealing native unselected names. Native names remain accessible and
+appear normally when an icon is selected.
 
 ## Cat refinement prompt
 
