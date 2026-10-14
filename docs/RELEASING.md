@@ -100,8 +100,6 @@ failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Preview the installation window
 
-![Gatto's drag-to-Applications installation window](images/dmg-install.png)
-
 Build a local DMG from an existing app bundle without signing, notarizing, or publishing:
 
 ```sh
