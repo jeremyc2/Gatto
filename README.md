@@ -40,10 +40,11 @@ the formatter and linter components.
 Releases are built, signed with a Developer ID certificate, and notarized on the
 maintainer's Mac (see [Releasing](#releasing)), then published on this
 repository's **Releases** page. Download
-`gatto-<version>-aarch64-apple-darwin.zip` for Apple Silicon Macs and
-unzip it to get `Gatto.app`. Move the app to `/Applications` before
+`gatto-<version>-aarch64-apple-darwin.dmg` for Apple Silicon Macs, open it,
+and drag Gatto onto the Applications folder in the installation window. Then open
+Gatto from Applications and eject the **Install Gatto** disk. Install the app before
 enabling Start at Login, because the login item records the app's location.
-`SHA256SUMS` contains the archive's SHA-256 checksum. GitHub CLI and
+`SHA256SUMS` contains the disk image's SHA-256 checksum. GitHub CLI and
 authentication are still required as described below. Intel Macs currently require
 a local build.
 

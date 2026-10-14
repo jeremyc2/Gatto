@@ -70,8 +70,14 @@ xcrun stapler staple "$bundle"
 xcrun stapler validate "$bundle"
 spctl --assess --type execute --verbose=2 "$bundle"
 
-archive="gatto-$version-$TARGET.zip"
-ditto -c -k --keepParent "$bundle" "$dist/$archive"
+archive="gatto-$version-$TARGET.dmg"
+./scripts/build-dmg.sh "$bundle" "$dist/$archive"
+codesign --timestamp --sign "$SIGN_IDENTITY" "$dist/$archive"
+codesign --verify --strict --verbose=2 "$dist/$archive"
+xcrun notarytool submit "$dist/$archive" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$dist/$archive"
+xcrun stapler validate "$dist/$archive"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$dist/$archive"
 (cd "$dist" && shasum -a 256 "$archive" > SHA256SUMS)
 
 read -r -p "Publish $tag to GitHub Releases? [y/N] " answer

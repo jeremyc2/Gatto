@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Replace the ZIP download with a signed, notarized DMG featuring original dark
+  anime-cat artwork, a curved matte arrow, and an Applications folder shortcut
+  for drag-to-Applications installation.
+
 ## [0.10.5] - 2026-10-12
 
 ### Changed
