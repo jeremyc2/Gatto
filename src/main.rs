@@ -1,9 +1,12 @@
 mod app;
+mod application_menu;
 mod custom_url;
 mod diagnostics;
 mod github;
 mod global_shortcut;
 mod image_preview;
+#[cfg(target_os = "macos")]
+mod installer_cleanup;
 mod log_viewer;
 mod menu_bar;
 mod model;
@@ -57,6 +60,7 @@ fn main() {
         theme::apply_dark_theme(cx);
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
+        application_menu::init(cx);
         set_dock_visible(true);
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
@@ -132,6 +136,8 @@ fn main() {
             }
         };
         menu_bar_controller.attach(menu_bar);
+        #[cfg(target_os = "macos")]
+        installer_cleanup::start(diagnostics.clone());
 
         cx.spawn(async move |cx| {
             // Keep the native status item alive for the entire application lifetime.

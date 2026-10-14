@@ -42,7 +42,7 @@ maintainer's Mac (see [Releasing](#releasing)), then published on this
 repository's **Releases** page. Download
 `gatto-<version>-aarch64-apple-darwin.dmg` for Apple Silicon Macs, open it,
 and drag Gatto onto the Applications folder in the installation window. Then open
-Gatto from Applications and eject the **Install Gatto** disk. Install the app before
+Gatto from Applications. Install the app before
 enabling Start at Login, because the login item records the app's location.
 `SHA256SUMS` contains the disk image's SHA-256 checksum. GitHub CLI and
 authentication are still required as described below. Intel Macs currently require
@@ -61,6 +61,8 @@ a local build.
 - Supports bulk uploads, per-image descriptions, partial-failure retries, and copying all results.
 - Opens a separate image preview with zoom, pan, and previous/next navigation.
 - Can start automatically at macOS login.
+- Silently ejects its installer disk after launching the installed app when the
+  disk can be safely identified and is not busy.
 - Shows the build's app version and Git commit hash in App Preferences.
 - Preserves the staged image when GitHub returns an error so the upload can be retried.
 - Includes an **Application logs** window with a copy button for troubleshooting.
@@ -162,7 +164,9 @@ and retains it for reuse without quitting the app. This avoids a native window
 teardown crash on Touch Bar Macs. After the last window closes, the Dock icon
 hides; use the menu bar item or click Gatto in the Dock to open the main page again.
 Closing the main window discards staged images and upload results, so copy
-anything you need first. Use **Quit** in the menu bar to exit.
+anything you need first. Press **Command+W** to close the focused window and
+**Command+Q** to quit Gatto. These actions also appear in the app's menus;
+**Quit** is available from the menu bar icon.
 
 ## Using the app
 

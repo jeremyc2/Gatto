@@ -7,6 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-14
+
+### Added
+
+- Automatically eject the matching installer disk in the background after Gatto
+  launches from Applications, without extra instructions or cleanup prompts.
+  Busy or ambiguous disks are left alone; the downloaded DMG is preserved.
+
+### Fixed
+
+- Restore Command+W to close the focused window and Command+Q to quit from any
+  app window, including while a text field is focused. Add native Close Window
+  and Quit Gatto menu items showing their shortcuts.
+
 ## [0.11.1] - 2026-10-14
 
 ### Changed

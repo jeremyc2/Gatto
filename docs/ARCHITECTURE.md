@@ -14,14 +14,27 @@ The application separates these responsibilities within a single local process:
   send image bytes directly to GitHub's attachment service. Gatto has no backend
   or server of its own.
 - **macOS integration:** provide menu bar actions, the optional global shortcut,
-  custom URL actions, and Start at Login. These entry points feed into the app's
-  shared action handling.
+  custom URL actions, Start at Login, and silent installer ejection. Interactive
+  entry points feed into the app's shared action handling.
 - **Preferences and diagnostics:** persist local preferences and keep a bounded,
   in-memory event log available in the Application logs window.
 
 Build and packaging tools supply version information, app metadata, and icons,
 and produce the signed release. See [Releasing](../README.md#releasing) for the
 release workflow.
+
+`installer_cleanup.rs` starts a background worker after the main window and menu
+bar are ready. It acts only on a bundled executable in `/Applications/Gatto.app`
+or the current user's `Applications/Gatto.app`. Release preparation creates the
+installer volume and records its UUID in the app's Info.plist before signing.
+The final DMG preserves that UUID through compression. Cleanup reads system disk
+metadata through bounded `hdiutil info -plist` and `diskutil info -plist` calls;
+it never reads mounted-volume files or opens the downloaded image. It requires
+a single current-user, read-only disk image with the recorded UUID, rechecks its
+identity, then requests ordinary AppKit ejection. Missing metadata, duplicate
+mounts, development/image launches, and ejection failures are harmless. There
+are no cleanup dialogs, download deletions, or additional persistent settings.
+Each installed launch can retry cleanup; once ejected, later launches do nothing.
 
 ## Data flow
 
@@ -102,6 +115,11 @@ and minimized windows; GPUI's drawing visibility is not used for this decision.
 Native programmatic close requests run on the foreground executor outside a GPUI update,
 because AppKit's synchronous close callback otherwise re-borrows the application.
 The Dock icon hides when no windows are presented. Quit ends the process.
+
+`application_menu` installs native Close Window and Quit Gatto menu items and
+unscoped Command+W / Command+Q bindings for every app window. Close captures the
+focused window, defers access until keyboard dispatch releases its borrow, then
+uses the existing native close request and per-window cleanup callbacks.
 
 Quick Copy runs through a process-lifetime background service with no window or
 view dependency. Menu, shortcut, and URL actions all invoke that service. It

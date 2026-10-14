@@ -57,6 +57,11 @@ cp packaging/Info.plist "$bundle/Contents/Info.plist"
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
 cp "target/$TARGET/release/gatto" "$bundle/Contents/MacOS/"
 
+# Pair the app with its installer before signing. Compression preserves this
+# volume's UUID, letting the installed app identify it without reading its files.
+installer_template="$dist/installer-template.dmg"
+./scripts/build-dmg.sh --prepare "$bundle" "$installer_template"
+
 # The hardened runtime and a secure timestamp are required for notarization.
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bundle"
 codesign --verify --strict --verbose=2 "$bundle"
@@ -71,7 +76,8 @@ xcrun stapler validate "$bundle"
 spctl --assess --type execute --verbose=2 "$bundle"
 
 archive="gatto-$version-$TARGET.dmg"
-./scripts/build-dmg.sh "$bundle" "$dist/$archive"
+./scripts/build-dmg.sh "$bundle" "$dist/$archive" "$installer_template"
+rm "$installer_template"
 codesign --timestamp --sign "$SIGN_IDENTITY" "$dist/$archive"
 codesign --verify --strict --verbose=2 "$dist/$archive"
 xcrun notarytool submit "$dist/$archive" --keychain-profile "$NOTARY_PROFILE" --wait

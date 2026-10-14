@@ -54,6 +54,12 @@ Gatekeeper assessment. The ZIP is temporary and is not distributed. It then buil
 the branded drag-to-Applications disk image, signs and notarizes it separately,
 staples and validates its ticket, and assesses the disk image with Gatekeeper.
 This preserves offline notarization tickets on both the copied app and the DMG.
+Before signing, it prepares a writable installer template and records that
+volume's UUID as `GattoInstallerVolumeUUID` in the app's Info.plist. After app
+notarization, the signed/stapled bundle replaces the template's unsigned copy,
+and the template is compressed to the final DMG without changing its volume UUID.
+This pairing allows the installed app to eject its own disk using only system
+metadata. The temporary template is removed before publication.
 It creates:
 
 - `dist/release/gatto-<version>-aarch64-apple-darwin.dmg`
@@ -66,7 +72,9 @@ Open the DMG and check its background, icon alignment, and Applications shortcut
 Double-click the Applications shortcut to confirm it opens the correct folder.
 For a full installation check, quit Gatto, drag the app into Applications, and
 launch it from there. If you want to keep your existing installation, copy the
-new app to a temporary folder and launch that copy instead.
+new app to a temporary folder and launch that copy instead. Automatic installer
+ejection is deliberately skipped outside the two supported Applications locations;
+use a disposable macOS user to verify the complete installation flow.
 Answering `y` creates the GitHub release/tag at the exact commit and uploads the
 DMG and checksum, with GitHub-generated release notes.
 
@@ -94,8 +102,12 @@ shasum -a 256 -c SHA256SUMS
 ```
 
 Open the DMG, drag Gatto onto Applications, then launch it from Applications and
-verify its version and commit. Eject the **Install Gatto** disk when done. Install
-before enabling Start at Login. Do not ask users to bypass a
+verify its version and commit. The matching **Install Gatto** disk should eject
+in the background; the downloaded DMG should remain. Also verify that a busy
+disk or two mounted copies of the same installer stay mounted without a prompt,
+and that launching the copy inside the DMG does not eject it. These checks use
+disposable installations; do not overwrite an installation you need to retain.
+Install before enabling Start at Login. Do not ask users to bypass a
 failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Preview the installation window
@@ -111,8 +123,10 @@ open dist/gatto-preview.dmg
 
 The output path must not already exist. The preview preserves the input bundle's
 signature, but the disk image itself is unsigned and is not a release artifact.
-Eject it in Finder when finished. The build uses a temporary mount point and
-cleans it up on exit, without depending on or ejecting any existing Gatto volume.
+It creates a fresh volume UUID, so it does not receive the release's automatic
+ejection pairing. Eject it in Finder when finished. The build uses a temporary
+mount point and cleans it up on exit, without depending on or ejecting any
+existing Gatto volume.
 
 `packaging/render-dmg-background.swift` typesets one instruction over the original
 dark anime-cat artwork in `packaging/dmg-artwork.png`. The generation prompts are
