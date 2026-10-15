@@ -5,18 +5,22 @@
 </p>
 
 A macOS app for adding images to GitHub pull requests, issues, comments,
-discussions, and anywhere you use Markdown.
+and discussions.
 
 Paste, drop, or select an image. Upload it and copy the Markdown. For fewer steps,
 **Quick Copy** uploads your clipboard image in the background and copies the result.
 
-Gatto connects your existing GitHub CLI account to GitHub's image attachment
-service. Images go directly from your Mac to GitHub; Gatto has no backend.
+Gatto uses the GitHub CLI (prerequisite) to connect to GitHub's image attachment
+service. Images go directly from your Mac to GitHub; Gatto doesn't have a backend.
 
 ## Download
 
 <!-- release-size:start -->
-[**Download Gatto v0.12.1**](https://github.com/jeremyc2/Gatto/releases/tag/v0.12.1) — 16.6 MB download · 30.0 MB installed app.
+<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.12.1">
+  <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">
+</a>
+
+**Gatto v0.12.1** — 16.6 MB download · 30.0 MB installed app.
 <!-- release-size:end -->
 
 Follow the [setup guide](docs/SETUP.md) to install and connect your GitHub account,
@@ -48,6 +52,10 @@ Quick Copy requires a pinned repository. See the
 requirements and repository selection.
 
 ## Guides and project
+
+<a href="https://rust-lang.org/">
+  <img src="https://raw.githubusercontent.com/rust-lang/rust-artwork/refs/heads/main/mascot/ferris-orig-noshadow.svg" alt="Ferris, the Rust mascot" width="140">
+</a>
 
 Built with **[Rust](https://rust-lang.org/), [GPUI](https://gpui.rs/), and
 [GPUI Kit](https://gpui-kit.com/)**. Contributions are welcome; start with the

@@ -170,8 +170,10 @@ The TypeScript script needs no package installation.
 It downloads the release’s DMG and `SHA256SUMS`, verifies its hash and
 GitHub asset size, mounts it read-only at a temporary location, and sums regular
 file bytes in `Gatto.app`. It checks the bundle version and architecture, ejects
-only that temporary mount, and updates the marked README paragraph. It leaves
-your installed app and existing mounts alone. `--check` reports stale figures
+only that temporary mount, and updates the marked README download button and size
+paragraph. The button uses `docs/images/download-macos.svg` and links to the
+measured release. It leaves your installed app and existing mounts alone.
+`--check` reports stale figures
 without editing the README. To reuse a downloaded release, add
 `--dmg /absolute/path/to/gatto-<version>-aarch64-apple-darwin.dmg`; its bytes must
 match the published asset. `--tag v<version>` selects a specific release.

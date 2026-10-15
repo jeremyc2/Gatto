@@ -177,7 +177,10 @@ Usage: bun scripts/update-readme-size.ts [options]
     }
   }
 
-  const paragraph = `[**Download Gatto ${tag}**](${release.url}) — `
+  const paragraph = `<a href="${release.url}">\n`
+    + `  <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">\n`
+    + `</a>\n\n`
+    + `**Gatto ${tag}** — `
     + `${(downloadBytes / 1_000_000).toFixed(1)} MB download · `
     + `${(installedBytes / 1_000_000).toFixed(1)} MB installed app.`;
   const updated = original.slice(0, startIndex) + "\n" + paragraph + "\n" + original.slice(endIndex);
