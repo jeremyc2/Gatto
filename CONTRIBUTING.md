@@ -7,7 +7,8 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Before you begin
 
-- Read the setup instructions in [README.md](README.md).
+- Read the [architecture overview](docs/ARCHITECTURE.md). For app configuration,
+  use the [setup guide](docs/SETUP.md).
 - Search existing issues and pull requests before opening a new one.
 - For a substantial change, open an issue first so the approach and scope can be
   discussed before implementation.
@@ -15,17 +16,55 @@ By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
-The project currently targets macOS. Install the Xcode Command Line Tools, Rust
-through `rustup`, and GitHub CLI as described in the README. Then fetch the Rust
-dependencies:
+Build on macOS 13 or newer. Install the Xcode Command Line Tools:
 
 ```sh
-cargo fetch --locked
+xcode-select --install
+xcode-select -p
 ```
 
-The repository uses the stable Rust toolchain selected by `rust-toolchain.toml`.
-GPUI Kit is pinned deliberately because it re-exports a matching GPUI version; do
-not upgrade GPUI independently.
+If the tools are already installed, verify the selected developer directory with
+the second command. For linker or SDK problems, see
+[Support](SUPPORT.md#development-builds).
+
+Install Rust through the official [rustup installer](https://rustup.rs/):
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Choose the default installation, restart Terminal, and verify it:
+
+```sh
+rustc --version
+cargo --version
+rustup --version
+```
+
+Clone and run the project:
+
+```sh
+git clone https://github.com/jeremyc2/Gatto.git
+cd Gatto
+rustup component add rustfmt clippy
+cargo fetch --locked
+cargo run
+```
+
+Entering this repository selects the stable toolchain in `rust-toolchain.toml`,
+including formatter and linter components. Follow the
+[app setup guide](docs/SETUP.md#2-connect-github-cli) for GitHub CLI authentication
+before trying uploads. To create an optimized binary, run `cargo build --release`.
+A source build can run on Intel macOS; published bundles currently target Apple Silicon.
+
+## Project layout
+
+| Path | Contents |
+| --- | --- |
+| `src/` | Rust interface, GitHub uploads, and macOS integration. |
+| `docs/` | User guides, architecture, decisions, and research. |
+| `scripts/` and `packaging/` | Build, packaging, release tools, and assets. |
+| `.github/` | Contribution templates and retained workflow definitions. |
 
 ## Making a change
 
@@ -63,21 +102,20 @@ silencing them unless there is a documented reason.
 
 ## Documentation and manual verification
 
-Keep documentation aligned with the implementation:
+Follow [documentation upkeep](docs/agents/documentation.md) for each guide’s scope,
+release-size updates, and link checks. Record user-visible changes under
+**Unreleased** in [CHANGELOG.md](CHANGELOG.md).
 
-- [README](README.md): install/setup, feature overview, and entry points to the guides.
-- [Walkthrough](docs/WALKTHROUGH.md): visible workflows and keyboard controls.
-- [Architecture](docs/ARCHITECTURE.md): module responsibilities, state, and integration boundaries.
-- [Release guide](docs/RELEASING.md): packaging and publication procedure.
-- [Support](SUPPORT.md) and [Security](SECURITY.md): recovery, persistence, authentication, and dependency policy.
-- [Rooftops](docs/EASTER_EGG.md): game controls and score export.
-- [Changelog](CHANGELOG.md): user-visible changes under **Unreleased**.
+### Walkthrough screenshots
 
-For UI changes, regenerate walkthrough images on macOS with
-`./scripts/update-walkthrough-screenshots.sh`, then inspect the resulting PNGs.
-The feature-gated screenshot binary uses fixed in-memory examples and does not
-contact GitHub or change saved preferences. Check relative links and image paths
-when moving or adding documentation.
+Run `./scripts/update-walkthrough-screenshots.sh` on macOS and inspect the PNGs.
+The script renders the production GPUI interface through its off-screen Metal
+renderer with fixed in-memory examples. It does not contact GitHub, read or
+modify saved preferences, use UI automation, or require Screen Recording
+permission. It overwrites `docs/images/walkthrough/`, including the Rooftops game,
+results, and exported scorecard images. Game captures show an early coin jump,
+a mid-level owl encounter, and the results screen in `rooftops-1.png` through
+`rooftops-3.png`; the scorecard is `rooftops-score.png`.
 
 For behavior changes, manually exercise the affected workflow with non-sensitive
 images and an accessible test repository. Relevant paths include first-run setup,
@@ -97,6 +135,11 @@ configuration remains in `.github/dependabot.yml`. Restoring workflow files to
 
 ## Dependencies
 
+The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.7.1`, which pins
+and re-exports its compatible GPUI `0.3.8` snapshot. Import GPUI through that
+facade; upgrade the pair together. Check `Cargo.toml` for the minimum Rust version
+and `rust-toolchain.toml` for the selected toolchain.
+
 Keep new dependencies to a minimum. In a dependency change, explain:
 
 - Why the dependency is needed.
@@ -104,7 +147,7 @@ Keep new dependencies to a minimum. In a dependency change, explain:
 - Any security, licensing, binary-size, or platform implications.
 
 When updating GPUI Kit, confirm its published package metadata pins a compatible
-GPUI release. Update the compatibility note in the README in the same pull request.
+GPUI release. Update the compatibility note above in the same pull request.
 Commit the resulting `Cargo.lock` change, review every newly introduced package and
 source, and do not bypass an advisory without a documented, time-bounded rationale.
 

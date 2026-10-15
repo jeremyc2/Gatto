@@ -7,7 +7,7 @@ workflow in GitHub Actions.
 
 ## Prerequisites
 
-- The [development tools](../README.md#prerequisites) and an authenticated `gh`
+- The [development tools](../CONTRIBUTING.md#development-setup) and an authenticated `gh`
   account with permission to create releases in this repository.
 - Apple signing/notarization tools available through `security`, `codesign`,
   `xcrun notarytool`, `xcrun stapler`, `spctl`, `plutil`, `ditto`, `hdiutil`,
@@ -17,13 +17,31 @@ workflow in GitHub Actions.
 - A **Developer ID Application** certificate and its private key in the login
   keychain. Check with `security find-identity -v -p codesigning`.
 - Notarization credentials stored in the `gatto-notary` keychain profile. Follow
-  the [one-time setup](../README.md#releasing); do not commit credentials.
+  the [one-time setup](#one-time-signing-setup); do not commit credentials.
 
 | Environment variable | Purpose |
 | --- | --- |
 | `SIGN_IDENTITY` | Signing certificate name. Required if more than one Developer ID Application identity is present. |
 | `NOTARY_PROFILE` | Existing notarization keychain profile; defaults to `gatto-notary`. |
 | `GIT_COMMIT_HASH` | Build metadata override for ordinary Cargo builds. The release script sets this to the full release commit itself. |
+
+## One-time signing setup
+
+In your Apple Developer account, create a **Developer ID Application** certificate:
+**Xcode → Settings → Accounts → Manage Certificates → + → Developer ID Application**.
+Check it with `security find-identity -v -p codesigning`.
+
+Create an app-specific password at [account.apple.com](https://account.apple.com/),
+then store the notarization credentials:
+
+```sh
+xcrun notarytool store-credentials gatto-notary \
+  --apple-id <apple-id> --team-id <team-id>
+```
+
+Enter the app-specific password when prompted. The certificate stays in your
+login keychain and credentials in the keychain profile; neither belongs in the
+repository or GitHub.
 
 ## Prepare the release
 
@@ -76,7 +94,8 @@ new app to a temporary folder and launch that copy instead. Automatic installer
 ejection is deliberately skipped outside the two supported Applications locations;
 use a disposable macOS user to verify the complete installation flow.
 Answering `y` creates the GitHub release/tag at the exact commit and uploads the
-DMG and checksum, with GitHub-generated release notes.
+DMG and checksum, with GitHub-generated release notes. After publication,
+[refresh the README size figures](#readme-size-figures) and commit the documentation update.
 
 The script currently builds only Apple Silicon. Intel users need a local build;
 changing the release targets requires a script change and separate verification.
@@ -95,11 +114,8 @@ on that release after checking its tag/commit rather than deleting it blindly.
 
 ## Verify the download
 
-Download the DMG and `SHA256SUMS` from the published release into the same directory:
-
-```sh
-shasum -a 256 -c SHA256SUMS
-```
+Follow [Setup’s checksum instructions](SETUP.md#1-install-the-app) for the
+published DMG and `SHA256SUMS`.
 
 Open the DMG, drag Gatto onto Applications, then launch it from Applications and
 verify its version and commit. The matching **Install Gatto** disk should eject
@@ -112,7 +128,8 @@ failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Preview the installation window
 
-![Gatto's drag-to-Applications installation window](images/dmg-install.png)
+See the [installation screenshot in Setup](SETUP.md#1-install-the-app) for the
+expected window layout.
 
 Build a local DMG from an existing app bundle without signing, notarizing, or publishing:
 
@@ -137,3 +154,40 @@ artwork; keep those coordinates aligned if you change the design. The background
 includes both standard and Retina resolutions. Finder's black unselected icon
 names blend into the lower black band; native names remain accessible and appear
 when an icon is selected.
+
+## README size figures
+
+The README reports the **latest published Apple Silicon release**, measured from
+its DMG. On macOS with [Bun](https://bun.com/docs/installation) and GitHub CLI
+available, run:
+
+```sh
+bun scripts/update-readme-size.ts
+bun scripts/update-readme-size.ts --check
+```
+
+The TypeScript script needs no package installation.
+It downloads the release’s DMG and `SHA256SUMS`, verifies its hash and
+GitHub asset size, mounts it read-only at a temporary location, and sums regular
+file bytes in `Gatto.app`. It checks the bundle version and architecture, ejects
+only that temporary mount, and updates the marked README paragraph. It leaves
+your installed app and existing mounts alone. `--check` reports stale figures
+without editing the README. To reuse a downloaded release, add
+`--dmg /absolute/path/to/gatto-<version>-aarch64-apple-darwin.dmg`; its bytes must
+match the published asset. `--tag v<version>` selects a specific release.
+
+Sizes use decimal MB (1 MB = 1,000,000 bytes), rounded to one decimal. The installed
+figure is the sum of bundle file lengths, excluding installer artwork, filesystem
+allocation overhead, downloaded DMGs, and the separately installed GitHub CLI.
+Ejecting the installer unmounts it; it does not delete the download. Compression
+means the DMG can be smaller than the app it contains.
+
+The initial v0.12.0 measurement on 2026-10-14 was **16,598,419 bytes** downloaded
+and **29,959,166 bytes** in the bundle. The local DMG matched the published asset’s
+SHA-256. Future runs replace the README figures with measurements of the selected
+release; this dated observation remains a baseline.
+
+After each publication, run the updater and commit its README change. For changes
+to code, embedded assets, dependencies, or packaging before publication, keep the
+README’s released version label accurate and refresh the figures when that build
+ships. See [documentation upkeep](agents/documentation.md) for ownership rules.

@@ -20,7 +20,7 @@ The application separates these responsibilities within a single local process:
   in-memory event log available in the Application logs window.
 
 Build and packaging tools supply version information, app metadata, and icons,
-and produce the signed release. See [Releasing](../README.md#releasing) for the
+and produce the signed release. See [the release guide](RELEASING.md) for the
 release workflow.
 
 `installer_cleanup.rs` starts a background worker after the main window and menu
@@ -35,6 +35,9 @@ identity, then requests ordinary AppKit ejection. Missing metadata, duplicate
 mounts, development/image launches, and ejection failures are harmless. There
 are no cleanup dialogs, download deletions, or additional persistent settings.
 Each installed launch can retry cleanup; once ejected, later launches do nothing.
+
+Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite,
+with the app’s existing dependencies.
 
 ## Data flow
 
@@ -159,12 +162,8 @@ when neither source is available.
 
 ## Dependency compatibility
 
-GPUI Kit's published facade pins and re-exports the GPUI version it supports. The
-application depends on GPUI Kit directly and imports GPUI through that facade to
-avoid selecting an incompatible GPUI release independently.
-
-Dependency upgrades should preserve this relationship and be reviewed alongside
-the minimum supported Rust version in `Cargo.toml`.
+See [Contributing](../CONTRIBUTING.md#dependencies) for the pinned GPUI/GPUI Kit
+pair and upgrade rules.
 
 ## Security boundaries
 

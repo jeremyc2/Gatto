@@ -7,6 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-14
+
+### Added
+
+- Added a Bun/TypeScript release-size updater and documentation maintenance guidance.
+
+### Changed
+
+- Shortened the README around macOS use, key features, and measured release sizes;
+  moved setup and developer instructions into linked guides.
+
 ## [0.12.0] - 2026-10-14
 
 ### Added
@@ -97,7 +108,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
-- Added Rooftops, a three-level black-cat platformer opened by clicking the cat in the main window.
+- Added Rooftops, a three-level black-cat platformer.
 - Added cat-face coins, rats and owls, lantern checkpoints, parallax rooftops, and illuminated
   apartments with animated residents to Rooftops.
 - Added a results screen with coins, kills, deaths, and active play time, plus a
@@ -106,7 +117,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- Made the cat in the main window visibly interactive on hover.
+- Refined hover feedback in the main window.
 
 ### Fixed
 

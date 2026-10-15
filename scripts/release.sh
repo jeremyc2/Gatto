@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds, signs, notarizes, and publishes a GitHub release from this Mac.
 #
-# Requires (see README, "Releasing"):
+# Requires (see docs/RELEASING.md):
 #   - A "Developer ID Application" certificate in the login keychain
 #   - A notarytool keychain profile (xcrun notarytool store-credentials)
 #   - gh authenticated with permission to create releases

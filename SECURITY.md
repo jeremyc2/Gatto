@@ -70,20 +70,24 @@ The repository's own `build.rs` only reads an optional hexadecimal
 non-hexadecimal values, does not access the network, and does not modify the
 working tree.
 
+## Authentication and image uploads
+
+Gatto uses GitHub’s existing issue and pull request attachment mechanism. It
+requests the active GitHub CLI token when needed, caches it in memory for the
+uploader session, and sends image bytes directly to GitHub’s attachment service.
+It does not persist tokens in app configuration. Restart after switching CLI
+accounts; see [Support](SUPPORT.md#common-problems) for account recovery.
+
 ## Local settings and clipboard behavior
 
 - Normal uploads do not change the clipboard. **Copy Markdown**, **Copy all**,
   and **Command+C** explicitly copy completed results. **Quick Copy**, invoked
   through the menu bar, custom URL, or enabled global shortcut, uploads a
   clipboard image and automatically copies its Markdown on success.
-- Pinned repository names are stored in
-  `~/Library/Application Support/Gatto/settings.json`. Tokens, image
-  bytes, and upload URLs are not persisted there.
-- Start at Login creates only the current user's
-  `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. The plist
-  contains the app executable path and no credentials.
-- Moving or replacing the executable can make a previously written login item
-  stale. Toggle Start at Login off and on after moving the app.
+- Preferences persist repository names and app settings; tokens, image bytes,
+  and upload URLs remain in memory. Start at Login writes a per-user LaunchAgent
+  containing the executable path. Exact files and removal instructions are in
+  [Support](SUPPORT.md#local-data-and-recovery).
 
 To repeat the policy scan locally:
 

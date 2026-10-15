@@ -11,3 +11,9 @@ Use the default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-
 ### Domain docs
 
 This is a single-context repo with root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Documentation
+
+When changing app behavior, assets, dependencies, packaging, or releases, read
+[documentation upkeep](docs/agents/documentation.md). Update the owning guide and
+verify README claims and measured release figures.

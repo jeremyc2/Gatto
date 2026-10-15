@@ -1,8 +1,7 @@
 # Rooftops Easter egg
 
-Click the cat logo in Gatto's main window to open Rooftops, a black-cat
-platformer with three levels. Close the game window to return to the app. Closing resets and hides the game;
-click the cat logo again to start a fresh run.
+Rooftops is a black-cat platformer with three levels. Closing the game window
+resets the run and returns to the app.
 
 ![A black cat jumping toward cat-face coins above illuminated apartments](images/walkthrough/rooftops-1.png)
 
@@ -26,8 +25,7 @@ Landing lights the buildings, revealing residents through their windows
 vacuuming, playing piano, gardening, cooking, dancing, or stargazing.
 Dark windows have closed blinds or shutters; lit windows leave the residents
 fully visible. Three skyline layers scroll at different speeds
-to create the parallax effect. The scene uses native GPUI elements, an embedded gold-kitten coin sprite,
-and the app's existing dependencies.
+to create the parallax effect.
 
 ![A mid-level owl encounter above narrow rooftops](images/walkthrough/rooftops-2.png)
 
@@ -45,14 +43,5 @@ The saved scorecard:
 
 ## Screenshots
 
-Run the normal screenshot script on macOS:
-
-```sh
-./scripts/update-walkthrough-screenshots.sh
-```
-
-Every run generates the app walkthrough screenshots and `rooftops-1.png`,
-`rooftops-2.png`, `rooftops-3.png`, and the exported score image
-`rooftops-score.png` under `docs/images/walkthrough/`.
-The game captures show an early coin jump, a mid-level owl encounter, and the
-final results screen.
+See the [contributor guide](../CONTRIBUTING.md#walkthrough-screenshots) to regenerate
+the game, results, and scorecard images alongside the app walkthrough.
