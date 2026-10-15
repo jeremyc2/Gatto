@@ -19,7 +19,7 @@ required-features = ["walkthrough-screenshots"]
 [dependencies]
 anyhow = "1"
 async-channel = "2"
-gpui-kit = "=0.7.1"
+gpui-kit = "=0.7.3"
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "native-tls", "query"] }
 serde = { version = "1", features = ["derive"] }
@@ -57,7 +57,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
 raw-window-handle = "0.6"
 
 [dev-dependencies]
-gpui-kit = { version = "=0.7.1", features = ["test-support"] }
+gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 
 [profile.release]
 lto = "thin"
