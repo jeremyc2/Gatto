@@ -12,6 +12,7 @@ concrete language and measured claims in the README. Keep the header illustratio
 | [Walkthrough](../WALKTHROUGH.md) | Upload/copy workflows, batches and retries, preview controls, shortcuts, automation requirements, window behavior. |
 | [Support](../../SUPPORT.md) | Troubleshooting, diagnostics, local file paths, reset, uninstall, recovery. |
 | [Contributing](../../CONTRIBUTING.md) | Developer tools, source builds, checks, dependency compatibility, screenshot regeneration. |
+| [Website](../../web/README.md) | Solid website development, Bun scripts, web assets, dependencies and verification. |
 | [Architecture](../ARCHITECTURE.md) | Modules, state, data flow, integration and security boundaries. |
 | [Releasing](../RELEASING.md) | Signing setup, packaging, publication, verification, size measurement method. |
 | [Security](../../SECURITY.md) | Authentication and data handling policy, dependency audits, vulnerability reporting. |

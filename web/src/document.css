@@ -1,0 +1,15 @@
+/* Font registration only. Document and UI styles live in StyleX. */
+@font-face {
+  font-family: "Coconat";
+  src: url("../assets/fonts/Coconat.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+@font-face {
+  font-family: "Apfel";
+  src: url("../assets/fonts/Apfel.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}

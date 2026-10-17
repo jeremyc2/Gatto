@@ -6,7 +6,7 @@ Start with the [expanded study shelf](index.html) for current experiments and th
 
 ## What the story is trying to do
 
-The [complete website concept](website-concept.html) now implements the requested pinned, crossfading sequence. Its [notes](website-notes.md) carry the latest direction: preserve the integrated `v3` artwork, keep copy outside it, and use one heading and one short explanation per scene. The independent flower overlay was rejected for incorrect contact and depth; its construction details below are historical.
+The [approved website](../../../web/README.md) now implements the requested pinned, crossfading sequence. Its [notes](website-notes.md) carry the latest direction: preserve the integrated `v3` artwork, keep copy outside it, and use one heading and one short explanation per scene. The independent flower overlay was rejected for incorrect contact and depth; its construction details below are historical.
 
 A person already has an image and something to say. The unfinished part is getting that image into the conversation. Gatto helps finish that small job. The emotional promise we can explore is relief, with a little affection attached to it.
 

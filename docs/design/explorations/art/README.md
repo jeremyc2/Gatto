@@ -4,7 +4,7 @@ Created October 16, 2026 with the built-in image-generation tool. This is origin
 
 ## Current redraw
 
-The current [organic integration](organic-integration.md) replaces the independent prop overlay with three integrated `v3` paintings. These are used by the [website concept](../website-concept.html) and the current studies. The earlier overlay and its assembly script remain a record of a rejected technique, not the current recommended scene construction.
+The current [organic integration](organic-integration.md) replaces the independent prop overlay with three integrated `v3` paintings. These are used by the [approved website](../../../../web/README.md) and the current studies. The earlier overlay and its assembly script remain a record of a rejected technique, not the current recommended scene construction.
 
 The latest [redraw notes](redraw-notes.md) own the current cast, three composed SVG scenes, canonical flower picture and painted GitHub label. The [scrolling story study](../story-sequence.html) uses all three encounters as one developing scene, as requested by the user. The [exact prompts](redraw-prompts.md) include intermediate attempts and the continuity fix.
 

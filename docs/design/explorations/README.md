@@ -2,13 +2,13 @@
 
 Start with [the study shelf](index.html). These are local, exploratory HTML documents, not an approved website design or production components.
 
-The [website concept](website-concept.html) is the complete single-file proposal requested after the explorations: a pinned illustrated story with changing copy, concise feature details and real download links. Its artwork is embedded, so the file works on its own. [Website notes](website-notes.md) describe scrolling, access, content sources and limits.
+The [approved website](../../../web/README.md) has moved to the Solid project in `web/`. Its approved design, copy and artwork are preserved; Bun builds and serves it. [Website notes](website-notes.md) describe scrolling, access, content sources and limits.
 
 ## What each study asks
 
 | Study | Question | Interaction |
 | --- | --- | --- |
-| [Website concept](website-concept.html) | What could the complete website look and feel like? | Native scrolling crossfades a fixed scene and nearby text; chapter navigation, responsive layout and README download badges. Reduced motion removes fades without changing layouts. |
+| [Approved website](../../../web/README.md) | Where is the approved website implemented? | Native scrolling crossfades a fixed scene and nearby text; chapter navigation, responsive layout and README download badges. Reduced motion removes fades without changing layouts. |
 | [One developing scene](story-sequence.html) | How do the three pictures and practical text unfold together while scrolling? | Full sequence with short copy; reactions concern text rather than reselecting the artwork. |
 | [Identity postcards](identity-postcards.html) | Can distinct cat materials and characters form a coherent little encounter? | Three composed scenes, alternate pitches, large-image inspection, reactions. |
 | [Character studio](character-studio.html) | Which character details and material relationships deserve more development? | Different actions across materials, surrounding context, full expression sheets. |

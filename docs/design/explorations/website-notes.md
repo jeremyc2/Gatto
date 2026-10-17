@@ -1,6 +1,6 @@
 # Website concept
 
-October 16, 2026. [Open the single HTML file](website-concept.html). This is a complete local website proposal, not a deployed site or a framework implementation.
+Design approved October 16, 2026; implementation moved October 17, 2026. The approved site now lives in [web/](../../../web/README.md), using Solid and Bun. These notes retain its design rationale.
 
 ## Decisions carried forward
 
@@ -18,7 +18,7 @@ The browser scrolls natively through a tall story section. Its stage remains sti
 
 Chapter buttons offer direct navigation, and a skip link bypasses the story. There is no Still view button or alternate reading layout. The operating system's `prefers-reduced-motion` preference disables fades and smooth scrolling while preserving the same JavaScript-driven chapter changes and pinned composition. Short screens use a more compact responsive layout. JavaScript being unavailable leaves the three scenes in normal document flow. Appearance follows the operating system without a visible settings control.
 
-The file embeds all artwork, fonts, CSS and JavaScript, so it can be opened by itself. External links require internet access. The embedded source artwork makes this a comparatively large design artifact; production image delivery and a framework migration are later work, not measured performance claims.
+The original concept was a single HTML file with embedded assets. The Solid implementation now uses bundled JavaScript and CSS, separate immutable artwork and font assets, and static prerendering; see the [website guide](../../../web/README.md) for current build and preview instructions.
 
 ## Organic picture integration
 

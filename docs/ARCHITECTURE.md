@@ -4,6 +4,11 @@ Gatto is a single-process macOS menu bar application. GPUI owns the
 application and window lifecycle, while small modules isolate GitHub access,
 platform integration, persistent settings, and shared state.
 
+The public website is a separate static Solid project in `web/`. Vite runs under
+Bun for development and builds; Bun prerenders its static HTML. It does not add
+a backend to the app. See
+[website development](../web/README.md) for its source and tooling boundaries.
+
 ## Responsibilities
 
 The application separates these responsibilities within a single local process:

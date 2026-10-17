@@ -1,0 +1,16 @@
+{
+  "name": "@gatto/web",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@solidjs/web": "2.0.0-rc.15",
+    "@stylexjs/stylex": "0.19.1",
+    "solid-js": "2.0.0-rc.15"
+  },
+  "devDependencies": {
+    "@solidjs/compiler": "2.0.0-rc.15",
+    "@solidjs/vite-plugin": "3.0.0-next.50",
+    "@stylexjs/eslint-plugin": "0.19.1",
+    "@stylexjs/unplugin": "0.19.1"
+  }
+}

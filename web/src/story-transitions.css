@@ -1,0 +1,57 @@
+/* Snapshot pseudo-elements belong to the document, outside component selectors. */
+:root {
+  view-transition-name: none;
+}
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(story-scene) {
+  animation-duration: 260ms;
+  overflow: clip;
+}
+::view-transition-old(story-scene) {
+  animation: story-leave 260ms ease both;
+  mix-blend-mode: normal;
+}
+::view-transition-new(story-scene) {
+  animation: story-enter 260ms ease both;
+  mix-blend-mode: normal;
+}
+@keyframes story-leave {
+  to {
+    transform: translateY(-100%);
+  }
+}
+@keyframes story-enter {
+  from {
+    transform: translateY(100%);
+  }
+}
+:root[data-story-direction="backward"]::view-transition-old(story-scene) {
+  animation-name: story-leave-backward;
+}
+:root[data-story-direction="backward"]::view-transition-new(story-scene) {
+  animation-name: story-enter-backward;
+}
+@keyframes story-leave-backward {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes story-enter-backward {
+  from {
+    transform: translateY(-100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(story-scene),
+  ::view-transition-old(story-scene),
+  ::view-transition-new(story-scene) {
+    animation: none;
+  }
+}
+
+/* StyleX 0.19 does not yet accept animation-range in its property validator. */
+[data-story-paw] {
+  animation-range: var(--paw-start) var(--paw-end);
+}

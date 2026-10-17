@@ -62,6 +62,7 @@ A source build can run on Intel macOS; published bundles currently target Apple 
 | Path | Contents |
 | --- | --- |
 | `src/` | Rust interface, GitHub uploads, and macOS integration. |
+| `web/` | Solid website, Bun build and development tools, and website tests. |
 | `docs/` | User guides, architecture, decisions, and research. |
 | `scripts/` and `packaging/` | Build, packaging, release tools, and assets. |
 | `.github/` | Contribution templates and retained workflow definitions. |
@@ -99,6 +100,27 @@ cargo deny --locked check --hide-inclusion-graph advisories licenses bans source
 
 Apply formatting with `cargo fmt --all`. Please resolve warnings rather than
 silencing them unless there is a documented reason.
+
+### Website
+
+Use Bun for website tooling. From the repository root:
+
+```sh
+bun install --frozen-lockfile
+bun build:web
+bun lint:web
+bun test:web
+```
+
+Run `bun dev:web` for a local preview and `bun format:web` to apply formatting.
+[Website development](web/README.md) owns the compiler, asset, dependency and
+preview details. Preserve the approved design and copy during implementation
+changes. Website checks do not replace the Rust checks for app changes.
+
+With the beta `cf` CLI installed and signed in (`cf auth login`), `bun deploy:web`
+builds and updates the existing `gatto` Worker. Set `CLOUDFLARE_ACCOUNT_ID` in your
+environment or the ignored root `.env` file. Use `bun deploy:web --dry-run` to
+validate without uploading.
 
 ## Documentation and manual verification
 

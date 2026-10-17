@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-17
+
+### Added
+
+- Added the public Gatto website with an illustrated scrolling story, chapter
+  navigation, download links, and links to setup, walkthrough, and support guides.
+  The story supports fast scrolling, reduced motion, and narrow screens, with
+  individual paw prints that adapt to the available space.
+- Added `bun deploy:web` to build and update the existing Cloudflare site using
+  the beta `cf` CLI, keeping account configuration in the local environment.
+
+### Changed
+
+- Updated GPUI Kit from 0.7.1 to 0.7.3 and serde_json from 1.0.152 to 1.0.154.
+- Replaced the README download link with a badge; the release-size updater keeps
+  its target aligned with the measured release.
+
 ## [0.12.1] - 2026-10-14
 
 ### Added

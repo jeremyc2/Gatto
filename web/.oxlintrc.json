@@ -1,0 +1,26 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "stylex/valid-styles": "error",
+    "stylex/no-unused": "error",
+    "stylex/valid-shorthands": "error"
+  },
+  "ignorePatterns": ["dist/**", ".cache/**"],
+  "jsPlugins": [
+    {
+      "name": "stylex",
+      "specifier": "@stylexjs/eslint-plugin"
+    }
+  ]
+}

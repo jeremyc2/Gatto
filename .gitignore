@@ -9,3 +9,7 @@
 !.env.example
 /.idea
 /.vscode
+node_modules/
+/web/dist/
+/web/.cache/
+/.cloudflare/

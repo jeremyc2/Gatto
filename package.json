@@ -1,0 +1,28 @@
+{
+  "name": "gatto",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "type": "module",
+  "scripts": {
+    "build:web": "bunx --bun vite build --config web/vite.config.ts && bun web/scripts/prerender.ts",
+    "dev:web": "bunx --bun vite --config web/vite.config.ts",
+    "lint:web": "bunx --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bunx --bun oxfmt --check web package.json",
+    "format:web": "bunx --bun oxfmt --write web package.json",
+    "typecheck:web": "bunx --bun tsc --noEmit -p web/tsconfig.json",
+    "test:web": "bun test web/tests",
+    "preview:web": "bunx --bun vite preview --config web/vite.config.ts",
+    "size:web": "bun web/scripts/css-size.ts",
+    "deploy:web": "bun web/scripts/deploy.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "oxfmt": "0.73.0",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  },
+  "packageManager": "bun@1.4.3"
+}
