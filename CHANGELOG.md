@@ -7,16 +7,28 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-## [0.13.1] - 2026-10-17
+## [0.14.0] - 2026-10-17
+
+### Added
+
+- Add a scroll-revealed Gattoverse portal between the website download area and
+  footer, with matching torn-paper edges, a watercolor setting, and a jetpack cat
+  that approaches and floats. Reduced motion shows a static composition.
+- Show a dismissible “Gattoverse mini game coming soon.” notice when the portal
+  is activated, with keyboard support and a contrasting notification that slides
+  into the top right.
 
 ### Fixed
 
-- Make the website's watercolor and paper cats more distinct, unify the cast's
-  lighting, keep the paper cat's limbs and tail consistently layered, distinguish
-  tail postures throughout the story, and correct the GitHub tray and picture
-  placement.
-- Keep website story illustrations centered within the available scene height on
-  wide, shorter screens, preventing overlap with the chapter tracker.
+- Keep the website paw trails progressing to each chapter, stop them at the
+  selected marker when using chapter controls, and return to normal page scrolling
+  as Share arrives. Remove the divider above the chapter tracker.
+- Keep website illustrations inside their scenes on wide, shorter screens,
+  preventing overlap with the chapter tracker.
+- Refine the website cats’ materials, lighting, limbs and tail poses, and correct
+  the GitHub tray and picture placement across the story.
+- Avoid a Solid development warning when synchronizing the initial story chapter
+  and keyboard focus.
 
 ## [0.13.0] - 2026-10-17
 

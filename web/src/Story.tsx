@@ -152,7 +152,8 @@ export function Story() {
         if (!frame) frame = window.requestAnimationFrame(update);
       }
 
-      update();
+      // Run outside the effect callback so apply() can flush before reading focus state.
+      schedule();
       window.addEventListener("scroll", schedule, { passive: true });
       window.addEventListener("resize", schedule);
       window.addEventListener("pageshow", schedule);
@@ -330,8 +331,10 @@ const styles = stylex.create({
     height: {
       default: null,
       [storyMedia.pinned]: {
-        default: "240svh",
-        [media.phone]: "220svh",
+        // Keep the two transition distances, removing the old final-scene hold.
+        // Stage + 70% of the former sticky range (240svh / 220svh).
+        default: `calc(198svh - ${layout.headerHeight} * 0.3)`,
+        [media.phone]: `calc(184svh - ${layout.headerHeight} * 0.3)`,
       },
     },
   },
@@ -491,12 +494,6 @@ const styles = stylex.create({
       default: null,
       [storyMedia.pinned]: { default: 70, [media.phone]: 62 },
     },
-    borderTopWidth: { default: null, [storyMedia.pinned]: 1 },
-    borderTopStyle: { default: null, [storyMedia.pinned]: "solid" },
-    borderTopColor: {
-      default: null,
-      [storyMedia.pinned]: colors.border,
-    },
   },
 
   chapterNav: {
@@ -545,8 +542,8 @@ const styles = stylex.create({
     fill: colors.accent,
     opacity: 0.55,
     transform: `translate(-50%, -50%) rotate(${step % 2 === 0 ? 65 : 105}deg)`,
-    "--paw-start": `contain calc(${gap === 0 ? 0 : 31}% + ${step + 1} * ${gap === 0 ? 30 : 37}% / (var(--paw-count) + 1))`,
-    "--paw-end": `contain calc(${gap === 0 ? 2 : 33}% + ${step + 1} * ${gap === 0 ? 30 : 37}% / (var(--paw-count) + 1))`,
+    "--paw-start": `contain calc(${gap === 0 ? 2 : 46}% + ${step} * ${gap === 0 ? 42 : 52}% / var(--paw-count))`,
+    "--paw-end": `contain calc(${gap === 0 ? 2 : 46}% + ${step + 1} * ${gap === 0 ? 42 : 52}% / var(--paw-count))`,
     animationName: {
       default: "none",
       "@supports ((animation-timeline: --story-route) and (animation-range: contain))":

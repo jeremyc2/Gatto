@@ -5,9 +5,11 @@ import * as stylex from "@stylexjs/stylex";
 
 import { Container } from "../design-system/Container";
 import { Brand } from "./Brand";
+import { PortalSeam } from "./PortalSeam";
 export function SiteFooter() {
   return (
     <footer {...stylex.attrs(styles.footer)}>
+      <PortalSeam edge="top" />
       <Container>
         <div {...stylex.attrs(styles.footerTop)}>
           <Brand small />
@@ -27,11 +29,14 @@ export function SiteFooter() {
 }
 const styles = stylex.create({
   footer: {
+    position: "relative",
+    zIndex: 0,
+    backgroundImage: {
+      default: `linear-gradient(to bottom, transparent 48px, ${colors.canvas} 48px)`,
+      [media.phone]: `linear-gradient(to bottom, transparent 40px, ${colors.canvas} 40px)`,
+    },
     boxSizing: "border-box",
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: colors.border,
-    paddingBlockStart: 32,
+    paddingBlockStart: { default: 64, [media.phone]: 56 },
     paddingBlockEnd: 27,
   },
   footerTop: {

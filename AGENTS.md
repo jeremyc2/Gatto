@@ -31,4 +31,4 @@ When changing app behavior, assets, dependencies, packaging, or releases, read
 [documentation upkeep](docs/agents/documentation.md). Update the owning guide and
 verify README claims and measured release figures.
 
-Keep READMEs focused on setup and usage; record design decisions and their rationale in `docs/adr/`.
+Change READMEs only for setup or essential usage. Put website visuals, motion, and asset mechanics in [the design system](web/DESIGN-SYSTEM.md) or artwork records; rationale in `docs/adr/`.

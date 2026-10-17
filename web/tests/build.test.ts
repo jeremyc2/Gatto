@@ -35,7 +35,7 @@ test("prerenders all scenes, concise copy and the two README download badges", a
     ...html.matchAll(/<link[^>]+rel="preload"[^>]+href="([^"]+)"[^>]+as="font"/g),
   ];
   expect(preloadedFonts).toHaveLength(2);
-  expect(html.match(/src="[^"]+\.webp"/g)).toHaveLength(3);
+  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(5);
   expect(html).not.toContain("Still view");
   expect(html).not.toContain("How it works");
   const articles = html.match(/<article\b[^>]*id="chapter-[^"]+"[^>]*>/g) ?? [];
@@ -56,8 +56,8 @@ test("prerenders all scenes, concise copy and the two README download badges", a
 test("ships one extracted stylesheet within the CSS budget, with themes and reduced motion", async () => {
   const size = await cssSize();
   expect(size.files).toHaveLength(1);
-  expect(size.bytes).toBeLessThan(16 * 1024);
-  expect(size.gzip).toBeLessThan(5 * 1024);
+  expect(size.bytes).toBeLessThan(22 * 1024);
+  expect(size.gzip).toBeLessThan(7 * 1024);
   const path = size.files[0]?.path;
   if (!path) throw new Error("The extracted stylesheet is missing.");
   const css = await Bun.file(new URL(path, staticDirectory)).text();

@@ -12,7 +12,8 @@ concrete language and measured claims in the README. Keep the header illustratio
 | [Walkthrough](../WALKTHROUGH.md) | Upload/copy workflows, batches and retries, preview controls, shortcuts, automation requirements, window behavior. |
 | [Support](../../SUPPORT.md) | Troubleshooting, diagnostics, local file paths, reset, uninstall, recovery. |
 | [Contributing](../../CONTRIBUTING.md) | Developer tools, source builds, checks, dependency compatibility, screenshot regeneration. |
-| [Website](../../web/README.md) | Solid website development, Bun scripts, web assets, dependencies and verification. |
+| [Website](../../web/README.md) | Website setup and essential development commands. |
+| [Website design](../../web/DESIGN-SYSTEM.md) | Website appearance, interaction, animation, asset implementation and visual verification. |
 | [Architecture](../ARCHITECTURE.md) | Modules, state, data flow, integration and security boundaries. |
 | [Releasing](../RELEASING.md) | Signing setup, packaging, publication, verification, size measurement method. |
 | [Security](../../SECURITY.md) | Authentication and data handling policy, dependency audits, vulnerability reporting. |
@@ -36,7 +37,8 @@ measured artifact/version, and a reproducible method.
 
 ## Change verification
 
-When behavior changes, update its owning guide and the README summary if relevant.
+When behavior changes, update its owning guide. Change a README only when setup
+or essential usage instructions change; visual tweaks belong in design docs.
 Move details with their caveats when shortening a page. Keep the README’s project
 index linked to project Markdown documents, excluding bundled agent skills and
 the Easter egg guide. Keep the Easter egg’s entry action undocumented everywhere,

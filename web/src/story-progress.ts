@@ -11,7 +11,8 @@ export function storyProgress(
 }
 
 export function chapterAtProgress(progress: number): Chapter {
-  return progress < 0.31 ? 0 : progress < 0.69 ? 1 : 2;
+  // Two transitions fill the pinned interval; Share has only a short settling edge.
+  return progress < 0.44 ? 0 : progress < 0.98 ? 1 : 2;
 }
 
 export function chapterScrollTarget(
@@ -20,6 +21,7 @@ export function chapterScrollTarget(
   storyHeight: number,
   stageHeight: number,
 ): number {
-  const positions = [0, 0.5, 0.95] as const;
+  // Send lands before its next paw trail; Share lands exactly at sticky release.
+  const positions = [0, 0.45, 1] as const;
   return storyTop + Math.max(1, storyHeight - stageHeight) * positions[chapter];
 }

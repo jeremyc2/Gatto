@@ -6,10 +6,12 @@ if (import.meta.env.DEV && !import.meta.env.SSR) {
 }
 import { Story } from "./Story";
 import { SiteHeader } from "./components/SiteHeader";
-import { SiteFooter } from "./components/SiteFooter";
 import { Features } from "./components/Features";
 import { DownloadSection } from "./components/DownloadSection";
+import { PortalEnding } from "./components/PortalCat";
+import { createSiteNotifications } from "./components/SiteNotifications";
 export default function App() {
+  const notifications = createSiteNotifications();
   return (
     <>
       <SiteHeader />
@@ -18,7 +20,8 @@ export default function App() {
         <Features />
         <DownloadSection />
       </main>
-      <SiteFooter />
+      <PortalEnding onActivate={() => notifications.show("Gattoverse mini game coming soon.")} />
+      <notifications.Region />
     </>
   );
 }

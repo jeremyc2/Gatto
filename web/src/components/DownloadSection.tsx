@@ -5,6 +5,7 @@ import { Container } from "../design-system/Container";
 import { Heading, Text } from "../design-system/Typography";
 import { Link } from "../design-system/Link";
 import { DownloadBadge } from "../DownloadBadge";
+import { PortalSeam } from "./PortalSeam";
 export function DownloadSection() {
   return (
     <section {...stylex.attrs(styles.downloadSection)} id="download">
@@ -24,13 +25,18 @@ export function DownloadSection() {
             </Link>
           </Text>
         </div>
-        <DownloadBadge placement="footer" />
+        <div {...stylex.attrs(styles.action)}>
+          <DownloadBadge placement="footer" />
+        </div>
       </Container>
+      <PortalSeam edge="bottom" />
     </section>
   );
 }
 const styles = stylex.create({
   downloadSection: {
+    position: "relative",
+    zIndex: 1,
     boxSizing: "border-box",
     padding: { default: "75px 0", [media.phone]: "55px 0" },
     borderTopWidth: 1,
@@ -40,11 +46,19 @@ const styles = stylex.create({
     textAlign: "left",
   },
   downloadRow: {
-    display: { default: "flex", [media.phone]: "block" },
-    justifyContent: "space-between",
+    display: "grid",
+    gridTemplateColumns: {
+      default: "minmax(0, 1fr) minmax(0, 1fr)",
+      [media.phone]: "minmax(0, 1fr)",
+    },
     alignItems: "center",
-    gap: 45,
+    gap: { default: 32, [media.phone]: 16 },
   },
   downloadHeading: { marginBlockEnd: 25 },
   requirements: { lineHeight: 1.7 },
+  action: {
+    width: "100%",
+    justifySelf: "end",
+    textAlign: { default: "right", [media.phone]: "left" },
+  },
 });

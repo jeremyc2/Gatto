@@ -13,8 +13,19 @@ describe("the pinned story", () => {
   });
 
   test("reverses cleanly when scrolling back through chapter boundaries", () => {
-    const journey = [0, 0.31, 0.69, 1, 0.68, 0.3];
+    const journey = [0, 0.44, 0.98, 1, 0.979, 0.439];
     expect(journey.map(chapterAtProgress)).toEqual([0, 1, 2, 2, 1, 0]);
+  });
+
+  test("chapter controls stop the footprint trail at the selected marker", () => {
+    const progress = ([0, 1, 2] as const).map((chapter) =>
+      storyProgress(chapterScrollTarget(chapter, 86, 2400, 600), 86, 2400, 600),
+    );
+    // The first trail finishes at 44%; the next print starts at 46%.
+    expect(progress[0]).toBe(0);
+    expect(progress[1]).toBeGreaterThanOrEqual(0.44);
+    expect(progress[1]).toBeLessThan(0.46);
+    expect(progress[2]).toBeGreaterThanOrEqual(0.98);
   });
 
   test("chapter controls land safely within each chapter", () => {
@@ -22,5 +33,12 @@ describe("the pinned story", () => {
       const target = chapterScrollTarget(chapter, 86, 2400, 600);
       expect(chapterAtProgress(storyProgress(target, 86, 2400, 600))).toBe(chapter);
     }
+  });
+
+  test("Share lands at the sticky release, without an idle pinned scroll interval", () => {
+    const top = 86;
+    const height = 1600;
+    const stage = 600;
+    expect(chapterScrollTarget(2, top, height, stage)).toBe(top + height - stage);
   });
 });

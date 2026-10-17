@@ -6,7 +6,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build:web": "bunx --bun vite build --config web/vite.config.ts && bun web/scripts/prerender.ts",
+    "build:web": "bun web/scripts/build-portal-seam.ts && bunx --bun vite build --config web/vite.config.ts && bun web/scripts/prerender.ts",
     "dev:web": "bunx --bun vite --config web/vite.config.ts",
     "lint:web": "bunx --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bunx --bun oxfmt --check web package.json",
     "format:web": "bunx --bun oxfmt --write web package.json",

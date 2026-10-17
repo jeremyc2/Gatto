@@ -25,6 +25,21 @@ SVGs in dedicated gaps. Container queries choose the print count from each gap's
 actual width, preserving physical spacing instead of stretching a fixed count
 across viewport breakpoints. Each visible print gets its own fade-in range.
 
+## Terminal chapter release
+
+On 2026-10-17, remove the long pinned interval after Share arrives. Keep 70% of
+the former sticky range while leaving the stage height unchanged. Renormalize
+the chapter boundaries to 44% and 98%, preserving the earlier transition
+distances to within roughly 1%. The final 2% is a short settling edge rather
+than a full reading interval. Share's chapter control targets 100%, exactly at
+release; its illustration then leaves in normal page flow. Reverse scrolling
+therefore reaches the previous transition without traversing a dormant chapter.
+
+Give the paw fades consecutive ranges from 2%–44% and 46%–98%, ending at the
+corresponding chapter boundaries. This keeps visible feedback through each
+transition interval, including narrow gaps with fewer prints. Do not intercept
+wheel gestures, dynamically resize the story, or wait on a timer to release it.
+
 ## Loading trade-offs
 
 Preload the bundled fonts and use `font-display: optional` to prevent late swaps;
