@@ -2,13 +2,13 @@
 
 [Overview](../README.md) · [Setup](SETUP.md) · [Support](../SUPPORT.md)
 
-Start with [setup](SETUP.md) to install Gatto and connect your organization.
+Start with [setup](SETUP.md) to install Gatto and connect your account or organization.
 The main window's question-mark icon opens this walkthrough in your browser.
 
 ## 1. Choose a repository
 
 Open Gatto from its menu bar icon and choose the repository to upload through.
-For frequent destinations, [pin a repository in App Preferences](SETUP.md#3-choose-your-organization).
+For frequent destinations, [pin a repository in App Preferences](SETUP.md#3-choose-your-account-or-organization).
 
 ## 2. Stage an image
 
@@ -105,7 +105,7 @@ From Terminal, use macOS's `open` command:
 open "gatto://quick-copy"
 ```
 
-Quick Copy requires a configured organization and at least one pinned repository. Gatto chooses
+Quick Copy requires a configured account or organization and at least one pinned repository. Gatto chooses
 the preferred pinned repository using the same rules as the menu bar and global keyboard shortcut.
 Install and open `Gatto.app` for macOS to register its URL scheme.
 

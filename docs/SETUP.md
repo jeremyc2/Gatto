@@ -45,21 +45,26 @@ Gatto runs GitHub CLI as your signed-in macOS user. Standard Homebrew
 installations work without extra configuration; see
 [Support](../SUPPORT.md#common-problems) for a custom GitHub CLI location.
 
-## 3. Choose your organization
+## 3. Choose your account or organization
 
 On first launch, open **App Preferences** from the settings icon or the menu bar.
-Gatto waits for an organization before contacting GitHub.
+Gatto waits for an account or organization login before contacting GitHub.
 
 <img src="images/walkthrough/01-first-run.png" alt="Gatto's first-run screen with Application Logs, App Preferences, walkthrough help, and an Open App Preferences button" width="620">
 
-Enter the organization login, such as `acme`, and save it. Use the login rather
-than a URL, a personal account, or `owner/repository`. Gatto lists repositories
-available to your active GitHub CLI account. GitHub.com is the supported host.
+Enter a personal account login, such as `octocat`, or an organization login, such
+as `acme`, in **GitHub account/organization**, and save it. Use the login rather
+than a URL or `owner/repository`. Gatto lists repositories owned by that account
+or organization that your active GitHub CLI account can access, including private
+repositories when permitted. GitHub.com is the supported host.
+
+Changing to a different account or organization clears the previous repository
+selection and pins. Choose and pin repositories for the new owner.
 
 Pin repositories you use often. Pins put them first in the repository picker
 and enable the menu bar's clipboard actions.
 
-<img src="images/walkthrough/02-preferences.png" alt="Gatto App Preferences with an organization, pinned repository, and global Quick Copy shortcut settings" width="620">
+<img src="images/walkthrough/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, and global Quick Copy shortcut settings" width="620">
 
 ## 4. Set your preferences
 

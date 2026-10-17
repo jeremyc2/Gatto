@@ -29,12 +29,12 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | Symptom | What to check |
 | --- | --- |
 | GitHub CLI works in Terminal but Gatto cannot find it | Application Logs shows the resolved CLI path. Gatto checks `GH_PATH`, `PATH`, `/opt/homebrew/bin/gh`, and `/usr/local/bin/gh`. For a custom installation, launch the executable with `GH_PATH=/absolute/path/to/gh` set; a GUI app may not inherit your shell’s Homebrew path. |
-| Organization does not load or a repository is missing | Enter an organization login, not a URL or personal account. Run `gh auth status --hostname github.com` to check the active GitHub CLI account. That account must have access to the organization's repositories, including any private repository you need. For SAML single sign-on, authorize its token for SSO on GitHub. |
+| Account or organization does not load or a repository is missing | Enter a personal account or organization login, not a URL or `owner/repository`. Run `gh auth status --hostname github.com` to check the active GitHub CLI account. That account must have access to the selected owner’s repositories, including any private repository you need. For SAML single sign-on, authorize its token for SSO on GitHub. |
 | An account switch is not reflected in Gatto | Restart Gatto after switching accounts with GitHub CLI; Gatto caches its session in memory. |
 | Image is rejected | Use a readable PNG, JPEG, GIF, or WebP. Files must also have a supported extension. Convert HEIC, TIFF, SVG, or other formats first. |
 | Clipboard action finds no image | Copy actual image data or an image file in Finder; a text URL or Markdown snippet is not image data. |
 | A normal upload fails | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Keep the window open; closing clears drafts. |
-| Quick Copy fails | Configure an organization and pin an accessible repository. Copy the image again and invoke Quick Copy again; this action clears its failed draft. |
+| Quick Copy fails | Configure an account or organization and pin an accessible repository. Copy the image again and invoke Quick Copy again; this action clears its failed draft. |
 | Global shortcut will not register | Use at least two modifiers and a supported key. If another app owns the chord, record a different shortcut. No Accessibility permission is required. |
 | Start at Login stopped working after moving the app | Put the app in its final location, then toggle Start at Login off and on. |
 | `gatto://` URLs do not open | Install and open `Gatto.app`; a standalone development executable does not register the URL scheme. |
@@ -46,7 +46,7 @@ an otherwise valid image is accepted.
 
 Gatto writes these per-user files:
 
-- `~/Library/Application Support/Gatto/settings.json`: organization, pinned and
+- `~/Library/Application Support/Gatto/settings.json`: account or organization, pinned and
   last-selected repositories, shortcut, and copy preferences.
 - `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at Login executable path.
 
@@ -81,7 +81,7 @@ See [Contributing](CONTRIBUTING.md#development-setup) for build prerequisites.
 Open **Application Logs** from the main window or App Preferences and choose
 **Copy all**. Logs cover lifecycle, image processing, GitHub CLI, and uploads.
 They retain at most 500 events and disappear on quit, so collect them before restarting. Gatto redacts common GitHub token prefixes, but logs can contain
-local paths, organization/repository names, filenames, descriptions, and server
+local paths, account/organization and repository names, filenames, descriptions, and server
 errors. Review and sanitize them before posting to a public issue. Never include
 output from `gh auth token`.
 

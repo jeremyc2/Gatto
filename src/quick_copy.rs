@@ -93,7 +93,7 @@ fn notify(cx: &mut App, title: &str, body: &str) {
 trait Backend: Send + Sync {
     fn upload(
         &self,
-        organization: &str,
+        owner: &str,
         repository: &str,
         image: &StagedImage,
         diagnostics: &Diagnostics,
@@ -104,13 +104,13 @@ struct GithubBackend;
 impl Backend for GithubBackend {
     fn upload(
         &self,
-        organization: &str,
+        owner: &str,
         repository: &str,
         image: &StagedImage,
         diagnostics: &Diagnostics,
     ) -> Result<String> {
         let token = github::load_token(diagnostics)?;
-        let id = github::load_repository_id(organization, repository, diagnostics)?;
+        let id = github::load_repository_id(owner, repository, diagnostics)?;
         Ok(github::upload(&token, id, image, diagnostics)?)
     }
 }
@@ -127,11 +127,11 @@ fn upload_clipboard(
         .filter(|name| settings.pinned_repositories.contains(*name))
         .or_else(|| settings.pinned_repositories.first())
         .context("Quick Copy needs a pinned repository. Pin one in App Preferences first.")?;
-    let organization = settings
-        .organization
+    let owner = settings
+        .owner
         .as_deref()
         .filter(|name| !name.trim().is_empty())
-        .context("Quick Copy needs an organization in App Preferences first.")?;
+        .context("Quick Copy needs an account or organization in App Preferences first.")?;
     let clipboard = clipboard.context("Copy a PNG, JPEG, GIF, or WebP image first.")?;
     let image = if let Some(image) = clipboard.entries().iter().find_map(|entry| match entry {
         ClipboardEntry::Image(image) => Some(image),
@@ -146,7 +146,7 @@ fn upload_clipboard(
     } else {
         bail!("Copy a PNG, JPEG, GIF, or WebP image first.");
     };
-    let url = backend.upload(organization, repository, &image, diagnostics)?;
+    let url = backend.upload(owner, repository, &image, diagnostics)?;
     Ok(markdown_image(&image.description, &url))
 }
 
@@ -163,7 +163,7 @@ mod tests {
     impl Backend for FakeBackend {
         fn upload(
             &self,
-            organization: &str,
+            owner: &str,
             repository: &str,
             _: &StagedImage,
             _: &Diagnostics,
@@ -171,7 +171,7 @@ mod tests {
             self.calls
                 .lock()
                 .unwrap()
-                .push((organization.into(), repository.into()));
+                .push((owner.into(), repository.into()));
             if self.fail {
                 bail!("Upload rejected");
             }
@@ -180,7 +180,7 @@ mod tests {
     }
     fn settings() -> AppSettings {
         AppSettings {
-            organization: Some("acme".into()),
+            owner: Some("acme".into()),
             pinned_repositories: ["alpha".into(), "beta".into()].into(),
             last_repository: Some("beta".into()),
             ..AppSettings::default()
@@ -247,12 +247,12 @@ mod tests {
             ),
             (
                 AppSettings {
-                    organization: None,
+                    owner: None,
                     ..settings()
                 },
                 image(),
                 false,
-                "organization",
+                "account or organization",
             ),
             (settings(), image(), true, "Upload rejected"),
         ] {
@@ -288,6 +288,23 @@ mod tests {
             }
             assert!(!service.busy.get());
         }
+    }
+
+    #[test]
+    fn uploads_to_a_personal_accounts_pinned_repository() {
+        let backend = FakeBackend {
+            calls: Mutex::new(Vec::new()),
+            fail: false,
+        };
+        let settings = AppSettings {
+            owner: Some("octocat".into()),
+            ..settings()
+        };
+        upload_clipboard(&settings, Some(image()), &Diagnostics::new(), &backend).unwrap();
+        assert_eq!(
+            *backend.calls.lock().unwrap(),
+            vec![("octocat".into(), "beta".into())]
+        );
     }
 
     #[test]

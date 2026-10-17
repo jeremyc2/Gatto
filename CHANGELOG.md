@@ -11,6 +11,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Support repositories owned by personal GitHub accounts as well as organizations.
+  App Preferences now accepts a GitHub account/organization login, preserving
+  existing organization settings. Changing owners clears the previous selection
+  and pins to keep uploads tied to the chosen owner.
 - Added the public Gatto website with an illustrated scrolling story, chapter
   navigation, download links, and links to setup, walkthrough, and support guides.
   The story supports fast scrolling, reduced motion, and narrow screens, with

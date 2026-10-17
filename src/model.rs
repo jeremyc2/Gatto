@@ -18,11 +18,11 @@ pub struct Repository {
     pub name: String,
 }
 
-/// Validates a GitHub organization login and returns it trimmed.
-pub fn parse_organization(value: &str) -> Result<String> {
+/// Validates a GitHub account or organization login and returns it trimmed.
+pub fn parse_owner(value: &str) -> Result<String> {
     let value = value.trim();
     if value.is_empty() || !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        bail!("Enter a GitHub organization name.");
+        bail!("Enter a GitHub account or organization login.");
     }
     Ok(value.to_owned())
 }
@@ -204,5 +204,25 @@ mod attachment_upload_state_tests {
         assert_eq!(uploaded.uploaded_url(), Some("https://example.com/image"));
         assert_eq!(failed.failure_message(), Some("network error"));
         assert!(!failed.is_uploaded());
+    }
+}
+
+#[cfg(test)]
+mod owner_tests {
+    use super::parse_owner;
+
+    #[test]
+    fn accepts_account_and_organization_logins_but_not_repository_paths() {
+        assert_eq!(parse_owner(" octocat ").unwrap(), "octocat");
+        assert_eq!(parse_owner("acme-labs").unwrap(), "acme-labs");
+        for invalid in [
+            "",
+            " ",
+            "https://github.com/octocat",
+            "octocat/images",
+            "two words",
+        ] {
+            assert!(parse_owner(invalid).is_err());
+        }
     }
 }

@@ -12,7 +12,8 @@ const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AppSettings {
-    pub organization: Option<String>,
+    #[serde(alias = "organization")]
+    pub owner: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
     pub last_repository: Option<String>,
     pub last_repository_id: Option<u64>,
@@ -31,7 +32,7 @@ fn default_quick_copy_shortcut() -> String {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            organization: None,
+            owner: None,
             pinned_repositories: BTreeSet::new(),
             last_repository: None,
             last_repository_id: None,
@@ -44,6 +45,21 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    /// Repository names and cached IDs belong to the selected owner.
+    pub fn set_owner(&mut self, owner: String) -> bool {
+        let changed = !self
+            .owner
+            .as_deref()
+            .is_some_and(|saved| saved.eq_ignore_ascii_case(&owner));
+        self.owner = Some(owner);
+        if changed {
+            self.pinned_repositories.clear();
+            self.last_repository = None;
+            self.last_repository_id = None;
+        }
+        changed
+    }
+
     /// Returns the repository to restore at launch. A pinned repository is the
     /// stable fallback for preferences saved before an explicit last selection.
     pub fn preferred_repository(&self) -> Option<&str> {
@@ -200,6 +216,29 @@ mod tests {
     use super::{AppSettings, clear_persistence};
 
     #[test]
+    fn changing_owner_clears_destinations_but_case_changes_preserve_them() {
+        let mut settings = AppSettings {
+            owner: Some("acme".into()),
+            pinned_repositories: ["images".into()].into(),
+            last_repository: Some("images".into()),
+            last_repository_id: Some(42),
+            ..AppSettings::default()
+        };
+        assert!(!settings.set_owner("ACME".into()));
+        assert!(settings.pinned_repositories.contains("images"));
+        assert_eq!(settings.last_repository_id, Some(42));
+        assert!(settings.set_owner("octocat".into()));
+        assert!(settings.pinned_repositories.is_empty());
+        assert!(settings.last_repository.is_none());
+        assert!(settings.last_repository_id.is_none());
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains("\"owner\":\"octocat\""));
+        assert!(!json.contains("organization"));
+        let restored: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.owner.as_deref(), Some("octocat"));
+    }
+
+    #[test]
     fn restores_a_pinned_repository_when_no_last_repository_is_saved() {
         let mut settings = AppSettings::default();
         settings
@@ -234,13 +273,17 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(
             r#"{
                 "organization": "acme",
-                "pinned_repositories": [],
-                "last_repository": null,
-                "last_repository_id": null
+                "pinned_repositories": ["images"],
+                "last_repository": "images",
+                "last_repository_id": 42
             }"#,
         )
         .expect("older settings should remain compatible");
 
+        assert_eq!(settings.owner.as_deref(), Some("acme"));
+        assert!(settings.pinned_repositories.contains("images"));
+        assert_eq!(settings.last_repository.as_deref(), Some("images"));
+        assert_eq!(settings.last_repository_id, Some(42));
         assert_eq!(settings.global_quick_copy_shortcut, "Command+Shift+G");
         assert!(!settings.global_quick_copy_shortcut_enabled);
         assert!(!settings.close_window_after_copy);

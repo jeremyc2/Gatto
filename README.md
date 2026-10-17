@@ -29,6 +29,7 @@ then the [walkthrough](docs/WALKTHROUGH.md) for your first upload.
 ## What you can do
 
 - Upload PNG, JPEG, GIF, and WebP from the clipboard, Finder, or a file picker.
+- Choose repositories owned by a personal GitHub account or an organization.
 - Upload batches, edit descriptions, retry failed images, and copy all results.
 - Preview images with zoom, pan, and previous/next navigation.
 - Use Quick Copy from the menu bar, a global shortcut, or a custom URL.

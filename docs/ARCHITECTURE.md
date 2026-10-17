@@ -80,8 +80,8 @@ Markdown copy control.
 ## Loading, batches, and window lifecycle
 
 Launch restores the remembered repository name and ID from settings without a
-GitHub request. Opening the repository picker loads the organization's paginated
-repository list and token through `gh`; uploading can instead resolve just the
+GitHub request. Opening the repository picker loads the account or organization's paginated
+repository list via GraphQL `repositoryOwner` (owned repositories only) and token through `gh`; uploading can instead resolve just the
 remembered repository ID and token when needed. The token is cached in process
 memory for the uploader window's lifetime. Reopen that window after changing the
 active GitHub CLI account to avoid using a previously loaded session. Quick Copy
@@ -131,7 +131,7 @@ uses the existing native close request and per-window cleanup callbacks.
 
 Quick Copy runs through a process-lifetime background service with no window or
 view dependency. Menu, shortcut, and URL actions all invoke that service. It
-snapshots the clipboard, loads saved preferences, requires an organization and a
+snapshots the clipboard, loads saved preferences, requires an account or organization and a
 pinned repository, validates the clipboard image (or first copied image file),
 and uses the same GitHub upload client and Markdown formatter as normal uploads.
 It prefers the last selected repository when pinned, otherwise the first pinned
@@ -142,10 +142,12 @@ and staged attachments are untouched, and closing a window cannot stop its job.
 
 ## App Preferences and local state
 
-The organization, repository selections, shortcut configuration, and general preferences are
+The repository owner (personal account or organization), repository selections, shortcut configuration, and general preferences are
 saved as JSON in `~/Library/Application Support/Gatto/settings.json`. The GitHub
-token and image bytes are never written there. Until an organization is set, the main screen only
-points the user to App Preferences.
+token and image bytes are never written there. Until an account or organization is set, the main screen only
+points the user to App Preferences. The `owner` setting accepts the former
+`organization` key when reading existing preferences. Changing owners clears
+repository selections, cached IDs, and pins after successfully saving settings.
 
 Start at Login is represented by the exact file
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the

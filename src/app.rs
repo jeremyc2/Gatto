@@ -38,7 +38,7 @@ use crate::{
     image_preview::ImagePreview,
     log_viewer::LogViewer,
     menu_bar::MenuBarController,
-    model::{AttachmentUploadState, Repository, StagedImage, parse_organization},
+    model::{AttachmentUploadState, Repository, StagedImage, parse_owner},
     settings::AppSettings,
     window_limits,
 };
@@ -127,7 +127,7 @@ impl WalkthroughScenario {
 }
 
 pub struct UploaderApp {
-    organization_input: Entity<InputState>,
+    owner_input: Entity<InputState>,
     global_shortcut_input: Entity<InputState>,
     repository_picker: Entity<RepositoryPicker>,
     repositories: HashMap<String, Repository>,
@@ -156,7 +156,7 @@ pub struct UploaderApp {
     header_mark: Arc<Image>,
     rooftops_window: Option<AnyWindowHandle>,
     focus_handle: FocusHandle,
-    _organization_subscription: Subscription,
+    _owner_subscription: Subscription,
     _global_shortcut_subscription: Subscription,
     _repository_subscription: Subscription,
 }
@@ -205,19 +205,18 @@ impl UploaderApp {
         persist_repository_selection: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        let initial_organization = settings.organization.clone().unwrap_or_default();
+        let initial_owner = settings.owner.clone().unwrap_or_default();
         let initial_shortcut = settings.global_quick_copy_shortcut.clone();
-        let organization_input = cx.new(|cx| {
+        let owner_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("organization")
-                .default_value(initial_organization)
+                .placeholder("account or organization")
+                .default_value(initial_owner)
         });
-        let organization_subscription =
-            cx.subscribe(&organization_input, |_: &mut Self, _, event, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
+        let owner_subscription = cx.subscribe(&owner_input, |_: &mut Self, _, event, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         let global_shortcut_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Command+Shift+G")
@@ -268,7 +267,7 @@ impl UploaderApp {
         );
 
         let mut this = Self {
-            organization_input,
+            owner_input,
             global_shortcut_input,
             repository_picker,
             repositories: HashMap::new(),
@@ -276,7 +275,7 @@ impl UploaderApp {
             token: None,
             loading_token: false,
             loading_repository: false,
-            load_state: if settings.organization.is_some() {
+            load_state: if settings.owner.is_some() {
                 LoadState::Idle
             } else {
                 LoadState::NeedsSetup
@@ -304,7 +303,7 @@ impl UploaderApp {
             )),
             rooftops_window: None,
             focus_handle: cx.focus_handle(),
-            _organization_subscription: organization_subscription,
+            _owner_subscription: owner_subscription,
             _global_shortcut_subscription: global_shortcut_subscription,
             _repository_subscription: subscription,
         };
@@ -327,7 +326,7 @@ impl UploaderApp {
     ) -> Self {
         let mut settings = AppSettings::default();
         if !matches!(scenario, WalkthroughScenario::FirstRun) {
-            settings.organization = Some("acme-labs".into());
+            settings.owner = Some("acme-labs".into());
             settings.pinned_repositories.insert("gatto".into());
             settings.last_repository = Some("gatto".into());
             settings.last_repository_id = Some(1001);
@@ -485,7 +484,7 @@ impl UploaderApp {
         };
         if self.load_state == LoadState::NeedsSetup {
             self.warn(
-                "Paste actions need an organization in App Preferences first.",
+                "Paste actions need an account or organization in App Preferences first.",
                 window,
                 cx,
             );
@@ -563,9 +562,9 @@ impl UploaderApp {
 
     fn load_repositories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.repositories.clear();
-        let Some(organization) = self.settings.organization.clone() else {
+        let Some(owner) = self.settings.owner.clone() else {
             self.diagnostics
-                .info("Repository loading is waiting for an organization setting.");
+                .info("Repository loading is waiting for an account or organization setting.");
             self.load_state = LoadState::NeedsSetup;
             cx.notify();
             return;
@@ -580,22 +579,22 @@ impl UploaderApp {
             );
         });
         self.diagnostics.info(format!(
-            "Loading repositories for organization {organization}."
+            "Loading repositories for account or organization {owner}."
         ));
         cx.notify();
 
         let diagnostics = self.diagnostics.clone();
         let state_generation = self.state_generation;
         cx.spawn_in(window, async move |this, window| {
-            let requested = organization.clone();
+            let requested = owner.clone();
             let result = window
-                .background_spawn(async move { github::load_session(&organization, &diagnostics) })
+                .background_spawn(async move { github::load_session(&owner, &diagnostics) })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
                 if this.state_generation != state_generation {
                     return;
                 }
-                if this.settings.organization.as_deref() != Some(requested.as_str()) {
+                if this.settings.owner.as_deref() != Some(requested.as_str()) {
                     return;
                 }
                 match result {
@@ -1371,8 +1370,8 @@ impl UploaderApp {
         if self.loading_repository {
             return;
         }
-        let (Some(organization), Some(repository)) = (
-            self.settings.organization.clone(),
+        let (Some(owner), Some(repository)) = (
+            self.settings.owner.clone(),
             self.selected_repository.clone(),
         ) else {
             return;
@@ -1385,16 +1384,29 @@ impl UploaderApp {
         let diagnostics = self.diagnostics.clone();
         let state_generation = self.state_generation;
         cx.spawn_in(window, async move |this, window| {
+            let requested_owner = owner.clone();
+            let requested_repository = repository.name.clone();
             let result = window
                 .background_spawn(async move {
-                    github::load_repository_id(&organization, &repository.name, &diagnostics)
+                    github::load_repository_id(&owner, &repository.name, &diagnostics)
                 })
                 .await;
             let _ = this.update_in(window, move |this, window, cx| {
-                if this.state_generation != state_generation {
+                if this.state_generation != state_generation
+                    || this.settings.owner.as_deref() != Some(requested_owner.as_str())
+                {
                     return;
                 }
                 this.loading_repository = false;
+                if this
+                    .selected_repository
+                    .as_ref()
+                    .map(|repo| repo.name.as_str())
+                    != Some(requested_repository.as_str())
+                {
+                    cx.notify();
+                    return;
+                }
                 match result {
                     Ok(id) => {
                         if let Some(repository) = this.selected_repository.as_mut() {
@@ -1562,48 +1574,40 @@ impl UploaderApp {
         cx.notify();
     }
 
-    fn save_organization(
+    fn save_owner(
         &mut self,
         _: &gpui_kit::ClickEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let value = self.organization_input.read(cx).value();
-        let organization = match parse_organization(&value) {
-            Ok(organization) => organization,
+        let value = self.owner_input.read(cx).value();
+        let owner = match parse_owner(&value) {
+            Ok(owner) => owner,
             Err(error) => {
                 window.push_notification(Notification::error(error.to_string()), cx);
                 return;
             }
         };
 
-        let previous = self.settings.organization.replace(organization.clone());
-        let previous_repository = self.settings.last_repository.clone();
-        let previous_repository_id = self.settings.last_repository_id;
-        if previous.as_deref() != Some(organization.as_str()) {
-            self.settings.last_repository = None;
-            self.settings.last_repository_id = None;
-            self.selected_repository = None;
-            self.repositories.clear();
-            self.repository_picker.update(cx, |picker, cx| {
-                picker.set_selected_indices([], window, cx);
-                picker.set_items(
-                    SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
-                    window,
-                    cx,
-                );
-            });
-        }
-        if let Err(error) = self.settings.save() {
-            self.settings.organization = previous;
-            self.settings.last_repository = previous_repository;
-            self.settings.last_repository_id = previous_repository_id;
-            self.restore_remembered_repository(window, cx);
+        let mut settings = self.settings.clone();
+        let owner_changed = settings.set_owner(owner);
+        if let Err(error) = settings.save() {
             window.push_notification(
                 Notification::error(format!("Could not save preferences: {error}")),
                 cx,
             );
             return;
+        }
+        self.settings = settings;
+        if owner_changed {
+            self.selected_repository = None;
+            self.loading_repository = false;
+            self.pending_paste_repository = None;
+            self.pending_menu_paste = false;
+            self.menu_bar.set_paste_actions_visible(false);
+            self.repository_picker.update(cx, |picker, cx| {
+                picker.set_selected_indices([], window, cx);
+            });
         }
 
         self.load_repositories(window, cx);
@@ -1870,7 +1874,7 @@ impl UploaderApp {
         AppSettings::reset()?;
 
         self.settings = AppSettings::default();
-        self.organization_input.update(cx, |input, cx| {
+        self.owner_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
         let default_shortcut = self.settings.global_quick_copy_shortcut.clone();
@@ -2094,7 +2098,7 @@ impl UploaderApp {
     ) -> impl IntoElement {
         let disabled = self.load_state == LoadState::NeedsSetup;
         let loading = self.load_state == LoadState::Loading;
-        let organization = self.settings.organization.clone().unwrap_or_default();
+        let owner = self.settings.owner.clone().unwrap_or_default();
         let view = cx.entity();
         v_flex()
             .w_full()
@@ -2120,7 +2124,7 @@ impl UploaderApp {
             )
             .child(
                 Combobox::new(&self.repository_picker)
-                    .placeholder(format!("Search {organization} repositories…"))
+                    .placeholder(format!("Search {owner} repositories…"))
                     .search_placeholder("Type to filter repositories…")
                     .disabled(disabled)
                     .empty(move |_, cx| {
@@ -2201,13 +2205,13 @@ impl UploaderApp {
                     .size(px(30.))
                     .text_color(cx.theme().primary),
             )
-            .child(div().text_sm().font_semibold().child("Set an organization"))
+            .child(div().text_sm().font_semibold().child("Set an account or organization"))
             .child(
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Enter a GitHub organization in App Preferences to load its repositories.",
+                        "Enter a GitHub account/organization in App Preferences to load its repositories.",
                     ),
             )
             .child(
@@ -2591,10 +2595,8 @@ impl UploaderApp {
             .iter()
             .cloned()
             .collect::<Vec<_>>();
-        let organization_is_saved = parse_organization(&self.organization_input.read(cx).value())
-            .is_ok_and(|organization| {
-                self.settings.organization.as_deref() == Some(organization.as_str())
-            });
+        let owner_is_saved = parse_owner(&self.owner_input.read(cx).value())
+            .is_ok_and(|owner| self.settings.owner.as_deref() == Some(owner.as_str()));
         v_flex()
             .flex_none()
             .p_6()
@@ -2622,30 +2624,35 @@ impl UploaderApp {
                     .child(
                         v_flex()
                             .gap_0p5()
-                            .child(div().font_semibold().text_sm().child("GitHub organization"))
+                            .child(
+                                div()
+                                    .font_semibold()
+                                    .text_sm()
+                                    .child("GitHub account/organization"),
+                            )
                             .child(
                                 div()
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child("Required."),
+                                    .child("Enter a personal account or organization login."),
                             ),
                     )
-                    .child(Input::new(&self.organization_input))
+                    .child(Input::new(&self.owner_input))
                     .child(
-                        Button::new("save-organization")
+                        Button::new("save-owner")
                             .primary()
                             .small()
                             .self_start()
-                            .label(if organization_is_saved {
-                                "Organization is saved"
+                            .label(if owner_is_saved {
+                                "Account/organization is saved"
                             } else {
-                                "Save organization"
+                                "Save account/organization"
                             })
-                            .disabled(organization_is_saved)
-                            .on_click(cx.listener(Self::save_organization)),
+                            .disabled(owner_is_saved)
+                            .on_click(cx.listener(Self::save_owner)),
                     ),
             )
-            .when(self.settings.organization.is_some(), |page| {
+            .when(self.settings.owner.is_some(), |page| {
                 page.child(
                     v_flex()
                         .gap_3()
@@ -3055,7 +3062,7 @@ mod tests {
                     Diagnostics::new(),
                     AppControllers::default(),
                     AppSettings {
-                        organization: Some("acme-labs".into()),
+                        owner: Some("acme-labs".into()),
                         ..AppSettings::default()
                     },
                     None,
@@ -3122,7 +3129,7 @@ mod tests {
     fn repository_picker_click_survives_the_loading_transition(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
         let settings = AppSettings {
-            organization: Some("acme-labs".into()),
+            owner: Some("acme-labs".into()),
             ..AppSettings::default()
         };
         let (view, cx) = cx.add_window_view(move |window, cx| {

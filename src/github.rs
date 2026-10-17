@@ -38,12 +38,9 @@ pub struct GithubSession {
     pub repositories: Vec<Repository>,
 }
 
-pub fn load_session(
-    organization: &str,
-    diagnostics: &Diagnostics,
-) -> Result<GithubSession, GithubError> {
+pub fn load_session(owner: &str, diagnostics: &Diagnostics) -> Result<GithubSession, GithubError> {
     let token = read_token(diagnostics)?;
-    let repositories = read_repositories(organization, diagnostics)?;
+    let repositories = read_repositories(owner, diagnostics)?;
     Ok(GithubSession {
         token,
         repositories,
@@ -55,13 +52,13 @@ pub fn load_token(diagnostics: &Diagnostics) -> Result<String, GithubError> {
     read_token(diagnostics)
 }
 
-/// Resolves one remembered repository without loading the organization's full list.
+/// Resolves one remembered repository without loading the owner's full list.
 pub fn load_repository_id(
-    organization: &str,
+    owner: &str,
     repository: &str,
     diagnostics: &Diagnostics,
 ) -> Result<u64, GithubError> {
-    let route = format!("repos/{organization}/{repository}");
+    let route = format!("repos/{owner}/{repository}");
     diagnostics.info("Resolving the remembered repository through GitHub CLI.");
     let output = run_gh(
         ["api", "--method", "GET", &route, "--jq", ".id"],
@@ -167,23 +164,44 @@ fn read_token(diagnostics: &Diagnostics) -> Result<String, GithubError> {
 }
 
 fn read_repositories(
-    organization: &str,
+    owner: &str,
     diagnostics: &Diagnostics,
 ) -> Result<Vec<Repository>, GithubError> {
-    let route = format!("orgs/{organization}/repos?per_page=100&type=all");
-    diagnostics.info("Requesting the organization repository list through GitHub CLI.");
-    let output = run_gh(
-        [
-            "api",
-            "--paginate",
-            "--method",
-            "GET",
-            &route,
-            "--jq",
-            ".[] | [.id, .name] | @tsv",
-        ],
-        diagnostics,
-    )
+    read_repositories_with(owner, diagnostics, |args| run_gh(args, diagnostics))
+}
+
+// RepositoryOwner covers both personal accounts and organizations. Restricting
+// ownerAffiliations avoids including repositories a person only collaborates on.
+const REPOSITORIES_QUERY: &str = r#"
+query($owner: String!, $endCursor: String) {
+  repositoryOwner(login: $owner) {
+    repositories(first: 100, after: $endCursor, ownerAffiliations: [OWNER]) {
+      nodes { databaseId name }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+"#;
+
+fn read_repositories_with(
+    owner: &str,
+    diagnostics: &Diagnostics,
+    request: impl FnOnce([&str; 9]) -> io::Result<Output>,
+) -> Result<Vec<Repository>, GithubError> {
+    let owner_field = format!("owner={owner}");
+    let query_field = format!("query={REPOSITORIES_QUERY}");
+    diagnostics.info("Requesting the account or organization repository list through GitHub CLI.");
+    let output = request([
+        "api",
+        "graphql",
+        "--paginate",
+        "-f",
+        &query_field,
+        "-f",
+        &owner_field,
+        "--jq",
+        ".data.repositoryOwner.repositories.nodes[] | [.databaseId, .name] | @tsv",
+    ])
     .map_err(|error| match error.kind() {
         io::ErrorKind::NotFound => GithubError::CliUnavailable,
         _ => GithubError::RepositoryList(error.to_string()),
@@ -213,7 +231,7 @@ fn read_repositories(
 
     if repositories.is_empty() {
         return Err(GithubError::RepositoryList(format!(
-            "No accessible repositories were found for {organization}"
+            "No accessible repositories were found for {owner}"
         )));
     }
     diagnostics.info(format!(
@@ -308,4 +326,60 @@ struct AttachmentResponse {
     url: Option<String>,
     #[serde(default)]
     href: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+
+    fn output(code: i32, stdout: &str, stderr: &str) -> Output {
+        Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn lists_personal_and_organization_repositories_across_pages() {
+        for owner in ["octocat", "acme-labs"] {
+            let repositories = read_repositories_with(owner, &Diagnostics::new(), |args| {
+                assert_eq!(&args[..4], &["api", "graphql", "--paginate", "-f"]);
+                assert_eq!(args[6], format!("owner={owner}"));
+                assert!(args[4].contains("repositoryOwner(login: $owner)"));
+                assert!(args[4].contains("ownerAffiliations: [OWNER]"));
+                assert!(args[4].contains("after: $endCursor"));
+                assert!(args[4].contains("pageInfo { hasNextPage endCursor }"));
+                assert!(args[8].contains(".databaseId"));
+                // gh emits the selected rows from every page into one stream.
+                Ok(output(0, "42\tzebra\n9\tAlpha\n103\tprivate-repo\n", ""))
+            })
+            .unwrap();
+            assert_eq!(
+                repositories
+                    .iter()
+                    .map(|repo| (repo.id, repo.name.as_str()))
+                    .collect::<Vec<_>>(),
+                [(9, "Alpha"), (103, "private-repo"), (42, "zebra")]
+            );
+        }
+    }
+
+    #[test]
+    fn reports_inaccessible_owners_and_empty_repository_lists() {
+        let diagnostics = Diagnostics::new();
+        let error = read_repositories_with("missing", &diagnostics, |_| {
+            Ok(output(1, "", "Could not resolve to a RepositoryOwner"))
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("Could not resolve"));
+        let error =
+            read_repositories_with("empty", &diagnostics, |_| Ok(output(0, "", ""))).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("No accessible repositories were found for empty")
+        );
+    }
 }
