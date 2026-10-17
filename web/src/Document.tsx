@@ -17,6 +17,10 @@ export default function Document(props: { children: JSX.Element }) {
         />
         <meta name="color-scheme" content="light dark" />
         <title>Gatto — Your image. Ready to share.</title>
+        <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+        <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
         <link rel="preload" href={coconat} as="font" type="font/woff2" crossorigin="anonymous" />
         <link rel="preload" href={apfel} as="font" type="font/woff2" crossorigin="anonymous" />
         <HydrationScript />

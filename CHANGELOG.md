@@ -7,7 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-## [0.12.2] - 2026-10-17
+## [0.13.0] - 2026-10-17
 
 ### Added
 
@@ -15,6 +15,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   navigation, download links, and links to setup, walkthrough, and support guides.
   The story supports fast scrolling, reduced motion, and narrow screens, with
   individual paw prints that adapt to the available space.
+- Added a black cat favicon inspired by the website's luminous character, with
+  cyan and violet eyes, scalable artwork, browser fallback sizes, and an Apple
+  touch icon.
 - Added `bun deploy:web` to build and update the existing Cloudflare site using
   the beta `cf` CLI, keeping account configuration in the local environment.
 
