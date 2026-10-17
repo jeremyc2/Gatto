@@ -7,8 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-17
+
 ### Fixed
 
+- Make the website's watercolor and paper cats more distinct, unify the cast's
+  lighting, keep the paper cat's limbs and tail consistently layered, distinguish
+  tail postures throughout the story, and correct the GitHub tray and picture
+  placement.
 - Keep website story illustrations centered within the available scene height on
   wide, shorter screens, preventing overlap with the chapter tracker.
 

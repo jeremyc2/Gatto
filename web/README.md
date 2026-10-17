@@ -34,3 +34,10 @@ the build and story logic; they do not measure browser layout.
 
 [Design system](DESIGN-SYSTEM.md) owns the styling conventions, component APIs,
 CSS budget and measurements.
+
+Story illustrations live in `assets/images/`: `story-bring`, `story-upload`, and
+`story-copy`. Each PNG master has a matching lossless WebP served by the website;
+keep both copies synchronized at 1536 × 1024. The cast uses watercolor, layered
+paper and smooth animated rendering under shared warm light. The
+[artwork record](../docs/design/explorations/art/website-cat-materials.md) contains
+the source provenance, prompts and export commands.
