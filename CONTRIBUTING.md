@@ -135,8 +135,8 @@ configuration remains in `.github/dependabot.yml`. Restoring workflow files to
 
 ## Dependencies
 
-The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.7.1`, which pins
-and re-exports its compatible GPUI `0.3.8` snapshot. Import GPUI through that
+The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.7.3`, which pins
+and re-exports its compatible GPUI `0.3.9` snapshot. Import GPUI through that
 facade; upgrade the pair together. Check `Cargo.toml` for the minimum Rust version
 and `rust-toolchain.toml` for the selected toolchain.
 
