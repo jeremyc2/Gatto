@@ -4,6 +4,8 @@
   <img src="packaging/rocket-cat-transparent.png" alt="Gatto, a cat with rocket boosters" width="220">
 </p>
 
+
+
 A macOS app for adding images to GitHub pull requests, issues, comments,
 and discussions.
 
