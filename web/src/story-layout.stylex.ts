@@ -47,7 +47,8 @@ export const storyLayout = stylex.defineVars({
     "@media (width <= 760px)": "760px",
   },
   imageMaximum: {
-    default: "none",
+    // Leave room for the header, chapter tracker and scene padding, even on wide screens.
+    default: "calc(100svh - 211px)",
     "@media (width > 760px) and (620px < height <= 700px)": "390px",
     "@media (width > 760px) and (height <= 620px)": "calc(100svh - 170px)",
     "@media (width <= 760px) and (height > 620px)": "calc((100svh - 135px)*0.52)",

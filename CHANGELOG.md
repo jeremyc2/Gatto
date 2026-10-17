@@ -7,6 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep website story illustrations centered within the available scene height on
+  wide, shorter screens, preventing overlap with the chapter tracker.
+
 ## [0.13.0] - 2026-10-17
 
 ### Added

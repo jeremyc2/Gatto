@@ -95,6 +95,7 @@ Measured on 2026-10-17 with Vite 8.3.4 and StyleX 0.19.1:
 | Initial direct StyleX translation, before Vite/minification       |        19,218 |      4,233 |
 | Refactored system, all production CSS including font declarations |        11,497 |      3,967 |
 | Native snapshot transitions and connected chapter tracker         |        16,369 |      4,969 |
+| Responsive scene height correction                                |        16,360 |      4,963 |
 
 The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change

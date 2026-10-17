@@ -472,7 +472,7 @@ const styles = stylex.create({
     display: "block",
     borderRadius: radius.image,
     maxHeight: {
-      default: "none",
+      default: null,
       [storyMedia.shortFlow]: 390,
       [storyMedia.pinned]: storyLayout.imageMaximum,
     },
