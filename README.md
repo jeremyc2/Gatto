@@ -16,11 +16,11 @@ service. Images go directly from your Mac to GitHub; Gatto doesn't have a backen
 ## Download
 
 <!-- release-size:start -->
-<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.12.1">
+<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.14.0">
   <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">
 </a>
 
-**Gatto v0.12.1** — 16.6 MB download · 30.0 MB installed app.
+**Gatto v0.14.0** — 16.6 MB download · 30.1 MB installed app.
 <!-- release-size:end -->
 
 Follow the [setup guide](docs/SETUP.md) to install and connect your GitHub account,
