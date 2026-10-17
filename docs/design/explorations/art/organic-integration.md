@@ -1,5 +1,8 @@
 # Organic picture integration
 
+The production website now uses the [October 17 material and lighting revision](website-cat-materials.md).
+The exploration studies retain the `v3` sources below as historical artwork.
+
 October 16, 2026. Built-in image-generation tool. The user rejected the independent prop overlay because paws and box rims did not correctly overlap it. These edits integrate the shared picture reference into each illustration instead.
 
 | Active file | Generated source |
