@@ -4,8 +4,10 @@ import { documentStyles } from "./design-system/document.stylex";
 import "./document.css";
 import coconat from "../assets/fonts/Coconat.woff2";
 import apfel from "../assets/fonts/Apfel.woff2";
+import { isGattoverse } from "./route";
 
 export default function Document(props: { children: JSX.Element }) {
+  const game = isGattoverse();
   return (
     <html lang="en" {...stylex.attrs(documentStyles.root)}>
       <head>
@@ -13,10 +15,17 @@ export default function Document(props: { children: JSX.Element }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta
           name="description"
-          content="Gatto is a small Mac app for getting images into GitHub conversations. Bring an image, upload it to GitHub, and copy the Markdown."
+          content={
+            game
+              ? "A little lost. A long way to go. Explore the rooftops, meet cats from other worlds, and take a slightly used jetpack into the night."
+              : "Gatto is a small Mac app for getting images into GitHub conversations. Bring an image, upload it to GitHub, and copy the Markdown."
+          }
         />
         <meta name="color-scheme" content="light dark" />
-        <title>Gatto — Your image. Ready to share.</title>
+        <title>
+          {game ? "Gattoverse — Somewhere between worlds." : "Gatto — Your image. Ready to share."}
+        </title>
+        {game && <meta name="robots" content="noindex" />}
         <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
         <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />

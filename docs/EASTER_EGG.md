@@ -45,3 +45,33 @@ The saved scorecard:
 
 See the [contributor guide](../CONTRIBUTING.md#walkthrough-screenshots) to regenerate
 the game, results, and scorecard images alongside the app walkthrough.
+
+## Gattoverse web game
+
+Gattoverse is a separate, full-screen game in the Rooftops world. The black cat
+walks in eight directions across large, generated rooftops. Laundry lines are
+decorative and can be walked underneath. Furniture blocks movement; tapping a
+destination routes around it.
+
+The question-mark button contains the controls. **WASD** or arrow keys move,
+**E** interacts, **J** equips an owned jetpack, and **Escape** pauses. Touch screens
+have a thumbstick and contextual action buttons. Pausing and talking to visitors
+stop the simulation, including hunger and enemy movement.
+
+Scattered keys open suitcases, which contain clothes or occasional gold coins.
+Keys are scarcer than suitcases and are generated separately. Loose coins make
+the initial jetpack purchase possible even if opened luggage contains only
+clothes. The vending machine trades five coins for a permanent jetpack. Spending
+coins reduces the pocket balance without reducing the run's score.
+
+In flight, hold **Space**, **↑**, or the screen to climb; release to descend.
+Landing from above returns to rooftop exploration. Food replenishes stamina,
+which walking and flying consume. Low stamina adds a translucent red edge pulse;
+reduced motion makes it static. Exhaustion, falling, or touching a rat, owl or
+unicorn ends the run. Nearby unicorns pursue the cat for a limited time before
+returning to their home area.
+
+Watercolor, folded-paper and large black cats wander, acknowledge nearby visitors,
+and tell stories about their jobs and lost universes. Restarting generates a new
+seed and clears the run. The best coin score stays in this browser when local
+storage is available. There is no server leaderboard or saved run.

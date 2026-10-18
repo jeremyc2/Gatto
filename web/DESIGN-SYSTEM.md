@@ -119,14 +119,12 @@ the entry animation. There is no vendor stylesheet. It keeps one active notice a
 extends the library's hover pause to keyboard focus. The portal's native button
 uses a circular focus indicator and stays hidden from keyboard navigation while
 the scroll section is collapsed.
-Portal activation displays “Gattoverse mini game coming soon.” for six seconds;
-explicit dismissal restores focus to its trigger. For notification changes,
-check activation, repeated clicks, dismissal, focus and timeout behavior on
-desktop and phone widths.
+For notification changes, check dismissal, focus and timeout behavior on desktop
+and phone widths. Gattoverse uses native dialogs for its own menus.
 
 Run `bun build:web` and `bun size:web` to measure the actual stylesheet links in
 `web/dist/client/index.html`. Bun reports raw bytes and gzip bytes. The build test
-limits the combined CSS to **22 KiB raw and 7 KiB gzip**, leaving room above the
+limits the combined CSS to **28 KiB raw and 9 KiB gzip**, leaving room above the
 current page while catching large regressions. Raise a budget only with a measured
 reason. Font and image payloads are separate from this CSS budget.
 
@@ -145,6 +143,7 @@ Measured on 2026-10-17 with Vite 8.3.4 and StyleX 0.19.1:
 | Deeper layered paper tears and contour shadows                    |        22,177 |      6,688 |
 | Remove the chapter tracker's top divider                          |        22,047 |      6,657 |
 | Complementary tear masks with a continuous paper setting          |        22,322 |      6,704 |
+| Full-screen game HUD, menus, touch controls and stamina feedback  |        26,439 |      8,091 |
 
 The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
 correction. The independent cat approach and feathered void add 324 raw bytes
@@ -160,11 +159,47 @@ The larger tear masks, paper underside and contour shadows add 545 raw bytes and
 Removing the chapter tracker's divider saves 130 raw bytes and 31 gzip bytes.
 Complementary masks and the shared paper setting add 275 raw bytes and 47 gzip
 bytes, remaining within the same budget.
+The game adds 4,117 raw bytes and 1,387 gzip bytes over that composition. The
+single extracted stylesheet includes both pages, so the measured addition raises
+the shared budget to 28 KiB raw and 9 KiB gzip. The game runtime and Phaser remain
+in a separate lazy browser chunk and are not preloaded by the homepage.
 
 The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change
 reflects both the source refactor and production minification. Refresh this dated
 measurement after intentional design-system or build changes.
+
+## Gattoverse visuals
+
+The game fills `100dvh` with no surrounding website navigation, explanatory
+cards or headings. Semantic headings and control descriptions remain visually
+hidden. A question-mark button opens help; pause and result menus use labeled
+icon buttons. The HUD shows a green stamina bar, gold coin and key counts, and a
+small map. Low stamina pulses a translucent red vignette at a 1.4-second period;
+reduced motion keeps the edge static. Game colors use fixed night-scene tokens
+in either system appearance. Other website compositions retain their themes.
+
+`src/gattoverse/rendering/` owns the visual implementation. Roofs use muted
+concrete, scattered wear, angled laundry lines, plants, chimneys, vents, rugs,
+crates, puddles and lanterns. Perspective is an oblique projection with a camera
+following the cat. The camera switches to a horizontal flight composition after
+takeoff. Cloth becomes translucent when it would hide the player.
+
+The actor atlas paints eight distinct directional poses and six frames for each
+of seven character types. Front, back, side and diagonal views change anatomy,
+visible eyes, ears, legs and tails. They are not rotations of one sprite. Phaser
+owns texture batching, frame animation, camera transforms and depth sorting;
+the simulation supplies position, facing and movement state. Watercolor texture,
+paper facets and the larger rounded black cat distinguish the visitors.
+The 128 × 128 coin image derives from the existing
+[`packaging/kitten-coin.png`](../packaging/kitten-coin.png) master, preserving the
+Rust game's coin. Other game art is code-native canvas/vector drawing.
+
+Verify native dialog dismissal and focus return, keyboard diagonals, click-to-walk
+around furniture, touch capture/release, both camera modes, and zero document
+overflow at desktop and phone sizes. See the
+[architecture guide](../docs/ARCHITECTURE.md#gattoverse-simulation-and-rendering)
+for the source responsibilities and simulation interface.
 
 ## References
 

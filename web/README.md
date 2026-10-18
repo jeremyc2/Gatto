@@ -30,7 +30,8 @@ The deployable static site is `web/dist/client/`.
 For responsive story changes, check all three chapters in the browser at
 1397 × 716 and 1920 × 720, plus phone and tablet sizes. Illustrations should fit
 inside their scenes above the chapter tracker without cropping. Bun tests check
-the build and story logic; they do not measure browser layout.
+the build, story logic and renderer-independent game simulation; they do not
+measure browser layout.
 
 [Design system](DESIGN-SYSTEM.md) owns the styling conventions, component APIs,
 CSS budget and measurements.

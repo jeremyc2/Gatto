@@ -21,6 +21,15 @@ export const colors = stylex.defineVars({
   portalVoid: "#000",
   portalVoidDepth: "#100910",
   portalVoidHaze: "rgba(89, 40, 17, 0.35)",
+  gameSky: "#101322",
+  gamePanel: "#191d2d",
+  gameBorder: "#35364c",
+  gameText: "#f4e9d6",
+  gameMuted: "#b3aec2",
+  gameGold: "#ffdba0",
+  gameMint: "#a8f0ce",
+  gameGlass: "#111b2bd9",
+  gameGlassBorder: "#b2b6c038",
 });
 
 export const type = stylex.defineVars({

@@ -9,9 +9,12 @@ import { SiteHeader } from "./components/SiteHeader";
 import { Features } from "./components/Features";
 import { DownloadSection } from "./components/DownloadSection";
 import { PortalEnding } from "./components/PortalCat";
-import { createSiteNotifications } from "./components/SiteNotifications";
+import { lazy } from "solid-js";
+import { isGattoverse } from "./route";
+
+const Gattoverse = lazy(() => import("./gattoverse/Gattoverse"));
 export default function App() {
-  const notifications = createSiteNotifications();
+  if (isGattoverse()) return <Gattoverse />;
   return (
     <>
       <SiteHeader />
@@ -20,8 +23,7 @@ export default function App() {
         <Features />
         <DownloadSection />
       </main>
-      <PortalEnding onActivate={() => notifications.show("Gattoverse mini game coming soon.")} />
-      <notifications.Region />
+      <PortalEnding onActivate={() => window.location.assign("/gattoverse")} />
     </>
   );
 }

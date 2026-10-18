@@ -5,6 +5,8 @@
   "dependencies": {
     "@solidjs/web": "2.0.0-rc.15",
     "@stylexjs/stylex": "0.19.1",
+    "bitecs": "0.4.0",
+    "phaser": "4.2.1",
     "solid-js": "2.0.0-rc.15",
     "toastify-js": "1.12.0"
   },
