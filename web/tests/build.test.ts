@@ -56,8 +56,8 @@ test("prerenders all scenes, concise copy and the two README download badges", a
 test("ships one extracted stylesheet within the CSS budget, with themes and reduced motion", async () => {
   const size = await cssSize();
   expect(size.files).toHaveLength(1);
-  expect(size.bytes).toBeLessThan(22 * 1024);
-  expect(size.gzip).toBeLessThan(7 * 1024);
+  expect(size.bytes).toBeLessThan(28 * 1024);
+  expect(size.gzip).toBeLessThan(9 * 1024);
   const path = size.files[0]?.path;
   if (!path) throw new Error("The extracted stylesheet is missing.");
   const css = await Bun.file(new URL(path, staticDirectory)).text();
@@ -65,4 +65,19 @@ test("ships one extracted stylesheet within the CSS budget, with themes and redu
   expect(css).toContain("prefers-reduced-motion");
   expect(css).toContain("prefers-color-scheme");
   expect(css).not.toContain("data:font");
+});
+
+test("prerenders the standalone game with its own metadata and keeps the engine out of the homepage entry", async () => {
+  const html = await Bun.file(new URL("gattoverse/index.html", staticDirectory)).text();
+  expect(html).toContain("Gattoverse — Somewhere between worlds.");
+  expect(html).toContain('content="noindex"');
+  expect(html).toContain('aria-label="Stamina"');
+  expect(html).toContain('aria-label="Help"');
+  expect(html).not.toContain('id="chapter-bring"');
+  expect(html).not.toContain("The night is yours.");
+  const home = await Bun.file(new URL("index.html", staticDirectory)).text();
+  expect(home).not.toMatch(/src="[^"]*runtime-[^"]*\.js"/);
+  expect(home).not.toMatch(/href="[^"]*runtime-[^"]*\.js"/);
+  const manifest = await Bun.file(new URL(".vite/manifest.json", staticDirectory)).json();
+  expect(Object.keys(manifest).some((key) => key.endsWith("gattoverse/runtime.ts"))).toBe(true);
 });

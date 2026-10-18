@@ -44,6 +44,40 @@ Each installed launch can retry cleanup; once ejected, later launches do nothing
 Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite,
 with the app’s existing dependencies.
 
+## Gattoverse simulation and rendering
+
+The web game uses BitECS 0.4.0's current API and Phaser 4.2.1. Its simulation is
+independent of the browser and renderer. The module's interface is
+`createSimulation(seed)` with `send(command)`, `step(seconds)`, and `read()`.
+Tests use that same interface to play complete runs without a canvas or DOM.
+
+| Location under `web/src/gattoverse/` | Owns |
+| --- | --- |
+| `simulation/contracts.ts` | Commands and the read-only view shared by callers. |
+| `simulation/components.ts`, `world.ts` | Per-world BitECS component stores, entity creation and lifetime. |
+| `simulation/generation.ts`, `random.ts` | Seeded roof contents and flight terrain. |
+| `simulation/navigation.ts` | Furniture avoidance for tap-to-walk. Its navigation grid does not determine visual placement. |
+| `simulation/systems/` | Movement, autonomous behavior, interactions, collisions and stamina. |
+| `rendering/` | Phaser textures, directional sprite atlases, camera, depth ordering, scenery and visual feedback. |
+| `input/browser.ts` | Keyboard, pointer and thumbstick input translated to commands. |
+| `ui/` | Icon HUD, minimap, native pause/help/dialogue dialogs and touch controls. |
+| `runtime.ts` | Browser lifecycle and fixed-step scheduling. |
+
+The simulation advances at 60 fixed steps per second, with a bounded catch-up
+interval. Each run allocates isolated component stores. Component data owns
+positions, velocity, facing, AI targets and pursuit timers, collision extents,
+loot state and inventory. Static roof and flight layouts are world resources.
+Seeded random sources determine generation and AI decisions. Older roof entities
+and flight sections are evicted as the player proceeds.
+
+Phaser receives the view and updates sprites. It has no physics configuration,
+input handlers, inventory or game-rule callbacks. Picking returns only a world
+coordinate and optional entity ID; the simulation validates the resulting
+command. Storage, visibility, native dialogs and keyboard focus stay outside the
+simulation. Hiding the page pauses the run and sleeps rendering; resume requires
+an explicit action. The only persisted game value is the browser's local best
+coin score.
+
 ## Data flow
 
 ```text

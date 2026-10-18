@@ -3,7 +3,7 @@ import { dynamic, type JSX } from "@solidjs/web";
 import { isStatic } from "solid-js";
 
 export function VisuallyHidden(props: {
-  as?: "span" | "h2" | "p";
+  as?: "span" | "h1" | "h2" | "p";
   children: JSX.Element;
   id?: string;
   role?: "status";

@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add Gattoverse, a full-screen web game with procedurally scattered rooftop
+  exploration, eight-direction character animation, wandering visitors, luggage,
+  stamina, jetpack flight, coins and pursuing enemies. BitECS 0.4.0 owns the game
+  rules; Phaser 4.2.1 provides the rendering layer. Include keyboard and touch
+  controls, an icon HUD, native pause/help menus and a local best score.
+
 ## [0.14.0] - 2026-10-17
 
 ### Added

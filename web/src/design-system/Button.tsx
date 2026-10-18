@@ -4,6 +4,7 @@ import { colors, radius } from "./tokens.stylex";
 
 export function Button(props: {
   children: JSX.Element;
+  label?: string;
   onClick: () => void;
   variant?: "quiet" | "selected";
   disabled?: boolean;
@@ -14,6 +15,7 @@ export function Button(props: {
   return (
     <button
       type="button"
+      aria-label={props.label}
       disabled={props.disabled}
       onClick={props.onClick}
       aria-current={props["aria-current"]}

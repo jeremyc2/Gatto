@@ -4,9 +4,13 @@ const { handleRequest } = (await import(
 )) as {
   handleRequest: (request: Request) => Promise<Response>;
 };
-// Localhost is only a base for the page URL; the handler renders it in memory.
-const prerenderUrl = new URL("/", "http://localhost");
-const response = await handleRequest(new Request(prerenderUrl));
-if (!response.ok) throw new Error(`Prerender failed: ${response.status}`);
-await Bun.write(new URL("../dist/client/index.html", import.meta.url), await response.text());
+// Each path gets a real static document, including direct loads and refreshes.
+for (const path of ["/", "/gattoverse/"]) {
+  const response = await handleRequest(new Request(new URL(path, "http://localhost")));
+  if (!response.ok) throw new Error(`Prerender failed for ${path}: ${response.status}`);
+  await Bun.write(
+    new URL(`../dist/client${path}index.html`, import.meta.url),
+    await response.text(),
+  );
+}
 console.log("Prerendered Gatto → web/dist/client/");
