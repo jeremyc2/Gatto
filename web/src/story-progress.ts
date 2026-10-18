@@ -1,5 +1,12 @@
 export type Chapter = 0 | 1 | 2;
 
+// Each leg ends at a marker. The final leg holds Share until sticky release.
+export const storyTrail = [
+  { start: 0.02, end: 0.31 },
+  { start: 0.33, end: 0.69 },
+  { start: 0.71, end: 1 },
+] as const;
+
 export function storyProgress(
   scrollY: number,
   storyTop: number,
@@ -11,8 +18,7 @@ export function storyProgress(
 }
 
 export function chapterAtProgress(progress: number): Chapter {
-  // Two transitions fill the pinned interval; Share has only a short settling edge.
-  return progress < 0.44 ? 0 : progress < 0.98 ? 1 : 2;
+  return progress < storyTrail[0].end ? 0 : progress < storyTrail[1].end ? 1 : 2;
 }
 
 export function chapterScrollTarget(
@@ -21,7 +27,7 @@ export function chapterScrollTarget(
   storyHeight: number,
   stageHeight: number,
 ): number {
-  // Send lands before its next paw trail; Share lands exactly at sticky release.
-  const positions = [0, 0.45, 1] as const;
+  // Controls land at their marker, before the next leg starts.
+  const positions = [0, 0.32, 0.7] as const;
   return storyTop + Math.max(1, storyHeight - stageHeight) * positions[chapter];
 }

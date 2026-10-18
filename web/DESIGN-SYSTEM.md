@@ -77,9 +77,21 @@ JavaScript. CSS selects the pinned story before hydration on script-enabled scre
 than 500 CSS pixels. Hydration updates its chapter state without changing its
 geometry. System appearance is a CSS token condition. The initial chapter update is
 scheduled for the next animation frame so focus synchronization can flush outside
-Solid's setup effect. The sticky range ends with Share's arrival, retaining only
-a 2% settling edge. Chapter controls and consecutive paw fade ranges use that
-same shortened interval; the final control targets its release point.
+Solid's setup effect. The sticky range includes a final paw trail after Share's
+arrival. The three trail legs cover 2%–31%, 33%–69% and 71%–100% of the pinned
+range; Share remains visible through the last leg in either scroll direction.
+Chapter controls stop at their marker before the next trail begins. A fourth,
+unnumbered circle is decorative and reveals a large, still rainbow pawprint at
+sticky release. It has no label or button behavior. A named inline-size container
+on the tracker wrapper keeps the chapter controls visible while at least 740px
+is available, leaving room for the labels and five prints per gap. Below 740px
+(currently a viewport narrower than 796px), the controls disappear, leaving
+three connected paw trails and the final circle across the available width.
+The tracker fills its container up to 960px,
+then stays centered so wider screens do not add trail length or prints.
+Each gap fits up to twelve prints, with
+exclusive container ranges keeping the visible count and fade timing aligned.
+This replaces the release-at-Share behavior recorded on 2026-10-17 in ADR 0002.
 Chapter changes use native View Transitions with directional
 transforms; reduced motion and unsupported
 browsers update immediately. `src/story-transitions.css` owns the document-level
@@ -126,25 +138,27 @@ desktop and phone widths.
 
 Run `bun build:web` and `bun size:web` to measure the actual stylesheet links in
 `web/dist/client/index.html`. Bun reports raw bytes and gzip bytes. The build test
-limits the combined CSS to **22 KiB raw and 7 KiB gzip**, leaving room above the
+limits the combined CSS to **23 KiB raw and 7 KiB gzip**, leaving room above the
 current page while catching large regressions. Raise a budget only with a measured
 reason. Font and image payloads are separate from this CSS budget.
 
-Measured on 2026-10-17 with Vite 8.3.4 and StyleX 0.19.1:
+Measured through 2026-10-18 with Vite 8.3.4 and StyleX 0.19.1:
 
-| Build                                                             | Styling bytes | Gzip bytes |
-| ----------------------------------------------------------------- | ------------: | ---------: |
-| Initial direct StyleX translation, before Vite/minification       |        19,218 |      4,233 |
-| Refactored system, all production CSS including font declarations |        11,497 |      3,967 |
-| Native snapshot transitions and connected chapter tracker         |        16,369 |      4,969 |
-| Responsive scene height correction                                |        16,360 |      4,963 |
-| Approaching cat, feathered void and soft brush seam composition   |        20,316 |      6,122 |
-| Portal button and themed in-page notifications                    |        21,166 |      6,380 |
-| Contrasting notification surface and top-right slide entry        |        21,576 |      6,528 |
-| Story release at Share with continuous paw fade intervals         |        21,632 |      6,535 |
-| Deeper layered paper tears and contour shadows                    |        22,177 |      6,688 |
-| Remove the chapter tracker's top divider                          |        22,047 |      6,657 |
-| Complementary tear masks with a continuous paper setting          |        22,322 |      6,704 |
+| Build                                                               | Styling bytes | Gzip bytes |
+| ------------------------------------------------------------------- | ------------: | ---------: |
+| Initial direct StyleX translation, before Vite/minification         |        19,218 |      4,233 |
+| Refactored system, all production CSS including font declarations   |        11,497 |      3,967 |
+| Native snapshot transitions and connected chapter tracker           |        16,369 |      4,969 |
+| Responsive scene height correction                                  |        16,360 |      4,963 |
+| Approaching cat, feathered void and soft brush seam composition     |        20,316 |      6,122 |
+| Portal button and themed in-page notifications                      |        21,166 |      6,380 |
+| Contrasting notification surface and top-right slide entry          |        21,576 |      6,528 |
+| Story release at Share with continuous paw fade intervals           |        21,632 |      6,535 |
+| Deeper layered paper tears and contour shadows                      |        22,177 |      6,688 |
+| Remove the chapter tracker's top divider                            |        22,047 |      6,657 |
+| Complementary tear masks with a continuous paper setting            |        22,322 |      6,704 |
+| Final rainbow paw marker and compact continuous trails (2026-10-18) |        23,208 |      6,950 |
+| Keep chapter controls until the tracker runs out of space           |        23,326 |      6,971 |
 
 The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
 correction. The independent cat approach and feathered void add 324 raw bytes
@@ -160,6 +174,11 @@ The larger tear masks, paper underside and contour shadows add 545 raw bytes and
 Removing the chapter tracker's divider saves 130 raw bytes and 31 gzip bytes.
 Complementary masks and the shared paper setting add 275 raw bytes and 47 gzip
 bytes, remaining within the same budget.
+The final paw marker, expanded print density and centered compact tracker add
+886 raw bytes and 246 gzip bytes. Raise the raw budget to 23 KiB for this addition;
+the gzip budget remains 7 KiB.
+Sizing the compact switch from the tracker container adds 118 raw bytes and
+21 gzip bytes, within the same budgets.
 
 The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change

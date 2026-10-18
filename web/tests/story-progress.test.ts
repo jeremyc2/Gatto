@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { chapterAtProgress, chapterScrollTarget, storyProgress } from "../src/story-progress";
+import {
+  chapterAtProgress,
+  chapterScrollTarget,
+  storyProgress,
+  storyTrail,
+} from "../src/story-progress";
 
 describe("the pinned story", () => {
   test("clamps to the first and last scenes outside the story", () => {
@@ -13,19 +18,19 @@ describe("the pinned story", () => {
   });
 
   test("reverses cleanly when scrolling back through chapter boundaries", () => {
-    const journey = [0, 0.44, 0.98, 1, 0.979, 0.439];
-    expect(journey.map(chapterAtProgress)).toEqual([0, 1, 2, 2, 1, 0]);
+    const journey = [0, 0.31, 0.69, 0.85, 1, 0.85, 0.69, 0.689, 0.309];
+    expect(journey.map(chapterAtProgress)).toEqual([0, 1, 2, 2, 2, 2, 2, 1, 0]);
   });
 
   test("chapter controls stop the footprint trail at the selected marker", () => {
     const progress = ([0, 1, 2] as const).map((chapter) =>
       storyProgress(chapterScrollTarget(chapter, 86, 2400, 600), 86, 2400, 600),
     );
-    // The first trail finishes at 44%; the next print starts at 46%.
     expect(progress[0]).toBe(0);
-    expect(progress[1]).toBeGreaterThanOrEqual(0.44);
-    expect(progress[1]).toBeLessThan(0.46);
-    expect(progress[2]).toBeGreaterThanOrEqual(0.98);
+    expect(progress[1]).toBeGreaterThanOrEqual(storyTrail[0].end);
+    expect(progress[1]).toBeLessThan(storyTrail[1].start);
+    expect(progress[2]).toBeGreaterThanOrEqual(storyTrail[1].end);
+    expect(progress[2]).toBeLessThan(storyTrail[2].start);
   });
 
   test("chapter controls land safely within each chapter", () => {
@@ -35,10 +40,16 @@ describe("the pinned story", () => {
     }
   });
 
-  test("Share lands at the sticky release, without an idle pinned scroll interval", () => {
+  test("Share leaves room for the final paw trail before sticky release", () => {
     const top = 86;
     const height = 1600;
     const stage = 600;
-    expect(chapterScrollTarget(2, top, height, stage)).toBe(top + height - stage);
+    const target = chapterScrollTarget(2, top, height, stage);
+    const release = top + height - stage;
+    expect(target).toBeLessThan(release);
+    expect(chapterAtProgress(storyProgress(target, top, height, stage))).toBe(2);
+    expect(storyTrail[2].end).toBe(1);
+    // Returning through the final leg keeps Share until its own marker is crossed.
+    expect(chapterAtProgress(storyProgress(release - 100, top, height, stage))).toBe(2);
   });
 });

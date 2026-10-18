@@ -3,6 +3,7 @@ import * as stylex from "@stylexjs/stylex";
 // CSS selects the first-paint layout before hydration. Short screens keep normal flow.
 export const storyMedia = stylex.defineConsts({
   pinned: "@media (scripting: enabled) and (height > 500px)",
+  compactTracker: "@container story-tracker (width < 740px)",
   phoneFlow:
     "@media (width <= 760px) and (scripting: none), (width <= 760px) and (height <= 500px)",
   shortFlow:

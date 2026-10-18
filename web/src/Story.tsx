@@ -14,6 +14,7 @@ import {
   chapterAtProgress,
   chapterScrollTarget,
   storyProgress,
+  storyTrail,
   type Chapter,
 } from "./story-progress";
 
@@ -45,6 +46,7 @@ export function Story() {
   const [active, setActive] = createSignal<Chapter>(0);
   const [enhanced, setEnhanced] = createSignal(false);
   const [status, setStatus] = createSignal("");
+  const [atEnd, setAtEnd] = createSignal(false);
   let story: HTMLElement | undefined;
   let stage: HTMLDivElement | undefined;
   let controlSelection = false;
@@ -98,6 +100,7 @@ export function Story() {
           geometry.stageHeight,
         );
         const next = chapterAtProgress(nextProgress);
+        setAtEnd(nextProgress === 1);
         const now = performance.now();
         const speed = Math.abs(window.scrollY - lastY) / Math.max(1, now - lastTime);
         lastY = window.scrollY;
@@ -121,9 +124,11 @@ export function Story() {
             setStatus(chapters[requested].status);
             flush();
             if (hadFocus && hadFocus.getAttribute("aria-hidden") === "true") {
-              story
-                ?.querySelector<HTMLButtonElement>('[aria-current="step"]')
-                ?.focus({ preventScroll: true });
+              const control = story?.querySelector<HTMLButtonElement>('[aria-current="step"]');
+              const target = control?.offsetParent
+                ? control
+                : story?.querySelector<HTMLElement>('article[aria-hidden="false"]');
+              target?.focus({ preventScroll: true });
             }
           };
           if (
@@ -192,6 +197,7 @@ export function Story() {
               aria-labelledby={`${chapter.id}-heading`}
               aria-hidden={enhanced() ? (active() !== index ? "true" : "false") : undefined}
               inert={enhanced() && active() !== index}
+              tabindex={-1}
             >
               <div {...stylex.attrs(styles.copy)}>
                 {chapter.id === "bring" ? (
@@ -259,9 +265,38 @@ export function Story() {
                   </span>
                   {chapter.label}
                 </Button>
-                {index < 2 && <Footsteps gap={index} />}
+                <Footsteps gap={index as Chapter} />
               </>
             ))}
+            <span
+              {...stylex.attrs(styles.number, styles.endMarker, atEnd() && styles.reachedMarker)}
+              aria-hidden="true"
+              data-story-end=""
+            >
+              <svg
+                {...stylex.attrs(styles.finalPaw, atEnd() && styles.reachedPaw)}
+                viewBox="0 0 12 14"
+              >
+                <defs>
+                  <linearGradient id="story-paw-rainbow" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#f36b79" />
+                    <stop offset="18%" stop-color="#f89a50" />
+                    <stop offset="36%" stop-color="#e9ca54" />
+                    <stop offset="52%" stop-color="#73bc87" />
+                    <stop offset="68%" stop-color="#59b9d7" />
+                    <stop offset="84%" stop-color="#8c8de6" />
+                    <stop offset="100%" stop-color="#cd7dcc" />
+                  </linearGradient>
+                </defs>
+                <g fill="url(#story-paw-rainbow)">
+                  <ellipse cx="2" cy="5" rx="1.5" ry="2" transform="rotate(-25 2 5)" />
+                  <ellipse cx="4.5" cy="2.5" rx="1.5" ry="2" transform="rotate(-8 4.5 2.5)" />
+                  <ellipse cx="8" cy="2.5" rx="1.5" ry="2" transform="rotate(8 8 2.5)" />
+                  <ellipse cx="10.5" cy="5" rx="1.5" ry="2" transform="rotate(25 10.5 5)" />
+                  <path d="M2.5 11 C2 9 4 6.5 6 6.5 S10 9 9.5 11 C9 13 7.5 11.5 6 11.5 S3 13 2.5 11Z" />
+                </g>
+              </svg>
+            </span>
           </nav>
         </div>
         <VisuallyHidden as="p" id="story-status" role="status" aria-live="polite">
@@ -272,7 +307,7 @@ export function Story() {
   );
 }
 
-function Footsteps(props: { gap: number }) {
+function Footsteps(props: { gap: Chapter }) {
   return (
     <div {...stylex.attrs(styles.route)} aria-hidden="true">
       <div {...stylex.attrs(styles.trail)}>
@@ -304,6 +339,11 @@ const density = stylex.create({
   count5: { display: { default: "none", "@container (width >= 122px)": "block" } },
   count6: { display: { default: "none", "@container (width >= 146px)": "block" } },
   count7: { display: { default: "none", "@container (width >= 170px)": "block" } },
+  count8: { display: { default: "none", "@container (width >= 194px)": "block" } },
+  count9: { display: { default: "none", "@container (width >= 218px)": "block" } },
+  count10: { display: { default: "none", "@container (width >= 242px)": "block" } },
+  count11: { display: { default: "none", "@container (width >= 266px)": "block" } },
+  count12: { display: { default: "none", "@container (width >= 290px)": "block" } },
 });
 const pawSlots = [
   density.count1,
@@ -313,6 +353,11 @@ const pawSlots = [
   density.count5,
   density.count6,
   density.count7,
+  density.count8,
+  density.count9,
+  density.count10,
+  density.count11,
+  density.count12,
 ];
 
 const leaveFootprint = stylex.keyframes({
@@ -331,10 +376,9 @@ const styles = stylex.create({
     height: {
       default: null,
       [storyMedia.pinned]: {
-        // Keep the two transition distances, removing the old final-scene hold.
-        // Stage + 70% of the former sticky range (240svh / 220svh).
-        default: `calc(198svh - ${layout.headerHeight} * 0.3)`,
-        [media.phone]: `calc(184svh - ${layout.headerHeight} * 0.3)`,
+        // Preserve the chapter travel distances and add a visible final paw leg.
+        default: "240svh",
+        [media.phone]: "220svh",
       },
     },
   },
@@ -483,6 +527,8 @@ const styles = stylex.create({
   },
 
   storyBottom: {
+    containerName: "story-tracker",
+    containerType: "inline-size",
     display: { default: "none", [storyMedia.pinned]: "flex" },
     boxSizing: { default: null, [storyMedia.pinned]: "border-box" },
     alignItems: { default: null, [storyMedia.pinned]: "center" },
@@ -499,10 +545,13 @@ const styles = stylex.create({
   chapterNav: {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "auto minmax(0, 1fr) auto minmax(0, 1fr) auto",
+    gridTemplateColumns: {
+      default: "repeat(3, auto minmax(0, 1fr)) auto",
+      [storyMedia.compactTracker]: "repeat(3, minmax(0, 1fr)) auto",
+    },
     alignItems: "center",
     width: "100%",
-    maxWidth: 720,
+    maxWidth: 960,
     marginInline: "auto",
   },
   route: {
@@ -523,16 +572,21 @@ const styles = stylex.create({
     paddingInline: 4,
     "--paw-count": {
       default: 1,
-      "@container (width >= 50px)": 2,
-      "@container (width >= 74px)": 3,
-      "@container (width >= 98px)": 4,
-      "@container (width >= 122px)": 5,
-      "@container (width >= 146px)": 6,
-      "@container (width >= 170px)": 7,
+      "@container (50px <= width < 74px)": 2,
+      "@container (74px <= width < 98px)": 3,
+      "@container (98px <= width < 122px)": 4,
+      "@container (122px <= width < 146px)": 5,
+      "@container (146px <= width < 170px)": 6,
+      "@container (170px <= width < 194px)": 7,
+      "@container (194px <= width < 218px)": 8,
+      "@container (218px <= width < 242px)": 9,
+      "@container (242px <= width < 266px)": 10,
+      "@container (266px <= width < 290px)": 11,
+      "@container (width >= 290px)": 12,
     },
   },
   pawSlot: { position: "relative", width: 18, height: 40, flexShrink: 0 },
-  paw: (step: number, gap: number) => ({
+  paw: (step: number, gap: Chapter) => ({
     display: "block",
     position: "absolute",
     left: "50%",
@@ -542,8 +596,8 @@ const styles = stylex.create({
     fill: colors.accent,
     opacity: 0.55,
     transform: `translate(-50%, -50%) rotate(${step % 2 === 0 ? 65 : 105}deg)`,
-    "--paw-start": `contain calc(${gap === 0 ? 2 : 46}% + ${step} * ${gap === 0 ? 42 : 52}% / var(--paw-count))`,
-    "--paw-end": `contain calc(${gap === 0 ? 2 : 46}% + ${step + 1} * ${gap === 0 ? 42 : 52}% / var(--paw-count))`,
+    "--paw-start": `contain calc(${storyTrail[gap].start * 100}% + ${step} * ${(storyTrail[gap].end - storyTrail[gap].start) * 100}% / var(--paw-count))`,
+    "--paw-end": `contain calc(${storyTrail[gap].start * 100}% + ${step + 1} * ${(storyTrail[gap].end - storyTrail[gap].start) * 100}% / var(--paw-count))`,
     animationName: {
       default: "none",
       "@supports ((animation-timeline: --story-route) and (animation-range: contain))":
@@ -564,7 +618,7 @@ const styles = stylex.create({
     paddingInline: { default: 12, [media.phone]: 0 },
     borderWidth: 0,
     borderRadius: 28,
-    display: "flex",
+    display: { default: "flex", [storyMedia.compactTracker]: "none" },
     gap: { default: 10, [media.phone]: 7 },
     alignItems: "center",
   },
@@ -590,5 +644,23 @@ const styles = stylex.create({
     borderStyle: "solid",
     borderColor: colors.accent,
     boxShadow: `0 0 0 3px ${colors.canvas}`,
+  },
+  endMarker: {
+    width: 42,
+    height: 42,
+    pointerEvents: "none",
+  },
+  reachedMarker: {
+    borderStyle: "solid",
+    borderColor: colors.accent,
+  },
+  finalPaw: {
+    display: "block",
+    width: 28,
+    height: 32,
+    visibility: "hidden",
+  },
+  reachedPaw: {
+    visibility: "visible",
   },
 });

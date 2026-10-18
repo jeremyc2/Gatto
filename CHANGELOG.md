@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Keep the website's Share scene pinned while pawprints continue to an unnumbered
+  final marker, which reveals a large, still rainbow pawprint before the page
+  scrolls onward. Reverse scrolling retraces that trail before changing chapters.
+- Keep the website chapter controls until the tracker has less than 740px of
+  available width, then use continuous paw trails. Allow more prints in wider
+  gaps and center the tracker at a maximum width of 960px.
+
 ## [0.14.0] - 2026-10-17
 
 ### Added
