@@ -1,0 +1,230 @@
+# 2D indie games: genres, subgenres, and useful boundaries
+
+Research date: **2026-10-18** (America/Chicago).
+
+This is a map of the kinds of games independent developers make in 2D, organized by what the player repeatedly does. It covers 15 families and 62 concrete subgenres, variants, and hybrid structures. Examples illustrate the distinctions; they are not rankings or a complete list of games.
+
+## How to read this map
+
+**Indie describes a production context, not a play mechanic.** This note uses it broadly for independently developed games, including games distributed by publishers. A publisher credit does not by itself establish or disprove creative independence. The examples' linked pages identify their creators; this is not an audit of studio ownership or financing.
+
+**2D is a separate axis from genre.** The working scope is side-on, top-down, tile, board, illustrated, or text play with a predominantly 2D presentation. It includes pixel art, drawn animation, abstract shapes, and sprites; it does not require pixel art or a particular engine. Apparent depth, perspective drawing, or making source artwork in a 3D tool does not automatically make the resulting game 3D. The catalog avoids obvious 3D-world or 2.5D examples. It does not claim to have audited every game's rendering pipeline.
+
+This organization is a **research synthesis, not an official universal hierarchy**. Steamworks itself distinguishes genres and subgenres from dimensions, viewpoints, themes, mood, mechanics, and player modes. It gives the hierarchy Action → Platformer → Precision Platformer, while treating 2D and top-down as different kinds of descriptors. Its tags also incorporate community input, so the evidence below uses developers' descriptions and first-party storefront “About” sections rather than assuming popular user tags are authoritative. [Steamworks: Steam Tags](https://partner.steamgames.com/doc/store/tags?language=english).
+
+| If the main appeal is… | Start with… |
+| --- | --- |
+| Movement, jumps, timing, or melee execution | [Platformers](#1-platformers), [combat and stealth](#2-combat-and-stealth), [shooters](#3-shooters) |
+| Discovering routes and unlocking a world | [Exploration and Metroidvania](#4-exploration-and-metroidvania) |
+| Solving rules, arrangements, or mysteries | [Puzzles](#5-puzzle-games), [adventure and narrative](#6-adventure-and-narrative) |
+| Building a character or party | [RPGs](#7-role-playing-games-rpgs) |
+| Repeated attempts with changing builds | [Roguelikes and run structures](#8-roguelikes-and-run-structures) |
+| Planning battles or operating a system | [Strategy](#9-strategy-and-tactics), [simulation and management](#10-simulation-and-management) |
+| Keeping a world or character alive | [Survival and sandbox](#11-survival-crafting-and-sandbox) |
+| Musical timing, sport, or competition with friends | [Rhythm](#12-rhythm-and-music), [sports and racing](#13-sports-and-racing), [party and social](#14-party-cooperation-and-social-play) |
+| Cards, automatic battles, or compounding growth | [Card, auto battler, and incremental games](#15-card-auto-battler-and-incremental-games) |
+
+Each row gives an operational definition, then a game whose official description supports that loop. Some labels describe a hybrid or a useful variant rather than a universally agreed standalone subgenre. Repeated examples deliberately show overlap.
+
+## 1. Platformers
+
+The central activity is controlling movement through space, usually with jumping and landing.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Action platformer | Traverse stages, avoid hazards, fight enemies, and defeat bosses; movement and combat share the foreground. | **Shovel Knight: Shovel of Hope**, within *Treasure Trove* — run, jump, fight with the Shovel Blade, and collect treasure. [Yacht Club Games' storefront](https://store.steampowered.com/app/250760/). |
+| Precision platformer | Learn a short obstacle sequence, execute tightly timed movement, fail, and retry until the route becomes reliable. | **Celeste** — climb, jump, and air-dash through authored challenges, with rapid respawns encouraging repeated attempts. [Developers' description](https://store.steampowered.com/app/504230/). |
+| Puzzle platformer | Work out how movement and environmental rules solve an obstacle; understanding the solution matters as much as performing it. | **Braid** — manipulate time to solve platforming puzzles, including rewind and objects with different time behavior. [Number None's description](https://store.steampowered.com/app/26800/). |
+| Cinematic platformer | Advance through authored scenes by reading environmental danger, solving contextual obstacles, and surviving action sequences. | **The Way** — a story-led alien-world adventure with puzzles, explicitly inspired by *Another World*, *Heart of Darkness*, and *Flashback*. This label is a synthesis of that stated lineage. [Puzzling Dream's description](https://store.steampowered.com/app/311010/). |
+
+## 2. Combat and stealth
+
+These games foreground encounters: defeating opponents, reading their behavior, or avoiding detection.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Beat 'em up / brawler | Move through encounters, crowd-control groups with attacks and combos, then progress to the next fight. | **Castle Crashers** — side-scrolling combat, combos, character growth, and cooperative play. [The Behemoth's description](https://store.steampowered.com/app/204360/). |
+| Hack-and-slash action | Chain weapon attacks against many enemies while improving combat capabilities; often overlaps with action RPGs. | **Dust: An Elysian Tail** — sword combat against groups, quests, upgrades, and nonlinear platforming. [Humble Hearts' description](https://store.steampowered.com/app/236090/). |
+| Traditional versus fighting game | Face one opponent in a bounded arena, control spacing, block attacks, and use character-specific moves and combos to win bouts. | **Pocket Bravery** — a 2D fighter explicitly inspired by *Street Fighter*, *Fatal Fury*, and *The King of Fighters*, with distinct fighters and elemental attacks. [Publisher PQube's game page](https://pqube.co.uk/games/pocket-bravery/). |
+| Platform fighter | Duel using positioning, aerial movement, character attacks, and stage geometry. | **Rivals of Aether**, the original sprite-based game — its developer explicitly identifies the platform-fighter genre and competitive versus modes. [Aether Studios' description](https://store.steampowered.com/app/383980/). |
+| Stealth action | Observe patrols, choose a route or distraction, exploit visibility, and bypass or silently remove threats. | **Mark of the Ninja** — supports nonlethal ghost-like play or assassination, with tools and optional objectives. [Klei's description](https://store.steampowered.com/app/214560/). |
+
+## 3. Shooters
+
+The common loop is aiming or directing fire while managing incoming threats. “Twin-stick” describes independent movement and aiming; it does not require that the player actually use two sticks.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Scrolling shoot 'em up / shmup | Pilot through scrolling stages, shoot formations, dodge projectiles, and fight stage bosses. | **ZeroRanger** — explicitly a vertically scrolling 2D shoot 'em up with weapon unlocks. [System Erasure's description](https://store.steampowered.com/app/809020/). |
+| Bullet hell / danmaku | Read dense projectile patterns, find safe gaps, and exploit a small vulnerable hit area; often a shmup specialization. | **Danmaku Unlimited 3** — its developer explains the vulnerable core, bullet grazing, and ghost-bullet systems. [Doragon Entertainment's description](https://store.steampowered.com/app/450950/). |
+| Top-down aiming / twin-stick-style shooter | Move through an arena or rooms while aiming separately, managing weapons and enemy positions. | **Nuclear Throne** — a top-down shooter with weapon collection and mutation abilities. The broad “top-down shooter” label is the developer's; twin-stick-style is the control-pattern classification here. [Vlambeer's description](https://store.steampowered.com/app/242680/). |
+| Run-and-gun / boss-focused shooter | Run and jump while firing; learn enemy or boss patterns and survive the encounter. | **Cuphead** — explicitly described as run-and-gun action with a strong focus on boss battles. [Studio MDHR's description](https://store.steampowered.com/app/268910/). |
+
+## 4. Exploration and Metroidvania
+
+This family emphasizes an interconnected world and revisiting places with new capabilities or knowledge. A large map alone is insufficient to explain the distinction.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Action Metroidvania | Explore connected areas, gain traversal or combat abilities, return to previously blocked routes, and uncover more of the world. | **Hollow Knight** — an interconnected 2D world, new movement abilities, secrets, and side-scrolling combat. [Team Cherry's description](https://store.steampowered.com/app/367520/). |
+| Puzzle / knowledge-led Metroidvania | Experiment with reusable tools and environmental interactions; discoveries make previously confusing places understandable. | **ANIMAL WELL** — nonlinear exploration, items with multiple uses, an interconnected labyrinth, and tension rather than combat as the emphasis. [Shared Memory's description](https://store.steampowered.com/app/813230/). |
+| Souls-influenced exploration action RPG | Explore dangerous interconnected areas, learn demanding encounters, develop an equipment build, and seek safe refuges. | **Salt and Sanctuary** — combines 2D combat and RPG mechanics with interconnected routes, bosses, equipment, and sanctuaries. “Souls-influenced” is a comparative label here, not a claim that all these games share an exact rule set. [Ska Studios' game page](https://ska-studios.com/games/salt-and-sanctuary/). |
+
+## 5. Puzzle games
+
+The main reward is discovering a solution or improving a construction. Puzzles can be abstract boards, physical environments, words, code, or story evidence.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Sokoban-like / block-pushing | Plan movement and pushes so objects reach useful positions without making the puzzle unsolvable. | **Patrick's Parabox** — push boxes into and out of other boxes, extending the pattern with recursion. [Patrick Traynor's description](https://store.steampowered.com/app/1260520/). |
+| Deductive logic grid | Interpret constraints and clues, eliminate possibilities, and determine which cells are valid. | **Hexcells** — an abstract logic-puzzle game; its board presentation supplies a compact example of this format. [Matthew Brown's storefront](https://store.steampowered.com/app/265890/). |
+| Rule-manipulation puzzle | Change the rules themselves, then use the new interactions to satisfy the goal. | **Baba Is You** — move rule blocks to alter how objects and the level behave. [Hempuli's description](https://store.steampowered.com/app/736260/). |
+| Physics / construction puzzle | Build or position a structure, observe physical behavior, and revise until it works. | **World of Goo** — assemble living goo into bridges and other structures. [2D BOY's description](https://store.steampowered.com/app/22000/). |
+| Tile-matching / match-3 hybrid | Arrange matching pieces to combine or clear them, create stronger combinations, and meet a score or task requirement. | **Battle Chef Brigade Deluxe** — combines monster hunting with timed tile-based cooking puzzles; the creator identifies match-3 as part of its design. [Game description](https://store.steampowered.com/app/452570/), [Trinket Studios' development history](https://www.trinketstudios.com/battle-suit-aces-presskit). |
+| Programming / automation puzzle | Express a repeatable procedure, run it against the task, debug it, and optionally optimize it. | **TIS-100** — repair programs using assembly-like instructions and optimize instruction, cycle, or node usage. [Zachtronics' description](https://store.steampowered.com/app/370360/). |
+| Word / spelling puzzle hybrid | Form valid words under constraints; word choices drive scores, attacks, or progression. | **Letter Quest: Grimm's Journey Remastered** — spell words to attack monsters, then spend rewards on RPG upgrades. [Bacon Bandit Games' description](https://store.steampowered.com/app/373970/). |
+| Detective / deduction puzzle | Inspect a scene, connect evidence, and reconstruct identities, motives, and events. | **The Case of the Golden Idol** — investigate deaths and infer suspects, motives, and weapons. [Color Gray Games' description](https://store.steampowered.com/app/1677770/). |
+| Time-manipulation puzzle | Rewind, synchronize, or exploit different time rules to make a solution possible. | **Braid** — each world introduces a different relationship between time, movement, and objects. [Number None's description](https://store.steampowered.com/app/26800/). |
+| Hidden object / visual search | Search a detailed scene for specified targets, using hints and local interactions to expose them. | **Hidden Folks** — find targets in interactive drawn landscapes and unlock the next area. [Creators' description](https://store.steampowered.com/app/435400/). |
+
+## 6. Adventure and narrative
+
+The player progresses through a story by investigating, talking, choosing, or using objects. These often overlap with puzzles and RPGs.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Point-and-click adventure | Explore scenes, talk to characters, and solve contextual puzzles to advance the story. | **Thimbleweed Park** — switch among characters and solve story-linked puzzles in a mystery town. [Terrible Toybox's description](https://store.steampowered.com/app/569860/). |
+| Visual novel / dating-sim variant | Read illustrated dialogue, choose who to spend time with or how to respond, and discover different story routes. | **Hatoful Boyfriend** — explicitly a visual novel / dating sim with relationships and multiple narrative outcomes. [Creator/publisher description](https://store.steampowered.com/app/310080/). |
+| Interactive fiction / text RPG | Read descriptions, choose actions and dialogue, manage state, and see the world respond. | **Roadwarden** — illustrated text-based RPG combining dialogue, inventory puzzles, abilities, survival mechanics, and timed quests. [Moral Anxiety Studio's description](https://store.steampowered.com/app/1155970/). |
+| Character-led exploration adventure | Explore familiar places, hold conversations, and experience changes in relationships and story over time. | **Night in the Woods** — its stated focus is exploration, story, and character. [Infinite Fall's description](https://store.steampowered.com/app/481510/). |
+
+## 7. Role-playing games (RPGs)
+
+Character development, abilities, equipment, quests, and consequential choices can matter alongside the combat format. A pixel-art game is not automatically an RPG.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Turn-based narrative RPG / JRPG-style | Explore and converse, choose commands in encounters, and develop a character or party through a story. | **Undertale** — offers battle commands and negotiation, combined with timed attacks and real-time dodging. It is deliberately a hybrid rather than a pure turn-taking example. [Toby Fox's description](https://store.steampowered.com/app/391540/). |
+| Action RPG | Fight in real time while using equipment, character skills, and upgrades to shape a build. | **CrossCode** — explicitly a 2D action RPG combining combat, equipment, skills, and dungeon puzzles. [Radical Fish Games' description](https://store.steampowered.com/app/368340/). |
+| Tactical RPG / strategy RPG | Build a persistent roster, choose classes and abilities, and position characters in tactical battles. | **Horizon's Gate** — develop a crew with classes and abilities, explore, trade, and fight tactical land or sea battles. [Rad Codex's description](https://store.steampowered.com/app/1224290/). |
+| Monster-taming / creature-collecting RPG | Collect creatures, train and combine their abilities, build a team, and battle or unlock routes. | **Monster Sanctuary** — monster collection and strategic team combat combined with side-scrolling exploration abilities. [Moi Rai Games' description](https://store.steampowered.com/app/814370/). |
+
+## 8. Roguelikes and run structures
+
+This is partly a **structure overlay**: it can be applied to platforming, shooting, cards, tactics, and other core genres. The useful common question is what changes between attempts and what is lost or retained.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Traditional roguelike | Make discrete, usually turn-based decisions in a systemic world; adapt a character to discoveries and risk losing the run. | **Caves of Qud**, specifically Classic mode — turn-based sandbox play with character permadeath. Other modes add checkpoints or different exploration rules, so the mode matters. [Freehold Games' description](https://store.steampowered.com/app/333640/). |
+| Action roguelike / roguelite | Execute real-time movement and combat through changing levels, collect a build, die, and start another attempt. | **Vagante** — action platforming with procedurally generated levels and permanent death. [Nuke Nine's description](https://store.steampowered.com/app/323220/). |
+| Roguelike deckbuilder | Fight with a small evolving deck, choose cards and relics after encounters, and try a new route or build on the next run. | **Slay the Spire** — explicitly combines single-player deckbuilding and roguelike structure. [Mega Crit's description](https://store.steampowered.com/app/646570/). |
+| Survivors-like / horde-survival action | Survive mounting enemy crowds, often with automatically firing weapons; collect experience or resources and choose upgrades that compound a combat build. | **Vampire Survivors** — its developer calls it time survival with roguelite elements, run-earned gold, and upgrades for later attempts. **Brotato** explicitly offers automatic firing, optional manual aiming, and upgrades between waves. “Survivors-like” is the family shorthand used here. [Poncle's description](https://store.steampowered.com/app/1794680/), [Blobfish's description](https://store.steampowered.com/app/1942280/Brotato/). |
+| Real-time-with-pause run management | Manage a crew and systems under pressure, pause to give orders, and navigate a changing sequence of encounters. | **FTL: Faster Than Light** — operate a spaceship through a randomly generated galaxy, allocating power, weapons, crew, and repairs. [Subset Games' description](https://store.steampowered.com/app/212680/). |
+
+**Roguelite does not mean only “permanent stat upgrades.”** Terminology varies: *Vagante* emphasizes permadeath, *Dead Cells* explicitly retains some unlocks, and *Spelunky* describes itself as a platformer inspired by roguelikes. Record procedural generation, death rules, run length, and retained progress separately rather than forcing every title into one strict definition. [Vagante](https://store.steampowered.com/app/323220/), [Dead Cells](https://store.steampowered.com/app/588650/), [Spelunky official description](https://www.spelunkyworld.com/info.html).
+
+## 9. Strategy and tactics
+
+These focus on planning with units, positions, resources, or defensive systems. Tactics usually describes encounter-scale decisions; strategy can also include wider economic or campaign decisions.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Turn-based squad tactics | Read threats, choose positions and actions, then resolve the enemy turn; preserve units or objectives. | **Into the Breach** — defend civilian buildings against telegraphed attacks in compact turn-based battles. [Subset Games' description](https://store.steampowered.com/app/590380/). |
+| Turn-based army tactics / wargame | Command armies across maps, exploit unit matchups, and use commander abilities to win objectives. | **Wargroove** — command armies and commanders in turn-based battles and authored or custom campaigns. [Chucklefish's description](https://store.steampowered.com/app/607050/). |
+| Real-time strategy / production hybrid | Build the economy and units while the simulation continues, then direct forces against opposing bases. | **Mindustry** — factories, supply chains, unit production, and army commands combine RTS with tower defense. [Anuken's description](https://store.steampowered.com/app/1127400/). |
+| Tower defense / trap defense | Place and upgrade defenses, anticipate enemy routes, and survive successive attacks. | **Dungeon Warfare** — protect a dungeon with traps and contraptions against invading adventurers. [Valsar's description](https://store.steampowered.com/app/355980/). |
+
+## 10. Simulation and management
+
+The central appeal is operating and improving a persistent system: a farm, colony, factory, restaurant, or transport network.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Farming / country-life simulation | Grow crops, raise animals, schedule work, improve a home, and build community relationships. | **Stardew Valley** — farming, crafting, skills, relationships, and community life within an open-ended country-life RPG. [ConcernedApe's description](https://store.steampowered.com/app/413150/). |
+| Colony simulation | Assign work, meet inhabitants' needs, construct facilities, and respond to crises that generate ongoing stories. | **RimWorld** — simulates colonists' needs, relationships, health, building, trade, and threats. [Ludeon Studios' description](https://store.steampowered.com/app/294100/). |
+| Factory / automation simulation | Extract resources, connect processing stages, diagnose bottlenecks, and expand automated production. | **Factorio** — build and maintain factories, research technology, and automate production in a 2D world. [Wube's description](https://store.steampowered.com/app/427520/). |
+| Restaurant / time-management hybrid | Plan a menu, execute customer orders under pressure, earn money, and upgrade the operation. | **Cook, Serve, Delicious!** — combines food preparation challenges with menu planning, equipment, and food upgrades. [Vertigo Gaming's description](https://store.steampowered.com/app/247020/). |
+| Transport / network-management puzzle | Connect demand to capacity, observe congestion, and redraw or expand the network as a city grows. | **Mini Metro** — design subway routes and allocate limited resources to keep passengers moving. [Dinosaur Polo Club's description](https://store.steampowered.com/app/287980/). |
+
+“Cozy” is a useful experience label, but it is not a replacement for the system being played. A farming game may emphasize relationships and low-pressure routines; a colony sim may emphasize crises. Describe those expectations separately rather than declaring the whole simulation family cozy.
+
+## 11. Survival, crafting, and sandbox
+
+Survival makes continued existence a central constraint. Crafting converts collected materials into useful things. Sandbox describes freedom to choose goals or reshape a world; a game can have one without all three.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Survival-crafting adventure | Explore, gather materials, make equipment, and overcome increasingly dangerous environments or enemies. | **Terraria** — gather raw materials, craft equipment, build, explore, and fight. [Re-Logic's description](https://store.steampowered.com/app/105600/). |
+| Building / creative sandbox | Set a personal project, reshape terrain or construct spaces, and iterate with the world's tools. | **Terraria** also offers construction and player-directed goals alongside combat. This is a separate appeal within the same game. [Re-Logic's description](https://store.steampowered.com/app/105600/). |
+| Survival horror | Explore for scarce resources, prepare defenses, and survive threats under sustained uncertainty and danger. | **Darkwood** — top-down survival horror: scavenge and craft during the day, barricade and defend at night. [Acid Wizard Studio's press kit](https://www.darkwoodgame.com/presskit/). |
+
+Horror also occurs without survival systems. **Slay the Princess** is a choice-driven horror narrative whose story changes with decisions and deaths; it belongs beside visual novels and narrative adventures as well as under horror. “Psychological horror” and “narrative horror” describe different emphases from scavenging and defensive survival. [Black Tabby Games' press kit](https://blacktabbygames.com/press-stp).
+
+## 12. Rhythm and music
+
+Musical timing is the central rule, rather than merely a soundtrack accompanying another genre.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Rhythm timing / chart game | Learn a musical pattern and perform precisely timed inputs as the chart or cue sequence progresses. | **Rhythm Doctor** — defibrillate on the correct heartbeat, with patterns based on different rhythm concepts. [7th Beat Games' description](https://store.steampowered.com/app/774181/). |
+| Rhythm-action / rhythm dungeon crawler | Move, attack, and plan around a beat while also dealing with spatial enemies and hazards. | **Crypt of the NecroDancer** — navigate an evolving dungeon and fight while moving to the music. [Brace Yourself Games' description](https://store.steampowered.com/app/247080/). |
+
+## 13. Sports and racing
+
+The central objective comes from a sport, a race, or the execution of tricks; 2D does not restrict these games to ball sports.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Arcade team sports | Control players, create scoring opportunities, and beat an opponent under simplified or exaggerated sport rules. | **Super Blood Hockey** — arcade hockey focused on skating, positioning, and violent collisions, with team management as an additional layer. [Loren Lemcke's description](https://store.steampowered.com/app/532190/). |
+| Top-down circuit racing | Follow a track, optimize cornering and racing lines, overtake competitors, and improve results across races. | **Ultimate Racing 2D** — top-down 2D racing with different vehicle classes, tracks, and championship formats. [Applimazing's description](https://store.steampowered.com/app/808080/). |
+| Trick / score-attack sports | Chain tricks, manage obstacles and momentum, time landings, and improve a score or challenge result. | **OlliOlli**, the original 2D game — a side-scrolling skateboarding game with timed landings, grinds, and combos. [Creative director's account](https://blog.playstation.com/2013/06/14/sidescrolling-skate-em-up-olliolli-debuts-new-footage-at-e3/). |
+
+## 14. Party, cooperation, and social play
+
+Multiplayer is a mode axis, but these recognizable formats make interaction among players the core appeal. A local arena game and a social-deduction game ask for very different behavior.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Social deduction / hidden-role party game | Perform visible tasks, infer hidden allegiances, discuss evidence, and vote or deceive. | **Among Us** — crewmates complete tasks and identify impostors; impostors sabotage, kill, and conceal their identity. [Innersloth's description](https://store.steampowered.com/app/945360/). |
+| Arena party action | Fight short competitive rounds with simple win conditions, changing weapons, and shared spatial chaos. | **Duck Game** — competitive weapon-based action with one-hit deaths and local or online multiplayer. [Landon Podbielski's description](https://store.steampowered.com/app/312530/). |
+| Cooperative puzzle platformer | Coordinate movement and timing, use teammates to solve obstacles, and bring the whole group to the exit. | **PICO PARK** — collect keys and reach goals in levels explicitly built around cooperation. [TECOPARK's description](https://store.steampowered.com/app/1509960/). |
+
+## 15. Card, auto battler, and incremental games
+
+These are worth keeping visible instead of treating every 2D game as an avatar moving around a world. They can use boards, cards, icons, and menus as their main play space.
+
+| Subgenre or variant | Defining play loop | 2D example and primary evidence |
+| --- | --- | --- |
+| Poker / card-rule roguelike hybrid | Build combinations from familiar card rules, acquire modifiers, and meet escalating score targets. | **Balatro** — a poker-inspired roguelike deckbuilder using hands, Jokers, and other modifiers to beat blinds. [LocalThunk's description](https://store.steampowered.com/app/2379780/). |
+| Auto battler / team-synergy builder | Choose and arrange a team, combine abilities, observe automatic combat, and revise the team between battles. | **Super Auto Pets** — build a team of animals with unique abilities that fight for the player, including asynchronous matchups. [Team Wood's creator page](https://teamwood.itch.io/super-auto-pets). |
+| Idle / incremental / clicker | Produce a resource, buy producers or multipliers, and reinvest compounding output; automation or resets may change the growth loop. | **Cookie Clicker** — collect cookies, buy increasingly productive cookie makers and upgrades, and unlock persistent heavenly upgrades. [Orteil and Opti's description](https://store.steampowered.com/app/1454400/). |
+
+## Boundaries that prevent confusing classifications
+
+| Terms often conflated | Practical distinction |
+| --- | --- |
+| 2D, side-scrolling, top-down, pixel art | Dimension/presentation, viewpoint, and art treatment describe different things. A drawn top-down game and a pixel-art side-scroller can share a genre. [Steamworks' separate tag categories](https://partner.steamgames.com/doc/store/tags?language=english). |
+| Strictly 2D examples versus 2.5D / mixed worlds | This catalog uses predominantly flat play/presentation examples. **FEZ** is kept outside it because its own description says it navigates 3D structures from four 2D perspectives. **Don't Starve** is likewise excluded from the main catalog because its developer explicitly describes 2D characters in a 3D world. [FEZ](https://store.steampowered.com/app/224760/), [Don't Starve](https://store.steampowered.com/app/219740/). |
+| Platformer versus Metroidvania | Platforming is about traversal; Metroidvania describes interconnected exploration and the opening of routes. They often combine. *Hollow Knight* demonstrates both. [Team Cherry's description](https://store.steampowered.com/app/367520/). |
+| Bullet hell versus survivors-like | Bullet hell usually foregrounds navigating incoming patterns; survivors-like action emphasizes surviving crowds and compounding a build. The terminology overlaps: *Vampire Survivors* markets the player as becoming the bullet hell. [Danmaku Unlimited 3](https://store.steampowered.com/app/450950/), [Vampire Survivors](https://store.steampowered.com/app/1794680/). |
+| Deckbuilder versus card game | A deckbuilder changes the deck as a central progression loop; a game merely displaying cards may instead be poker, a battler, or a board-like rules system. *Slay the Spire* and *Balatro* are explicitly presented as deckbuilders despite different encounter rules. [Slay the Spire](https://store.steampowered.com/app/646570/), [Balatro](https://store.steampowered.com/app/2379780/). |
+| Tactical RPG versus turn-based tactics | Persistent character/class development is a useful RPG emphasis; positions and encounter decisions are the tactics emphasis. The boundary overlaps rather than dividing every game cleanly. Compare *Horizon's Gate*'s class/ability development with *Into the Breach*'s telegraphed tactical encounters. [Horizon's Gate](https://store.steampowered.com/app/1224290/), [Into the Breach](https://store.steampowered.com/app/590380/). |
+| Cozy, horror, retro, short, story-rich | These communicate mood, presentation, length, or narrative emphasis. They become more informative when paired with a loop: cozy farming, survival horror, narrative horror, retro shmup. Steamworks similarly separates mood, visuals, and mechanics. [Steamworks](https://partner.steamgames.com/doc/store/tags?language=english). |
+| Single-player, co-op, PvP, local, online | These describe who plays together and how, not the main repeated action. *Castle Crashers* is a brawler with cooperative modes; *PICO PARK* makes cooperation part of the puzzle itself. [Castle Crashers](https://store.steampowered.com/app/204360/), [PICO PARK](https://store.steampowered.com/app/1509960/). |
+
+## A compact way to describe a game idea
+
+Combine **core loop + specific variant + progression structure + viewpoint/presentation + mood + player mode**. Include only the parts that change the reader's expectations.
+
+- “A precision platformer with short authored stages, side-view pixel art, and solo play.”
+- “A top-down survival-crafting game with a persistent world, horror atmosphere, and cooperative play.”
+- “A turn-based deckbuilding roguelike with illustrated cards and solo runs.”
+- “A cozy farming and life sim with a persistent village and optional co-op.”
+
+Those are hypothetical combinations, not extra claims about the example games. For an actual project, spell out the run's reset rules, whether combat is real-time, and what players do most often. A stack of labels cannot substitute for that explanation.
+
+## Evidence and limits
+
+Sources were checked on 2026-10-18. Evidence comes from creator websites and press kits, creator-authored storefront descriptions (including Steam's corresponding public product data), and official platform documentation. Linked storefronts also carry player reviews and user tags; those sections are not the evidence for the gameplay descriptions above. Interpretive labels such as cinematic platformer, souls-influenced, and survivors-like are identified as synthesis where the developer uses different wording.
+
+This is a discovery reference, not a market study, an assessment of production difficulty, or a claim that every possible 2D subgenre has been captured. Historical examples remain useful for understanding loops; current prices, sales, platform compatibility, and ownership changes are outside scope.
