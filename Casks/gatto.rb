@@ -1,11 +1,13 @@
 cask "gatto" do
-  version "0.14.0"
-  sha256 "fe44b82cd408367bf910aa9429c67133ced74dd422a0db68df92c7f568ee9b35"
+  version "0.15.0"
+  sha256 "1fa8fefaf2b107c3905c83cb873dcd07ad2aed195a66de03c55f3bb6582ee845"
 
   url "https://github.com/jeremyc2/Gatto/releases/download/v#{version}/gatto-#{version}-aarch64-apple-darwin.dmg"
   name "Gatto"
   desc "A macOS app for adding images to GitHub"
   homepage "https://github.com/jeremyc2/Gatto"
+
+  auto_updates true
 
   depends_on arch: :arm64
   depends_on formula: "gh"
