@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Press **Escape** in App Preferences to return to the main page, just like **Done**.
+
 ## [0.15.1] - 2026-10-19
 
 ### Added

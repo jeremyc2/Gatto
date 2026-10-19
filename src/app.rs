@@ -1659,6 +1659,21 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn handle_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.recording_global_shortcut {
+            self.record_global_shortcut(event, window, cx);
+        } else if self.settings_open && event.keystroke.key == "escape" {
+            window.prevent_default();
+            cx.stop_propagation();
+            self.show_main_page(window, cx);
+        }
+    }
+
     fn record_global_shortcut(
         &mut self,
         event: &KeyDownEvent,
@@ -1757,9 +1772,7 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.cancel_global_shortcut_recording(window, cx);
-        self.settings_open = false;
-        cx.notify();
+        self.show_main_page(window, cx);
     }
 
     fn set_global_shortcut_enabled(
@@ -2878,7 +2891,7 @@ impl Render for UploaderApp {
         let root = v_flex()
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
-            .capture_key_down(cx.listener(Self::record_global_shortcut))
+            .capture_key_down(cx.listener(Self::handle_key_down))
             .on_action(cx.listener(Self::on_paste))
             .on_action(cx.listener(Self::paste_and_preview_from_menu))
             .on_action(cx.listener(Self::switch_to_bulk_upload))
@@ -3139,6 +3152,68 @@ mod tests {
                 this.show_main_page(window, cx);
                 assert!(!this.settings_open);
                 assert!(this.focus_handle.is_focused(window));
+            });
+        });
+    }
+
+    #[gpui_kit::test]
+    fn escape_leaves_preferences_from_inputs_and_cancels_recording_first(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            UploaderApp::with_settings(
+                window,
+                Diagnostics::new(),
+                AppControllers::default(),
+                AppSettings::default(),
+                None,
+                false,
+                cx,
+            )
+        });
+
+        for focus_input in [false, true] {
+            cx.update(|window, cx| {
+                view.update(cx, |app, cx| {
+                    app.show_settings(cx);
+                    if focus_input {
+                        app.owner_input
+                            .update(cx, |input, cx| input.focus(window, cx));
+                    } else {
+                        app.focus_handle.focus(window, cx);
+                    }
+                });
+                window.draw(cx).clear(cx);
+            });
+            cx.simulate_keystrokes("escape");
+            cx.update(|window, cx| {
+                view.update(cx, |app, _| {
+                    assert!(!app.settings_open);
+                    assert!(app.focus_handle.is_focused(window));
+                });
+            });
+        }
+
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.show_settings(cx);
+                app.recording_global_shortcut = true;
+                app.focus_handle.focus(window, cx);
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| {
+            view.update(cx, |app, _| {
+                assert!(app.settings_open);
+                assert!(!app.recording_global_shortcut);
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.settings_open);
+                assert!(app.focus_handle.is_focused(window));
             });
         });
     }
