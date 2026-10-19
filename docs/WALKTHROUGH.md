@@ -129,6 +129,13 @@ when a new release is available. Click it once to install and restart. Finish
 active uploads first. **Updating…** shows progress; **↻ Update** retries a failure.
 See [Setup](SETUP.md#updates) for timing and the first updater-enabled install.
 
+To check immediately, choose **Gatto → Check for Updates…** in the macOS menu
+bar. If a release is available, a small native pop-up shows its version and a
+link to the GitHub release. Choose **Update** to install and restart, or **Cancel**
+to leave it for later. Active uploads must finish before installation can start.
+The command also reports when no update is available or the check fails.
+Scheduled checks remain quiet and keep the existing Update controls current.
+
 <img src="images/walkthrough/05-update.png" alt="Gatto's small Update control beside the header controls" width="620">
 
 ## Start quietly at login

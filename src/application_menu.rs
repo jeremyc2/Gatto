@@ -1,6 +1,15 @@
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, actions};
 
-actions!(gatto, [CloseWindow, Quit, InstallUpdate, OpenPreferences]);
+actions!(
+    gatto,
+    [
+        CloseWindow,
+        Quit,
+        InstallUpdate,
+        CheckForUpdates,
+        OpenPreferences
+    ]
+);
 
 pub fn init(cx: &mut App) {
     // Unscoped actions work in every window, including focused text fields.
@@ -23,7 +32,11 @@ pub fn init(cx: &mut App) {
         }
     });
     cx.set_menus([
-        Menu::new("Gatto").items([MenuItem::action("Quit Gatto", Quit)]),
+        Menu::new("Gatto").items([
+            MenuItem::action("Check for Updates…", CheckForUpdates),
+            MenuItem::separator(),
+            MenuItem::action("Quit Gatto", Quit),
+        ]),
         Menu::new("File").items([MenuItem::action("Close Window", CloseWindow)]),
     ]);
 }

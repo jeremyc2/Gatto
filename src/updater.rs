@@ -49,6 +49,11 @@ impl Updater {
             cx.spawn(async move |cx| {
                 while let Ok((code, message)) = events.recv().await {
                     cx.update(|cx| {
+                        if code == 6 {
+                            // Confirmation uses the existing upload guards and install path.
+                            cx.dispatch_action(&crate::application_menu::InstallUpdate);
+                            return;
+                        }
                         if matches!(code, 3..=5) {
                             diagnostics.error(&message);
                         }
@@ -91,6 +96,15 @@ impl Updater {
         }
         #[cfg(not(target_os = "macos"))]
         let _ = cx;
+    }
+
+    pub fn check_for_updates(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        if let Some(bridge) = &self.native {
+            bridge.check_for_updates();
+            return true;
+        }
+        false
     }
 }
 
@@ -149,6 +163,13 @@ mod native {
             // SAFETY: The bridge implements this main-thread selector.
             unsafe {
                 let _: () = msg_send![&self.object, install];
+            }
+        }
+
+        pub fn check_for_updates(&self) {
+            // SAFETY: The bridge implements this main-thread selector.
+            unsafe {
+                let _: () = msg_send![&self.object, checkForUpdates];
             }
         }
     }

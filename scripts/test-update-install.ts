@@ -49,12 +49,24 @@ await Bun.write(
   }
   let recent = CommandLine.arguments.contains("--recent")
   let cached = CommandLine.arguments.contains("--cached")
+  let manual = CommandLine.arguments.contains(where: { $0.hasPrefix("--manual-") })
+  let cancel = CommandLine.arguments.contains("--manual-cancel")
   if cached { UserDefaults.standard.set("0.15.0", forKey: "GattoAvailableUpdate") }
-  UserDefaults.standard.set(Date(timeIntervalSinceNow: (recent || cached) ? 0 : -5 * 60 * 60), forKey: "SULastCheckTime")
-  let driver = UpdaterBridge()
+  UserDefaults.standard.set(Date(timeIntervalSinceNow: (recent || cached || manual) ? 0 : -5 * 60 * 60), forKey: "SULastCheckTime")
+  let driver = UpdaterBridge(client: nil) { prompt, reply in
+   assert(manual && prompt.offersInstall && prompt.title == "Gatto 0.15.0 is available")
+   assert(prompt.releaseURL?.absoluteString == "https://github.com/jeremyc2/Gatto/releases/tag/v0.15.0")
+   if cancel {
+    reply(false)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exit(0) }
+   } else {
+    try! "clicked".write(toFile: ${JSON.stringify(clicked)}, atomically: true, encoding: .utf8)
+    reply(true)
+   }
+  }
   driver.start { state, message in
    NSLog("TEST state=%ld %@", state, message)
-   if state == 1 {
+   if (state == 1 && !manual) || state == 6 {
     if recent { exit(21) }
     DispatchQueue.main.async {
      try! "clicked".write(toFile: ${JSON.stringify(clicked)}, atomically: true, encoding: .utf8)
@@ -63,6 +75,7 @@ await Bun.write(
    }
    if state == 3 || state == 4 { exit(20) }
   }
+  if manual { driver.checkForUpdates() }
   if recent {
    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exit(0) }
   }
@@ -98,7 +111,7 @@ try {
     await Bun.$`codesign --force --sign - ${app}`.quiet();
   }
   await Bun.$`ditto -c -k --keepParent ${work}/new/Gatto.app ${work}/served/gatto-test.zip`.quiet();
-  await Bun.$`dist/sparkle/bin/generate_appcast --ed-key-file ${keyfile} --download-url-prefix http://127.0.0.1:${server.port}/ --maximum-deltas 0 ${work}/served`.quiet();
+  await Bun.$`dist/sparkle/bin/generate_appcast --ed-key-file ${keyfile} --download-url-prefix http://127.0.0.1:${server.port}/ --link https://github.com/jeremyc2/Gatto/releases/tag/v0.15.0 --maximum-deltas 0 ${work}/served`.quiet();
   const recent = Bun.spawn([join(work, "installed/Gatto.app/Contents/MacOS/gatto"), "--recent"], {
     stdin: "ignore",
     stdout: "ignore",
@@ -114,7 +127,7 @@ try {
     clearTimeout(recentTimeout);
   }
   await Bun.$`ditto ${work}/installed/Gatto.app ${work}/original.app`.quiet();
-  for (const mode of ["--overdue", "--cached"]) {
+  for (const mode of ["--overdue", "--cached", "--manual-cancel", "--manual-install"]) {
     await Bun.$`rm -rf ${work}/installed/Gatto.app`;
     await Bun.$`ditto ${work}/original.app ${work}/installed/Gatto.app`.quiet();
     await Bun.$`rm -f ${marker} ${clicked}`;
@@ -127,6 +140,20 @@ try {
       stderr: "pipe",
     });
     const stderrPromise = new Response(child.stderr).text();
+    if (mode === "--manual-cancel") {
+      const timeout = setTimeout(() => child?.kill(), 10000);
+      try {
+        if ((await child.exited) !== 0) throw new Error(await stderrPromise);
+        if (downloads !== 0 || feedRequests < 1 || (await Bun.file(marker).exists()))
+          throw new Error("Cancelling the manual prompt must not download or install");
+        console.log(
+          "Passed (--manual-cancel): version and release link shown; cancel leaves app installed",
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
+      continue;
+    }
     const end = Date.now() + 20000;
     while (Date.now() < end && !(await Bun.file(marker).exists())) {
       await Bun.sleep(250);

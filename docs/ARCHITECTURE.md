@@ -71,6 +71,15 @@ already in progress prevent starting an update; new uploads and Quick Copy are
 blocked during installation. The user driver never consents to install without
 the click. Information-only releases and installation failures leave a retry
 control and actionable tooltip; background-check errors only enter diagnostics.
+The macOS **Gatto → Check for Updates…** action requests a fresh check without
+granting installation consent. It queues behind an active background check and
+deduplicates repeated requests. Only this manual check presents native alerts:
+the available version with a release link and Update/Cancel choices, no update,
+or a check error. Alerts run outside GPUI's current update to avoid reentrant
+window borrows. Confirmation dismisses the checking session and sends an install
+action back through Rust's existing upload guards and fresh installation check.
+Cancellation dismisses without skipping future update reminders. Source builds
+and updater startup failures report that checking is unavailable.
 Sparkle verifies the signed feed and archive before extraction, handles app
 replacement/recovery, and relaunches the app. Release packaging signs nested code
 and embeds the release Mac's persistent Ed25519 public key.

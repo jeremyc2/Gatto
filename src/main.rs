@@ -114,6 +114,24 @@ fn main() {
             let main = update_main.clone();
             cx.defer(move |cx| perform_action(MenuAction::Update, &main, cx));
         });
+        let check_main = controller.clone();
+        cx.on_action(move |_: &application_menu::CheckForUpdates, cx| {
+            let main = check_main.clone();
+            cx.defer(move |cx| {
+                if !updater::Updater::shared(cx).read(cx).check_for_updates() {
+                    let (handle, _) = main.show(cx);
+                    let _ = handle.update(cx, |_, window, cx| {
+                        drop(window.prompt(
+                            gpui_kit::PromptLevel::Info,
+                            "Update checking is unavailable",
+                            Some("Use a packaged release of Gatto with its bundled updater. If this is a packaged release, see Application logs for details."),
+                            &["OK"],
+                            cx,
+                        ));
+                    });
+                }
+            });
+        });
         let preferences_main = controller.clone();
         cx.on_action(move |_: &application_menu::OpenPreferences, cx| {
             // Keyboard dispatch can still borrow the focused window.

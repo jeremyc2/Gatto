@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add **Gatto → Check for Updates…** to the macOS application menu, with a native
+  version prompt, GitHub release link, and Update/Cancel choices. Report when no
+  update is available or checking fails; preserve quiet scheduled checks and the
+  existing Update controls.
+
 ## [0.15.2] - 2026-10-19
 
 ### Added
