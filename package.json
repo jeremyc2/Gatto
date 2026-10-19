@@ -11,6 +11,7 @@
     "lint:web": "bunx --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bunx --bun oxfmt --check web package.json",
     "format:web": "bunx --bun oxfmt --write web package.json",
     "typecheck:web": "bunx --bun tsc --noEmit -p web/tsconfig.json",
+    "typecheck:scripts": "bunx --bun tsc --noEmit -p tsconfig.json",
     "test:web": "bun test web/tests",
     "preview:web": "bunx --bun vite preview --config web/vite.config.ts",
     "size:web": "bun web/scripts/css-size.ts",

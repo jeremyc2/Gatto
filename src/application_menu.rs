@@ -1,6 +1,6 @@
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, actions};
 
-actions!(gatto, [CloseWindow, Quit]);
+actions!(gatto, [CloseWindow, Quit, InstallUpdate]);
 
 pub fn init(cx: &mut App) {
     // Unscoped actions work in every window, including focused text fields.

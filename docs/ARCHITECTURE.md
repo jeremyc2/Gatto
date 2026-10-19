@@ -44,6 +44,44 @@ Each installed launch can retry cleanup; once ejected, later launches do nothing
 Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite,
 with the app’s existing dependencies.
 
+## Release updates
+
+`updater.rs` owns a process-lifetime GPUI entity observed by the uploader view.
+It loads `Contents/Frameworks/libGattoUpdater.dylib` only in bundled builds and
+retains the library for the process lifetime. The native updater reports status
+changes back to Rust through a callback and channel; all native updater operations
+run on the main thread. No network work depends on a window being
+visible. No updater is loaded in an ordinary source build.
+
+`native/Updater.swift` uses Sparkle 2.10.0 with a custom user driver. Sparkle owns
+its four-hour check interval, persisted check time (`SULastCheckTime`), scheduling,
+and retries against the public signed GitHub release feed. It checks when overdue
+at launch and continues while Gatto runs, even with no windows. No extra Gatto
+timer, updater cron job, or updater LaunchAgent is installed. Automatic downloads
+and installation are disabled. Scheduled update notifications update the cached
+badge and are dismissed in Sparkle without downloading the archive. The cache
+keeps the badge visible across launches; an explicit click performs a fresh check
+and authorizes installation. A click during a background check is carried into
+the next update session before Sparkle schedules another check.
+
+The header and menu bar menu show a compact Update control. Clicking initiates a
+fresh Sparkle check, then authorizes download, verified installation, and relaunch
+without another app confirmation. macOS can still request authorization. Uploads
+already in progress prevent starting an update; new uploads and Quick Copy are
+blocked during installation. The user driver never consents to install without
+the click. Information-only releases and installation failures leave a retry
+control and actionable tooltip; background-check errors only enter diagnostics.
+Sparkle verifies the signed feed and archive before extraction, handles app
+replacement/recovery, and relaunches the app. Release packaging signs nested code
+and embeds the release Mac's persistent Ed25519 public key.
+
+The available version and Sparkle check time/state use the app's macOS
+preferences domain (`~/Library/Preferences/com.jeremy-chandler.gatto.plist`);
+Sparkle caches use `~/Library/Caches/com.jeremy-chandler.gatto`. Reset app clears
+repository preferences and the login item while retaining updater state.
+The Homebrew cask lives in `Casks/gatto.rb` in the same repository and installs
+the published signed DMG, with GitHub CLI as a dependency.
+
 ## Data flow
 
 ```text
@@ -151,9 +189,15 @@ repository selections, cached IDs, and pins after successfully saving settings.
 
 Start at Login is represented by the exact file
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the
-setting writes a LaunchAgent containing the current executable's canonical path;
-disabling it removes that one file. The agent runs in the user's Aqua session at
-the next login. No privileged helper or system-wide service is installed.
+setting writes a LaunchAgent containing the current executable's canonical path
+and a `--login` argument; disabling it removes that one file. The agent runs in
+the user's Aqua session at the next login. A login launch hides the Dock icon and
+creates no windows. Startup loads preferences and registers the global shortcut
+without an uploader view; menu actions, custom URLs, and background update checks
+remain available. Explicitly opening Gatto or choosing Open App shows the window.
+On startup, an existing login item is atomically refreshed with the new argument;
+this never enables Start at Login for users who have not selected it. No privileged
+helper or system-wide login service is installed.
 
 The **Reset app** preference removes both of these per-user files and returns
 the in-memory UI to first-run setup. It does not modify GitHub CLI

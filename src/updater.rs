@@ -1,0 +1,155 @@
+//! Process-lifetime update state, shared by the window and menu bar.
+use gpui_kit::{App, AppContext as _, Context, Entity, Global};
+
+use crate::{diagnostics::Diagnostics, menu_bar::MenuBarController};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UpdateState {
+    #[default]
+    Idle,
+    Available,
+    Installing,
+    Failed,
+}
+
+#[derive(Default)]
+pub struct Updater {
+    pub state: UpdateState,
+    pub message: String,
+    #[cfg(target_os = "macos")]
+    native: Option<native::Bridge>,
+}
+
+struct SharedUpdater(Entity<Updater>);
+impl Global for SharedUpdater {}
+
+impl Updater {
+    pub fn shared(cx: &mut App) -> Entity<Self> {
+        if let Some(shared) = cx.try_global::<SharedUpdater>() {
+            return shared.0.clone();
+        }
+        let entity = cx.new(|_| Self::default());
+        cx.set_global(SharedUpdater(entity.clone()));
+        entity
+    }
+
+    pub fn start(cx: &mut App, diagnostics: Diagnostics, menu: MenuBarController) {
+        let entity = Self::shared(cx);
+        #[cfg(target_os = "macos")]
+        {
+            let (sender, events) = async_channel::unbounded();
+            match native::Bridge::load(sender) {
+                Ok(Some(bridge)) => entity.update(cx, |this, _| this.native = Some(bridge)),
+                Ok(None) => return, // Source builds have no bundled updater.
+                Err(error) => {
+                    diagnostics.error(format!("Could not start updater: {error:#}"));
+                    return;
+                }
+            }
+            cx.spawn(async move |cx| {
+                while let Ok((code, message)) = events.recv().await {
+                    cx.update(|cx| {
+                        if matches!(code, 3..=5) {
+                            diagnostics.error(&message);
+                        }
+                        entity.update(cx, |this, cx| {
+                            this.receive(code, message, cx);
+                            menu.set_update_state(this.state);
+                        });
+                    });
+                }
+            })
+            .detach();
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (entity, diagnostics, menu);
+    }
+
+    fn receive(&mut self, code: isize, message: String, cx: &mut Context<Self>) {
+        self.state = match code {
+            0 | 4 => UpdateState::Idle,
+            1 => UpdateState::Available,
+            2 => UpdateState::Installing,
+            3 => UpdateState::Failed,
+            _ => return, // Background errors belong in logs, not in the badge.
+        };
+        self.message = message;
+        cx.notify();
+    }
+
+    pub fn install(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.state, UpdateState::Available | UpdateState::Failed) {
+            return;
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(bridge) = &self.native {
+            // Block new uploads in this turn, before the native event channel runs.
+            self.state = UpdateState::Installing;
+            self.message = "Downloading update; Gatto will restart when ready".into();
+            cx.notify();
+            bridge.install();
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = cx;
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod native {
+    use anyhow::{Context as _, Result};
+    use block2::RcBlock;
+    use objc2::{
+        msg_send,
+        rc::Retained,
+        runtime::{AnyClass, AnyObject},
+    };
+    use objc2_foundation::NSString;
+
+    pub struct Bridge {
+        object: Retained<AnyObject>,
+        // The Objective-C class and all callbacks live in this library. Keep it
+        // loaded until process exit: unloading registered classes is unsafe.
+        _library: std::mem::ManuallyDrop<libloading::Library>,
+    }
+
+    impl Bridge {
+        pub fn load(events: async_channel::Sender<(isize, String)>) -> Result<Option<Self>> {
+            let executable = std::env::current_exe()?;
+            let Some(contents) = executable.parent().and_then(|path| path.parent()) else {
+                return Ok(None);
+            };
+            if contents.file_name().is_none_or(|name| name != "Contents") {
+                return Ok(None);
+            }
+            let library = contents.join("Frameworks/libGattoUpdater.dylib");
+            // SAFETY: Only load the bridge inside our signed app bundle. Hardened
+            // runtime library validation checks its signing team at runtime.
+            let library =
+                std::mem::ManuallyDrop::new(unsafe { libloading::Library::new(library) }?);
+            let class =
+                AnyClass::get(c"GattoUpdaterBridge").context("Missing updater bridge class")?;
+            // SAFETY: These selectors and the block ABI match native/Updater.swift.
+            // All calls and Sparkle callbacks run on the application main thread.
+            let object: Retained<AnyObject> = unsafe { msg_send![class, new] };
+            let handler = RcBlock::new(move |code: isize, message: *mut NSString| {
+                // SAFETY: Swift supplies a nonnull NSString alive for this call.
+                let message = unsafe { &*message }.to_string();
+                let _ = events.try_send((code, message));
+            });
+            unsafe {
+                let _: () = msg_send![&object, startWithHandler: &*handler];
+            }
+            Ok(Some(Self {
+                object,
+                _library: library,
+            }))
+        }
+
+        pub fn install(&self) {
+            // SAFETY: The bridge implements this main-thread selector.
+            unsafe {
+                let _: () = msg_send![&self.object, install];
+            }
+        }
+    }
+}

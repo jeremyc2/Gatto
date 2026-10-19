@@ -1985,13 +1985,15 @@ dependencies = [
 
 [[package]]
 name = "gatto"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "async-channel",
+ "block2 0.6.2",
  "global-hotkey",
  "gpui-kit",
  "image",
+ "libloading",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",

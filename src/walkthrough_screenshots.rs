@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod app;
+mod application_menu;
 mod diagnostics;
 mod github;
 mod global_shortcut;
@@ -12,6 +13,7 @@ mod rooftops;
 mod rooftops_score;
 mod settings;
 mod theme;
+mod updater;
 mod window_limits;
 
 #[cfg(target_os = "macos")]

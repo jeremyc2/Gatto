@@ -78,6 +78,19 @@ uploader session, and sends image bytes directly to GitHub’s attachment servic
 It does not persist tokens in app configuration. Restart after switching CLI
 accounts; see [Support](SUPPORT.md#common-problems) for account recovery.
 
+## Release updates
+
+Bundled updater-enabled releases make unauthenticated HTTPS requests to the public
+GitHub release feed through Sparkle every four hours while Gatto runs. They send no
+GitHub CLI token, images, repository selections, or optional system profile.
+A click on Update is required before downloading and installing a release.
+Sparkle verifies the Ed25519-signed feed and archive before extraction, then
+handles installation and relaunch; the distributed app and DMG are Developer ID
+signed and notarized. The release pipeline pins the Sparkle SDK's SHA-256 and
+keeps its persistent private signing key in the release Mac's Keychain.
+See [Releasing](docs/RELEASING.md#one-time-updater-signing-setup) for key handling.
+Rust dependency audits do not audit the separately bundled native Sparkle SDK.
+
 ## Local settings and clipboard behavior
 
 - Normal uploads do not change the clipboard. **Copy Markdown**, **Copy all**,

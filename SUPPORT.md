@@ -36,6 +36,7 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | A normal upload fails | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Keep the window open; closing clears drafts. |
 | Quick Copy fails | Configure an account or organization and pin an accessible repository. Copy the image again and invoke Quick Copy again; this action clears its failed draft. |
 | Global shortcut will not register | Use at least two modifiers and a supported key. If another app owns the chord, record a different shortcut. No Accessibility permission is required. |
+| A window still opens at login after upgrading | Open the updated app once to refresh its existing login item, or toggle Start at Login off and on. |
 | Start at Login stopped working after moving the app | Put the app in its final location, then toggle Start at Login off and on. |
 | `gatto://` URLs do not open | Install and open `Gatto.app`; a standalone development executable does not register the URL scheme. |
 
@@ -54,6 +55,20 @@ If malformed or unreadable settings prevent use, quit Gatto, move `settings.json
 somewhere safe, and reopen the app to configure it again. To clear a stale login
 item, remove only the exact LaunchAgent file above while Gatto is quit. Moving
 settings alone does not disable Start at Login.
+
+## App updates
+
+See [Setup's update instructions](docs/SETUP.md#updates). If installation fails,
+hover **↻ Update** for details and open Application Logs, then click to retry.
+Offline release checks are retried by Sparkle's four-hour scheduler. Only
+bundled updater-enabled releases can update themselves; versions through v0.14.0
+need a new DMG or Homebrew install once. Source builds do not check for updates.
+
+Updater state and Sparkle defaults live in
+`~/Library/Preferences/com.jeremy-chandler.gatto.plist`, with caches in
+`~/Library/Caches/com.jeremy-chandler.gatto`. Reset app retains that update state.
+Homebrew users can uninstall with `brew uninstall --cask jeremyc2/gatto/gatto`;
+add `--zap` to remove the cask's declared per-user settings and caches too.
 
 ## Reset and uninstall
 

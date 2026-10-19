@@ -7,14 +7,35 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-19
+
+### Added
+
+- Add a Homebrew cask that installs Gatto and its GitHub CLI dependency.
+- Add quiet update checks while Gatto runs, using Sparkle’s four-hour scheduler.
+  A compact Update control downloads, verifies, installs, and restarts only after
+  a click, with retry support and protection for active uploads.
+- Add linked game-development research covering engines, gameplay, physics,
+  assets, NPCs, story structure, and project scope.
+
 ### Changed
 
-- Keep the website's Share scene pinned while pawprints continue to an unnumbered
-  final marker, which reveals a large, still rainbow pawprint before the page
-  scrolls onward. Reverse scrolling retraces that trail before changing chapters.
-- Keep the website chapter controls until the tracker has less than 740px of
-  available width, then use continuous paw trails. Allow more prints in wider
-  gaps and center the tracker at a maximum width of 960px.
+- Guide version selection and release notes, run release checks, commit and push
+  code, verify uploaded assets before publication, and automatically refresh,
+  verify, commit, and push the README figures and Homebrew cask. Interrupted
+  publication or metadata updates can resume without rebuilding.
+- Start at Login now runs quietly in the menu bar without creating a window or
+  showing a Dock icon; shortcuts and update checks start independently of the UI.
+- Keep the website's Share scene pinned while a final paw trail reaches an
+  unnumbered rainbow pawprint marker. Reverse scrolling retraces the trail.
+- Adapt website chapter controls and pawprint density to the available width,
+  center the tracker on wide screens, and preserve keyboard focus when compact
+  controls are hidden.
+
+### Fixed
+
+- Load Bun's types for release scripts in editors and provide a dedicated script
+  type check.
 
 ## [0.14.0] - 2026-10-17
 

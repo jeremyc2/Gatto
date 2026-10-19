@@ -1,9 +1,15 @@
-use std::{collections::BTreeSet, env, fs, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::global_shortcut::DEFAULT_QUICK_COPY_SHORTCUT;
+
+pub const LOGIN_ARGUMENT: &str = "--login";
 
 const APPLICATION_SUPPORT_DIRECTORY: &str = "Gatto";
 const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.gatto.plist";
@@ -96,7 +102,16 @@ impl AppSettings {
         Ok(())
     }
 
-    /// Removes every setting this app writes, including its per-user login item.
+    /// Upgrade an existing login item without enabling login startup for new users.
+    pub fn refresh_start_at_login() -> Result<()> {
+        let path = launch_agent_path()?;
+        if path.exists() {
+            refresh_launch_agent(&path, &current_executable()?)?;
+        }
+        Ok(())
+    }
+
+    /// Removes repository preferences and the login item; updater state is separate.
     pub fn reset() -> Result<()> {
         clear_persistence(&settings_path()?, &launch_agent_path()?)
     }
@@ -148,13 +163,31 @@ fn install_launch_agent() -> Result<()> {
     fs::create_dir_all(directory)
         .with_context(|| format!("Could not create {}", directory.display()))?;
 
+    write_launch_agent(&path, &current_executable()?)
+}
+
+fn current_executable() -> Result<String> {
     let executable = env::current_exe().context("Could not locate the app executable")?;
-    let executable = executable
+    Ok(executable
         .canonicalize()
         .unwrap_or(executable)
         .to_string_lossy()
-        .into_owned();
-    let plist = format!(
+        .into_owned())
+}
+
+fn refresh_launch_agent(path: &Path, executable: &str) -> Result<()> {
+    let plist = login_agent_plist(executable);
+    let legacy = plist.replace(&format!("<string>{LOGIN_ARGUMENT}</string>\n"), "");
+    // Only migrate the exact configuration produced for this executable by older
+    // releases. A source build must never repoint an installed app's login item.
+    if fs::read_to_string(path).ok().as_deref() == Some(&legacy) {
+        write_launch_agent(path, executable)?;
+    }
+    Ok(())
+}
+
+fn login_agent_plist(executable: &str) -> String {
+    format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
 <plist version=\"1.0\">\n\
@@ -164,6 +197,7 @@ fn install_launch_agent() -> Result<()> {
   <key>ProgramArguments</key>\n\
   <array>\n\
     <string>{}</string>\n\
+    <string>{LOGIN_ARGUMENT}</string>\n\
   </array>\n\
   <key>RunAtLoad</key>\n\
   <true/>\n\
@@ -171,9 +205,19 @@ fn install_launch_agent() -> Result<()> {
   <string>Aqua</string>\n\
 </dict>\n\
 </plist>\n",
-        escape_xml(&executable)
-    );
-    fs::write(&path, plist).with_context(|| format!("Could not write {}", path.display()))?;
+        escape_xml(executable)
+    )
+}
+
+fn write_launch_agent(path: &Path, executable: &str) -> Result<()> {
+    let plist = login_agent_plist(executable);
+    if fs::read_to_string(path).ok().as_deref() != Some(&plist) {
+        let temporary_path = path.with_extension("plist.tmp");
+        fs::write(&temporary_path, plist)
+            .with_context(|| format!("Could not write {}", temporary_path.display()))?;
+        fs::rename(&temporary_path, path)
+            .with_context(|| format!("Could not replace {}", path.display()))?;
+    }
     Ok(())
 }
 
@@ -214,6 +258,42 @@ mod tests {
     };
 
     use super::{AppSettings, clear_persistence};
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn login_item_passes_background_argument_and_upgrades_existing_configuration() {
+        let unique_id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("gatto-login-test-{unique_id}"));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("login.plist");
+        // Model an enabled login item from a release without the login argument.
+        let executable = "/Applications/Gatto & Friends.app/Contents/MacOS/gatto";
+        let legacy = super::login_agent_plist(executable)
+            .replace(&format!("<string>{}</string>\n", super::LOGIN_ARGUMENT), "");
+        fs::write(&path, &legacy).unwrap();
+        super::refresh_launch_agent(&path, "/repo/target/debug/gatto").unwrap();
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            legacy,
+            "source builds must preserve the installed login path"
+        );
+        super::refresh_launch_agent(&path, executable).unwrap();
+        let output = std::process::Command::new("/usr/bin/plutil")
+            .args(["-extract", "ProgramArguments", "json", "-o", "-"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let arguments: Vec<String> = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(arguments, [executable, super::LOGIN_ARGUMENT]);
+        let expected = fs::read_to_string(&path).unwrap();
+        super::write_launch_agent(&path, executable).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn changing_owner_clears_destinations_but_case_changes_preserve_them() {

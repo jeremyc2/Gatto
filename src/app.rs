@@ -40,6 +40,7 @@ use crate::{
     menu_bar::MenuBarController,
     model::{AttachmentUploadState, Repository, StagedImage, parse_owner},
     settings::AppSettings,
+    updater::{UpdateState, Updater},
     window_limits,
 };
 
@@ -104,16 +105,18 @@ pub(crate) enum WalkthroughScenario {
     Preferences,
     ImageStaged,
     UploadComplete,
+    UpdateAvailable,
 }
 
 #[cfg(feature = "walkthrough-screenshots")]
 #[allow(dead_code)]
 impl WalkthroughScenario {
-    pub(crate) const ALL: [Self; 4] = [
+    pub(crate) const ALL: [Self; 5] = [
         Self::FirstRun,
         Self::Preferences,
         Self::ImageStaged,
         Self::UploadComplete,
+        Self::UpdateAvailable,
     ];
 
     pub(crate) const fn file_name(self) -> &'static str {
@@ -122,6 +125,7 @@ impl WalkthroughScenario {
             Self::Preferences => "02-preferences.png",
             Self::ImageStaged => "03-image-staged.png",
             Self::UploadComplete => "04-upload-complete.png",
+            Self::UpdateAvailable => "05-update.png",
         }
     }
 }
@@ -153,6 +157,8 @@ pub struct UploaderApp {
     menu_bar: MenuBarController,
     global_shortcut: GlobalShortcutController,
     diagnostics: Diagnostics,
+    updater: Entity<Updater>,
+    _update_subscription: Subscription,
     header_mark: Arc<Image>,
     rooftops_window: Option<AnyWindowHandle>,
     focus_handle: FocusHandle,
@@ -266,6 +272,8 @@ impl UploaderApp {
             },
         );
 
+        let updater = Updater::shared(cx);
+        let update_subscription = cx.observe(&updater, |_, _, cx| cx.notify());
         let mut this = Self {
             owner_input,
             global_shortcut_input,
@@ -297,6 +305,8 @@ impl UploaderApp {
             menu_bar: controllers.menu_bar,
             global_shortcut: controllers.global_shortcut,
             diagnostics,
+            updater,
+            _update_subscription: update_subscription,
             header_mark: Arc::new(Image::from_bytes(
                 ImageFormat::Png,
                 include_bytes!("../packaging/rocket-cat-transparent.png").to_vec(),
@@ -390,6 +400,13 @@ impl UploaderApp {
             this.staged_images.push(image);
         }
 
+        if matches!(scenario, WalkthroughScenario::UpdateAvailable) {
+            this.updater.update(cx, |updater, cx| {
+                updater.state = UpdateState::Available;
+                updater.message = "Install the new version and restart Gatto".into();
+                cx.notify();
+            });
+        }
         this.refresh_repository_picker(window, cx);
         this
     }
@@ -436,10 +453,6 @@ impl UploaderApp {
                 );
             }
         }
-    }
-
-    pub fn has_pinned_repository(&self) -> bool {
-        !self.settings.pinned_repositories.is_empty()
     }
 
     fn paste_and_preview_from_menu(
@@ -1199,7 +1212,7 @@ impl UploaderApp {
     }
 
     fn send_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.uploading {
+        if self.uploading || self.updater.read(cx).state == UpdateState::Installing {
             return;
         }
         let Some(repository) = self.selected_repository.clone() else {
@@ -2091,6 +2104,22 @@ impl UploaderApp {
         }
     }
 
+    pub fn install_update(
+        &mut self,
+        quick_copy_busy: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.uploading || quick_copy_busy {
+            window.push_notification(
+                Notification::info("Finish the current upload before updating."),
+                cx,
+            );
+            return;
+        }
+        self.updater.update(cx, |updater, cx| updater.install(cx));
+    }
+
     fn render_repository_picker(
         &self,
         heading: &'static str,
@@ -2844,7 +2873,8 @@ impl Render for UploaderApp {
                 .any(|image| !image.upload_state.is_uploaded())
             && !self.uploading
             && !self.loading_token
-            && !self.loading_repository;
+            && !self.loading_repository
+            && self.updater.read(cx).state != UpdateState::Installing;
         let root = v_flex()
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
@@ -2915,6 +2945,23 @@ impl Render for UploaderApp {
                                                 .min_w_0()
                                                 .gap_2()
                                                 .flex_wrap()
+                                                .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
+                                                    let update = self.updater.read(cx);
+                                                    row.child(Button::new("install-update")
+                                                        .debug_selector(|| "install-update".into())
+                                                        .outline().xsmall()
+                                                        .label(match update.state {
+                                                            UpdateState::Installing => "Updating…",
+                                                            UpdateState::Failed => "↻ Update",
+                                                            _ => "↑ Update",
+                                                        })
+                                                        .disabled(self.uploading || update.state == UpdateState::Installing)
+                                                        .accessibility_label("Install update and restart Gatto")
+                                                        .tooltip(update.message.clone())
+                                                        .on_click(|_, window, cx| {
+                                                            window.dispatch_action(Box::new(crate::application_menu::InstallUpdate), cx);
+                                                        }))
+                                                })
                                                 .child(
                                                     Button::new("open-logs")
                                                         .outline()
@@ -3020,6 +3067,55 @@ mod tests {
             result.markdown(),
             "![first](https://example.com/first)\n![second](https://example.com/second)"
         );
+    }
+
+    #[gpui_kit::test]
+    fn update_badge_reacts_to_background_state_and_dispatches_one_click(cx: &mut TestAppContext) {
+        let clicks = Rc::new(Cell::new(0));
+        let clicked = clicks.clone();
+        cx.update(move |cx| {
+            gpui_kit::init(cx);
+            cx.on_action(move |_: &crate::application_menu::InstallUpdate, _| {
+                clicked.set(clicked.get() + 1);
+            });
+        });
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            UploaderApp::with_settings(
+                window,
+                Diagnostics::new(),
+                AppControllers::default(),
+                AppSettings::default(),
+                None,
+                false,
+                cx,
+            )
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(cx.debug_bounds("install-update").is_none());
+        cx.update(|_, cx| {
+            Updater::shared(cx).update(cx, |updater, cx| {
+                updater.state = UpdateState::Available;
+                updater.message = "Install and restart Gatto".into();
+                cx.notify();
+            });
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let button = cx
+            .debug_bounds("install-update")
+            .expect("background checks should reveal the badge");
+        cx.simulate_mouse_down(button.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(button.center(), MouseButton::Left, Modifiers::default());
+        assert_eq!(clicks.get(), 1);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.uploading = true;
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_mouse_down(button.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(button.center(), MouseButton::Left, Modifiers::default());
+        assert_eq!(clicks.get(), 1, "active uploads must disable installation");
     }
 
     #[gpui_kit::test]

@@ -26,7 +26,21 @@ impl QuickCopy {
         }
     }
 
+    pub fn is_busy(&self) -> bool {
+        self.busy.get()
+    }
+
     pub fn start(&self, cx: &mut App) {
+        if crate::updater::Updater::shared(cx).read(cx).state
+            == crate::updater::UpdateState::Installing
+        {
+            notify(
+                cx,
+                "Updating Gatto",
+                "Try Quick Copy again after Gatto restarts.",
+            );
+            return;
+        }
         self.start_with(cx, AppSettings::load, Arc::new(GithubBackend));
     }
 
