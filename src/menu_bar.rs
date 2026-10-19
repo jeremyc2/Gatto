@@ -3,7 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use anyhow::{Context as _, Result};
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder,
-    menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem},
+    menu::{
+        Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem,
+        accelerator::{Key, KeyAccelerator, Modifiers},
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,6 +43,12 @@ impl MenuBar {
         let paste_preview = MenuItem::new("Preview from Clipboard", true, None);
         let paste_url = MenuItem::new("Quick Copy", true, None);
         let settings = MenuItem::new("App Preferences", true, None);
+        settings
+            .set_key_accelerator(Some(KeyAccelerator::new(
+                Modifiers::META,
+                Key::Character(",".into()),
+            )))
+            .context("Could not set the App Preferences shortcut")?;
         let paste_separator = PredefinedMenuItem::separator();
         let settings_separator = PredefinedMenuItem::separator();
         let quit_separator = PredefinedMenuItem::separator();

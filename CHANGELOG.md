@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Open App Preferences with **Command+,** while Gatto is focused.
+
 ## [0.15.0] - 2026-10-19
 
 ### Added

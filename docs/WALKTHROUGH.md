@@ -63,6 +63,8 @@ menu bar when windows close. Its Dock icon appears while a window is open;
 clicking it focuses open windows or reopens the main page.
 **Command+W** closes the focused window; **Command+Q** quits Gatto. These actions
 also appear in the app menus, and the menu bar includes **Quit**.
+Press **Command+,** while Gatto is focused to open App Preferences, or choose
+**App Preferences** from its menu bar menu.
 
 ## Inspect an image
 

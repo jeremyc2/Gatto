@@ -1,12 +1,13 @@
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, actions};
 
-actions!(gatto, [CloseWindow, Quit, InstallUpdate]);
+actions!(gatto, [CloseWindow, Quit, InstallUpdate, OpenPreferences]);
 
 pub fn init(cx: &mut App) {
     // Unscoped actions work in every window, including focused text fields.
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, None),
         KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("cmd-,", OpenPreferences, None),
     ]);
     cx.on_action(|_: &Quit, cx| cx.quit());
     cx.on_action(|_: &CloseWindow, cx| {
@@ -48,7 +49,7 @@ mod tests {
         }
     }
 
-    fn assert_shortcut_dispatches(cx: &mut TestAppContext, shortcut: &str, quit: bool) {
+    fn assert_shortcut_dispatches<A: gpui_kit::Action>(cx: &mut TestAppContext, shortcut: &str) {
         let dispatched = Rc::new(Cell::new(false));
         let capture = dispatched.clone();
         cx.update(move |cx| {
@@ -60,11 +61,7 @@ mod tests {
             // close and quit effects are verified with a bundled app on macOS.
             cx.observe_keystrokes(move |event, _, _| {
                 if let Some(action) = &event.action {
-                    capture.set(if quit {
-                        action.as_any().is::<Quit>()
-                    } else {
-                        action.as_any().is::<CloseWindow>()
-                    });
+                    capture.set(action.as_any().is::<A>());
                 }
             })
             .detach();
@@ -84,11 +81,21 @@ mod tests {
 
     #[gpui_kit::test]
     fn command_w_dispatches_with_a_text_input_focused(cx: &mut TestAppContext) {
-        assert_shortcut_dispatches(cx, "cmd-w", false);
+        assert_shortcut_dispatches::<CloseWindow>(cx, "cmd-w");
     }
 
     #[gpui_kit::test]
     fn command_q_dispatches_with_a_text_input_focused(cx: &mut TestAppContext) {
-        assert_shortcut_dispatches(cx, "cmd-q", true);
+        assert_shortcut_dispatches::<Quit>(cx, "cmd-q");
+    }
+
+    #[gpui_kit::test]
+    fn command_comma_dispatches_with_a_text_input_focused(cx: &mut TestAppContext) {
+        // main.rs registers this process-wide action with the main-window
+        // controller; this test supplies a receiver without opening native UI.
+        cx.update(|cx| {
+            cx.on_action(|_: &OpenPreferences, _| {});
+        });
+        assert_shortcut_dispatches::<OpenPreferences>(cx, "cmd-,");
     }
 }

@@ -114,6 +114,12 @@ fn main() {
             let main = update_main.clone();
             cx.defer(move |cx| perform_action(MenuAction::Update, &main, cx));
         });
+        let preferences_main = controller.clone();
+        cx.on_action(move |_: &application_menu::OpenPreferences, cx| {
+            // Keyboard dispatch can still borrow the focused window.
+            let main = preferences_main.clone();
+            cx.defer(move |cx| perform_action(MenuAction::Settings, &main, cx));
+        });
         controller.start(login_launch, cx);
         *main_window.borrow_mut() = Some(controller.clone());
         let custom_url_main = controller.clone();
