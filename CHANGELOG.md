@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-10-19
+
 ### Added
 
 - Add **Gatto → Check for Updates…** to the macOS application menu, with a native
