@@ -86,7 +86,13 @@ fn main() {
             settings::AppSettings::default()
         });
         let menu_bar_controller = MenuBarController::default();
-        let global_shortcut_controller = GlobalShortcutController::default();
+        let shortcut_menu = menu_bar_controller.clone();
+        let shortcut_diagnostics = diagnostics.clone();
+        let global_shortcut_controller = GlobalShortcutController::new(move |shortcut| {
+            if let Err(error) = shortcut_menu.set_quick_copy_shortcut(shortcut) {
+                shortcut_diagnostics.error(format!("Could not refresh menu shortcuts: {error:#}"));
+            }
+        });
         let shortcut_events = match global_shortcut_controller.install() {
             Ok(events) => Some(events),
             Err(error) => {
@@ -172,7 +178,10 @@ fn main() {
         }
 
         let paste_actions_visible = !startup_settings.pinned_repositories.is_empty();
-        let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {
+        let (menu_bar, menu_events) = match MenuBar::install(
+            paste_actions_visible,
+            global_shortcut_controller.registered_shortcut().as_deref(),
+        ) {
             Ok(menu_bar) => menu_bar,
             Err(error) => {
                 diagnostics.error(format!("Menu bar setup failed: {error}"));

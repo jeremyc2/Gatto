@@ -9,6 +9,8 @@ use gpui_kit::Keystroke;
 
 pub const DEFAULT_QUICK_COPY_SHORTCUT: &str = "Command+Shift+G";
 
+type ShortcutObserver = Rc<dyn Fn(Option<&str>)>;
+
 struct GlobalShortcutState {
     manager: GlobalHotKeyManager,
     registered: Option<HotKey>,
@@ -18,9 +20,25 @@ struct GlobalShortcutState {
 #[derive(Clone, Default)]
 pub struct GlobalShortcutController {
     state: Rc<RefCell<Option<GlobalShortcutState>>>,
+    on_change: Option<ShortcutObserver>,
 }
 
 impl GlobalShortcutController {
+    pub fn new(on_change: impl Fn(Option<&str>) + 'static) -> Self {
+        Self {
+            on_change: Some(Rc::new(on_change)),
+            ..Self::default()
+        }
+    }
+
+    pub fn registered_shortcut(&self) -> Option<String> {
+        self.state
+            .borrow()
+            .as_ref()
+            .and_then(|state| state.registered)
+            .map(format_shortcut)
+    }
+
     /// Creates the native manager on the main thread and forwards pressed events
     /// into an async channel that can be consumed by GPUI's event loop.
     pub fn install(&self) -> Result<async_channel::Receiver<u32>> {
@@ -43,8 +61,8 @@ impl GlobalShortcutController {
     /// when the new combination is unavailable.
     pub fn set_shortcut(&self, shortcut: Option<&str>) -> Result<Option<String>> {
         let hotkey = shortcut.map(parse_shortcut).transpose()?;
-        let mut state = self.state.borrow_mut();
-        let Some(state) = state.as_mut() else {
+        let mut registration = self.state.borrow_mut();
+        let Some(state) = registration.as_mut() else {
             if hotkey.is_none() {
                 return Ok(None);
             }
@@ -55,7 +73,7 @@ impl GlobalShortcutController {
             return Ok(hotkey.map(format_shortcut));
         }
 
-        match hotkey {
+        let canonical = match hotkey {
             Some(new_hotkey) => {
                 state.manager.register(new_hotkey).with_context(|| {
                     format!(
@@ -71,7 +89,7 @@ impl GlobalShortcutController {
                     return Err(error).context("Could not replace the previous global shortcut");
                 }
                 state.registered = Some(new_hotkey);
-                Ok(Some(format_shortcut(new_hotkey)))
+                Some(format_shortcut(new_hotkey))
             }
             None => {
                 if let Some(previous) = state.registered {
@@ -81,9 +99,16 @@ impl GlobalShortcutController {
                         .context("Could not disable the global shortcut")?;
                 }
                 state.registered = None;
-                Ok(None)
+                None
             }
+        };
+        drop(registration);
+        // Publish only successful registrations, including temporary removal
+        // during recording. Failed replacements leave the previous hint intact.
+        if let Some(on_change) = &self.on_change {
+            on_change(canonical.as_deref());
         }
+        Ok(canonical)
     }
 
     pub fn is_registered_event(&self, id: u32) -> bool {

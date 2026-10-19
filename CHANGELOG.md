@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.15.4] - 2026-10-19
+
+### Added
+
+- Add **App Preferences** with **⌘,** to the Gatto application menu. Show **⌘Q**
+  for Quit and **⌘V** for Preview from Clipboard in the cat icon's menu, plus the
+  enabled Quick Copy shortcut, which stays in sync with shortcut preferences.
+
 ## [0.15.3] - 2026-10-19
 
 ### Added

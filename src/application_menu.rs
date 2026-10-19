@@ -33,6 +33,8 @@ pub fn init(cx: &mut App) {
     });
     cx.set_menus([
         Menu::new("Gatto").items([
+            MenuItem::action("App Preferences", OpenPreferences),
+            MenuItem::separator(),
             MenuItem::action("Check for Updates…", CheckForUpdates),
             MenuItem::separator(),
             MenuItem::action("Quit Gatto", Quit),

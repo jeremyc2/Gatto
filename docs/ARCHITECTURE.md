@@ -171,8 +171,13 @@ Native programmatic close requests run on the foreground executor outside a GPUI
 because AppKit's synchronous close callback otherwise re-borrows the application.
 The Dock icon hides when no windows are presented. Quit ends the process.
 
-`application_menu` installs native Close Window and Quit Gatto menu items and
-unscoped Command+W / Command+Q bindings for every app window. Close captures the
+`application_menu` installs native App Preferences, Check for Updates, Close
+Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
+Command+Q bindings for every app window. The cat icon's menu also shows the
+preferences, quit and clipboard preview shortcuts. Successful global Quick Copy
+registrations notify the menu controller, which refreshes its shortcut hint;
+disabling or temporarily unregistering during recording clears that hint.
+Close captures the
 focused window, defers access until keyboard dispatch releases its borrow, then
 uses the existing native close request and per-window cleanup callbacks.
 

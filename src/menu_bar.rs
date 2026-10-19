@@ -5,7 +5,7 @@ use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder,
     menu::{
         Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem,
-        accelerator::{Key, KeyAccelerator, Modifiers},
+        accelerator::{Accelerator, Key, KeyAccelerator, Modifiers},
     },
 };
 
@@ -37,11 +37,19 @@ pub struct MenuBar {
 impl MenuBar {
     pub fn install(
         paste_actions_visible: bool,
+        quick_copy_shortcut: Option<&str>,
     ) -> Result<(Self, async_channel::Receiver<MenuEvent>)> {
         let menu = Menu::new();
         let open = MenuItem::new("Open App", true, None);
         let paste_preview = MenuItem::new("Preview from Clipboard", true, None);
+        paste_preview
+            .set_key_accelerator(Some(KeyAccelerator::new(
+                Modifiers::META,
+                Key::Character("v".into()),
+            )))
+            .context("Could not set the Preview from Clipboard shortcut")?;
         let paste_url = MenuItem::new("Quick Copy", true, None);
+        set_quick_copy_shortcut(&paste_url, quick_copy_shortcut)?;
         let settings = MenuItem::new("App Preferences", true, None);
         settings
             .set_key_accelerator(Some(KeyAccelerator::new(
@@ -53,6 +61,11 @@ impl MenuBar {
         let settings_separator = PredefinedMenuItem::separator();
         let quit_separator = PredefinedMenuItem::separator();
         let quit = MenuItem::new("Quit", true, None);
+        quit.set_key_accelerator(Some(KeyAccelerator::new(
+            Modifiers::META,
+            Key::Character("q".into()),
+        )))
+        .context("Could not set the Quit shortcut")?;
         menu.append(&open)
             .context("Could not create the menu bar menu")?;
         if paste_actions_visible {
@@ -149,6 +162,24 @@ pub struct MenuBarController {
 }
 
 impl MenuBarController {
+    pub fn set_quick_copy_shortcut(&self, shortcut: Option<&str>) -> Result<()> {
+        if let Some(bar) = self.menu_bar.borrow().as_ref() {
+            set_quick_copy_shortcut(&bar.paste_items[1], shortcut)?;
+            // muda 0.21 leaves the native key equivalent intact when clearing
+            // an accelerator. Reinsert the item to rebuild it from cleared state.
+            if let Some(index) = bar
+                .menu
+                .items()
+                .iter()
+                .position(|item| item.id() == bar.paste_items[1].id())
+            {
+                bar.menu.remove(&bar.paste_items[1])?;
+                bar.menu.insert(&bar.paste_items[1], index)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn attach(&self, menu_bar: MenuBar) {
         *self.menu_bar.borrow_mut() = Some(menu_bar);
     }
@@ -189,6 +220,25 @@ impl MenuBarController {
             menu_bar.set_paste_actions_visible(visible);
         }
     }
+}
+
+fn set_quick_copy_shortcut(item: &MenuItem, shortcut: Option<&str>) -> Result<()> {
+    // The global hotkey uses physical key codes, so its menu equivalent must
+    // preserve those same codes (including function keys and numpad keys).
+    let displayed = shortcut
+        .map(str::parse::<Accelerator>)
+        .transpose()
+        .is_ok_and(|accelerator| item.set_accelerator(accelerator).is_ok());
+    if displayed {
+        item.set_text("Quick Copy");
+    } else {
+        // macOS can register some keys (such as volume keys) that menus cannot
+        // represent as key equivalents. Keep the action and show a text hint.
+        item.set_accelerator(None)
+            .context("Could not clear the Quick Copy menu shortcut")?;
+        item.set_text(format!("Quick Copy ({})", shortcut.unwrap_or_default()));
+    }
+    Ok(())
 }
 
 fn app_glyph_icon() -> Result<Icon> {

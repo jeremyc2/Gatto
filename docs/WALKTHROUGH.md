@@ -65,9 +65,10 @@ Gatto’s menu bar, Dock, and app window share the same icon. Gatto remains in t
 menu bar when windows close. Its Dock icon appears while a window is open;
 clicking it focuses open windows or reopens the main page.
 **Command+W** closes the focused window; **Command+Q** quits Gatto. These actions
-also appear in the app menus, and the menu bar includes **Quit**.
+also appear in the app menus, and the cat icon's menu includes **Quit** with **⌘Q**.
 Press **Command+,** while Gatto is focused to open App Preferences, or choose
-**App Preferences** from its menu bar menu.
+**App Preferences** from either the **Gatto** application menu beside the Apple
+menu or the cat icon's dropdown (the menu bar extra). Both show **⌘,**.
 
 ## Inspect an image
 
@@ -88,8 +89,8 @@ The percentage is relative to the fitted image size.
 
 With at least one repository pinned, these actions appear in Gatto’s menu bar menu:
 
-- **Preview from Clipboard** stages the image in the main window.
-- **Quick Copy** uploads it in the background, copies its Markdown, and sends a macOS notification when it finishes.
+- **Preview from Clipboard** stages the image in the main window and shows **⌘V**.
+- **Quick Copy** uploads it in the background, copies its Markdown, and sends a macOS notification when it finishes. When its global shortcut is enabled, the menu shows the registered shortcut. The hint follows changes in App Preferences and disappears while the shortcut is disabled or being recorded.
 
 To customize the enabled global shortcut in App Preferences, click **Record
 shortcut** and press a supported chord with at least two modifier keys.
