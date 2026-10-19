@@ -1,0 +1,223 @@
+import { expect, test } from "bun:test";
+import { mkdtemp, mkdir, rm, chmod } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+// Execute the real shell workflow with isolated stand-ins for signing, GitHub,
+// Git and build tools. Nothing can publish, sign with a real key, or push code.
+async function workflow(mode: string, resume = false) {
+  const root = await mkdtemp(join(tmpdir(), "gatto-release-workflow-"));
+  const bin = join(root, "tools");
+  const writeExecutable = async (name: string, source: string) => {
+    await Bun.write(name, source);
+    await chmod(name, 0o755);
+  };
+  try {
+    for (const path of [bin, join(root, "scripts"), join(root, "packaging"), join(root, "Casks")])
+      await mkdir(path, { recursive: true });
+    await Bun.write(
+      join(root, "scripts/release.sh"),
+      await Bun.file(new URL("./release.sh", import.meta.url)).text(),
+    );
+    await Bun.write(join(root, "Cargo.toml"), '[package]\nname = "gatto"\nversion = "0.15.0"\n');
+    await Bun.write(join(root, "packaging/Info.plist"), "test plist");
+    await Bun.write(join(root, "packaging/AppIcon.icns"), "icon");
+    await Bun.write(join(root, "packaging/Assets.car"), "assets");
+    await Bun.write(join(root, "README.md"), "old figures");
+    await Bun.write(join(root, "Casks/gatto.rb"), "old cask");
+    const common = `
+import { appendFileSync, mkdirSync, writeFileSync, cpSync, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const root = process.env.GATTO_TEST_ROOT!;
+const mode = process.env.GATTO_TEST_MODE!;
+const args = process.argv.slice(2);
+appendFileSync(join(root, 'calls'), JSON.stringify([tool, ...args]) + '\\n');
+const dirty = join(root, 'dirty');
+const draft = join(root, 'draft');
+const sha = 'a'.repeat(40);
+if (tool === 'git') {
+ if (args[0] === 'branch') console.log('main');
+ if (args[0] === 'rev-parse') {
+  if (args.includes('refs/tags/v0.15.0')) process.exit(1);
+  console.log(sha);
+ }
+ if (args[0] === 'diff' && args.includes('--cached') && args.includes('--quiet')) process.exit(existsSync(dirty) ? 1 : 0);
+ if (args[0] === 'diff' && args.includes('--quiet') && mode === 'code-mismatch') process.exit(1);
+ if (args[0] === 'push') {
+  const countFile = join(root, 'push-count');
+  const count = existsSync(countFile) ? Number(readFileSync(countFile,'utf8')) + 1 : 1;
+  writeFileSync(countFile, String(count));
+  if (mode === 'push-failure' && count === 2) process.exit(1);
+ }
+ if (args[0] === 'commit') writeFileSync(dirty, '');
+ if (args[0] === 'commit') { const {unlinkSync} = await import('node:fs'); unlinkSync(dirty); }
+} else if (tool === 'gh') {
+ if (args[0] === 'release' && args[1] === 'view') {
+  if (!args.includes('--json')) process.exit(1);
+  if (args.includes('isDraft')) console.log(mode === 'draft-resume' ? 'true' : 'false');
+  if (args.includes('targetCommitish')) console.log(sha);
+ }
+ if (args[1] === 'create') writeFileSync(draft, 'draft');
+ if (args[1] === 'edit' && !existsSync(draft) && mode !== 'draft-resume') throw new Error('Published without a verified draft');
+} else if (tool === 'bun') {
+ if (args[0] === 'scripts/prepare-release.ts' && args.includes('--print-notes')) console.log('### Added\\n\\n- Test release.');
+ if (args[0] === 'scripts/verify-release.ts' && mode === 'verify-failure') process.exit(1);
+ if (args[0] === 'typecheck:scripts' && mode === 'check-failure') process.exit(1);
+ if (args[0] === 'scripts/update-homebrew-cask.ts' && mode === 'metadata-failure') process.exit(1);
+ if (['scripts/update-readme-size.ts','scripts/update-homebrew-cask.ts'].includes(args[0]) && !args.includes('--check')) writeFileSync(dirty, 'metadata');
+} else if (tool === 'cargo' && args[0] === 'build') {
+ mkdirSync(join(root,'target/aarch64-apple-darwin/release'),{recursive:true});
+ writeFileSync(join(root,'target/aarch64-apple-darwin/release/gatto'),'binary');
+} else if (tool === 'ditto') {
+ if (args[0] === '-c') writeFileSync(args.at(-1)!, 'archive');
+ else cpSync(args[0]!, args[1]!, {recursive:true});
+}
+`;
+    for (const tool of [
+      "git",
+      "gh",
+      "bun",
+      "cargo",
+      "rustup",
+      "security",
+      "codesign",
+      "xcrun",
+      "spctl",
+      "ditto",
+      "ruby",
+      "plutil",
+      "hdiutil",
+    ]) {
+      await writeExecutable(
+        join(bin, tool),
+        `#!${process.execPath}\nconst tool = ${JSON.stringify(tool)};\n${common}`,
+      );
+    }
+    await writeExecutable(
+      join(root, "scripts/prepare-updater.sh"),
+      `#!/bin/bash
+set -e
+mkdir -p dist/sparkle/bin dist/sparkle/Sparkle.framework
+printf bridge > dist/sparkle/libGattoUpdater.dylib
+printf license > dist/sparkle/LICENSE
+printf '#!/bin/bash\\nprintf test-public-key\\n' > dist/sparkle/bin/generate_keys
+printf '#!/bin/bash\\nprintf feed > dist/release/appcast.xml\\n' > dist/sparkle/bin/generate_appcast
+printf '#!/bin/bash\\nexit 0\\n' > dist/sparkle/bin/sign_update
+chmod +x dist/sparkle/bin/*
+`,
+    );
+    await writeExecutable(join(root, "scripts/test-updater.sh"), "#!/bin/bash\nexit 0\n");
+    await writeExecutable(
+      join(root, "scripts/build-dmg.sh"),
+      '#!/bin/bash\nif [[ "$1" == --prepare ]]; then printf template > "$3"; else printf image > "$2"; fi\n',
+    );
+    await Bun.write(join(root, "dirty"), "code");
+    if (resume) {
+      await rm(join(root, "dirty"));
+      await mkdir(join(root, "dist/release"), { recursive: true });
+      for (const name of ["gatto-0.15.0-aarch64-apple-darwin.dmg", "appcast.xml", "SHA256SUMS"])
+        if (mode !== "published-no-artifacts")
+          await Bun.write(join(root, "dist/release", name), "original artifact");
+    }
+    const child = Bun.spawn(
+      ["/bin/bash", join(root, "scripts/release.sh"), ...(resume ? ["--resume"] : [])],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          SIGN_IDENTITY: "Test Developer ID Application",
+          GATTO_TEST_ROOT: root,
+          GATTO_TEST_MODE: mode,
+        },
+        stdin: new Blob(["y\ny\n"]),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const stdout = new Response(child.stdout).text();
+    const stderr = new Response(child.stderr).text();
+    const exit = await child.exited;
+    const calls: string[][] = (await Bun.file(join(root, "calls")).text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    return { exit, calls, output: (await stdout) + (await stderr) };
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+const find = (calls: string[][], ...prefix: string[]) =>
+  calls.findIndex((call) => prefix.every((part, i) => call[i] === part));
+test("release checks precede commits; uploads are verified as a draft before publication; metadata is verified and pushed", async () => {
+  const result = await workflow("release");
+  expect(result.exit, result.output).toBe(0);
+  expect(find(result.calls, "bun", "typecheck:scripts")).toBeLessThan(
+    find(result.calls, "git", "commit"),
+  );
+  const create = find(result.calls, "gh", "release", "create");
+  expect(result.calls[create]).toContain("--draft");
+  expect(create).toBeLessThan(find(result.calls, "bun", "scripts/verify-release.ts"));
+  expect(find(result.calls, "bun", "scripts/verify-release.ts")).toBeLessThan(
+    find(result.calls, "gh", "release", "edit"),
+  );
+  const cask = result.calls.filter((call) => call[1] === "scripts/update-homebrew-cask.ts");
+  expect(cask.length).toBe(2);
+  expect(cask[0]).toContain("v0.15.0");
+  expect(cask[1]).toContain("--check");
+  expect(result.calls.filter((call) => call[0] === "git" && call[1] === "push").length).toBe(2);
+});
+test("failed checks prevent committing and publishing", async () => {
+  const result = await workflow("check-failure");
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "git", "commit")).toBe(-1);
+  expect(find(result.calls, "gh", "release", "create")).toBe(-1);
+});
+test("failed upload verification retains an unpublished draft", async () => {
+  const result = await workflow("verify-failure");
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "gh", "release", "create")).toBeGreaterThan(-1);
+  expect(find(result.calls, "gh", "release", "edit")).toBe(-1);
+});
+test("published release recovery only verifies and syncs metadata", async () => {
+  const result = await workflow("published-resume", true);
+  expect(result.exit, result.output).toBe(0);
+  expect(find(result.calls, "cargo", "build")).toBe(-1);
+  expect(find(result.calls, "gh", "release", "create")).toBe(-1);
+  expect(find(result.calls, "git", "add", "--", "README.md", "Casks/gatto.rb")).toBeGreaterThan(-1);
+});
+test("draft recovery uses its exact target commit and verifies reuploaded assets before publishing", async () => {
+  const result = await workflow("draft-resume", true);
+  expect(result.exit, result.output).toBe(0);
+  expect(find(result.calls, "gh", "release", "upload")).toBeLessThan(
+    find(result.calls, "bun", "scripts/verify-release.ts"),
+  );
+  expect(find(result.calls, "cargo", "build")).toBe(-1);
+});
+test("recovery refuses a checkout with code changes since the release", async () => {
+  const result = await workflow("code-mismatch", true);
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "bun", "scripts/update-readme-size.ts")).toBe(-1);
+});
+
+test("published recovery can measure a downloaded DMG when local artifacts are absent", async () => {
+  const result = await workflow("published-no-artifacts", true);
+  expect(result.exit, result.output).toBe(0);
+  const readme = result.calls.find((call) => call[1] === "scripts/update-readme-size.ts");
+  expect(readme).not.toContain("--dmg");
+});
+
+test("metadata failures explain how to resume an already published release", async () => {
+  const result = await workflow("metadata-failure");
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "gh", "release", "edit")).toBeGreaterThan(-1);
+  expect(result.output).toContain("--resume");
+});
+test("a failed metadata push retains its local commit for recovery", async () => {
+  const result = await workflow("push-failure");
+  expect(result.exit).not.toBe(0);
+  expect(result.calls.filter((call) => call[0] === "git" && call[1] === "commit").length).toBe(2);
+  expect(result.output).toContain("metadata is committed locally");
+  expect(result.output).toContain("--resume");
+});

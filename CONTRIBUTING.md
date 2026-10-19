@@ -95,11 +95,28 @@ cargo fmt --all -- --check
 cargo check --all-targets
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets
+./scripts/test-updater.sh
+bun typecheck:scripts
+bun test scripts
 cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
 ```
 
 Apply formatting with `cargo fmt --all`. Please resolve warnings rather than
 silencing them unless there is a documented reason.
+
+The native updater tests download the pinned Sparkle SDK and compile a Swift
+harness and signed test feed. `bun scripts/test-update-install.ts` also checks
+Sparkle’s scheduler and installs/relaunches disposable app bundles. These use
+isolated preferences and temporary test signing keys; ordinary
+`cargo run` does not load Sparkle or contact the release feed. See
+[Releasing](docs/RELEASING.md#one-time-updater-signing-setup) for bundled builds.
+
+Release-workflow tests mock native tools, Git and GitHub; they never publish or
+push real code. The normal release script runs these checks before offering to
+commit code. See [Releasing](docs/RELEASING.md#release-with-one-command).
+
+Root release scripts and their tests use the root `tsconfig.json`, which loads
+Bun's types for editor diagnostics and `bun typecheck:scripts`.
 
 ### Website
 

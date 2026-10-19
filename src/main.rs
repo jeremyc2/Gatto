@@ -15,6 +15,7 @@ mod rooftops;
 mod rooftops_score;
 mod settings;
 mod theme;
+mod updater;
 mod window_limits;
 
 use std::{cell::RefCell, rc::Rc};
@@ -35,6 +36,9 @@ use crate::{
 };
 
 fn main() {
+    let login_launch = std::env::args_os()
+        .skip(1)
+        .any(|argument| argument == settings::LOGIN_ARGUMENT);
     let application = gpui_kit::application()
         .with_assets(gpui_kit::assets::AllAssets)
         .with_quit_mode(gpui_kit::QuitMode::Explicit);
@@ -61,7 +65,7 @@ fn main() {
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
         application_menu::init(cx);
-        set_dock_visible(true);
+        set_dock_visible(!login_launch);
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
                 set_dock_visible(false);
@@ -69,7 +73,18 @@ fn main() {
         })
         .detach();
         let diagnostics = Diagnostics::new();
-        diagnostics.info("Application started.");
+        diagnostics.info(if login_launch {
+            "Started in the background at login."
+        } else {
+            "Application started."
+        });
+        if let Err(error) = settings::AppSettings::refresh_start_at_login() {
+            diagnostics.error(format!("Could not refresh Start at Login: {error:#}"));
+        }
+        let startup_settings = settings::AppSettings::load().unwrap_or_else(|error| {
+            diagnostics.error(format!("Could not load startup preferences: {error:#}"));
+            settings::AppSettings::default()
+        });
         let menu_bar_controller = MenuBarController::default();
         let global_shortcut_controller = GlobalShortcutController::default();
         let shortcut_events = match global_shortcut_controller.install() {
@@ -80,12 +95,26 @@ fn main() {
             }
         };
 
+        if startup_settings.global_quick_copy_shortcut_enabled
+            && let Err(error) = global_shortcut_controller
+                .set_shortcut(Some(&startup_settings.global_quick_copy_shortcut))
+        {
+            diagnostics.error(format!(
+                "Could not restore the global Quick Copy shortcut: {error:#}"
+            ));
+        }
+
         let controller = MainWindow::new(
             diagnostics.clone(),
             menu_bar_controller.clone(),
             global_shortcut_controller.clone(),
         );
-        let (window_handle, view) = controller.show(cx);
+        let update_main = controller.clone();
+        cx.on_action(move |_: &application_menu::InstallUpdate, cx| {
+            let main = update_main.clone();
+            cx.defer(move |cx| perform_action(MenuAction::Update, &main, cx));
+        });
+        controller.start(login_launch, cx);
         *main_window.borrow_mut() = Some(controller.clone());
         let custom_url_main = controller.clone();
         cx.spawn(async move |cx| {
@@ -118,24 +147,28 @@ fn main() {
             .detach();
         }
 
-        let paste_actions_visible = view.read(cx).has_pinned_repository();
+        let paste_actions_visible = !startup_settings.pinned_repositories.is_empty();
         let (menu_bar, menu_events) = match MenuBar::install(paste_actions_visible) {
             Ok(menu_bar) => menu_bar,
             Err(error) => {
-                let _ = window_handle.update(cx, |_, window, cx| {
-                    view.update(cx, |this, cx| {
-                        this.report_menu_bar_error(
-                            format!("Menu bar setup failed: {error}"),
-                            window,
-                            cx,
-                        );
+                diagnostics.error(format!("Menu bar setup failed: {error}"));
+                if !login_launch {
+                    let (handle, view) = controller.show(cx);
+                    let _ = handle.update(cx, |_, window, cx| {
+                        view.update(cx, |this, cx| {
+                            this.report_menu_bar_error(
+                                format!("Menu bar setup failed: {error}"),
+                                window,
+                                cx,
+                            );
+                        });
                     });
-                });
-                // The window remains usable if macOS refuses to create a status item.
+                }
                 return;
             }
         };
         menu_bar_controller.attach(menu_bar);
+        updater::Updater::start(cx, diagnostics.clone(), menu_bar_controller.clone());
         #[cfg(target_os = "macos")]
         installer_cleanup::start(diagnostics.clone());
 
@@ -191,6 +224,12 @@ impl MainWindow {
             menu_bar,
             shortcut,
         })))
+    }
+
+    fn start(&self, login_launch: bool, cx: &mut App) {
+        if !login_launch {
+            self.show(cx);
+        }
     }
 
     fn ensure(&self, cx: &mut App) -> (AnyWindowHandle, Entity<UploaderApp>) {
@@ -295,6 +334,38 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
             let (_, view) = main.show(cx);
             view.update(cx, |this, cx| this.show_settings(cx));
         }
+        MenuAction::Update => {
+            let (handle, view) = main.show(cx);
+            let quick_copy_busy = main.0.borrow().quick_copy.is_busy();
+            let _ = handle.update(cx, |_, window, cx| {
+                view.update(cx, |this, cx| {
+                    this.install_update(quick_copy_busy, window, cx)
+                });
+            });
+        }
         MenuAction::Quit => cx.quit(),
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[gpui_kit::test]
+    fn login_launch_does_not_create_a_main_window(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let main = MainWindow::new(
+                Diagnostics::new(),
+                MenuBarController::default(),
+                GlobalShortcutController::default(),
+            );
+            main.start(true, cx);
+            assert!(
+                cx.windows().is_empty(),
+                "login must not create even a hidden window"
+            );
+            assert!(main.0.borrow().current.is_none());
+        });
     }
 }

@@ -12,6 +12,7 @@ pub enum MenuAction {
     PreviewFromClipboard,
     QuickCopy,
     Settings,
+    Update,
     Quit,
 }
 
@@ -25,6 +26,8 @@ pub struct MenuBar {
     paste_separator: PredefinedMenuItem,
     paste_actions_visible: bool,
     settings_id: MenuId,
+    update_item: MenuItem,
+    update_visible: bool,
     quit_id: MenuId,
 }
 
@@ -78,6 +81,8 @@ impl MenuBar {
                 paste_separator,
                 paste_actions_visible,
                 settings_id: settings.id().clone(),
+                update_item: MenuItem::new("↑ Update", true, None),
+                update_visible: false,
                 quit_id: quit.id().clone(),
             },
             receiver,
@@ -93,6 +98,8 @@ impl MenuBar {
             Some(MenuAction::QuickCopy)
         } else if event.id == self.settings_id {
             Some(MenuAction::Settings)
+        } else if event.id == *self.update_item.id() {
+            Some(MenuAction::Update)
         } else if event.id == self.quit_id {
             Some(MenuAction::Quit)
         } else {
@@ -142,6 +149,30 @@ impl MenuBarController {
             .borrow()
             .as_ref()
             .and_then(|menu_bar| menu_bar.action_for(event))
+    }
+
+    pub fn set_update_state(&self, state: crate::updater::UpdateState) {
+        use crate::updater::UpdateState;
+        if let Some(bar) = self.menu_bar.borrow_mut().as_mut() {
+            let visible = state != UpdateState::Idle;
+            bar.update_item.set_text(match state {
+                UpdateState::Installing => "Updating…",
+                UpdateState::Failed => "↻ Retry Update",
+                _ => "↑ Update",
+            });
+            bar.update_item
+                .set_enabled(state != UpdateState::Installing);
+            if visible != bar.update_visible {
+                let result = if visible {
+                    bar.menu.insert(&bar.update_item, 1)
+                } else {
+                    bar.menu.remove(&bar.update_item)
+                };
+                if result.is_ok() {
+                    bar.update_visible = visible;
+                }
+            }
+        }
     }
 
     pub fn set_paste_actions_visible(&self, visible: bool) {

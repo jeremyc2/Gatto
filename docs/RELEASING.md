@@ -2,8 +2,8 @@
 
 Releases are built locally on macOS with `scripts/release.sh`. The script produces
 a Developer ID signed and notarized Apple Silicon app and disk image, then
-publishes the DMG and checksum to GitHub Releases. There is no active release
-workflow in GitHub Actions.
+publishes the DMG, signed Sparkle appcast, and checksums to GitHub Releases.
+There is no active release workflow in GitHub Actions.
 
 ## Prerequisites
 
@@ -12,6 +12,8 @@ workflow in GitHub Actions.
 - Apple signing/notarization tools available through `security`, `codesign`,
   `xcrun notarytool`, `xcrun stapler`, `spctl`, `plutil`, `ditto`, `hdiutil`,
   `swift`, `tiffutil`, and `osascript`.
+- Bun and `cargo-deny` 0.20.2 installed for release checks (`cargo install --locked
+  cargo-deny --version 0.20.2` is one-time setup).
 - A logged-in macOS desktop session. Finder saves the disk image's window layout;
   allow your terminal to control Finder if macOS asks on the first build.
 - A **Developer ID Application** certificate and its private key in the login
@@ -22,6 +24,7 @@ workflow in GitHub Actions.
 | Environment variable | Purpose |
 | --- | --- |
 | `SIGN_IDENTITY` | Signing certificate name. Required if more than one Developer ID Application identity is present. |
+| `SPARKLE_ACCOUNT` | Keychain account for the persistent Sparkle Ed25519 signing key; defaults to `gatto-updates`. |
 | `NOTARY_PROFILE` | Existing notarization keychain profile; defaults to `gatto-notary`. |
 | `GIT_COMMIT_HASH` | Build metadata override for ordinary Cargo builds. The release script sets this to the full release commit itself. |
 
@@ -43,18 +46,73 @@ Enter the app-specific password when prompted. The certificate stays in your
 login keychain and credentials in the keychain profile; neither belongs in the
 repository or GitHub.
 
-## Prepare the release
+## One-time updater signing setup
 
-1. Add release notes to [CHANGELOG.md](../CHANGELOG.md), moving the relevant
-   Unreleased entries into the new version/date section.
-2. Set the same version in `Cargo.toml` and
-   `packaging/Info.plist` (`CFBundleShortVersionString`). Update `Cargo.lock` to
-   reflect the package version with `cargo check`, and review the resulting diff.
-   The release script copies the plist as-is; it does not synchronize these versions.
-3. Run the [contributor checks](../CONTRIBUTING.md#code-quality). Manually verify
-   changed workflows, regenerate affected screenshots, and review documentation.
-4. Commit and push to `main`. The working tree must be clean and HEAD must equal
-   `origin/main` after fetching. A release named `v<version>` must not already exist.
+Run on the release Mac:
+
+```sh
+./scripts/prepare-updater.sh
+dist/sparkle/bin/generate_keys --account gatto-updates
+```
+
+Sparkle stores the private Ed25519 key in the login Keychain. Keep using this same
+key for all releases and back it up securely using Sparkle's documented key
+export/import procedure; never commit or log the private key. The release script
+reads only its public key into the app's Info.plist. It fails before building
+if the key is absent. Changing `SPARKLE_ACCOUNT` must select the same signing key
+used by installed clients; key rotation requires a separate migration plan.
+
+`prepare-updater.sh` downloads Sparkle **2.10.0**, verifies its pinned SHA-256,
+and builds the small Swift user driver. It does not alter Keychain items.
+The SDK's license and notices are copied into the app's Resources directory.
+Review upstream release notes and the checksum when upgrading it. Sparkle is a
+permissively licensed native dependency used for signed feed/archive validation,
+macOS authorization, app replacement, and relaunch; these operations are not
+implemented by Gatto's upload dependencies. `block2` and `libloading` are already
+in Cargo.lock and provide the main-thread callback and bundled-library boundary.
+Normal Cargo builds remain independent of the SDK and signing credentials.
+
+## Release with one command
+
+After the one-time credential/tool setup, run from `main`:
+
+```sh
+./scripts/release.sh
+```
+
+Merge feature branches into `main` first. Your local main may contain uncommitted
+work or commits ready to push, but must include `origin/main` without conflicts.
+The script fetches the remote before proceeding.
+
+The script guides the release in this order:
+
+1. Verify GitHub authentication, signing identity, notarization profile, and the
+   persistent Sparkle key.
+2. Offer the prepared version, or prompt for a patch/minor/major/custom version
+   newer than the latest published release. Use a minor bump for new compatible
+   capabilities and a major bump for user-facing compatibility breaks. Reuse
+   prepared/Unreleased changelog notes, or ask for a short categorized summary.
+   It updates Cargo, the lockfile, both bundle versions, and the dated changelog.
+3. Install locked Bun dependencies and run Rust formatting, compilation, lint,
+   tests, and dependency policy checks; script type checks/tests; native updater
+   tests; a disposable install/relaunch test; cask syntax; and website build,
+   lint, type checks, and tests.
+4. Show the changed-file summary and ask before committing all pending code and
+   release preparation changes and pushing `main`. A concurrent remote change
+   makes a normal push fail; the script never force-pushes.
+5. Build, sign, notarize, and verify the app and DMG, then generate the signed
+   update feed and checksums. Ask before uploading a draft, verify uploaded bytes
+   against the local files, and publish it as the latest stable release using
+   the prepared changelog notes.
+6. Measure and verify the README figures for the exact tag, refresh and verify
+   the cask from the same release, then commit and push those two metadata files.
+
+The script is the recurring entry point. Code review, manual testing on affected
+hardware, and one-time credentials still require human judgment; automated checks
+do not verify Touch Bar hardware or production authorization prompts. Nothing is
+committed or published merely by invoking the script: the commit/build and
+publication confirmations remain explicit. Cancelling keeps prepared changes
+and artifacts available for inspection.
 
 ## Build and publish
 
@@ -81,6 +139,7 @@ metadata. The temporary template is removed before publication.
 It creates:
 
 - `dist/release/gatto-<version>-aarch64-apple-darwin.dmg`
+- `dist/release/appcast.xml`
 - `dist/release/SHA256SUMS`
 
 Inspect and launch the resulting bundle to verify the release behavior before
@@ -94,23 +153,54 @@ new app to a temporary folder and launch that copy instead. Automatic installer
 ejection is deliberately skipped outside the two supported Applications locations;
 use a disposable macOS user to verify the complete installation flow.
 Answering `y` creates the GitHub release/tag at the exact commit and uploads the
-DMG and checksum, with GitHub-generated release notes. After publication,
-[refresh the README size figures](#readme-size-figures) and commit the documentation update.
+DMG, signed appcast, and checksums, using the prepared changelog notes. After
+publication, the script automatically refreshes and verifies the
+[README size figures](#readme-size-figures) for that exact tag using the local DMG.
+
+Nested Sparkle helpers, framework, and the Swift bridge are signed before the
+outer bundle. Sparkle handles background scheduling every four hours and persists
+its last check time. Automatic downloading and installation stay disabled; Gatto
+provides the subtle indicator and explicit install click.
+The signed feed at the latest release's `appcast.xml` points to that release's
+immutable DMG URL. Do not edit the feed after signing it. `SHA256SUMS` covers the
+DMG and feed. Keep the latest release stable and compatible with macOS 13; the
+single-item feed does not preserve updates for older OS support branches.
+
+The script then refreshes `Casks/gatto.rb` from that exact release's checksum,
+verifies it with `--check`, and commits and pushes it with the README update so
+users of the repository tap receive it on their next `brew update`. To repair a stale
+cask independently, run `bun scripts/update-homebrew-cask.ts`. Starting with the
+first updater-enabled release, the cask declares `auto_updates true`.
 
 The script currently builds only Apple Silicon. Intel users need a local build;
 changing the release targets requires a script change and separate verification.
 
 ## Interrupted or cancelled releases
 
-Cancelling the publication prompt leaves the artifacts in `dist/release` and does
-not publish a release. A rerun deletes and rebuilds that directory, including any
-previous artifacts; copy anything you need to retain elsewhere first.
+Before the commit confirmation, cancellation leaves the prepared version and
+notes in the working tree. Before publication, cancellation leaves signed files
+in `dist/release`; rerunning normally reuses the prepared version/notes and
+rebuilds those generated files. A failed check never commits or publishes.
 
-If signing or notarization fails, fix the certificate/profile issue and rerun.
-If publication fails, inspect `gh release view v<version>` and its assets before
-retrying: GitHub may have created the release even if an asset upload failed.
-The script refuses to rerun against an existing release. Repair missing assets
-on that release after checking its tag/commit rather than deleting it blindly.
+Uploads are drafts until every asset has been downloaded and verified against
+its local bytes and checksums. To finish an existing draft or published release:
+
+```sh
+./scripts/release.sh --resume
+```
+
+Resume checks that the checkout matches the release commit except for README/cask
+metadata. A draft must retain its original local assets: the script repairs those
+uploads, verifies them, and asks before publishing. For an already published
+release it verifies the uploaded artifacts and only finishes metadata updates and
+their commit/push. It never rebuilds, republishes, or replaces published assets.
+If local artifacts are absent after publication, the size updater downloads the
+release DMG. A failed metadata push can be retried with the same resume command.
+
+Keep failed draft assets until recovery completes. Repairing a tag that points at
+unrelated code, merging diverged branches, or changing lost signing credentials
+requires inspecting the error; the script stops instead of rewriting history or
+silently changing keys.
 
 ## Verify the download
 
@@ -125,6 +215,31 @@ and that launching the copy inside the DMG does not eject it. These checks use
 disposable installations; do not overwrite an installation you need to retain.
 Install before enabling Start at Login. Do not ask users to bypass a
 failed signature or Gatekeeper assessment; investigate and replace the artifact.
+
+## Verify updates and Homebrew
+
+Run `./scripts/test-updater.sh` for native timing, consent, and signed-feed
+verification/tamper tests, and
+`bun test scripts` for cask, version/notes, asset-verification, and release-workflow
+tests. The workflow tests use isolated stand-ins for signing, builds, GitHub, and
+Git; they never publish or push to a real repository.
+On a logged-in macOS desktop, run `bun scripts/test-update-install.ts` to test
+actual replacement and relaunch using disposable ad-hoc signed app bundles and a
+local feed. It uses Gatto's production native driver and real Sparkle scheduler,
+verifies that recent checks suppress requests, and tests both an overdue check
+and a cached badge clicked during startup. It simulates the explicit install
+click and verifies that only then does the archive download and the new version
+launch. These tests
+do not modify the real app's preferences, Keychain, or installation.
+
+Before publishing the first updater-enabled release, use disposable signed
+bundles and a test feed to exercise an older-to-newer install and relaunch,
+corrupt archive/feed rejection, permission failure, retry, and a Homebrew
+installation. Verify no download occurs before the click, no check occurs inside
+the saved four-hour interval, and an overdue running/background app checks again.
+An initial DMG/Homebrew install is necessary for users of v0.14.0 and earlier.
+A Developer ID signed two-version update remains a release acceptance check; the
+local fixture verifies replacement and relaunch without testing notarization.
 
 ## Preview the installation window
 
@@ -189,7 +304,10 @@ and **29,959,166 bytes** in the bundle. The local DMG matched the published asse
 SHA-256. Future runs replace the README figures with measurements of the selected
 release; this dated observation remains a baseline.
 
-After each publication, run the updater and commit its README change. For changes
+`release.sh` runs the updater and its `--check` verification after every successful
+publication. It commits and pushes the README and cask updates after verifying both. The
+commands above remain available for manual inspection; `--resume` finishes
+interrupted post-publication steps. For changes
 to code, embedded assets, dependencies, or packaging before publication, keep the
 README’s released version label accurate and refresh the figures when that build
 ships. See [documentation upkeep](agents/documentation.md) for ownership rules.

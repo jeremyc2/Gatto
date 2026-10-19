@@ -116,3 +116,19 @@ path components; repository selection remains controlled by App Preferences.
 
 The logs icon opens **Application Logs**. For collecting diagnostics, resetting
 preferences, or uninstalling, see [Support](../SUPPORT.md).
+
+## Install an update
+
+A small **↑ Update** appears next to the header controls and in the menu bar menu
+when a new release is available. Click it once to install and restart. Finish
+active uploads first. **Updating…** shows progress; **↻ Update** retries a failure.
+See [Setup](SETUP.md#updates) for timing and the first updater-enabled install.
+
+<img src="images/walkthrough/05-update.png" alt="Gatto's small Update control beside the header controls" width="620">
+
+## Start quietly at login
+
+Enable **Start at Login** in App Preferences to start Gatto in the menu bar at
+macOS login, without opening a window. Quick Copy and update checks remain
+available. Choose **Open App** from the menu bar, or open Gatto in Finder, when
+you want its window. Opening the app normally still shows the main window.

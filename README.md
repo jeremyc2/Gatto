@@ -23,6 +23,13 @@ service. Images go directly from your Mac to GitHub; Gatto doesn't have a backen
 **Gatto v0.14.0** — 16.6 MB download · 30.1 MB installed app.
 <!-- release-size:end -->
 
+Homebrew (Apple Silicon):
+
+```sh
+brew tap jeremyc2/gatto https://github.com/jeremyc2/Gatto.git
+brew install --cask jeremyc2/gatto/gatto
+```
+
 Follow the [setup guide](docs/SETUP.md) to install and connect your GitHub account,
 then the [walkthrough](docs/WALKTHROUGH.md) for your first upload.
 

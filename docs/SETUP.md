@@ -17,6 +17,41 @@ Install before enabling Start at Login so the saved app location is correct.
 You can delete the downloaded file after installation. For macOS compatibility
 and Intel Macs, see [Support](../SUPPORT.md#compatibility).
 
+### Install with Homebrew
+
+On Apple Silicon with [Homebrew](https://brew.sh/):
+
+```sh
+brew tap jeremyc2/gatto https://github.com/jeremyc2/Gatto.git
+brew install --cask jeremyc2/gatto/gatto
+```
+
+This also installs GitHub CLI. The tap tracks the latest published DMG with its
+SHA-256 checksum. Use `brew upgrade --cask jeremyc2/gatto/gatto` to update through
+Homebrew. Releases with in-app updating can also use the **↑ Update** control.
+For casks with in-app updating, add `--greedy` when explicitly upgrading through
+Homebrew.
+
+### Updates
+
+Updater-enabled releases check GitHub quietly while Gatto is running, including
+with all windows closed. Sparkle checks a small signed release feed every four
+hours, remembering its last check across launches. An overdue check runs when
+Gatto next starts. Nothing runs after Gatto quits, and failed checks are retried
+by Sparkle's scheduler. The DMG is downloaded only after clicking Update.
+
+When a release is available, **↑ Update** appears beside the small header controls
+and in the menu bar menu. Click once to download, verify, install, and restart.
+No download or installation starts without that click. The tooltip mentions the
+restart; finish your current work before updating. Active uploads must finish
+first. A failed installation leaves **↻ Update** available to retry, with details
+in its tooltip and Application Logs. macOS may request authorization if the app
+is owned by another user.
+
+Versions through v0.14.0 do not contain an updater. Install the first
+updater-enabled release through the DMG or Homebrew once. Source builds do not
+include the updater framework.
+
 ### Verify the download (optional)
 
 The `.dmg` file is a disk image containing the app. Releases also include
@@ -48,7 +83,8 @@ installations work without extra configuration; see
 ## 3. Choose your account or organization
 
 On first launch, open **App Preferences** from the settings icon or the menu bar.
-Gatto waits for an account or organization login before contacting GitHub.
+Gatto waits for an account or organization login before loading repositories.
+Public release checks do not need GitHub CLI authentication.
 
 <img src="images/walkthrough/01-first-run.png" alt="Gatto's first-run screen with Application Logs, App Preferences, walkthrough help, and an Open App Preferences button" width="620">
 
@@ -68,8 +104,11 @@ and enable the menu bar's clipboard actions.
 
 ## 4. Set your preferences
 
-- **Start at Login** opens Gatto at macOS login. If you move the app later, toggle
-  this off and on to refresh its saved location.
+- **Start at Login** starts Gatto quietly in the menu bar, without opening a
+  window or showing a Dock icon. Quick Copy and update checks work in the background.
+  Choose **Open App** from the menu bar to show the window. Existing login items
+  are refreshed when you next open the updated app. If you move the app later,
+  toggle this off and on to refresh its saved location.
 - **Quick Copy shortcut** enables a global shortcut, initially
   **Command+Shift+G**. It is off by default and requires no Accessibility
   permission. See the [walkthrough](WALKTHROUGH.md#faster-clipboard-uploads) to
