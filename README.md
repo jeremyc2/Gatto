@@ -16,11 +16,11 @@ service. Images and videos go directly from your Mac to GitHub; Gatto doesn't ha
 ## Download
 
 <!-- release-size:start -->
-<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.15.4">
+<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.16.0">
   <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">
 </a>
 
-**Gatto v0.15.4** — 17.7 MB download · 33.3 MB installed app.
+**Gatto v0.16.0** — 17.8 MB download · 33.5 MB installed app.
 <!-- release-size:end -->
 
 Homebrew (Apple Silicon):
