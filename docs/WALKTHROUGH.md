@@ -11,7 +11,9 @@ Open Gatto from its menu bar icon and choose the repository to upload through.
 For frequent destinations, [pin a repository in App Preferences](SETUP.md#3-choose-your-account-or-organization).
 
 In App Preferences, press **Escape** or click **Done** to return to the main page.
-While recording a global shortcut, **Escape** cancels recording first.
+Escape also works from a focused text field or toolbar control. If a dialog is
+open, Escape dismisses the dialog first. While recording a global shortcut,
+**Escape** cancels recording first; press it again to return to the main page.
 
 ## 2. Stage an image or video
 

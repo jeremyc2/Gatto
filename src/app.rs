@@ -545,6 +545,14 @@ impl UploaderApp {
         cx.notify();
     }
 
+    pub(crate) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.recording_global_shortcut {
+            self.cancel_global_shortcut_recording(window, cx);
+        } else if self.settings_open {
+            self.show_main_page(window, cx);
+        }
+    }
+
     fn restore_global_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.settings.global_quick_copy_shortcut_enabled {
             return;
@@ -2060,7 +2068,7 @@ impl UploaderApp {
         } else if self.settings_open && event.keystroke.key == "escape" {
             window.prevent_default();
             cx.stop_propagation();
-            self.show_main_page(window, cx);
+            self.dismiss(window, cx);
         }
     }
 
@@ -4202,28 +4210,28 @@ mod tests {
 
     #[gpui_kit::test]
     fn escape_leaves_preferences_from_inputs_and_cancels_recording_first(cx: &mut TestAppContext) {
-        cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(|window, cx| {
-            UploaderApp::with_settings(
-                window,
-                Diagnostics::new(),
-                AppControllers::default(),
-                AppSettings::default(),
-                None,
-                false,
-                cx,
-            )
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            init_keybindings(cx);
+            crate::image_preview::init_keybindings(cx);
+            crate::application_menu::init(cx);
         });
+        let (view, cx) = upload_window(cx);
 
-        for focus_input in [false, true] {
+        for focus in ["page", "owner", "shortcut", "none"] {
             cx.update(|window, cx| {
+                window.activate_window();
                 view.update(cx, |app, cx| {
                     app.show_settings(cx);
-                    if focus_input {
-                        app.owner_input
-                            .update(cx, |input, cx| input.focus(window, cx));
-                    } else {
-                        app.focus_handle.focus(window, cx);
+                    match focus {
+                        "owner" => app
+                            .owner_input
+                            .update(cx, |input, cx| input.focus(window, cx)),
+                        "shortcut" => app
+                            .global_shortcut_input
+                            .update(cx, |input, cx| input.focus(window, cx)),
+                        "none" => window.blur(cx),
+                        _ => app.focus_handle.focus(window, cx),
                     }
                 });
                 window.draw(cx).clear(cx);
@@ -4260,6 +4268,34 @@ mod tests {
                 assert!(app.focus_handle.is_focused(window));
             });
         });
+    }
+
+    #[gpui_kit::test]
+    fn escape_dismisses_a_preferences_dialog_before_leaving_preferences(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            init_keybindings(cx);
+            crate::application_menu::init(cx);
+        });
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            window.activate_window();
+            view.update(cx, |app, cx| {
+                app.show_settings(cx);
+                app.focus_handle.focus(window, cx);
+                app.confirm_reset(&gpui_kit::ClickEvent::default(), window, cx);
+            });
+            window.draw(cx).clear(cx);
+            assert!(window.has_active_dialog(cx));
+        });
+        cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| {
+            assert!(!window.has_active_dialog(cx));
+            assert!(view.read(cx).settings_open);
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.update(|_, cx| assert!(!view.read(cx).settings_open));
     }
 
     #[gpui_kit::test]

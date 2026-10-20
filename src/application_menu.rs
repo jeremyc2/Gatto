@@ -44,16 +44,25 @@ pub(crate) fn is_extra_window(window: &Window, cx: &App) -> bool {
         })
 }
 
-fn close_focused_window(extra_only: bool, cx: &mut App) {
+fn close_focused_window(dismiss: bool, cx: &mut App) {
     if let Some(handle) = cx.active_window() {
         // Keyboard dispatch already borrows the focused window. Capture that
         // window before deferring so another window cannot become the target.
         cx.defer(move |cx| {
             let _ = handle.update(cx, |_, window, cx| {
-                if !extra_only || is_extra_window(window, cx) {
-                    // Preserve each window's cleanup and Touch Bar workaround.
-                    crate::window_limits::request_close(window, cx);
+                if dismiss && !is_extra_window(window, cx) {
+                    // Key bindings run before raw key listeners. Route Escape
+                    // to the main view even when no control has keyboard focus.
+                    if let Some(root) = window.root::<gpui_kit::base::Root>().flatten() {
+                        let content = root.read(cx).view().clone();
+                        if let Ok(main) = content.downcast::<crate::app::UploaderApp>() {
+                            main.update(cx, |main, cx| main.dismiss(window, cx));
+                        }
+                    }
+                    return;
                 }
+                // Preserve each window's cleanup and Touch Bar workaround.
+                crate::window_limits::request_close(window, cx);
             });
         });
     }

@@ -265,8 +265,12 @@ focused window, defers access until keyboard dispatch releases its borrow, then
 uses the existing native close request and per-window cleanup callbacks.
 An unscoped Escape action uses the same close path for the focused extra window,
 even when no control has keyboard focus. It identifies main-window content through
-the GPUI Root and leaves it open; main-window dialogs and Preferences retain their
-own Escape handling.
+the GPUI Root and routes Escape to that view to cancel shortcut recording first,
+then return from Preferences to the main page on the next press. The main page
+keeps its draft. Scoped dialog actions dismiss an open dialog first. Key bindings
+run before raw key listeners, so the global action must handle main-window
+navigation as well as closing extra windows. Regression tests use the full app
+keyboard setup and the same Root wrapper as native windows.
 
 Quick Copy runs through a process-lifetime background service with no window or
 view dependency. Menu, shortcut, and URL actions all invoke that service. It

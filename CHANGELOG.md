@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-10-20
+
+### Fixed
+
+- Restore Escape navigation from App Preferences when the app-wide Escape action
+  is enabled, including focused inputs and cleared control focus. Keep dialog
+  dismissal and shortcut-recording cancellation ahead of returning to the main page.
+
 ## [0.16.2] - 2026-10-20
 
 ### Changed
