@@ -47,8 +47,8 @@ use crate::{
     log_viewer::LogViewer,
     menu_bar::MenuBarController,
     model::{
-        AttachmentUploadState, Media, OversizedVideo, Repository, SUPPORTED_MEDIA_MESSAGE,
-        StagedAttachment, VideoUploadLimit, parse_owner,
+        AttachmentUploadState, Media, OversizedVideo, Repository, StagedAttachment,
+        UNSUPPORTED_MEDIA_MESSAGE, VideoUploadLimit, parse_owner,
     },
     settings::AppSettings,
     updater::{UpdateState, Updater},
@@ -66,7 +66,6 @@ actions!(
 );
 
 const KEY_CONTEXT: &str = "Gatto";
-const UNSUPPORTED_MESSAGE: &str = SUPPORTED_MEDIA_MESSAGE;
 const WALKTHROUGH_URL: &str = "https://github.com/jeremyc2/Gatto/blob/main/docs/WALKTHROUGH.md";
 const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
 
@@ -895,7 +894,7 @@ impl UploaderApp {
             return;
         }
         let Some(clipboard) = cx.read_from_clipboard() else {
-            self.warn(UNSUPPORTED_MESSAGE, window, cx);
+            self.warn(UNSUPPORTED_MEDIA_MESSAGE, window, cx);
             self.pending_menu_paste = false;
             self.pending_paste_repository = None;
             return;
@@ -938,7 +937,7 @@ impl UploaderApp {
             return;
         }
 
-        self.warn(UNSUPPORTED_MESSAGE, window, cx);
+        self.warn(UNSUPPORTED_MEDIA_MESSAGE, window, cx);
         self.pending_menu_paste = false;
         self.pending_paste_repository = None;
     }
@@ -2810,19 +2809,6 @@ impl UploaderApp {
                                 "or drop images or videos here"
                             } else {
                                 "or drop an image or video here"
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_center()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(if self.settings.allow_large_videos {
-                                "Images up to 10 MB · MP4, MOV, WebM up to 100 MB"
-                            } else if bulk_upload {
-                                "PNG, JPEG, GIF, WebP, MP4, MOV, WebM · up to 10 MB each"
-                            } else {
-                                "PNG, JPEG, GIF, WebP, MP4, MOV, WebM · up to 10 MB"
                             }),
                     ),
             )

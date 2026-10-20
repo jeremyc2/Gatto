@@ -14,8 +14,7 @@ use gpui_kit::{Image, ImageFormat};
 use crate::video::Video;
 
 pub const MAX_ATTACHMENT_BYTES: u64 = 10_000_000;
-pub const SUPPORTED_MEDIA_MESSAGE: &str =
-    "Choose a PNG, JPEG, GIF, WebP, MP4, MOV, or WebM file within your upload limit.";
+pub const UNSUPPORTED_MEDIA_MESSAGE: &str = "Unsupported file type.";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum VideoUploadLimit {
@@ -226,8 +225,7 @@ impl StagedAttachment {
 
     pub fn from_clipboard(image: &Image) -> Result<Self> {
         validate_size(image.bytes.len() as u64, MAX_ATTACHMENT_BYTES)?;
-        let format = supported_gpui_format(image.format)
-            .context("Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM.")?;
+        let format = supported_gpui_format(image.format).context(UNSUPPORTED_MEDIA_MESSAGE)?;
         let pixel_size = validate_image_bytes(&image.bytes, format)?;
 
         let timestamp = SystemTime::now()
@@ -252,16 +250,13 @@ impl StagedAttachment {
     }
 
     fn from_bytes(name: String, bytes: Vec<u8>, path: Option<&Path>) -> Result<Self> {
-        let guessed = ::image::guess_format(&bytes)
-            .context("Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM.")?;
+        let guessed = ::image::guess_format(&bytes).context(UNSUPPORTED_MEDIA_MESSAGE)?;
         let format = match guessed {
             ::image::ImageFormat::Png => ImageFormat::Png,
             ::image::ImageFormat::Jpeg => ImageFormat::Jpeg,
             ::image::ImageFormat::Gif => ImageFormat::Gif,
             ::image::ImageFormat::WebP => ImageFormat::Webp,
-            _ => bail!(
-                "Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM."
-            ),
+            _ => bail!(UNSUPPORTED_MEDIA_MESSAGE),
         };
 
         if let Some(path) = path {
@@ -271,9 +266,7 @@ impl StagedAttachment {
                 .unwrap_or_default()
                 .to_ascii_lowercase();
             if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp") {
-                bail!(
-                    "Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM."
-                );
+                bail!(UNSUPPORTED_MEDIA_MESSAGE);
             }
         }
 
@@ -333,9 +326,7 @@ fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<(u32, u32)>
         ImageFormat::Jpeg => ::image::ImageFormat::Jpeg,
         ImageFormat::Gif => ::image::ImageFormat::Gif,
         ImageFormat::Webp => ::image::ImageFormat::WebP,
-        _ => bail!(
-            "Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM."
-        ),
+        _ => bail!(UNSUPPORTED_MEDIA_MESSAGE),
     };
     let image = ::image::load_from_memory_with_format(bytes, image_format)
         .context("The image data is corrupt or unreadable")?;
@@ -447,6 +438,20 @@ mod media_tests {
     use std::io::{Seek as _, Write as _};
 
     pub(crate) const VIDEO: &[u8] = include_bytes!("../tests/fixtures/sample.mp4");
+
+    #[test]
+    fn unsupported_file_types_have_a_concise_error() {
+        let mut file = tempfile::Builder::new().suffix(".txt").tempfile().unwrap();
+        file.write_all(b"not a supported media file").unwrap();
+
+        let error =
+            match StagedAttachment::from_path(file.path().into(), VideoUploadLimit::Standard) {
+                Ok(_) => panic!("unsupported file type should not be staged"),
+                Err(error) => error,
+            };
+
+        assert_eq!(error.to_string(), UNSUPPORTED_MEDIA_MESSAGE);
+    }
 
     #[test]
     fn paid_video_limit_preserves_image_limit_and_rechecks_staged_files() {

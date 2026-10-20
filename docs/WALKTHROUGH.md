@@ -19,6 +19,8 @@ Return to the main window and paste an image, drag a file into the drop zone, or
 click the drop zone to select a file. Gatto accepts PNG, JPEG, GIF, and WebP
 images, plus MP4, MOV, and WebM videos. You can also copy an image or video file
 in Finder and paste it into Gatto; a text URL is not a video clipboard payload.
+Unsupported file types produce an error notification when selected, dropped, or
+pasted.
 
 By default, each file must be at most **10 MB** (10,000,000 bytes), so the video
 limit works with Free and paid GitHub plans. Eligible paid-plan users can enable
