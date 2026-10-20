@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-19
+
 ### Added
 
 - Add an unchecked **Copy images as Markdown** preference to use
@@ -28,12 +30,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   a five-minute total timeout and 90-second inactivity timeout, and actionable
   network, access, format, size, rate-limit, and server errors.
 
-
-### Fixed
-
-- Restore the original gap between the drop zone and attachment previews by
-  rendering the compression panel only while a compression job is active.
-
 ### Changed
 
 - Default each image/video to 10 MB for Free-plan compatibility. Keep videos as
@@ -42,6 +38,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Copy uploaded images as HTML `<img>` elements by default, with width, height, and alt text
   for GitHub Markdown. Normal, bulk, and Quick Copy uploads use the image's pixel
   dimensions and escape HTML attributes.
+
+### Fixed
+
+- Restore the original gap between the drop zone and attachment previews by
+  rendering the compression panel only while a compression job is active.
 
 ## [0.15.4] - 2026-10-19
 
