@@ -9,6 +9,7 @@ resets the run and returns to the app.
 
 - **← →** move.
 - **Space** jumps. Hold for a higher jump; release for a shorter hop.
+- **Escape** closes the game window and resets the run.
 - At the doorway, **Space** opens the next level. On the results screen, it starts a new run.
 
 ## Playing

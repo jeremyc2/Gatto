@@ -920,11 +920,6 @@ impl UploaderApp {
             ClipboardEntry::ExternalPaths(paths) => Some(paths.paths().to_vec()),
             _ => None,
         }) {
-            let paths = if self.bulk_upload {
-                paths
-            } else {
-                paths.into_iter().take(1).collect()
-            };
             Self::load_dropped_paths(
                 cx.entity().downgrade(),
                 self.state_generation,
@@ -1246,6 +1241,9 @@ impl UploaderApp {
         cx: &mut Context<Self>,
     ) {
         if self.bulk_upload || self.staged_attachments.is_empty() {
+            // Preserve multi-file input before deciding how to handle an
+            // existing attachment. An empty draft can become a batch directly.
+            self.bulk_upload |= images.len() > 1;
             self.append_staged_attachments(images, window, cx);
         } else {
             self.open_replace_attachment_dialog(images, window, cx);
@@ -2760,16 +2758,11 @@ impl UploaderApp {
                     })
                     .can_drop(|value, _, _| value.downcast_ref::<ExternalPaths>().is_some())
                     .on_drop(move |paths: &ExternalPaths, window, cx| {
-                        let paths = if bulk_upload {
-                            paths.paths().to_vec()
-                        } else {
-                            paths.paths().iter().take(1).cloned().collect()
-                        };
                         Self::load_dropped_paths(
                             view.clone(),
                             state_generation,
                             staging_generation,
-                            paths,
+                            paths.paths().to_vec(),
                             video_limit,
                             window,
                             cx,
@@ -3659,6 +3652,210 @@ mod tests {
             .set_len(file.as_file().metadata().unwrap().len() + crate::model::MAX_ATTACHMENT_BYTES)
             .unwrap();
         file
+    }
+
+    fn four_image_paths() -> (tempfile::TempDir, Vec<PathBuf>) {
+        let directory = tempfile::tempdir().unwrap();
+        let paths = (1..=4)
+            .map(|index| {
+                let path = directory.path().join(format!("dropped-{index}.png"));
+                std::fs::write(&path, include_bytes!("../packaging/menu-bar-icon.png")).unwrap();
+                path
+            })
+            .collect::<Vec<_>>();
+        (directory, paths)
+    }
+
+    fn drop_paths(cx: &mut gpui_kit::VisualTestContext, paths: Vec<PathBuf>) {
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let position = cx.debug_bounds("image-drop-zone").unwrap().center();
+        cx.update(|window, cx| {
+            use gpui_kit::{FileDropEvent, InputEvent as _};
+            window.dispatch_event(
+                FileDropEvent::Entered {
+                    position,
+                    paths: ExternalPaths(paths.into_iter().collect()),
+                }
+                .to_platform_input(),
+                cx,
+            );
+            window.draw(cx).clear(cx);
+            window.dispatch_event(FileDropEvent::Submit { position }.to_platform_input(), cx);
+            window.dispatch_event(FileDropEvent::Ended.to_platform_input(), cx);
+        });
+        cx.run_until_parked();
+    }
+
+    #[gpui_kit::test]
+    fn dropping_four_images_then_switching_to_bulk_keeps_and_uploads_every_image(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(init_keybindings);
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|_, cx| {
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                app.staged_attachments = vec![mixed_attachments().remove(0)];
+                cx.notify();
+            });
+        });
+        drop_paths(cx, paths);
+        cx.update(|window, cx| {
+            view.update(cx, |app, _| {
+                assert_eq!(app.staged_attachments.len(), 1);
+                assert_eq!(
+                    app.pending_replacement_attachments.as_ref().unwrap().len(),
+                    4
+                );
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.update(|window, cx| {
+            use gpui_kit::test::TestWindowExt as _;
+            window.click("switch-to-bulk-upload", cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                assert!(app.bulk_upload);
+                assert_eq!(app.staged_attachments.len(), 5);
+                assert_eq!(
+                    app.staged_attachments[1..]
+                        .iter()
+                        .map(|item| item.name.as_str())
+                        .collect::<Vec<_>>(),
+                    [
+                        "dropped-1.png",
+                        "dropped-2.png",
+                        "dropped-3.png",
+                        "dropped-4.png"
+                    ]
+                );
+                app.start_upload(window, cx, |item, _, _| {
+                    Ok(format!(
+                        "https://github.com/user-attachments/assets/{}",
+                        item.id
+                    ))
+                });
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert_eq!(app.upload_result.as_ref().unwrap().attachments.len(), 5);
+                assert!(
+                    app.staged_attachments
+                        .iter()
+                        .all(|item| item.upload_state.is_uploaded())
+                );
+            });
+        });
+    }
+
+    #[gpui_kit::test]
+    fn dropping_multiple_images_into_an_empty_draft_enables_bulk_upload(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        drop_paths(cx, paths);
+        cx.update(|window, cx| {
+            view.update(cx, |app, _| {
+                assert!(app.bulk_upload);
+                assert_eq!(app.staged_attachments.len(), 4);
+                assert!(app.pending_replacement_attachments.is_none());
+            });
+            assert!(!window.has_active_dialog(cx));
+        });
+    }
+
+    #[gpui_kit::test]
+    fn pasting_multiple_finder_files_preserves_the_whole_batch_for_the_bulk_choice(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(init_keybindings);
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|window, cx| {
+            cx.write_to_clipboard(ClipboardItem {
+                entries: vec![ClipboardEntry::ExternalPaths(ExternalPaths(
+                    paths.into_iter().collect(),
+                ))],
+            });
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                app.staged_attachments = vec![mixed_attachments().remove(0)];
+                app.on_paste(&PasteImage, window, cx);
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.simulate_keystrokes("b");
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(app.bulk_upload);
+                assert_eq!(app.staged_attachments.len(), 5);
+            });
+        });
+    }
+
+    #[gpui_kit::test]
+    fn canceling_or_replacing_a_multi_file_drop_keeps_the_explicit_choice(cx: &mut TestAppContext) {
+        let (_directory, paths) = four_image_paths();
+        for key in ["escape", "enter"] {
+            let (view, cx) = upload_window(cx);
+            cx.update(|_, cx| {
+                view.update(cx, |app, cx| {
+                    app.load_state = LoadState::Ready;
+                    app.staged_attachments = vec![mixed_attachments().remove(0)];
+                    cx.notify();
+                });
+            });
+            drop_paths(cx, paths.clone());
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            if key == "escape" {
+                cx.simulate_keystrokes(key);
+            } else {
+                cx.update(|window, cx| {
+                    use gpui_kit::test::TestWindowExt as _;
+                    window.click("replace-image", cx);
+                });
+            }
+            cx.update(|window, cx| {
+                view.update(cx, |app, _| {
+                    assert!(!app.bulk_upload);
+                    assert_eq!(app.staged_attachments.len(), 1);
+                    assert!(app.pending_replacement_attachments.is_none());
+                    assert_eq!(
+                        app.staged_attachments[0].name,
+                        if key == "escape" {
+                            "rocket-cat-transparent.png"
+                        } else {
+                            "dropped-1.png"
+                        }
+                    );
+                });
+                assert!(!window.has_active_dialog(cx));
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn escape_preserves_the_main_window_and_its_draft(cx: &mut TestAppContext) {
+        cx.update(crate::application_menu::init);
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            assert!(!crate::application_menu::is_extra_window(window, cx));
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                app.staged_attachments = mixed_attachments();
+                window.focus(&app.focus_handle, cx);
+                window.activate_window();
+            });
+        });
+        cx.simulate_keystrokes("escape");
+        cx.update(|_, cx| {
+            assert_eq!(view.read(cx).staged_attachments.len(), 2);
+        });
     }
 
     #[gpui_kit::test]

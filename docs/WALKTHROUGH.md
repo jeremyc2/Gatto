@@ -131,10 +131,13 @@ has no image alt-text field.
 
 ## Bulk uploads and retries
 
-Enable **Bulk upload** before selecting or pasting several files. You can add more
-images or videos to the same batch by dropping files or pasting again. In single-attachment mode,
-adding another file opens a replacement dialog; choose **Switch to bulk upload**
-(or press **B** in that dialog) to keep the existing attachment and add the new one.
+Enable **Bulk upload** before selecting several files in the file picker. Dropping
+or pasting several files into an empty draft enables bulk upload automatically.
+You can add more images or videos to the same batch by dropping files or pasting
+again. In single-attachment mode, adding more files opens a replacement dialog;
+choose **Switch to bulk upload** (or press **B** in that dialog) to keep the existing
+attachment and add every new file in order. **Cancel** keeps the current attachment;
+**Replace attachment** replaces it with the first new file.
 The bulk toggle is disabled during uploads and while more than one attachment
 remains; remove attachments until at most one remains to return to single-attachment mode.
 
@@ -179,6 +182,9 @@ menu bar when windows close. Its Dock icon appears while a window is open;
 clicking it focuses open windows or reopens the main page.
 **Command+W** closes the focused window; **Command+Q** quits Gatto. These actions
 also appear in the app menus, and the cat icon's menu includes **Quit** with **⌘Q**.
+**Escape** closes the focused extra window, including Application logs and image
+previews. The main window keeps its draft; Escape still dismisses its dialogs or
+returns from App Preferences.
 Press **Command+,** while Gatto is focused to open App Preferences, or choose
 **App Preferences** from either the **Gatto** application menu beside the Apple
 menu or the cat icon's dropdown (the menu bar extra). Both show **⌘,**.

@@ -141,6 +141,11 @@ attachment transitions from preview or failed to queued, then uploading with
 byte progress, then uploaded or failed. Retrying skips uploaded attachments. The
 copy result is rebuilt from successful attachments in their current order.
 Image and video variants share staging, retry, upload, and copy interfaces.
+File drops and Finder pastes preserve all input paths through validation and the
+replacement dialog. Switching to bulk keeps the existing attachment and appends
+the whole accepted batch in order; a multi-file input to an empty draft enables
+bulk upload directly. Cancel keeps the draft, while Replace uses the first new
+attachment.
 The shared image formatter defaults to an HTML `<img>` element accepted in GitHub
 Markdown, with `width` and `height` from the validated pixel dimensions and
 escaped `alt` and `src` attributes. The saved `copy_images_as_markdown` preference
@@ -258,6 +263,10 @@ disabling or temporarily unregistering during recording clears that hint.
 Close captures the
 focused window, defers access until keyboard dispatch releases its borrow, then
 uses the existing native close request and per-window cleanup callbacks.
+An unscoped Escape action uses the same close path for the focused extra window,
+even when no control has keyboard focus. It identifies main-window content through
+the GPUI Root and leaves it open; main-window dialogs and Preferences retain their
+own Escape handling.
 
 Quick Copy runs through a process-lifetime background service with no window or
 view dependency. Menu, shortcut, and URL actions all invoke that service. It

@@ -7,6 +7,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-20
+
+### Fixed
+
+- Keep every dropped or pasted file when switching an existing attachment to
+  bulk upload. Enable bulk upload for multi-file input into an empty draft.
+- Close the focused extra window with Escape, including Application logs, image
+  previews, and Rooftops, even without a focused control. Preserve the main draft
+  and existing dialog and Preferences Escape behavior.
+
 ## [0.16.0] - 2026-10-19
 
 ### Added

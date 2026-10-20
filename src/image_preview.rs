@@ -18,18 +18,11 @@ use gpui_kit::{
     Styled as _, Window, actions, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
 
-use crate::{model::StagedAttachment, window_limits};
+use crate::model::StagedAttachment;
 
 actions!(
     image_preview,
-    [
-        ZoomIn,
-        ZoomOut,
-        FitImage,
-        PreviousImage,
-        NextImage,
-        ClosePreview
-    ]
+    [ZoomIn, ZoomOut, FitImage, PreviousImage, NextImage]
 );
 
 const KEY_CONTEXT: &str = "ImagePreview";
@@ -266,10 +259,6 @@ impl ImagePreview {
         self.select_image(self.current_index + 1, window, cx);
     }
 
-    fn close_preview(&mut self, _: &ClosePreview, window: &mut Window, cx: &mut Context<Self>) {
-        window_limits::request_close(window, cx);
-    }
-
     fn mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         self.drag = Some(DragState {
             pointer_origin: event.position,
@@ -409,7 +398,6 @@ impl Render for ImagePreview {
             .on_action(cx.listener(Self::fit_image))
             .on_action(cx.listener(Self::previous_image))
             .on_action(cx.listener(Self::next_image))
-            .on_action(cx.listener(Self::close_preview))
             .size_full()
             .flex()
             .flex_col()
@@ -549,7 +537,6 @@ pub fn init_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-0", FitImage, Some(KEY_CONTEXT)),
         KeyBinding::new("left", PreviousImage, Some(KEY_CONTEXT)),
         KeyBinding::new("right", NextImage, Some(KEY_CONTEXT)),
-        KeyBinding::new("escape", ClosePreview, Some(KEY_CONTEXT)),
     ]);
 }
 
