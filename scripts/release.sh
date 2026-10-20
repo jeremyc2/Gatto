@@ -17,7 +17,7 @@ case "${1:-}" in
 esac
 [[ $# -le 1 ]] || fail "usage: ./scripts/release.sh [--resume]"
 [[ "$(uname -s)" == Darwin ]] || fail "releases require macOS"
-for tool in bun gh git cargo plutil hdiutil; do
+for tool in bun gh git cargo plutil hdiutil diskutil; do
   command -v "$tool" >/dev/null || fail "missing required tool: $tool; see docs/RELEASING.md"
 done
 [[ "$(git branch --show-current)" == main ]] || fail "merge your work into main, then run this command there"

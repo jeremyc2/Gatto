@@ -43,7 +43,7 @@ mount="$work/volume"
 mounted=false
 cleanup() {
   if [[ "$mounted" == true ]]; then
-    if ! hdiutil detach "$mount" -quiet; then
+    if ! diskutil eject "$mount" > /dev/null; then
       echo "Could not eject $mount; temporary files retained in $work" >&2
       return
     fi
@@ -66,14 +66,14 @@ else
   hdiutil create -quiet -volname "Install Gatto" -fs HFS+ -format UDRW \
     -srcfolder "$work/staging" "$work/writable.dmg"
 fi
-hdiutil attach -quiet -noautoopen -mountpoint "$mount" "$work/writable.dmg"
+diskutil image attach --mountPoint "$mount" --mountOptions nobrowse "$work/writable.dmg" > /dev/null
 mounted=true
 volume_uuid="$(diskutil info -plist "$mount" | plutil -extract VolumeUUID raw -o - -)"
 [[ "$volume_uuid" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] \
   || fail "could not identify installer volume UUID"
 if [[ "$mode" == prepare ]]; then
   plutil -insert GattoInstallerVolumeUUID -string "$volume_uuid" "$bundle/Contents/Info.plist"
-  hdiutil detach -quiet "$mount"
+  diskutil eject "$mount" > /dev/null
   mounted=false
   mv "$work/writable.dmg" "$output"
   echo "Prepared installer template $output"
@@ -88,7 +88,7 @@ fi
 osascript "$repo_root/packaging/configure-dmg.applescript" "$mount"
 [[ -s "$mount/.DS_Store" ]] || fail "Finder did not save the installation window layout"
 sync
-hdiutil detach -quiet "$mount"
+diskutil eject "$mount" > /dev/null
 mounted=false
 hdiutil convert -quiet "$work/writable.dmg" -format UDZO -imagekey zlib-level=9 -o "$output"
 hdiutil verify -quiet "$output"

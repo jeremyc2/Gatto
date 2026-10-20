@@ -87,6 +87,7 @@ if (tool === 'git') {
       "ruby",
       "plutil",
       "hdiutil",
+      "diskutil",
     ]) {
       await writeExecutable(
         join(bin, tool),

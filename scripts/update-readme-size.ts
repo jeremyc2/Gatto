@@ -63,8 +63,8 @@ function bundleBytes(directory: string): number {
 function measure(dmg: string, mount: string, tag: string): number {
   try {
     run(
-      "hdiutil", "attach", "-readonly", "-nobrowse", "-noautoopen",
-      "-mountpoint", mount, "-plist", dmg,
+      "diskutil", "image", "attach", "--readOnly", "--mountPoint", mount,
+      "--mountOptions", "nobrowse", "--plist", dmg,
     );
     const app = join(mount, "Gatto.app");
     const version = run(
@@ -81,7 +81,7 @@ function measure(dmg: string, mount: string, tag: string): number {
     return bundleBytes(app);
   } finally {
     // This mountpoint belongs to this invocation. Never eject other mounts.
-    if (isMounted(mount)) run("hdiutil", "detach", mount);
+    if (isMounted(mount)) run("diskutil", "eject", mount);
   }
 }
 

@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-10-20
+
+### Changed
+
+- Use `diskutil image attach` and `diskutil eject` for installer packaging and
+  release-size measurements instead of the deprecated `hdiutil` commands.
+
 ## [0.16.1] - 2026-10-20
 
 ### Fixed

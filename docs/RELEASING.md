@@ -10,7 +10,7 @@ There is no active release workflow in GitHub Actions.
 - The [development tools](../CONTRIBUTING.md#development-setup) and an authenticated `gh`
   account with permission to create releases in this repository.
 - Apple signing/notarization tools available through `security`, `codesign`,
-  `xcrun notarytool`, `xcrun stapler`, `spctl`, `plutil`, `ditto`, `hdiutil`,
+  `xcrun notarytool`, `xcrun stapler`, `spctl`, `plutil`, `ditto`, `hdiutil`, `diskutil`,
   `swift`, `tiffutil`, and `osascript`.
 - Bun and `cargo-deny` 0.20.2 installed for release checks (`cargo install --locked
   cargo-deny --version 0.20.2` is one-time setup).
@@ -259,6 +259,9 @@ It creates a fresh volume UUID, so it does not receive the release's automatic
 ejection pairing. Eject it in Finder when finished. The build uses a temporary
 mount point and cleans it up on exit, without depending on or ejecting any
 existing Gatto volume.
+Mounting and cleanup use `diskutil image attach` and `diskutil eject`;
+`hdiutil` creates, compresses, and verifies the image. Temporary mounts use the
+`nobrowse` mount option so Finder opens only when the layout script requests it.
 
 `packaging/render-dmg-background.swift` typesets one instruction over the original
 dark anime-cat artwork in `packaging/dmg-artwork.png`. The generation prompts are
