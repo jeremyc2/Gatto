@@ -179,6 +179,23 @@ and re-exports its compatible GPUI `0.3.9` snapshot. Import GPUI through that
 facade; upgrade the pair together. Check `Cargo.toml` for the minimum Rust version
 and `rust-toolchain.toml` for the selected toolchain.
 
+`tests/fixtures/sample.mp4` is a locally generated, two-second H.264 fixture
+with ten 64 × 64 solid-color frames and no audio or external artwork.
+`sample-audio.mp4` adds a locally generated 440 Hz test tone through a native
+AVFoundation export. Tests check actual native H.264/AAC output, dimensions,
+duration, cancellation, and oversized-import choices without contacting GitHub
+or opening a player.
+
+Media uploads use Tokio and futures-util for streamed async HTTP and cancellation
+inside background workers; `tempfile` provides automatically removed, privately
+permissioned video snapshots. These were already transitive dependencies; the
+new direct requirements enable ownership and cancellation that a blocking body
+clone could not provide. Compression uses narrowly enabled `objc2` AVFoundation, AVFAudio, CoreMedia,
+CoreVideo, and VideoToolbox bindings. They link macOS's existing decoders and
+hardware encoder; no software codec, capture framework, or external encoder
+executable is bundled. The first four additions are framework glue; the
+VideoToolbox binding supplies the hardware-requirement key.
+
 Keep new dependencies to a minimum. In a dependency change, explain:
 
 - Why the dependency is needed.

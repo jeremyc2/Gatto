@@ -7,6 +7,42 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add an unchecked **Copy images as Markdown** preference to use
+  `![description](URL)` instead of sized HTML image tags across individual copy,
+  bulk copy, and Quick Copy, including existing uploads.
+- Add an unchecked **Allow videos up to 100 MB** preference for eligible paid
+  GitHub plans. Apply it to every import path, Quick Copy, and compression;
+  retain the 10 MB image/GIF limit and recheck staged videos before upload.
+- Offer Cancel / Compress for oversized video imports. Use native hardware
+  H.264/AAC MP4 compression with original resolution, progress, cancellation,
+  bounded retries, and strict final size validation. Keep source files unchanged
+  and provide recording guidance, including clips under 15 seconds.
+- Upload MP4, MOV, and WebM videos through drag/drop, file selection, or copied
+  Finder files, including mixed batches and Quick Copy. Open video previews in
+  the default macOS video app with its playback and audio controls.
+- Play animated GIF frames in the image preview, with their recorded timing,
+  pausing when inactive and respecting Reduce Motion.
+- Stream attachment uploads with byte progress, queued/waiting states, cancel,
+  a five-minute total timeout and 90-second inactivity timeout, and actionable
+  network, access, format, size, rate-limit, and server errors.
+
+
+### Fixed
+
+- Restore the original gap between the drop zone and attachment previews by
+  rendering the compression panel only while a compression job is active.
+
+### Changed
+
+- Default each image/video to 10 MB for Free-plan compatibility. Keep videos as
+  private temporary snapshots for stable previews/retries without full-memory
+  buffering. Separate copied snippets with blank lines for GitHub video players.
+- Copy uploaded images as HTML `<img>` elements by default, with width, height, and alt text
+  for GitHub Markdown. Normal, bulk, and Quick Copy uploads use the image's pixel
+  dimensions and escape HTML attributes.
+
 ## [0.15.4] - 2026-10-19
 
 ### Added

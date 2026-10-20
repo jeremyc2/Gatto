@@ -27,6 +27,8 @@ pub struct AppSettings {
     pub global_quick_copy_shortcut: String,
     pub global_quick_copy_shortcut_enabled: bool,
     pub close_window_after_copy: bool,
+    pub allow_large_videos: bool,
+    pub copy_images_as_markdown: bool,
     #[serde(skip)]
     pub start_at_login: bool,
 }
@@ -45,12 +47,30 @@ impl Default for AppSettings {
             global_quick_copy_shortcut: default_quick_copy_shortcut(),
             global_quick_copy_shortcut_enabled: false,
             close_window_after_copy: false,
+            allow_large_videos: false,
+            copy_images_as_markdown: false,
             start_at_login: false,
         }
     }
 }
 
 impl AppSettings {
+    pub fn image_copy_format(&self) -> crate::model::ImageCopyFormat {
+        if self.copy_images_as_markdown {
+            crate::model::ImageCopyFormat::Markdown
+        } else {
+            crate::model::ImageCopyFormat::Html
+        }
+    }
+
+    pub fn video_upload_limit(&self) -> crate::model::VideoUploadLimit {
+        if self.allow_large_videos {
+            crate::model::VideoUploadLimit::Paid
+        } else {
+            crate::model::VideoUploadLimit::Standard
+        }
+    }
+
     /// Repository names and cached IDs belong to the selected owner.
     pub fn set_owner(&mut self, owner: String) -> bool {
         let changed = !self
@@ -257,7 +277,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{AppSettings, clear_persistence};
+    use super::{AppSettings, clear_persistence, write_settings};
 
     #[cfg(target_os = "macos")]
     #[test]
@@ -367,5 +387,57 @@ mod tests {
         assert_eq!(settings.global_quick_copy_shortcut, "Command+Shift+G");
         assert!(!settings.global_quick_copy_shortcut_enabled);
         assert!(!settings.close_window_after_copy);
+        assert!(!settings.allow_large_videos);
+        assert!(!settings.copy_images_as_markdown);
+        assert_eq!(
+            settings.image_copy_format(),
+            crate::model::ImageCopyFormat::Html
+        );
+        assert_eq!(settings.video_upload_limit().bytes(), 10_000_000);
+    }
+
+    #[test]
+    fn large_video_opt_in_survives_saved_preferences() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let mut settings = AppSettings::default();
+        assert!(!settings.allow_large_videos);
+        settings.allow_large_videos = true;
+        write_settings(&settings, &path).unwrap();
+        let restored: AppSettings =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(restored.allow_large_videos);
+        assert_eq!(restored.video_upload_limit().bytes(), 100_000_000);
+        settings.allow_large_videos = false;
+        write_settings(&settings, &path).unwrap();
+        let restored: AppSettings =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(!restored.allow_large_videos);
+        assert_eq!(restored.video_upload_limit().bytes(), 10_000_000);
+    }
+
+    #[test]
+    fn markdown_copy_opt_in_survives_saved_preferences_and_can_be_disabled() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        assert!(!AppSettings::default().copy_images_as_markdown);
+        for enabled in [true, false] {
+            let settings = AppSettings {
+                copy_images_as_markdown: enabled,
+                ..Default::default()
+            };
+            write_settings(&settings, &path).unwrap();
+            let restored: AppSettings =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            assert_eq!(restored.copy_images_as_markdown, enabled);
+            assert_eq!(
+                restored.image_copy_format(),
+                if enabled {
+                    crate::model::ImageCopyFormat::Markdown
+                } else {
+                    crate::model::ImageCopyFormat::Html
+                }
+            );
+        }
     }
 }

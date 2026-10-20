@@ -1,4 +1,9 @@
-use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
@@ -13,7 +18,7 @@ use gpui_kit::{
     Styled as _, Window, actions, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
 
-use crate::{model::StagedImage, window_limits};
+use crate::{model::StagedAttachment, window_limits};
 
 actions!(
     image_preview,
@@ -46,6 +51,7 @@ pub struct ImagePreview {
     offset: Point<Pixels>,
     drag: Option<DragState>,
     focus_handle: FocusHandle,
+    animation: Rc<RefCell<AnimationClock>>,
 }
 
 #[derive(Clone)]
@@ -56,22 +62,79 @@ struct PreviewImage {
     pixel_size: (u32, u32),
 }
 
-impl From<StagedImage> for PreviewImage {
-    fn from(image: StagedImage) -> Self {
-        Self {
-            id: image.id,
-            image: image.preview,
-            name: image.name.into(),
+impl PreviewImage {
+    fn from_attachment(attachment: StagedAttachment) -> Option<Self> {
+        let image = attachment.image()?;
+        Some(Self {
+            id: attachment.id,
+            image: image.preview.clone(),
+            name: attachment.name.clone().into(),
             pixel_size: image.pixel_size,
+        })
+    }
+}
+
+#[derive(Default)]
+struct AnimationClock {
+    frame: usize,
+    last_frame: Option<Instant>,
+    image_id: Option<gpui_kit::ImageId>,
+    delays: Vec<Duration>,
+    cycle: Duration,
+}
+
+impl AnimationClock {
+    fn frame_at(
+        &mut self,
+        image: &gpui_kit::RenderImage,
+        now: Instant,
+        playing: bool,
+        reduce_motion: bool,
+    ) -> usize {
+        if self.image_id != Some(image.id) {
+            *self = Self::default();
+            self.image_id = Some(image.id);
+            self.delays = (0..image.frame_count())
+                .map(|index| Duration::from(image.delay(index)).max(Duration::from_millis(10)))
+                .collect();
+            self.cycle = self.delays.iter().copied().sum();
         }
+        if self.delays.len() <= 1 || reduce_motion {
+            self.frame = 0;
+            self.last_frame = None;
+            return 0;
+        }
+        self.frame = self.frame.min(self.delays.len() - 1);
+        if !playing {
+            self.last_frame = None;
+            return self.frame;
+        }
+        let mut last_frame = self.last_frame.unwrap_or(now);
+        // Skip full cycles after occlusion/slow renders, then account for each
+        // frame's own delay. Zero-delay frames must not cause a busy loop.
+        let elapsed = now.duration_since(last_frame);
+        if elapsed >= self.cycle {
+            last_frame =
+                now - Duration::from_nanos((elapsed.as_nanos() % self.cycle.as_nanos()) as u64);
+        }
+        loop {
+            let delay = self.delays[self.frame];
+            if now.duration_since(last_frame) < delay {
+                break;
+            }
+            last_frame += delay;
+            self.frame = (self.frame + 1) % self.delays.len();
+        }
+        self.last_frame = Some(last_frame);
+        self.frame
     }
 }
 
 impl ImagePreview {
-    pub fn new(images: Vec<StagedImage>, selected_id: u64, cx: &mut Context<Self>) -> Self {
+    pub fn new(images: Vec<StagedAttachment>, selected_id: u64, cx: &mut Context<Self>) -> Self {
         let images = images
             .into_iter()
-            .map(PreviewImage::from)
+            .filter_map(PreviewImage::from_attachment)
             .collect::<Vec<_>>();
         let current_index = images
             .iter()
@@ -84,11 +147,21 @@ impl ImagePreview {
             offset: point(px(0.), px(0.)),
             drag: None,
             focus_handle: cx.focus_handle(),
+            animation: Rc::new(RefCell::new(AnimationClock::default())),
         }
     }
 
-    pub fn show(&mut self, images: Vec<StagedImage>, selected_id: u64, cx: &mut Context<Self>) {
-        self.images = images.into_iter().map(PreviewImage::from).collect();
+    pub fn show(
+        &mut self,
+        images: Vec<StagedAttachment>,
+        selected_id: u64,
+        cx: &mut Context<Self>,
+    ) {
+        self.images = images
+            .into_iter()
+            .filter_map(PreviewImage::from_attachment)
+            .collect();
+        *self.animation.borrow_mut() = AnimationClock::default();
         self.current_index = self
             .images
             .iter()
@@ -99,6 +172,7 @@ impl ImagePreview {
 
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.images.clear();
+        *self.animation.borrow_mut() = AnimationClock::default();
         self.current_index = 0;
         self.fit(cx);
     }
@@ -118,6 +192,7 @@ impl ImagePreview {
             return;
         }
         self.current_index = index;
+        *self.animation.borrow_mut() = AnimationClock::default();
         self.fit(cx);
         self.update_window_title(window);
     }
@@ -246,6 +321,7 @@ impl ImagePreview {
         let current = self.current().cloned();
         let zoom = self.zoom;
         let offset = self.offset;
+        let animation = self.animation.clone();
 
         canvas(
             move |_, window, cx| {
@@ -257,7 +333,7 @@ impl ImagePreview {
                         .map(|render_image| (render_image, image.pixel_size))
                 })
             },
-            move |bounds, render_image, window, _| {
+            move |bounds, render_image, window, cx| {
                 let Some((render_image, (natural_width, natural_height))) = render_image else {
                     return;
                 };
@@ -276,12 +352,24 @@ impl ImagePreview {
                     ),
                     image_size,
                 );
+                let playing = render_image.frame_count() > 1
+                    && !cx.reduce_motion()
+                    && window.is_window_active();
+                let frame = animation.borrow_mut().frame_at(
+                    &render_image,
+                    Instant::now(),
+                    playing,
+                    cx.reduce_motion(),
+                );
+                if playing {
+                    window.request_animation_frame();
+                }
                 let _ = window.paint_image(
                     bounds,
                     image_bounds,
                     Corners::default(),
                     render_image,
-                    0,
+                    frame,
                     false,
                 );
             },
@@ -468,6 +556,68 @@ pub fn init_keybindings(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn animated_gif() -> Arc<gpui_kit::RenderImage> {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = image::codecs::gif::GifEncoder::new(&mut bytes);
+            for (color, delay) in [([255, 0, 0, 255], 100), ([0, 255, 0, 255], 200)] {
+                encoder
+                    .encode_frame(image::Frame::from_parts(
+                        image::RgbaImage::from_pixel(2, 2, image::Rgba(color)),
+                        0,
+                        0,
+                        image::Delay::from_numer_denom_ms(delay, 1),
+                    ))
+                    .unwrap();
+            }
+        }
+        Image::from_bytes(gpui_kit::ImageFormat::Gif, bytes)
+            .to_image_data(gpui_kit::SvgRenderer::new(Arc::new(
+                gpui_kit::assets::AllAssets,
+            )))
+            .unwrap()
+    }
+
+    #[test]
+    fn gif_frames_advance_with_their_delays_loop_and_pause_for_accessibility() {
+        let image = animated_gif();
+        assert_eq!(image.frame_count(), 2);
+        let now = Instant::now();
+        let mut clock = AnimationClock::default();
+        assert_eq!(clock.frame_at(&image, now, true, false), 0);
+        let second = clock.frame_at(&image, now + Duration::from_millis(110), true, false);
+        assert_eq!(second, 1);
+        assert_ne!(image.as_bytes(0), image.as_bytes(second));
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_millis(299), true, false),
+            1
+        );
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_millis(300), true, false),
+            0
+        );
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_millis(410), true, false),
+            1
+        );
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_secs(10), false, false),
+            1
+        );
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_secs(20), true, false),
+            1
+        );
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_secs(21), true, true),
+            0
+        );
+        assert_eq!(
+            clock.frame_at(&image, now + Duration::from_secs(22), true, false),
+            0
+        );
+    }
 
     #[test]
     fn zoom_is_clamped_to_preview_limits() {

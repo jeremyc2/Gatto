@@ -1,4 +1,5 @@
 use std::{
+    io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -9,6 +10,39 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use gpui_kit::{Image, ImageFormat};
+
+use crate::video::Video;
+
+pub const MAX_ATTACHMENT_BYTES: u64 = 10_000_000;
+pub const SUPPORTED_MEDIA_MESSAGE: &str =
+    "Choose a PNG, JPEG, GIF, WebP, MP4, MOV, or WebM file within your upload limit.";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VideoUploadLimit {
+    #[default]
+    Standard,
+    Paid,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ImageCopyFormat {
+    #[default]
+    Html,
+    Markdown,
+}
+
+impl VideoUploadLimit {
+    pub fn bytes(self) -> u64 {
+        match self {
+            Self::Standard => MAX_ATTACHMENT_BYTES,
+            Self::Paid => 100_000_000,
+        }
+    }
+
+    pub fn megabytes(self) -> u64 {
+        self.bytes() / 1_000_000
+    }
+}
 
 static NEXT_STAGED_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -27,14 +61,35 @@ pub fn parse_owner(value: &str) -> Result<String> {
     Ok(value.to_owned())
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "This video exceeds {limit_mb} MB. Open it in Gatto to choose Compress, or trim it before using Quick Copy."
+)]
+pub struct OversizedVideo {
+    pub path: PathBuf,
+    pub bytes: u64,
+    pub limit_mb: u64,
+}
+
 #[derive(Clone)]
-pub struct StagedImage {
+pub struct StagedAttachment {
     pub id: u64,
     pub name: String,
     pub description: String,
     pub upload_state: AttachmentUploadState,
     pub mime_type: String,
-    pub bytes: Arc<Vec<u8>>,
+    pub media: Media,
+}
+
+#[derive(Clone)]
+pub enum Media {
+    Image(ImageData),
+    Video(Arc<Video>),
+}
+
+#[derive(Clone)]
+pub struct ImageData {
+    pub bytes: Arc<[u8]>,
     pub preview: Arc<Image>,
     pub pixel_size: (u32, u32),
 }
@@ -43,7 +98,11 @@ pub struct StagedImage {
 pub enum AttachmentUploadState {
     #[default]
     Preview,
-    Uploading,
+    Queued,
+    Uploading {
+        sent: u64,
+        total: u64,
+    },
     Uploaded {
         url: String,
     },
@@ -72,21 +131,103 @@ impl AttachmentUploadState {
     }
 }
 
-impl StagedImage {
-    pub fn from_path(path: PathBuf) -> Result<Self> {
+impl StagedAttachment {
+    pub fn from_path(path: PathBuf, video_limit: VideoUploadLimit) -> Result<Self> {
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
-            .context("The selected image has an invalid file name")?
+            .context("The selected file has an invalid name")?
             .to_owned();
-        let bytes =
-            std::fs::read(&path).with_context(|| format!("Could not read {}", path.display()))?;
+        let path_metadata = std::fs::metadata(&path)
+            .with_context(|| format!("Could not inspect {}", path.display()))?;
+        if !path_metadata.is_file() {
+            bail!("Choose a regular image or video file, rather than a folder or device.");
+        }
+        let mut file = std::fs::File::open(&path)
+            .with_context(|| format!("Could not read {}", path.display()))?;
+        let metadata = file
+            .metadata()
+            .context("Could not inspect the selected file")?;
+        if !metadata.is_file() {
+            bail!("Choose a regular image or video file, rather than a folder or device.");
+        }
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if let Some(mime_type) = Video::mime_type(&extension) {
+            if metadata.len() > video_limit.bytes() {
+                return Err(OversizedVideo {
+                    path,
+                    bytes: metadata.len(),
+                    limit_mb: video_limit.megabytes(),
+                }
+                .into());
+            }
+            validate_size(metadata.len(), video_limit.bytes())?;
+            let video = Video::stage(&mut file, &extension, video_limit)?;
+            return Ok(Self {
+                id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
+                description: name.clone(),
+                name,
+                upload_state: AttachmentUploadState::Preview,
+                mime_type: mime_type.into(),
+                media: Media::Video(Arc::new(video)),
+            });
+        }
+        validate_size(metadata.len(), MAX_ATTACHMENT_BYTES)?;
+        let mut bytes = Vec::new();
+        file.take(MAX_ATTACHMENT_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .context("Could not read the selected image")?;
+        validate_size(bytes.len() as u64, MAX_ATTACHMENT_BYTES)?;
         Self::from_bytes(name, bytes, Some(&path))
     }
 
+    pub fn image(&self) -> Option<&ImageData> {
+        match &self.media {
+            Media::Image(image) => Some(image),
+            Media::Video(_) => None,
+        }
+    }
+
+    pub fn len(&self) -> u64 {
+        match &self.media {
+            Media::Image(image) => image.bytes.len() as u64,
+            Media::Video(video) => video.len(),
+        }
+    }
+
+    pub fn reader(&self) -> Result<Box<dyn Read + Send>> {
+        match &self.media {
+            Media::Image(image) => Ok(Box::new(Cursor::new(image.bytes.clone()))),
+            Media::Video(video) => Ok(Box::new(video.reader()?)),
+        }
+    }
+
+    pub fn validate_upload_size(&self, video_limit: VideoUploadLimit) -> Result<()> {
+        let limit = match self.media {
+            Media::Image(_) => MAX_ATTACHMENT_BYTES,
+            Media::Video(_) => video_limit.bytes(),
+        };
+        validate_size(self.len(), limit)
+    }
+
+    pub fn snippet(&self, url: &str, format: ImageCopyFormat) -> String {
+        match &self.media {
+            Media::Image(image) => match format {
+                ImageCopyFormat::Html => html_image(&self.description, url, image.pixel_size),
+                ImageCopyFormat::Markdown => markdown_image(&self.description, url),
+            },
+            Media::Video(_) => url.to_owned(),
+        }
+    }
+
     pub fn from_clipboard(image: &Image) -> Result<Self> {
+        validate_size(image.bytes.len() as u64, MAX_ATTACHMENT_BYTES)?;
         let format = supported_gpui_format(image.format)
-            .context("Unsupported format. Please paste or drop an image file (PNG/JPEG).")?;
+            .context("Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM.")?;
         let pixel_size = validate_image_bytes(&image.bytes, format)?;
 
         let timestamp = SystemTime::now()
@@ -94,7 +235,7 @@ impl StagedImage {
             .unwrap_or_default()
             .as_secs();
         let name = format!("clipboard-{timestamp}.{}", format.extension());
-        let bytes = Arc::new(image.bytes.clone());
+        let bytes: Arc<[u8]> = image.bytes.clone().into();
 
         Ok(Self {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
@@ -102,21 +243,25 @@ impl StagedImage {
             name,
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
-            preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
-            bytes,
-            pixel_size,
+            media: Media::Image(ImageData {
+                preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
+                bytes,
+                pixel_size,
+            }),
         })
     }
 
     fn from_bytes(name: String, bytes: Vec<u8>, path: Option<&Path>) -> Result<Self> {
         let guessed = ::image::guess_format(&bytes)
-            .context("Unsupported format. Please paste or drop an image file (PNG/JPEG).")?;
+            .context("Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM.")?;
         let format = match guessed {
             ::image::ImageFormat::Png => ImageFormat::Png,
             ::image::ImageFormat::Jpeg => ImageFormat::Jpeg,
             ::image::ImageFormat::Gif => ImageFormat::Gif,
             ::image::ImageFormat::WebP => ImageFormat::Webp,
-            _ => bail!("Unsupported format. Please paste or drop an image file (PNG/JPEG)."),
+            _ => bail!(
+                "Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM."
+            ),
         };
 
         if let Some(path) = path {
@@ -126,32 +271,49 @@ impl StagedImage {
                 .unwrap_or_default()
                 .to_ascii_lowercase();
             if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp") {
-                bail!("Unsupported format. Please paste or drop an image file (PNG/JPEG).");
+                bail!(
+                    "Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM."
+                );
             }
         }
 
         let pixel_size = validate_image_bytes(&bytes, format)?;
-        let bytes = Arc::new(bytes);
+        let bytes: Arc<[u8]> = bytes.into();
         Ok(Self {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             description: name.clone(),
             name,
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
-            preview: Arc::new(Image::from_bytes(format, bytes.as_ref().clone())),
-            bytes,
-            pixel_size,
+            media: Media::Image(ImageData {
+                preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
+                bytes,
+                pixel_size,
+            }),
         })
     }
 
     pub fn formatted_size(&self) -> String {
-        let bytes = self.bytes.len() as f64;
-        if bytes >= 1_048_576.0 {
-            format!("{:.1} MB", bytes / 1_048_576.0)
+        let bytes = self.len() as f64;
+        if bytes >= 1_000_000.0 {
+            format!("{:.1} MB", bytes / 1_000_000.0)
         } else {
-            format!("{:.0} KB", (bytes / 1024.0).max(0.1))
+            format!("{:.0} KB", (bytes / 1000.0).max(0.1))
         }
     }
+}
+
+pub fn validate_size(len: u64, limit: u64) -> Result<()> {
+    if len == 0 {
+        bail!("The selected file is empty.");
+    }
+    if len > limit {
+        bail!(
+            "The selected file exceeds the {} MB limit. Remove it and add it again to choose compression, or trim it and try again.",
+            limit / 1_000_000
+        );
+    }
+    Ok(())
 }
 
 fn supported_gpui_format(format: ImageFormat) -> Option<ImageFormat> {
@@ -171,20 +333,92 @@ fn validate_image_bytes(bytes: &[u8], format: ImageFormat) -> Result<(u32, u32)>
         ImageFormat::Jpeg => ::image::ImageFormat::Jpeg,
         ImageFormat::Gif => ::image::ImageFormat::Gif,
         ImageFormat::Webp => ::image::ImageFormat::WebP,
-        _ => bail!("Unsupported format. Please paste or drop an image file (PNG/JPEG)."),
+        _ => bail!(
+            "Unsupported image format. Choose PNG, JPEG, GIF, or WebP; videos must be MP4, MOV, or WebM."
+        ),
     };
     let image = ::image::load_from_memory_with_format(bytes, image_format)
         .context("The image data is corrupt or unreadable")?;
     Ok((image.width(), image.height()))
 }
 
-pub fn markdown_image(file_name: &str, url: &str) -> String {
-    let alt_text = file_name
+/// HTML supported in GitHub Markdown, sized to the validated image pixels.
+pub fn html_image(description: &str, url: &str, pixel_size: (u32, u32)) -> String {
+    let alt_text = escape_html_attribute(&description.replace(['\r', '\n'], " "));
+    let src = escape_html_attribute(url);
+    let (width, height) = pixel_size;
+    format!(r#"<img width="{width}" height="{height}" alt="{alt_text}" src="{src}" />"#)
+}
+
+fn markdown_image(description: &str, url: &str) -> String {
+    let alt_text = description
+        .replace(['\r', '\n'], " ")
         .replace('\\', "\\\\")
         .replace('[', "\\[")
         .replace(']', "\\]")
-        .replace(['\r', '\n'], " ");
-    format!("![{alt_text}]({url})")
+        .replace('*', "\\*")
+        .replace('_', "\\_")
+        .replace('`', "\\`")
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    // Keep the destination a single Markdown link even if its URL contains
+    // whitespace or parentheses. GitHub attachment URLs normally contain neither.
+    let destination = url
+        .replace('\\', "%5C")
+        .replace('(', "%28")
+        .replace(')', "%29")
+        .replace(' ', "%20")
+        .replace('<', "%3C")
+        .replace('>', "%3E")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+        .replace('\t', "%09");
+    format!("![{alt_text}]({destination})")
+}
+
+fn escape_html_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+#[cfg(test)]
+mod image_snippet_tests {
+    use super::{html_image, markdown_image};
+
+    #[test]
+    fn preserves_dimensions_and_escapes_html_attributes() {
+        assert_eq!(
+            html_image(
+                "A [cat] \\ \"quoted\" & <sleeping> 'cat'\nnext line",
+                "https://github.com/user-attachments/assets/example?a=1&b=\"2\"",
+                (640, 480),
+            ),
+            r#"<img width="640" height="480" alt="A [cat] \ &quot;quoted&quot; &amp; &lt;sleeping&gt; &#39;cat&#39; next line" src="https://github.com/user-attachments/assets/example?a=1&amp;b=&quot;2&quot;" />"#,
+        );
+    }
+
+    #[test]
+    fn markdown_has_alt_text_without_dimensions_and_escapes_markup() {
+        assert_eq!(
+            markdown_image(
+                "Gatto rocket cat",
+                "https://github.com/user-attachments/assets/cat"
+            ),
+            "![Gatto rocket cat](https://github.com/user-attachments/assets/cat)"
+        );
+        assert_eq!(
+            markdown_image(
+                "[cat] \\ *code* _name_ `x` & <tag>\nnext",
+                "https://example.com/a (b).png"
+            ),
+            r"![\[cat\] \\ \*code\* \_name\_ \`x\` &amp; &lt;tag&gt; next](https://example.com/a%20%28b%29.png)"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -204,6 +438,125 @@ mod attachment_upload_state_tests {
         assert_eq!(uploaded.uploaded_url(), Some("https://example.com/image"));
         assert_eq!(failed.failure_message(), Some("network error"));
         assert!(!failed.is_uploaded());
+    }
+}
+
+#[cfg(test)]
+mod media_tests {
+    use super::*;
+    use std::io::{Seek as _, Write as _};
+
+    pub(crate) const VIDEO: &[u8] = include_bytes!("../tests/fixtures/sample.mp4");
+
+    #[test]
+    fn paid_video_limit_preserves_image_limit_and_rechecks_staged_files() {
+        let mut file = tempfile::Builder::new().suffix(".mp4").tempfile().unwrap();
+        file.write_all(VIDEO).unwrap();
+        let padding = MAX_ATTACHMENT_BYTES + 8;
+        file.write_all(&(padding as u32).to_be_bytes()).unwrap();
+        file.write_all(b"free").unwrap();
+        file.as_file()
+            .set_len(VIDEO.len() as u64 + padding)
+            .unwrap();
+        let error = StagedAttachment::from_path(file.path().into(), VideoUploadLimit::Standard)
+            .err()
+            .unwrap();
+        assert_eq!(error.downcast_ref::<OversizedVideo>().unwrap().limit_mb, 10);
+        let item = StagedAttachment::from_path(file.path().into(), VideoUploadLimit::Paid).unwrap();
+        assert!(item.len() > MAX_ATTACHMENT_BYTES);
+        assert!(item.validate_upload_size(VideoUploadLimit::Paid).is_ok());
+        assert!(
+            item.validate_upload_size(VideoUploadLimit::Standard)
+                .is_err()
+        );
+        let paid_max = VideoUploadLimit::Paid.bytes();
+        assert!(validate_size(paid_max, paid_max).is_ok());
+        file.as_file().set_len(paid_max + 1).unwrap();
+        let error = StagedAttachment::from_path(file.path().into(), VideoUploadLimit::Paid)
+            .err()
+            .unwrap();
+        assert_eq!(
+            error.downcast_ref::<OversizedVideo>().unwrap().limit_mb,
+            100
+        );
+
+        let image = tempfile::Builder::new().suffix(".png").tempfile().unwrap();
+        image.as_file().set_len(MAX_ATTACHMENT_BYTES + 1).unwrap();
+        let error = StagedAttachment::from_path(image.path().into(), VideoUploadLimit::Paid)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("10 MB"));
+    }
+
+    #[test]
+    fn video_snapshot_survives_source_changes_and_has_repeatable_readers() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("recording.MP4");
+        std::fs::write(&path, VIDEO).unwrap();
+        let item = StagedAttachment::from_path(path.clone(), Default::default()).unwrap();
+        std::fs::write(&path, b"source changed after staging").unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert!(item.image().is_none());
+        assert_eq!(item.mime_type, "video/mp4");
+        assert_eq!(item.len(), VIDEO.len() as u64);
+        for _ in 0..2 {
+            let mut bytes = Vec::new();
+            item.reader().unwrap().read_to_end(&mut bytes).unwrap();
+            assert_eq!(bytes, VIDEO);
+        }
+        assert_eq!(
+            item.snippet(
+                "https://github.com/user-attachments/assets/video",
+                ImageCopyFormat::Html
+            ),
+            "https://github.com/user-attachments/assets/video"
+        );
+    }
+
+    #[test]
+    fn rejects_empty_oversized_corrupt_and_audio_only_videos() {
+        let mut file = tempfile::Builder::new().suffix(".mp4").tempfile().unwrap();
+        assert!(
+            StagedAttachment::from_path(file.path().into(), Default::default())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("empty")
+        );
+        file.as_file().set_len(MAX_ATTACHMENT_BYTES + 1).unwrap();
+        assert!(
+            StagedAttachment::from_path(file.path().into(), Default::default())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("10 MB")
+        );
+        for bytes in [
+            b"not a video".to_vec(),
+            VIDEO[..VIDEO.len() / 2].to_vec(),
+            {
+                let mut audio_only = VIDEO.to_vec();
+                let position = audio_only
+                    .windows(4)
+                    .position(|bytes| bytes == b"vide")
+                    .unwrap();
+                audio_only[position..position + 4].copy_from_slice(b"soun");
+                audio_only
+            },
+        ] {
+            file.as_file().set_len(0).unwrap();
+            file.rewind().unwrap();
+            file.write_all(&bytes).unwrap();
+            assert!(
+                StagedAttachment::from_path(file.path().into(), Default::default())
+                    .err()
+                    .unwrap()
+                    .to_string()
+                    .contains("container")
+            );
+        }
+        assert!(validate_size(MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_BYTES).is_ok());
+        assert!(validate_size(MAX_ATTACHMENT_BYTES + 1, MAX_ATTACHMENT_BYTES).is_err());
     }
 }
 

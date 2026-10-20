@@ -13,10 +13,10 @@ a backend to the app. See
 
 The application separates these responsibilities within a single local process:
 
-- **Interface and upload state:** show repositories and image previews, coordinate
+- **Interface and upload state:** show repositories and attachment previews, coordinate
   uploads and retries, and make uploaded links available to copy.
 - **GitHub access:** use GitHub CLI for authentication and repository lookup, then
-  send image bytes directly to GitHub's attachment service. Gatto has no backend
+  stream image and video bytes directly to GitHub's attachment service. Gatto has no backend
   or server of its own.
 - **macOS integration:** provide menu bar actions, the optional global shortcut,
   custom URL actions, Start at Login, and silent installer ejection. Interactive
@@ -97,10 +97,10 @@ the published signed DMG, with GitHub CLI as a dependency.
 Paste, drop, or file selection
              |
              v
-      Validate image data
+      Validate media and selected upload limit
              |
              v
-      Stage attachment in memory
+      Stage image in memory / video in a private temporary file
              |
              +------> Show preview state and metadata
              |
@@ -114,7 +114,7 @@ Read active token from GitHub CLI
 Send bytes to GitHub attachment service
              |
              v
-Mark the attachment uploaded or failed
+Report progress, then uploaded or failed
              |
              v
 Add Markdown copy control to uploaded attachment
@@ -134,20 +134,90 @@ memory for the uploader window's lifetime. Reopen that window after changing the
 active GitHub CLI account to avoid using a previously loaded session. Quick Copy
 reads the current CLI token for each background job.
 
-Image validation, CLI calls, and blocking HTTP uploads run on background tasks.
-A batch uploads sequentially; each attachment transitions from preview or failed
-to uploading, then uploaded or failed. Retrying skips uploaded attachments. The
+Media validation and CLI calls run on background tasks. Each HTTP upload uses
+an async reqwest client in a background worker's current-thread Tokio runtime;
+canceling drops the pending request. A batch uploads sequentially; each
+attachment transitions from preview or failed to queued, then uploading with
+byte progress, then uploaded or failed. Retrying skips uploaded attachments. The
 copy result is rebuilt from successful attachments in their current order.
+Image and video variants share staging, retry, upload, and copy interfaces.
+The shared image formatter defaults to an HTML `<img>` element accepted in GitHub
+Markdown, with `width` and `height` from the validated pixel dimensions and
+escaped `alt` and `src` attributes. The saved `copy_images_as_markdown` preference
+defaults to false, including for older settings. Enabling it selects
+`ImageCopyFormat::Markdown`, producing escaped `![description](URL)` snippets
+without dimensions. Individual copy, batch copy, and Quick Copy use the same
+format selection; preference changes rebuild completed copy results without
+uploading again. Video snippets remain bare URLs in both modes.
+GPUI's clipboard image exposes encoded bytes without an
+original display size or scale factor; copied dimensions therefore describe
+pixels rather than the source app's logical size.
+Video snippets are bare URLs, and bulk copy uses blank paragraphs between all
+snippets so GitHub can promote each video URL to a player.
 Generation counters prevent stale task completions from restoring state after
-reset or draft replacement. Reset clears local state; it does not cancel an HTTP
-request already sent to GitHub or remove a remote attachment.
+reset, close, or draft replacement. Reset and main-window close cancel active
+uploads and clear local state; they cannot remove a remote attachment that
+GitHub has already accepted.
 
-The upload client uses a 15-second connection timeout and a 90-second request
-timeout. It sends original image bytes to
+Images are limited to 10,000,000 bytes. `allow_large_videos` defaults to false,
+including for older saved settings; `video_upload_limit()` maps it to a typed
+10,000,000- or 100,000,000-byte video policy. Selection, drop, Finder paste,
+Quick Copy, bounded snapshots, and compression share that policy. Gatto does
+not query billing eligibility. The checkbox is disabled while uploading or
+importing; changes invalidate pending input jobs. Uploads recheck current limits
+so disabling the option cannot send an already staged larger video.
+Images retain shared immutable
+encoded bytes; videos use a private `tempfile` snapshot, copied with a bounded
+reader before container validation. Snapshotting preserves a stable retry source
+if the original moves or changes. MP4/MOV validation checks box bounds, a video
+handler, and media payload; WebM checks EBML/DocType, a video track, and a cluster.
+These are container checks, not codec decoding or transcoding.
+
+The upload client streams 64 KiB chunks without copying the full body. Progress
+counts bytes read into the HTTP body, throttled to about ten updates per second
+plus start/end. A separate waiting state lasts until the server returns a URL.
+The client uses a 15-second connection timeout, a 90-second stream/response
+inactivity limit, and a five-minute total timeout. Redirects and automatic POST
+retries are disabled. Responses are capped at 64 KiB; errors distinguish auth,
+permissions/SSO, size/format rejection, rate limits, and server/network failures.
+It sends original image/video bytes to
 `https://uploads.github.com/user-attachments/assets` with filename, content type,
 and numeric repository ID query parameters. Returned URLs must use HTTPS,
-`github.com`, and the `/user-attachments/assets/` path prefix. The endpoint is
+`github.com`, the standard HTTPS port, no embedded credentials, and a nonempty
+`/user-attachments/assets/` path. The endpoint is
 hard-coded for GitHub.com; GitHub Enterprise Server hosts are not configurable.
+
+Oversized video imports carry a typed `OversizedVideo` result into an ordered
+import batch. The main window offers Cancel / Compress per file; Quick Copy
+instead returns a main-window recovery hint. The batch waits for each choice
+and compression result before staging the accepted items in their input order.
+A separate cancellation flag and generation guard prevent stale native jobs
+from restoring discarded imports. Uploads and updates are disabled during import.
+
+`compression.rs` owns the offline AVURLAsset → AVAssetReader → AVAssetWriter
+pipeline through narrowly enabled `objc2` framework bindings. It uses native
+hardware-required H.264, original decoded pixel dimensions, the source transform,
+a maximum input rate of about 30 fps, a 300-frame / ten-second GOP, and mono
+48 kHz AAC at 64 kbps when audio exists. Audio and video retain their shared
+source timestamps. Zero-sample edit markers are skipped, and video dimensions
+are checked throughout decoding and again on a decoded finalized output frame.
+HDR, multiple video/audio tracks, invalid durations and unsupported codecs or
+sizes produce actionable errors rather than silent media loss or CPU fallback.
+
+The ABR budget reserves audio first from 92% of the selected byte limit and scales
+with source duration (capped at 12 Mbps for short clips). At 60 seconds with
+audio under the default 10 MB policy it is about 1.16 Mbps for video. A second pass may retry from the original
+at 70% of the first video bitrate. Only a finalized, nonempty MP4 strictly below
+the selected 10 MB or 100 MB limit is copied into a staged video snapshot; byte estimates alone
+never authorize upload. The original is read without modification and its size
+and modification time are rechecked before accepting the result.
+
+One background worker owns every native object, respects writer backpressure,
+and uses per-iteration autorelease pools. UI cancellation only sets an atomic
+flag; the owner cancels reader/writer operations serially. A ten-minute deadline
+bounds each attempt. `gatto-compress-*` directories are private and removed on
+success, failure, or cancellation; only the accepted upload snapshot survives.
+Compression does not capture screens or microphones or invoke external encoders.
 
 On macOS, closing a window orders it out and vetoes native destruction. GPUI's
 window teardown can trigger an uncaught AppKit Touch Bar observer exception
@@ -167,6 +237,14 @@ in [ADR 0001](adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md).
 Dock reopening activates existing presented windows without changing their pages.
 If none are presented, it opens the main page. AppKit visibility includes occluded
 and minimized windows; GPUI's drawing visibility is not used for this decision.
+The custom image preview uses decoded GIF frame delays and requests redraws
+while the active window animates; it pauses when inactive and respects Reduce
+Motion. Image navigation excludes videos. Video previews run `/usr/bin/open -W`
+on a background task to launch the default macOS player. A playback task retains
+the private video snapshot until that application exits, independently of main
+window/draft lifetime. Launch errors reach diagnostics and a notification;
+codec/playback errors are handled by the external player.
+
 Native programmatic close requests run on the foreground executor outside a GPUI update,
 because AppKit's synchronous close callback otherwise re-borrows the application.
 The Dock icon hides when no windows are presented. Quit ends the process.
@@ -184,8 +262,8 @@ uses the existing native close request and per-window cleanup callbacks.
 Quick Copy runs through a process-lifetime background service with no window or
 view dependency. Menu, shortcut, and URL actions all invoke that service. It
 snapshots the clipboard, loads saved preferences, requires an account or organization and a
-pinned repository, validates the clipboard image (or first copied image file),
-and uses the same GitHub upload client and Markdown formatter as normal uploads.
+pinned repository, validates the clipboard image (or first copied image/video file),
+and uses the same streamed GitHub upload client and media snippet formatter as normal uploads.
 It prefers the last selected repository when pinned, otherwise the first pinned
 repository alphabetically. Success writes Markdown to the clipboard and sends a
 macOS notification. Failure sends a notification and preserves the clipboard.
@@ -234,7 +312,9 @@ pair and upgrade rules.
 
 - Authentication remains delegated to GitHub CLI.
 - Tokens are requested only when needed and are not written to application config.
-- Image content is sent to GitHub and otherwise remains local to the process.
+- Image content remains in memory; videos use private per-user temporary files.
+  Both are sent directly to GitHub, and video preview shares the local snapshot
+  with the configured macOS player.
 - Custom action URLs do not accept parameters; repository selection remains controlled by saved
   app preferences.
 - Upload results are copied after an explicit copy action or a user-configured Quick Copy action.

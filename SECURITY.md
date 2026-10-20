@@ -70,11 +70,11 @@ The repository's own `build.rs` only reads an optional hexadecimal
 non-hexadecimal values, does not access the network, and does not modify the
 working tree.
 
-## Authentication and image uploads
+## Authentication and media uploads
 
 Gatto uses GitHub’s existing issue and pull request attachment mechanism. It
 requests the active GitHub CLI token when needed, caches it in memory for the
-uploader session, and sends image bytes directly to GitHub’s attachment service.
+uploader session, and streams image/video bytes directly to GitHub’s attachment service.
 It does not persist tokens in app configuration. Restart after switching CLI
 accounts; see [Support](SUPPORT.md#common-problems) for account recovery.
 
@@ -96,11 +96,20 @@ Rust dependency audits do not audit the separately bundled native Sparkle SDK.
 - Normal uploads do not change the clipboard. **Copy Markdown**, **Copy all**,
   and **Command+C** explicitly copy completed results. **Quick Copy**, invoked
   through the menu bar, custom URL, or enabled global shortcut, uploads a
-  clipboard image and automatically copies its Markdown on success.
+  clipboard image or copied Finder media file and automatically copies its Markdown on success.
 - Preferences persist repository names and app settings; tokens, image bytes,
-  and upload URLs remain in memory. Start at Login writes a per-user LaunchAgent
-  containing the executable path. Exact files and removal instructions are in
-  [Support](SUPPORT.md#local-data-and-recovery).
+  and upload URLs remain in memory. Video staging creates a private 0600
+  temporary snapshot with a random name; it is removed when its last draft,
+  upload, or external viewer reference is released. Viewer references last until
+  the macOS player application exits, and forced termination can leave temporary
+  files for operating-system cleanup. Optional compression uses private
+  `gatto-compress-*` directories and native hardware H.264/AAC encoding after an
+  explicit Compress choice. Failed/canceled attempts are deleted; successful
+  output is copied into the staged snapshot only after size validation. Source
+  videos are never modified. No screen or microphone capture permission is used.
+  Start at Login writes a per-user LaunchAgent containing the executable path.
+  See [local data and recovery](SUPPORT.md#local-data-and-recovery) for paths and
+  removal instructions.
 
 To repeat the policy scan locally:
 

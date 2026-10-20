@@ -1,11 +1,16 @@
 use std::{
     env, io,
+    io::Read as _,
     path::PathBuf,
     process::{Command, Output},
-    time::Duration,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+    time::{Duration, Instant},
 };
 
-use reqwest::{StatusCode, blocking::Client};
+use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
@@ -13,7 +18,7 @@ use url::Url;
 
 use crate::{
     diagnostics::Diagnostics,
-    model::{Repository, StagedImage},
+    model::{Repository, StagedAttachment},
 };
 
 const ATTACHMENT_ENDPOINT: &str = "https://uploads.github.com/user-attachments/assets";
@@ -30,6 +35,8 @@ pub enum GithubError {
     RepositoryList(String),
     #[error("Upload failed: {0}")]
     Upload(String),
+    #[error("Upload canceled. You can retry this attachment.")]
+    Canceled,
 }
 
 #[derive(Clone)]
@@ -83,64 +90,284 @@ pub fn load_repository_id(
         .map_err(|_| GithubError::RepositoryList("GitHub returned an invalid repository ID".into()))
 }
 
+/// Shared by a whole sequential batch. Cancel drops the active HTTP request and
+/// prevents subsequent requests; already accepted remote assets cannot be undone.
+#[derive(Clone, Default)]
+pub struct UploadControl {
+    canceled: Arc<AtomicBool>,
+    wake: Arc<tokio::sync::Notify>,
+}
+
+impl UploadControl {
+    pub fn cancel(&self) {
+        self.canceled.store(true, Ordering::Release);
+        self.wake.notify_one();
+    }
+
+    pub fn is_canceled(&self) -> bool {
+        self.canceled.load(Ordering::Acquire)
+    }
+
+    async fn cancelled(&self) {
+        let wake = self.wake.notified();
+        if !self.is_canceled() {
+            wake.await;
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct UploadTimeouts {
+    total: Duration,
+    idle: Duration,
+}
+
+impl Default for UploadTimeouts {
+    fn default() -> Self {
+        Self {
+            total: Duration::from_secs(300),
+            idle: Duration::from_secs(90),
+        }
+    }
+}
+
 pub fn upload(
     token: &str,
     repository_id: u64,
-    image: &StagedImage,
+    attachment: &StagedAttachment,
     diagnostics: &Diagnostics,
+    control: &UploadControl,
+    progress: impl Fn(u64, u64) + Send + Sync + 'static,
 ) -> Result<String, GithubError> {
-    diagnostics.info("Sending image data to GitHub's attachment service.");
+    if control.is_canceled() {
+        return Err(GithubError::Canceled);
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| GithubError::Upload("Could not start the upload worker. Try again.".into()))?;
+    diagnostics.info("Streaming an attachment to GitHub.");
+    let result = runtime.block_on(upload_to(
+        ATTACHMENT_ENDPOINT,
+        token,
+        repository_id,
+        attachment,
+        control,
+        Arc::new(progress),
+        UploadTimeouts::default(),
+    ));
+    if result.is_ok() {
+        diagnostics.info("GitHub accepted the attachment.");
+    }
+    result
+}
+
+async fn upload_to(
+    endpoint: &str,
+    token: &str,
+    repository_id: u64,
+    attachment: &StagedAttachment,
+    control: &UploadControl,
+    progress: Arc<dyn Fn(u64, u64) + Send + Sync>,
+    timeouts: UploadTimeouts,
+) -> Result<String, GithubError> {
+    if control.is_canceled() {
+        return Err(GithubError::Canceled);
+    }
+    let activity = Arc::new(AtomicU64::new(0));
+    let started = Instant::now();
+    let send_activity = activity.clone();
+    let reader = attachment
+        .reader()
+        .map_err(|error| GithubError::Upload(error.to_string()))?;
+    let total = attachment.len();
+    progress(0, total);
+    let stream = futures_util::stream::try_unfold(
+        (reader, 0_u64, Instant::now()),
+        move |(mut reader, sent, last_progress)| {
+            let progress = progress.clone();
+            let activity = send_activity.clone();
+            async move {
+                let mut chunk = vec![0; 64 * 1024];
+                let count = reader.read(&mut chunk)?;
+                if count == 0 {
+                    if sent != total {
+                        return Err(io::Error::new(
+                            io::ErrorKind::UnexpectedEof,
+                            "The staged attachment became unreadable",
+                        ));
+                    }
+                    return Ok(None);
+                }
+                let sent = sent + count as u64;
+                if sent > total {
+                    return Err(io::Error::other("The staged attachment changed size"));
+                }
+                chunk.truncate(count);
+                activity.store(started.elapsed().as_millis() as u64, Ordering::Release);
+                let last_progress =
+                    if sent == total || last_progress.elapsed() >= Duration::from_millis(100) {
+                        progress(sent, total);
+                        Instant::now()
+                    } else {
+                        last_progress
+                    };
+                Ok::<_, io::Error>(Some((chunk, (reader, sent, last_progress))))
+            }
+        },
+    );
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(90))
+        .timeout(timeouts.total)
+        .redirect(reqwest::redirect::Policy::none())
+        .retry(reqwest::retry::never())
         .build()
-        .map_err(|error| GithubError::Upload(error.to_string()))?;
-    let repository_id = repository_id.to_string();
-
-    let response = client
-        .post(ATTACHMENT_ENDPOINT)
-        .bearer_auth(token)
-        .header("Accept", "application/json")
-        .header("Content-Type", &image.mime_type)
-        .header("User-Agent", concat!("gatto/", env!("CARGO_PKG_VERSION")))
-        .query(&[
-            ("name", image.name.as_str()),
-            ("content_type", image.mime_type.as_str()),
-            ("repository_id", repository_id.as_str()),
-        ])
-        .body(image.bytes.as_ref().clone())
-        .send()
-        .map_err(|error| GithubError::Upload(error.to_string()))?;
-
-    let status = response.status();
-    let body = response
-        .text()
-        .map_err(|error| GithubError::Upload(error.to_string()))?;
-    if !status.is_success() {
-        diagnostics.error(format!("GitHub attachment service returned HTTP {status}."));
-        return Err(GithubError::Upload(api_error(status, &body)));
+        .map_err(|_| {
+            GithubError::Upload("Could not initialize the secure upload connection.".into())
+        })?;
+    let request = async {
+        let response = client
+            .post(endpoint)
+            .bearer_auth(token)
+            .header("Accept", "application/json")
+            .header("Content-Type", &attachment.mime_type)
+            .header("Content-Length", total)
+            .header("User-Agent", concat!("gatto/", env!("CARGO_PKG_VERSION")))
+            .query(&[
+                ("name", attachment.name.as_str()),
+                ("content_type", attachment.mime_type.as_str()),
+                ("repository_id", &repository_id.to_string()),
+            ])
+            .body(reqwest::Body::wrap_stream(stream))
+            .send()
+            .await
+            .map_err(upload_network_error)?;
+        activity.store(started.elapsed().as_millis() as u64, Ordering::Release);
+        let status = response.status();
+        let retry_after = response
+            .headers()
+            .get("retry-after")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        // Bound responses too: an error proxy must not fill memory with HTML.
+        let mut response = response;
+        let mut body = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(upload_network_error)? {
+            if body.len() + chunk.len() > 64 * 1024 {
+                return Err(GithubError::Upload(
+                    "GitHub returned an oversized response. Check GitHub's status and retry."
+                        .into(),
+                ));
+            }
+            activity.store(started.elapsed().as_millis() as u64, Ordering::Release);
+            body.extend_from_slice(&chunk);
+        }
+        let body = String::from_utf8_lossy(&body);
+        if !status.is_success() {
+            return Err(GithubError::Upload(upload_http_error(
+                status,
+                &body,
+                retry_after.as_deref(),
+            )));
+        }
+        let uploaded: AttachmentResponse = serde_json::from_str(&body)
+            .map_err(|_| GithubError::Upload("GitHub returned an unreadable upload response. The attachment may have uploaded; retrying can create another copy.".into()))?;
+        let url = uploaded.url.or(uploaded.href)
+            .ok_or_else(|| GithubError::Upload("GitHub returned no attachment URL. The attachment may have uploaded; retrying can create another copy.".into()))?;
+        validate_attachment_url(&url)?;
+        Ok(url)
+    };
+    let stalled = async {
+        loop {
+            tokio::time::sleep(timeouts.idle.min(Duration::from_secs(1))).await;
+            if started.elapsed().as_millis() - activity.load(Ordering::Acquire) as u128
+                >= timeouts.idle.as_millis()
+            {
+                break GithubError::Upload("No upload activity for 90 seconds. Check your connection and retry; GitHub may already have received the file.".into());
+            }
+        }
+    };
+    tokio::select! {
+        // Preserve a received success even if cancellation arrives in the same poll.
+        biased;
+        result = request => result,
+        _ = control.cancelled() => Err(GithubError::Canceled),
+        error = stalled => Err(error),
     }
+}
 
-    let uploaded: AttachmentResponse = serde_json::from_str(&body)
-        .map_err(|error| GithubError::Upload(format!("Invalid GitHub response: {error}")))?;
-    let attachment_url = uploaded
-        .url
-        .or(uploaded.href)
-        .ok_or_else(|| GithubError::Upload("GitHub did not return an attachment URL".into()))?;
-    let parsed = Url::parse(&attachment_url)
-        .map_err(|_| GithubError::Upload("GitHub returned an invalid attachment URL".into()))?;
-
-    if parsed.scheme() != "https"
-        || parsed.host_str() != Some("github.com")
-        || !parsed.path().starts_with("/user-attachments/assets/")
-    {
-        return Err(GithubError::Upload(
-            "GitHub returned an unexpected attachment URL".into(),
-        ));
+fn validate_attachment_url(url: &str) -> Result<(), GithubError> {
+    let valid = Url::parse(url).is_ok_and(|parsed| {
+        parsed.scheme() == "https"
+            && parsed.host_str() == Some("github.com")
+            && parsed.port_or_known_default() == Some(443)
+            && parsed.username().is_empty()
+            && parsed.password().is_none()
+            && parsed
+                .path()
+                .strip_prefix("/user-attachments/assets/")
+                .is_some_and(|id| !id.is_empty())
+    });
+    if valid {
+        Ok(())
+    } else {
+        Err(GithubError::Upload(
+            "GitHub returned an unexpected attachment URL. The upload may have completed.".into(),
+        ))
     }
+}
 
-    diagnostics.info("GitHub attachment service accepted the image.");
-    Ok(attachment_url)
+fn upload_network_error(error: reqwest::Error) -> GithubError {
+    let message = if error.is_timeout() {
+        "The upload timed out. Check your connection and retry. If GitHub already received the file, retrying can create another copy."
+    } else if error.is_connect() {
+        "Could not connect securely to GitHub. Check your network, VPN, or proxy and retry."
+    } else if error.is_body() {
+        "Could not read or send the attachment. Add the file again and retry."
+    } else {
+        "The connection to GitHub was interrupted. Check your connection and retry; the upload may already have completed."
+    };
+    GithubError::Upload(message.into())
+}
+
+fn upload_http_error(status: StatusCode, body: &str, retry_after: Option<&str>) -> String {
+    let hint = match status.as_u16() {
+        401 => "GitHub authentication expired. Run gh auth login and reopen Gatto.",
+        403 | 404 => {
+            "GitHub denied the upload. Check repository write access, token permissions, and any organization SSO requirement."
+        }
+        413 => {
+            "GitHub rejected the file size. For videos over 10 MB, verify the repository's paid plan and your upload eligibility, or disable the 100 MB preference and compress below 10 MB."
+        }
+        415 | 422 => {
+            "GitHub rejected this attachment. Check its format or export the video as H.264 MP4."
+        }
+        429 => "GitHub is rate limiting uploads. Wait before retrying.",
+        500..=599 => "GitHub's upload service is temporarily unavailable. Try again later.",
+        _ => "GitHub rejected the upload. Check repository access and try again.",
+    };
+    let detail = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("message")
+                .or_else(|| value.get("error"))
+                .and_then(Value::as_str)
+                .map(|value| value.chars().take(300).collect::<String>())
+        })
+        .unwrap_or_default();
+    let retry = retry_after
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|seconds| format!(" Retry after {seconds} seconds."))
+        .unwrap_or_default();
+    format!(
+        "HTTP {status}: {hint}{retry}{}",
+        if detail.is_empty() {
+            String::new()
+        } else {
+            format!(" ({detail})")
+        }
+    )
 }
 
 fn read_token(diagnostics: &Diagnostics) -> Result<String, GithubError> {
@@ -299,27 +526,6 @@ fn log_gh_failure(operation: &str, output: &Output, diagnostics: &Diagnostics) {
     ));
 }
 
-fn api_error(status: StatusCode, body: &str) -> String {
-    let parsed = serde_json::from_str::<Value>(body).ok();
-    let message = parsed
-        .as_ref()
-        .and_then(|value| value.get("message"))
-        .and_then(Value::as_str)
-        .or_else(|| {
-            parsed
-                .as_ref()
-                .and_then(|value| value.get("error"))
-                .and_then(Value::as_str)
-        })
-        .unwrap_or_else(|| body.trim());
-
-    if message.is_empty() {
-        format!("GitHub returned HTTP {status}")
-    } else {
-        format!("GitHub returned HTTP {status}: {message}")
-    }
-}
-
 #[derive(Deserialize)]
 struct AttachmentResponse {
     #[serde(default)]
@@ -338,6 +544,216 @@ mod tests {
             status: std::process::ExitStatus::from_raw(code << 8),
             stdout: stdout.as_bytes().to_vec(),
             stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    struct Request {
+        headers: String,
+        body: Vec<u8>,
+    }
+
+    fn receive_request(socket: &mut std::net::TcpStream) -> Request {
+        socket
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut bytes = Vec::new();
+        while !bytes.ends_with(b"\r\n\r\n") {
+            let mut byte = [0];
+            socket.read_exact(&mut byte).unwrap();
+            bytes.push(byte[0]);
+        }
+        let headers = String::from_utf8(bytes).unwrap();
+        let len: usize = headers
+            .lines()
+            .find_map(|line| {
+                let (key, value) = line.split_once(':')?;
+                key.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse().unwrap())
+            })
+            .unwrap();
+        let mut body = vec![0; len];
+        socket.read_exact(&mut body).unwrap();
+        Request { headers, body }
+    }
+
+    fn server(status: u16, body: &str) -> (String, std::thread::JoinHandle<Request>) {
+        use std::io::Write as _;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://{}/user-attachments/assets",
+            listener.local_addr().unwrap()
+        );
+        let body = body.to_owned();
+        let worker = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let request = receive_request(&mut socket);
+            write!(socket, "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nRetry-After: 7\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            request
+        });
+        (url, worker)
+    }
+
+    fn video_attachment() -> StagedAttachment {
+        StagedAttachment::from_path(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4"),
+            Default::default(),
+        )
+        .unwrap()
+    }
+
+    fn run_upload(
+        endpoint: &str,
+        item: &StagedAttachment,
+        control: &UploadControl,
+        progress: Arc<dyn Fn(u64, u64) + Send + Sync>,
+        timeout: Duration,
+    ) -> Result<String, GithubError> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(upload_to(
+                endpoint,
+                "test-token",
+                42,
+                item,
+                control,
+                progress,
+                UploadTimeouts {
+                    total: timeout,
+                    ..Default::default()
+                },
+            ))
+    }
+
+    #[test]
+    fn streams_original_video_with_length_metadata_and_progress_then_reopens_for_retry() {
+        let item = video_attachment();
+        let progress = Arc::new(std::sync::Mutex::new(Vec::new()));
+        for _ in 0..2 {
+            let (endpoint, worker) = server(
+                201,
+                r#"{"url":"https://github.com/user-attachments/assets/test-video"}"#,
+            );
+            let capture = progress.clone();
+            let url = run_upload(
+                &endpoint,
+                &item,
+                &UploadControl::default(),
+                Arc::new(move |sent, total| capture.lock().unwrap().push((sent, total))),
+                Duration::from_secs(5),
+            )
+            .unwrap();
+            assert_eq!(url, "https://github.com/user-attachments/assets/test-video");
+            let request = worker.join().unwrap();
+            assert!(request.headers.starts_with("POST /user-attachments/assets?name=sample.mp4&content_type=video%2Fmp4&repository_id=42 "));
+            assert!(
+                request
+                    .headers
+                    .to_ascii_lowercase()
+                    .contains("content-type: video/mp4")
+            );
+            assert_eq!(request.body, include_bytes!("../tests/fixtures/sample.mp4"));
+        }
+        let values = progress.lock().unwrap();
+        assert_eq!(values.first(), Some(&(0, item.len())));
+        assert_eq!(values.last(), Some(&(item.len(), item.len())));
+        assert!(values.iter().all(|(sent, total)| sent <= total));
+    }
+
+    #[test]
+    fn maps_server_failures_and_rejects_unsafe_or_missing_urls() {
+        let item = video_attachment();
+        for (status, body, message) in [
+            (401, "{}", "authentication"),
+            (404, "{}", "write access"),
+            (413, "{}", "10 MB"),
+            (415, "{}", "H.264"),
+            (429, "{}", "Retry after 7 seconds"),
+            (503, "{}", "temporarily unavailable"),
+            (201, "not json", "unreadable"),
+            (201, "{}", "no attachment URL"),
+            (
+                201,
+                r#"{"url":"https://evil.example/user-attachments/assets/a"}"#,
+                "unexpected",
+            ),
+            (
+                201,
+                r#"{"url":"http://github.com/user-attachments/assets/a"}"#,
+                "unexpected",
+            ),
+        ] {
+            let (endpoint, worker) = server(status, body);
+            let error = run_upload(
+                &endpoint,
+                &item,
+                &UploadControl::default(),
+                Arc::new(|_, _| {}),
+                Duration::from_secs(5),
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains(message), "{error}");
+            worker.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn cancellation_interrupts_waiting_for_github_and_timeout_is_actionable() {
+        for mode in ["cancel", "timeout", "idle"] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let endpoint = format!("http://{}/", listener.local_addr().unwrap());
+            let (received, ready) = std::sync::mpsc::channel();
+            let (release, hold) = std::sync::mpsc::channel::<()>();
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                receive_request(&mut socket);
+                received.send(()).unwrap();
+                let _ = hold.recv_timeout(Duration::from_secs(5));
+            });
+            let control = UploadControl::default();
+            let job_control = control.clone();
+            let job = std::thread::spawn(move || {
+                let timeouts = UploadTimeouts {
+                    total: if mode == "timeout" {
+                        Duration::from_millis(200)
+                    } else {
+                        Duration::from_secs(30)
+                    },
+                    idle: if mode == "idle" {
+                        Duration::from_millis(200)
+                    } else {
+                        Duration::from_secs(90)
+                    },
+                };
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(upload_to(
+                        &endpoint,
+                        "test-token",
+                        42,
+                        &video_attachment(),
+                        &job_control,
+                        Arc::new(|_, _| {}),
+                        timeouts,
+                    ))
+            });
+            ready.recv_timeout(Duration::from_secs(5)).unwrap();
+            let started = Instant::now();
+            if mode == "cancel" {
+                control.cancel();
+            }
+            let error = job.join().unwrap().unwrap_err();
+            assert!(started.elapsed() < Duration::from_secs(2));
+            assert!(error.to_string().contains(match mode {
+                "cancel" => "canceled",
+                "idle" => "No upload activity",
+                _ => "timed out",
+            }));
+            release.send(()).unwrap();
+            server.join().unwrap();
         }
     }
 

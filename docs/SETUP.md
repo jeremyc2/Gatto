@@ -100,10 +100,22 @@ selection and pins. Choose and pin repositories for the new owner.
 Pin repositories you use often. Pins put them first in the repository picker
 and enable the menu bar's clipboard actions.
 
-<img src="images/walkthrough/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, and global Quick Copy shortcut settings" width="620">
+<img src="images/walkthrough/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, Quick Copy shortcut, and an unchecked Copy images as Markdown option" width="620">
 
 ## 4. Set your preferences
 
+- **Copy images as Markdown** is unchecked by default. Enable it to copy
+  `![description](URL)` instead of a sized HTML image tag. It applies to
+  individual copy, bulk copy, and Quick Copy, including images already uploaded
+  in the current window. Markdown image snippets have no width or height;
+  video links keep their existing format.
+- **Allow videos up to 100 MB** is unchecked by default. Enable it only when the
+  destination repository belongs to a paid GitHub account or organization and
+  you qualify to upload larger videos: you are an organization member, outside
+  collaborator, or personally on a paid plan. Gatto does not check your plan or
+  grant upload access. The preference applies to file selection, drag/drop,
+  Finder paste, Quick Copy, and the compression target. Images and GIFs remain
+  limited to 10 MB. See [GitHub's attachment limits](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files).
 - **Start at Login** starts Gatto quietly in the menu bar, without opening a
   window or showing a Dock icon. Quick Copy and update checks work in the background.
   Choose **Open App** from the menu bar to show the window. Existing login items

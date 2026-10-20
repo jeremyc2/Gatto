@@ -2,6 +2,7 @@
 
 mod app;
 mod application_menu;
+mod compression;
 mod diagnostics;
 mod github;
 mod global_shortcut;
@@ -14,6 +15,7 @@ mod rooftops_score;
 mod settings;
 mod theme;
 mod updater;
+mod video;
 mod window_limits;
 
 #[cfg(target_os = "macos")]

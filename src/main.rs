@@ -1,5 +1,6 @@
 mod app;
 mod application_menu;
+mod compression;
 mod custom_url;
 mod diagnostics;
 mod github;
@@ -16,6 +17,7 @@ mod rooftops_score;
 mod settings;
 mod theme;
 mod updater;
+mod video;
 mod window_limits;
 
 use std::{cell::RefCell, rc::Rc};
@@ -294,11 +296,12 @@ impl MainWindow {
             window.on_window_should_close(cx, move |window, cx| {
                 let _ = close_view.update(cx, |this, cx| {
                     this.prepare_to_close(window, cx);
-                    this.clear_staged_images(
-                        "Closed the main window; discarded the staged image.",
+                    this.clear_staged_attachments(
+                        "Closed the main window; discarded staged attachments.",
                         cx,
                     );
                 });
+                gpui_kit::component::WindowExt::close_dialog(window, cx);
                 let should_close = window_limits::close(window, cx);
                 if should_close {
                     controller.0.borrow_mut().current = None;

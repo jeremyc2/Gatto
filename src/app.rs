@@ -1,4 +1,10 @@
-use std::{cell::Cell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc};
+use std::{
+    cell::Cell,
+    collections::{HashMap, VecDeque},
+    path::PathBuf,
+    rc::Rc,
+    sync::Arc,
+};
 
 use gpui_kit::assets::IconName as AssetIconName;
 use gpui_kit::component::{
@@ -17,6 +23,7 @@ use gpui_kit::component::{
     kbd::Kbd,
     link::Link,
     notification::Notification,
+    progress::Progress,
     searchable_list::{SearchableGroup, SearchableVec},
     spinner::Spinner,
     switch::Switch,
@@ -32,13 +39,17 @@ use gpui_kit::{
 };
 
 use crate::{
+    compression,
     diagnostics::Diagnostics,
     github,
     global_shortcut::{GlobalShortcutController, canonicalize_shortcut, shortcut_from_keystroke},
     image_preview::ImagePreview,
     log_viewer::LogViewer,
     menu_bar::MenuBarController,
-    model::{AttachmentUploadState, Repository, StagedImage, parse_owner},
+    model::{
+        AttachmentUploadState, Media, OversizedVideo, Repository, SUPPORTED_MEDIA_MESSAGE,
+        StagedAttachment, VideoUploadLimit, parse_owner,
+    },
     settings::AppSettings,
     updater::{UpdateState, Updater},
     window_limits,
@@ -55,8 +66,7 @@ actions!(
 );
 
 const KEY_CONTEXT: &str = "Gatto";
-const UNSUPPORTED_MESSAGE: &str =
-    "Unsupported format. Please paste or drop a PNG, JPEG, GIF, or WebP image.";
+const UNSUPPORTED_MESSAGE: &str = SUPPORTED_MEDIA_MESSAGE;
 const WALKTHROUGH_URL: &str = "https://github.com/jeremyc2/Gatto/blob/main/docs/WALKTHROUGH.md";
 const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
 
@@ -78,23 +88,54 @@ enum LoadState {
 }
 
 #[derive(Clone)]
-struct UploadedImage {
+struct UploadedAttachment {
     markdown: String,
 }
 
 #[derive(Clone)]
 struct UploadResult {
-    images: Vec<UploadedImage>,
+    attachments: Vec<UploadedAttachment>,
 }
 
 impl UploadResult {
     fn markdown(&self) -> String {
-        self.images
+        self.attachments
             .iter()
             .map(|image| image.markdown.as_str())
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n\n")
     }
+}
+
+enum UploadEvent {
+    Progress {
+        id: u64,
+        sent: u64,
+        total: u64,
+    },
+    Finished {
+        id: u64,
+        result: Result<String, github::GithubError>,
+    },
+    Complete {
+        canceled: bool,
+    },
+}
+
+struct PendingImport {
+    remaining: VecDeque<anyhow::Result<StagedAttachment>>,
+    processed: Vec<anyhow::Result<StagedAttachment>>,
+}
+
+struct CompressionJob {
+    control: compression::CompressionControl,
+    name: String,
+    progress: compression::Progress,
+}
+
+enum CompressionEvent {
+    Progress(compression::Progress),
+    Finished(anyhow::Result<StagedAttachment>),
 }
 
 #[cfg(feature = "walkthrough-screenshots")]
@@ -106,17 +147,25 @@ pub(crate) enum WalkthroughScenario {
     ImageStaged,
     UploadComplete,
     UpdateAvailable,
+    VideoStaged,
+    MixedUploadProgress,
+    VideoTooLarge,
+    VideoCompressing,
 }
 
 #[cfg(feature = "walkthrough-screenshots")]
 #[allow(dead_code)]
 impl WalkthroughScenario {
-    pub(crate) const ALL: [Self; 5] = [
+    pub(crate) const ALL: [Self; 9] = [
         Self::FirstRun,
         Self::Preferences,
         Self::ImageStaged,
         Self::UploadComplete,
         Self::UpdateAvailable,
+        Self::VideoStaged,
+        Self::MixedUploadProgress,
+        Self::VideoTooLarge,
+        Self::VideoCompressing,
     ];
 
     pub(crate) const fn file_name(self) -> &'static str {
@@ -126,6 +175,10 @@ impl WalkthroughScenario {
             Self::ImageStaged => "03-image-staged.png",
             Self::UploadComplete => "04-upload-complete.png",
             Self::UpdateAvailable => "05-update.png",
+            Self::VideoStaged => "06-video-staged.png",
+            Self::MixedUploadProgress => "07-mixed-upload-progress.png",
+            Self::VideoTooLarge => "08-video-too-large.png",
+            Self::VideoCompressing => "09-video-compressing.png",
         }
     }
 }
@@ -140,18 +193,22 @@ pub struct UploaderApp {
     loading_token: bool,
     loading_repository: bool,
     load_state: LoadState,
-    staged_images: Vec<StagedImage>,
+    staged_attachments: Vec<StagedAttachment>,
     bulk_upload: bool,
     paste_generation: u64,
     state_generation: u64,
     upload_result: Option<UploadResult>,
     uploading: bool,
+    upload_control: Option<github::UploadControl>,
+    upload_generation: u64,
+    pending_import: Option<PendingImport>,
+    compression: Option<CompressionJob>,
     settings: AppSettings,
     settings_open: bool,
     recording_global_shortcut: bool,
     pending_paste_repository: Option<String>,
     pending_menu_paste: bool,
-    pending_replacement_images: Option<Vec<StagedImage>>,
+    pending_replacement_attachments: Option<Vec<StagedAttachment>>,
     log_window: Option<(AnyWindowHandle, Entity<LogViewer>)>,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
     menu_bar: MenuBarController,
@@ -288,18 +345,22 @@ impl UploaderApp {
             } else {
                 LoadState::NeedsSetup
             },
-            staged_images: Vec::new(),
+            staged_attachments: Vec::new(),
             bulk_upload: false,
             paste_generation: 0,
             state_generation: 0,
             upload_result: None,
             uploading: false,
+            upload_control: None,
+            upload_generation: 0,
+            pending_import: None,
+            compression: None,
             settings,
             settings_open: false,
             recording_global_shortcut: false,
             pending_paste_repository: None,
             pending_menu_paste: false,
-            pending_replacement_images: None,
+            pending_replacement_attachments: None,
             log_window: None,
             preview_window: None,
             menu_bar: controllers.menu_bar,
@@ -379,25 +440,86 @@ impl UploaderApp {
 
         if matches!(
             scenario,
-            WalkthroughScenario::ImageStaged | WalkthroughScenario::UploadComplete
+            WalkthroughScenario::ImageStaged
+                | WalkthroughScenario::UploadComplete
+                | WalkthroughScenario::MixedUploadProgress
         ) {
             let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("packaging/rocket-cat-transparent.png");
-            let mut image = StagedImage::from_path(path)
+            let mut image = StagedAttachment::from_path(path, Default::default())
                 .expect("the walkthrough fixture image should always be valid");
             image.name = "rocket-cat.png".into();
             image.description = "Gatto rocket cat".into();
 
-            if matches!(scenario, WalkthroughScenario::UploadComplete) {
+            if matches!(
+                scenario,
+                WalkthroughScenario::UploadComplete | WalkthroughScenario::MixedUploadProgress
+            ) {
                 let url = "https://github.com/user-attachments/assets/01234567-89ab-cdef-0123-456789abcdef";
                 image.upload_state = AttachmentUploadState::Uploaded { url: url.into() };
                 this.upload_result = Some(UploadResult {
-                    images: vec![UploadedImage {
-                        markdown: crate::model::markdown_image(&image.description, url),
+                    attachments: vec![UploadedAttachment {
+                        markdown: image.snippet(url, this.settings.image_copy_format()),
                     }],
                 });
             }
-            this.staged_images.push(image);
+            this.staged_attachments.push(image);
+        }
+
+        if matches!(
+            scenario,
+            WalkthroughScenario::VideoStaged | WalkthroughScenario::MixedUploadProgress
+        ) {
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4");
+            let mut video = StagedAttachment::from_path(path, Default::default())
+                .expect("valid walkthrough video fixture");
+            video.name = "interaction-recording.mp4".into();
+            video.description = "Interaction recording".into();
+            if matches!(scenario, WalkthroughScenario::MixedUploadProgress) {
+                this.bulk_upload = true;
+                this.uploading = true;
+                this.upload_control = Some(github::UploadControl::default());
+                video.upload_state = AttachmentUploadState::Uploading {
+                    sent: video.len() * 65 / 100,
+                    total: video.len(),
+                };
+            }
+            this.staged_attachments.push(video);
+        }
+
+        if matches!(scenario, WalkthroughScenario::VideoCompressing) {
+            this.pending_import = Some(PendingImport {
+                remaining: VecDeque::new(),
+                processed: Vec::new(),
+            });
+            this.compression = Some(CompressionJob {
+                control: compression::CompressionControl::default(),
+                name: "interaction-recording.mov".into(),
+                progress: compression::Progress {
+                    attempt: 1,
+                    percent: 42,
+                },
+            });
+        }
+        if matches!(scenario, WalkthroughScenario::VideoTooLarge) {
+            this.pending_import = Some(PendingImport {
+                remaining: VecDeque::new(),
+                processed: Vec::new(),
+            });
+            let view = cx.entity().downgrade();
+            window.defer(cx, move |window, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    this.prompt_compression(
+                        OversizedVideo {
+                            path: PathBuf::from("interaction-recording.mov"),
+                            bytes: 24_000_000,
+                            limit_mb: 10,
+                        },
+                        window,
+                        cx,
+                    )
+                });
+            });
         }
 
         if matches!(scenario, WalkthroughScenario::UpdateAvailable) {
@@ -534,16 +656,25 @@ impl UploaderApp {
     /// Clears a pasted image when the main window is closed, or when the user
     /// explicitly discards it. Incrementing the generation keeps a pending
     /// clipboard conversion from restoring an image after it was cleared.
-    pub fn clear_staged_images(&mut self, reason: &str, cx: &mut Context<Self>) {
+    pub fn clear_staged_attachments(&mut self, reason: &str, cx: &mut Context<Self>) {
         self.paste_generation = self.paste_generation.wrapping_add(1);
+        self.upload_generation = self.upload_generation.wrapping_add(1);
+        if let Some(control) = self.upload_control.take() {
+            control.cancel();
+        }
+        if let Some(job) = self.compression.take() {
+            job.control.cancel();
+        }
+        self.pending_import = None;
+        self.uploading = false;
         self.pending_menu_paste = false;
         self.pending_paste_repository = None;
-        if !self.staged_images.is_empty() {
-            self.staged_images.clear();
+        if !self.staged_attachments.is_empty() {
+            self.staged_attachments.clear();
             self.upload_result = None;
             self.diagnostics.info(reason);
-            cx.notify();
         }
+        cx.notify();
     }
 
     pub fn report_menu_bar_error(
@@ -708,19 +839,24 @@ impl UploaderApp {
     }
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diagnostics.info("Opened the image file picker.");
+        self.diagnostics.info("Opened the attachment file picker.");
+        if self.uploading || self.import_busy() {
+            return;
+        }
         let multiple = self.bulk_upload;
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
             multiple,
             prompt: Some(if multiple {
-                "Choose images".into()
+                "Choose images or videos".into()
             } else {
-                "Choose an image".into()
+                "Choose an image or video".into()
             }),
         });
         let state_generation = self.state_generation;
+        let staging_generation = self.upload_generation;
+        let video_limit = self.settings.video_upload_limit();
 
         cx.spawn_in(window, async move |this, window| {
             let Some(paths) = prompt.await.ok().and_then(Result::ok).flatten() else {
@@ -730,15 +866,17 @@ impl UploaderApp {
                 .background_spawn(async move {
                     paths
                         .into_iter()
-                        .map(StagedImage::from_path)
+                        .map(|path| StagedAttachment::from_path(path, video_limit))
                         .collect::<Vec<_>>()
                 })
                 .await;
             let _ = this.update_in(window, |this, window, cx| {
-                if this.state_generation != state_generation {
+                if this.state_generation != state_generation
+                    || this.upload_generation != staging_generation
+                {
                     return;
                 }
-                this.accept_image_results(results, window, cx);
+                this.accept_attachment_results(results, window, cx);
             });
         })
         .detach();
@@ -748,9 +886,9 @@ impl UploaderApp {
         if self.load_state == LoadState::NeedsSetup {
             return;
         }
-        if self.uploading {
+        if self.uploading || self.import_busy() {
             self.warn(
-                "Wait for the current upload to finish before adding images.",
+                "Finish the current upload or compression before adding attachments.",
                 window,
                 cx,
             );
@@ -768,11 +906,11 @@ impl UploaderApp {
             _ => None,
         }) {
             let paste_generation = self.paste_generation;
-            let task = cx.background_spawn(async move { StagedImage::from_clipboard(&image) });
+            let task = cx.background_spawn(async move { StagedAttachment::from_clipboard(&image) });
             cx.spawn_in(window, async move |this, window| {
                 let result = task.await;
                 let _ = this.update_in(window, |this, window, cx| {
-                    this.accept_pasted_image_result(paste_generation, result, window, cx);
+                    this.accept_pasted_attachment_result(paste_generation, result, window, cx);
                 });
             })
             .detach();
@@ -791,7 +929,9 @@ impl UploaderApp {
             Self::load_dropped_paths(
                 cx.entity().downgrade(),
                 self.state_generation,
+                self.upload_generation,
                 paths,
+                self.settings.video_upload_limit(),
                 window,
                 cx,
             );
@@ -806,7 +946,9 @@ impl UploaderApp {
     fn load_dropped_paths(
         view: gpui_kit::WeakEntity<Self>,
         state_generation: u64,
+        staging_generation: u64,
         paths: Vec<PathBuf>,
+        video_limit: VideoUploadLimit,
         window: &mut Window,
         cx: &mut App,
     ) {
@@ -816,37 +958,250 @@ impl UploaderApp {
         let task = cx.background_spawn(async move {
             paths
                 .into_iter()
-                .map(StagedImage::from_path)
+                .map(|path| StagedAttachment::from_path(path, video_limit))
                 .collect::<Vec<_>>()
         });
         window
             .spawn(cx, async move |window| {
                 let results = task.await;
                 let _ = view.update_in(window, |this, window, cx| {
-                    if this.state_generation != state_generation {
+                    if this.state_generation != state_generation
+                        || this.upload_generation != staging_generation
+                    {
                         return;
                     }
-                    this.accept_image_results(results, window, cx);
+                    this.accept_attachment_results(results, window, cx);
                 });
             })
             .detach();
     }
 
-    fn accept_image_result(
+    fn accept_attachment_result(
         &mut self,
-        result: anyhow::Result<StagedImage>,
+        result: anyhow::Result<StagedAttachment>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.accept_image_results(vec![result], window, cx);
+        self.accept_attachment_results(vec![result], window, cx);
     }
 
-    fn accept_image_results(
+    fn import_busy(&self) -> bool {
+        self.pending_import.is_some() || self.compression.is_some()
+    }
+
+    fn accept_attachment_results(
         &mut self,
-        results: Vec<anyhow::Result<StagedImage>>,
+        results: Vec<anyhow::Result<StagedAttachment>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.uploading || self.import_busy() {
+            self.warn(
+                "Finish the current upload or compression before adding more files.",
+                window,
+                cx,
+            );
+            return;
+        }
+        self.pending_import = Some(PendingImport {
+            remaining: results.into(),
+            processed: Vec::new(),
+        });
+        self.advance_import(window, cx);
+    }
+
+    fn advance_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(mut batch) = self.pending_import.take() else {
+            return;
+        };
+        while let Some(result) = batch.remaining.pop_front() {
+            match result {
+                Ok(attachment) => batch.processed.push(Ok(attachment)),
+                Err(error) => match error.downcast::<OversizedVideo>() {
+                    Ok(video) => {
+                        self.pending_import = Some(batch);
+                        self.prompt_compression(video, window, cx);
+                        return;
+                    }
+                    Err(error) => batch.processed.push(Err(error)),
+                },
+            }
+        }
+        self.accept_ready_attachment_results(batch.processed, window, cx);
+    }
+
+    fn prompt_compression(
+        &mut self,
+        video: OversizedVideo,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let view = cx.entity().downgrade();
+        let generation = self.upload_generation;
+        let resolved = Rc::new(Cell::new(false));
+        let limit_mb = video.limit_mb;
+        let name = video
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Video".into());
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let accept_view = view.clone();
+            let close_view = view.clone();
+            let path = video.path.clone();
+            let accepted = resolved.clone();
+            let closed = resolved.clone();
+            alert.width(px(480.)).title(format!("Video exceeds {limit_mb} MB"))
+                .description(format!("{name} is {:.1} MB. Compress it to an H.264 MP4 below {limit_mb} MB? The original stays unchanged. Resolution is preserved; visual quality may decrease and audio becomes mono AAC. For best results, keep recordings under 15 seconds.", video.bytes as f64 / 1_000_000.))
+                .show_cancel(true).cancel_text("Cancel").ok_text("Compress")
+                .on_ok(move |_, window, cx| {
+                    accepted.set(true);
+                    let _ = accept_view.update(cx, |this, cx| {
+                        if this.upload_generation == generation && this.pending_import.is_some() {
+                            this.start_compression(path.clone(), window, cx);
+                        }
+                    });
+                    true
+                })
+                .on_close(move |_, window, cx| {
+                    if !closed.replace(true) {
+                        let close_view = close_view.clone();
+                        window.defer(cx, move |window, cx| {
+                            let _ = close_view.update(cx, |this, cx| {
+                                if this.upload_generation == generation { this.advance_import(window, cx); }
+                            });
+                        });
+                    }
+                })
+        });
+        cx.notify();
+    }
+
+    fn start_compression(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let control = compression::CompressionControl::default();
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Video".into());
+        self.compression = Some(CompressionJob {
+            control: control.clone(),
+            name,
+            progress: compression::Progress {
+                attempt: 1,
+                percent: 0,
+            },
+        });
+        let generation = self.upload_generation;
+        let (sender, receiver) = async_channel::unbounded();
+        let video_limit = self.settings.video_upload_limit();
+        cx.background_spawn(async move {
+            let progress = sender.clone();
+            let result = compression::compress(&path, video_limit, &control, move |value| {
+                let _ = progress.try_send(CompressionEvent::Progress(value));
+            });
+            let _ = sender.try_send(CompressionEvent::Finished(result));
+        })
+        .detach();
+        cx.spawn_in(window, async move |this, window| {
+            while let Ok(event) = receiver.recv().await {
+                let finished = matches!(event, CompressionEvent::Finished(_));
+                let result = this.update_in(window, |this, window, cx| {
+                    if this.upload_generation != generation || this.compression.is_none() {
+                        return false;
+                    }
+                    match event {
+                        CompressionEvent::Progress(value) => {
+                            if let Some(job) = &mut this.compression {
+                                job.progress = value;
+                            }
+                        }
+                        CompressionEvent::Finished(result) => {
+                            this.compression = None;
+                            if let Some(batch) = &mut this.pending_import {
+                                match result {
+                                    Err(error)
+                                        if error
+                                            .downcast_ref::<compression::Canceled>()
+                                            .is_some() =>
+                                    {
+                                        this.diagnostics.info("Video compression canceled.")
+                                    }
+                                    result => batch.processed.push(result),
+                                }
+                            }
+                            this.advance_import(window, cx);
+                        }
+                    }
+                    cx.notify();
+                    true
+                });
+                if finished || !matches!(result, Ok(true)) {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn render_compression(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.entity().downgrade();
+        v_flex().when_some(self.compression.as_ref(), |content, job| {
+            content.child(
+                v_flex()
+                    .gap_2()
+                    .p_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .child(div().text_sm().child(format!(
+                        "Compressing {} · pass {} of 2 · {}%",
+                        job.name, job.progress.attempt, job.progress.percent
+                    )))
+                    .child(
+                        Progress::new("compression-progress")
+                            .value(job.progress.percent as f32)
+                            .color(cx.theme().primary)
+                            .small()
+                            .accessibility_label("Video compression progress"),
+                    )
+                    .child(
+                        Button::new("cancel-compression")
+                            .outline()
+                            .small()
+                            .label(if job.control.is_canceled() {
+                                "Canceling…"
+                            } else {
+                                "Cancel compression"
+                            })
+                            .disabled(job.control.is_canceled())
+                            .on_click(move |_, _, cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    if let Some(job) = &this.compression {
+                                        job.control.cancel();
+                                    }
+                                    cx.notify();
+                                });
+                            }),
+                    ),
+            )
+        })
+    }
+
+    fn accept_ready_attachment_results(
+        &mut self,
+        results: Vec<anyhow::Result<StagedAttachment>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.uploading {
+            self.warn(
+                "Wait for the upload to finish before adding attachments.",
+                window,
+                cx,
+            );
+            return;
+        }
         let mut images = Vec::new();
         let mut errors = Vec::new();
         for result in results {
@@ -854,7 +1209,7 @@ impl UploaderApp {
                 Ok(image) => images.push(image),
                 Err(error) => {
                     self.diagnostics
-                        .error(format!("Image staging failed: {error}"));
+                        .error(format!("Attachment staging failed: {error}"));
                     errors.push(error.to_string());
                 }
             }
@@ -871,70 +1226,71 @@ impl UploaderApp {
         if !errors.is_empty() {
             self.warn(
                 format!(
-                    "Added {} image{}; {} file{} could not be read.",
+                    "Added {} attachment{}; {} file{} could not be read. {}",
                     images.len(),
                     if images.len() == 1 { "" } else { "s" },
                     errors.len(),
                     if errors.len() == 1 { "" } else { "s" },
+                    errors[0],
                 ),
                 window,
                 cx,
             );
         }
-        self.stage_images(images, window, cx);
+        self.stage_attachments(images, window, cx);
     }
 
-    fn stage_images(
+    fn stage_attachments(
         &mut self,
-        images: Vec<StagedImage>,
+        images: Vec<StagedAttachment>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.bulk_upload || self.staged_images.is_empty() {
-            self.append_staged_images(images, window, cx);
+        if self.bulk_upload || self.staged_attachments.is_empty() {
+            self.append_staged_attachments(images, window, cx);
         } else {
-            self.open_replace_image_dialog(images, window, cx);
+            self.open_replace_attachment_dialog(images, window, cx);
         }
     }
 
-    fn append_staged_images(
+    fn append_staged_attachments(
         &mut self,
-        mut images: Vec<StagedImage>,
+        mut images: Vec<StagedAttachment>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let added = images.len();
-        self.staged_images.append(&mut images);
+        self.staged_attachments.append(&mut images);
         self.sync_upload_result();
         self.diagnostics.info(format!(
-            "Staged {added} image{} for upload.",
+            "Staged {added} attachment{} for upload.",
             if added == 1 { "" } else { "s" }
         ));
         self.try_complete_menu_paste(cx);
         cx.notify();
     }
 
-    fn replace_staged_image(
+    fn replace_staged_attachment(
         &mut self,
-        image: StagedImage,
+        image: StagedAttachment,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.staged_images.clear();
-        self.append_staged_images(vec![image], window, cx);
+        self.staged_attachments.clear();
+        self.append_staged_attachments(vec![image], window, cx);
     }
 
-    fn change_image_description(
+    fn change_attachment_description(
         &mut self,
         image_id: u64,
         requested_name: &str,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let image = self
-            .staged_images
+            .staged_attachments
             .iter_mut()
             .find(|image| image.id == image_id)
-            .ok_or_else(|| anyhow::anyhow!("That image is no longer staged."))?;
+            .ok_or_else(|| anyhow::anyhow!("That attachment is no longer staged."))?;
         image.description = requested_name.to_owned();
         let description = image.description.clone();
         self.sync_upload_result();
@@ -950,13 +1306,17 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(image) = self.staged_images.iter().find(|image| image.id == image_id) else {
+        let Some(image) = self
+            .staged_attachments
+            .iter()
+            .find(|image| image.id == image_id)
+        else {
             return;
         };
         let current_description = image.description.clone();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Descriptive image name")
+                .placeholder("Descriptive attachment name")
                 .default_value(current_description)
         });
         let rename_view = cx.entity().downgrade();
@@ -976,7 +1336,7 @@ impl UploaderApp {
                 .width(px(440.))
                 .title("Set description")
                 .description(
-                    "This description is used as the Markdown alt text. It does not rename the file sent to GitHub.",
+                    "Images use this description as alt text. Video descriptions stay in Gatto; GitHub receives a video URL. The uploaded filename stays the same.",
                 )
                 .child(
                     v_flex()
@@ -990,7 +1350,7 @@ impl UploaderApp {
                 .on_ok(move |_, window, cx| {
                     let requested_name = rename_input.read(cx).value().to_string();
                     match rename_view.update(cx, |this, cx| {
-                        this.change_image_description(image_id, &requested_name, cx)
+                        this.change_attachment_description(image_id, &requested_name, cx)
                     }) {
                         Ok(Ok(())) => true,
                         Ok(Err(error)) => {
@@ -1006,9 +1366,9 @@ impl UploaderApp {
         });
     }
 
-    fn open_replace_image_dialog(
+    fn open_replace_attachment_dialog(
         &mut self,
-        images: Vec<StagedImage>,
+        images: Vec<StagedAttachment>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1018,7 +1378,7 @@ impl UploaderApp {
         let Some(replacement) = images.first().cloned() else {
             return;
         };
-        self.pending_replacement_images = Some(images.clone());
+        self.pending_replacement_attachments = Some(images.clone());
         let view = cx.entity().downgrade();
         let bulk_shortcut_focus = cx.focus_handle();
         let focus_bulk_shortcut = Rc::new(Cell::new(true));
@@ -1041,22 +1401,19 @@ impl UploaderApp {
 
             alert
                 .width(px(460.))
-                .icon(
-                    Icon::new(IconName::CircleAlert)
-                        .text_color(cx.theme().warning),
-                )
-                .title("Replace the current image?")
+                .icon(Icon::new(IconName::CircleAlert).text_color(cx.theme().warning))
+                .title("Replace the current attachment?")
                 .description(
-                    "This will override the current image. To do more than one image at a time, switch to bulk upload.",
+                    "This will replace the current attachment. Switch to bulk upload to keep both.",
                 )
                 .child(
                     v_flex()
                         .track_focus(&bulk_shortcut_focus)
                         .on_action(move |_: &SwitchToBulkUpload, window, cx| {
                             let _ = shortcut_bulk_view.update(cx, |this, cx| {
-                                this.pending_replacement_images = None;
+                                this.pending_replacement_attachments = None;
                                 this.bulk_upload = true;
-                                this.append_staged_images(
+                                this.append_staged_attachments(
                                     shortcut_bulk_images.clone(),
                                     window,
                                     cx,
@@ -1080,7 +1437,7 @@ impl UploaderApp {
                             div()
                                 .text_xs()
                                 .text_color(cx.theme().muted_foreground)
-                                .child("Turn on bulk upload and add this image to the batch."),
+                                .child("Turn on bulk upload and add this attachment to the batch."),
                         )
                         .child(
                             Button::new("switch-to-bulk-upload")
@@ -1089,14 +1446,12 @@ impl UploaderApp {
                                 .self_start()
                                 .flex_none()
                                 .label("Switch to bulk upload")
-                                .child(Kbd::new(
-                                    Keystroke::parse("b").expect("valid shortcut"),
-                                ))
+                                .child(Kbd::new(Keystroke::parse("b").expect("valid shortcut")))
                                 .on_click(move |_, window, cx| {
                                     let _ = bulk_view.update(cx, |this, cx| {
-                                        this.pending_replacement_images = None;
+                                        this.pending_replacement_attachments = None;
                                         this.bulk_upload = true;
-                                        this.append_staged_images(
+                                        this.append_staged_attachments(
                                             bulk_images.clone(),
                                             window,
                                             cx,
@@ -1108,22 +1463,22 @@ impl UploaderApp {
                 )
                 .footer(
                     DialogFooter::new()
-                        .child(DialogClose::new().trigger(|button| {
-                            button.label("Cancel")
-                        }))
-                        .child(DialogAction::new().child(
-                            Button::new("replace-image")
-                                .primary()
-                                .label("Replace image")
-                                .child(Kbd::new(
-                                    Keystroke::parse("enter").expect("valid shortcut"),
-                                )),
-                        )),
+                        .child(DialogClose::new().trigger(|button| button.label("Cancel")))
+                        .child(
+                            DialogAction::new().child(
+                                Button::new("replace-image")
+                                    .primary()
+                                    .label("Replace attachment")
+                                    .child(Kbd::new(
+                                        Keystroke::parse("enter").expect("valid shortcut"),
+                                    )),
+                            ),
+                        ),
                 )
                 .on_ok(move |_, window, cx| {
                     let _ = replace_view.update(cx, |this, cx| {
-                        this.pending_replacement_images = None;
-                        this.replace_staged_image(replacement.clone(), window, cx);
+                        this.pending_replacement_attachments = None;
+                        this.replace_staged_attachment(replacement.clone(), window, cx);
                     });
                     true
                 })
@@ -1131,7 +1486,7 @@ impl UploaderApp {
                     let _ = close_view.update(cx, |this, _| {
                         this.pending_menu_paste = false;
                         this.pending_paste_repository = None;
-                        this.pending_replacement_images = None;
+                        this.pending_replacement_attachments = None;
                     });
                 })
         });
@@ -1143,19 +1498,19 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(images) = self.pending_replacement_images.take() else {
+        let Some(images) = self.pending_replacement_attachments.take() else {
             return;
         };
 
         self.bulk_upload = true;
-        self.append_staged_images(images, window, cx);
+        self.append_staged_attachments(images, window, cx);
         window.close_dialog(cx);
     }
 
-    fn accept_pasted_image_result(
+    fn accept_pasted_attachment_result(
         &mut self,
         paste_generation: u64,
-        result: anyhow::Result<StagedImage>,
+        result: anyhow::Result<StagedAttachment>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1164,7 +1519,7 @@ impl UploaderApp {
                 .info("Discarded a stale clipboard image conversion.");
             return;
         }
-        self.accept_image_result(result, window, cx);
+        self.accept_attachment_result(result, window, cx);
     }
 
     fn warn(
@@ -1180,14 +1535,14 @@ impl UploaderApp {
     }
 
     fn send(&mut self, _: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.send_image(window, cx);
+        self.send_attachments(window, cx);
     }
 
     fn try_complete_menu_paste(&mut self, cx: &mut Context<Self>) {
         if !self.pending_menu_paste {
             return;
         }
-        if self.staged_images.is_empty()
+        if self.staged_attachments.is_empty()
             || !matches!(self.load_state, LoadState::Idle | LoadState::Ready)
             || self.selected_repository.is_none()
         {
@@ -1200,25 +1555,33 @@ impl UploaderApp {
 
     fn sync_upload_result(&mut self) {
         let images = self
-            .staged_images
+            .staged_attachments
             .iter()
             .filter_map(|image| {
-                image.upload_state.uploaded_url().map(|url| UploadedImage {
-                    markdown: crate::model::markdown_image(&image.description, url),
-                })
+                image
+                    .upload_state
+                    .uploaded_url()
+                    .map(|url| UploadedAttachment {
+                        markdown: image.snippet(url, self.settings.image_copy_format()),
+                    })
             })
             .collect::<Vec<_>>();
-        self.upload_result = (!images.is_empty()).then_some(UploadResult { images });
+        self.upload_result = (!images.is_empty()).then_some(UploadResult {
+            attachments: images,
+        });
     }
 
-    fn send_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.uploading || self.updater.read(cx).state == UpdateState::Installing {
+    fn send_attachments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.uploading
+            || self.import_busy()
+            || self.updater.read(cx).state == UpdateState::Installing
+        {
             return;
         }
         let Some(repository) = self.selected_repository.clone() else {
             return;
         };
-        if self.staged_images.is_empty() {
+        if self.staged_attachments.is_empty() {
             return;
         }
         if repository.id == 0 {
@@ -1229,115 +1592,145 @@ impl UploaderApp {
             self.load_token_then_send(window, cx);
             return;
         };
-        let images = self
-            .staged_images
-            .iter_mut()
-            .filter(|image| !image.upload_state.is_uploaded())
-            .map(|image| {
-                image.upload_state = AttachmentUploadState::Uploading;
-                image.clone()
-            })
-            .collect::<Vec<_>>();
-        let upload_count = images.len();
-        if upload_count == 0 {
+        let diagnostics = self.diagnostics.clone();
+        self.start_upload(window, cx, move |item, control, progress| {
+            github::upload(
+                &token,
+                repository.id,
+                item,
+                &diagnostics,
+                control,
+                move |sent, total| progress(sent, total),
+            )
+        });
+    }
+
+    fn start_upload(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        upload: impl Fn(
+            &StagedAttachment,
+            &github::UploadControl,
+            Arc<dyn Fn(u64, u64) + Send + Sync>,
+        ) -> Result<String, github::GithubError>
+        + Send
+        + 'static,
+    ) {
+        if self.uploading {
             return;
         }
-
+        for item in self
+            .staged_attachments
+            .iter()
+            .filter(|item| !item.upload_state.is_uploaded())
+        {
+            if let Err(error) = item.validate_upload_size(self.settings.video_upload_limit()) {
+                self.warn(format!("{}: {error}", item.name), window, cx);
+                return;
+            }
+        }
+        let attachments = self
+            .staged_attachments
+            .iter_mut()
+            .filter(|item| !item.upload_state.is_uploaded())
+            .map(|item| {
+                item.upload_state = AttachmentUploadState::Queued;
+                item.clone()
+            })
+            .collect::<Vec<_>>();
+        if attachments.is_empty() {
+            return;
+        }
+        let control = github::UploadControl::default();
+        self.upload_control = Some(control.clone());
         self.uploading = true;
-        self.diagnostics.info(format!(
-            "Started uploading {upload_count} image{}.",
-            if upload_count == 1 { "" } else { "s" }
-        ));
-        cx.notify();
-
-        let diagnostics = self.diagnostics.clone();
+        self.upload_generation = self.upload_generation.wrapping_add(1);
+        let generation = self.upload_generation;
         let state_generation = self.state_generation;
-        cx.spawn_in(window, async move |this, window| {
-            let results = window
-                .background_spawn(async move {
-                    images
-                        .into_iter()
-                        .map(|image| {
-                            let result =
-                                github::upload(&token, repository.id, &image, &diagnostics);
-                            (image.id, image.name, image.description, result)
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .await;
-            let _ = this.update_in(window, move |this, window, cx| {
-                if this.state_generation != state_generation {
-                    return;
+        let (sender, receiver) = async_channel::unbounded();
+        cx.background_spawn(async move {
+            for item in attachments {
+                if control.is_canceled() {
+                    break;
                 }
-                this.uploading = false;
-                let mut uploaded = Vec::new();
-                let mut failures = Vec::new();
-                for (id, name, description, result) in results {
-                    match result {
-                        Ok(url) => {
-                            if let Some(image) =
-                                this.staged_images.iter_mut().find(|image| image.id == id)
-                            {
-                                image.upload_state =
-                                    AttachmentUploadState::Uploaded { url: url.clone() };
-                            }
-                            uploaded.push(UploadedImage {
-                                markdown: crate::model::markdown_image(&description, &url),
-                            });
-                        }
-                        Err(error) => {
-                            let message = error.to_string();
-                            if let Some(image) =
-                                this.staged_images.iter_mut().find(|image| image.id == id)
-                            {
-                                image.upload_state = AttachmentUploadState::Failed {
-                                    message: message.clone(),
-                                };
-                            }
-                            failures.push((name, message));
-                        }
-                    }
+                let id = item.id;
+                let progress = sender.clone();
+                let result = upload(
+                    &item,
+                    &control,
+                    Arc::new(move |sent, total| {
+                        let _ = progress.try_send(UploadEvent::Progress { id, sent, total });
+                    }),
+                );
+                let canceled = matches!(result, Err(github::GithubError::Canceled));
+                let _ = sender.try_send(UploadEvent::Finished { id, result });
+                if canceled {
+                    break;
                 }
-
-                if uploaded.is_empty() {
-                    if let Some((_, error)) = failures.first() {
-                        this.diagnostics
-                            .error(format!("Image batch upload failed: {error}"));
-
-                        window.push_notification(Notification::error(error.clone()), cx);
-                    }
-                    cx.notify();
-                    return;
-                }
-
-                let upload_result = UploadResult { images: uploaded };
-                let uploaded_count = upload_result.images.len();
-                this.diagnostics.info(format!(
-                    "Uploaded {uploaded_count} image{} successfully.",
-                    if uploaded_count == 1 { "" } else { "s" },
-                ));
-
-                this.sync_upload_result();
-
-                if failures.is_empty() {
-                    let message = format!(
-                        "{uploaded_count} image{} uploaded successfully.",
-                        if uploaded_count == 1 { "" } else { "s" }
-                    );
-                    window.push_notification(Notification::success(message), cx);
-                } else {
-                    let failed_count = failures.len();
-                    window.push_notification(
-                        Notification::warning(format!(
-                            "{uploaded_count} uploaded; {failed_count} failed and remain staged."
-                        )),
-                        cx,
-                    );
-                }
-                cx.notify();
+            }
+            let _ = sender.try_send(UploadEvent::Complete {
+                canceled: control.is_canceled(),
             });
         })
         .detach();
+        cx.spawn_in(window, async move |this, window| {
+            let mut uploaded = 0;
+            let mut failures = 0;
+            while let Ok(event) = receiver.recv().await {
+                let complete = matches!(event, UploadEvent::Complete { .. });
+                let result = this.update_in(window, |this, window, cx| {
+                    if this.state_generation != state_generation || this.upload_generation != generation { return false; }
+                    match event {
+                        UploadEvent::Progress { id, sent, total } => {
+                            if let Some(item) = this.staged_attachments.iter_mut().find(|item| item.id == id) {
+                                item.upload_state = AttachmentUploadState::Uploading { sent, total };
+                            }
+                        }
+                        UploadEvent::Finished { id, result } => {
+                            if let Some(item) = this.staged_attachments.iter_mut().find(|item| item.id == id) {
+                                match result {
+                                    Ok(url) => { uploaded += 1; item.upload_state = AttachmentUploadState::Uploaded { url }; }
+                                    Err(error) => {
+                                        failures += 1;
+                                        this.diagnostics.error(format!("Attachment upload failed: {error}"));
+                                        item.upload_state = AttachmentUploadState::Failed { message: error.to_string() };
+                                    }
+                                }
+                            }
+                            this.sync_upload_result();
+                        }
+                        UploadEvent::Complete { canceled } => {
+                            this.uploading = false;
+                            this.upload_control = None;
+                            for item in &mut this.staged_attachments {
+                                if matches!(item.upload_state, AttachmentUploadState::Queued | AttachmentUploadState::Uploading { .. }) {
+                                    item.upload_state = AttachmentUploadState::Failed { message: "Batch canceled before this attachment completed. You can retry it.".into() };
+                                }
+                            }
+                            let message = if canceled {
+                                format!("Upload canceled. {uploaded} uploaded; remaining attachments can be retried. An in-flight upload may already exist on GitHub.")
+                            } else if failures > 0 {
+                                format!("{uploaded} uploaded; {failures} failed. See each attachment for details, then retry.")
+                            } else { format!("{uploaded} attachment(s) uploaded successfully.") };
+                            this.diagnostics.info(&message);
+                            window.push_notification(if canceled || failures > 0 { Notification::warning(message) } else { Notification::success(message) }, cx);
+                        }
+                    }
+                    cx.notify();
+                    true
+                });
+                if !matches!(result, Ok(true)) || complete { break; }
+            }
+        }).detach();
+        cx.notify();
+    }
+
+    fn cancel_upload(&mut self, _: &gpui_kit::ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(control) = &self.upload_control {
+            control.cancel();
+        }
+        cx.notify();
     }
 
     fn load_token_then_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1363,7 +1756,7 @@ impl UploaderApp {
                 match result {
                     Ok(token) => {
                         this.token = Some(token);
-                        this.send_image(window, cx);
+                        this.send_attachments(window, cx);
                     }
                     Err(error) => {
                         this.diagnostics
@@ -1433,7 +1826,7 @@ impl UploaderApp {
                                 ));
                             }
                         }
-                        this.send_image(window, cx);
+                        this.send_attachments(window, cx);
                     }
                     Err(error) => {
                         this.diagnostics.error(format!(
@@ -1842,6 +2235,52 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn set_copy_images_as_markdown(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous = self.settings.copy_images_as_markdown;
+        self.settings.copy_images_as_markdown = enabled;
+        if let Err(error) = self.settings.save() {
+            self.settings.copy_images_as_markdown = previous;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+        }
+        // Existing uploads use the selected format on their next copy too.
+        self.sync_upload_result();
+        cx.notify();
+    }
+
+    fn set_allow_large_videos(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.uploading || self.import_busy() {
+            return;
+        }
+        let previous = self.settings.allow_large_videos;
+        self.settings.allow_large_videos = enabled;
+        if let Err(error) = self.settings.save() {
+            self.settings.allow_large_videos = previous;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+        } else {
+            // Invalidate file-picker, drop and clipboard results started under
+            // the previous policy. Already staged files are checked at upload.
+            self.upload_generation = self.upload_generation.wrapping_add(1);
+            self.paste_generation = self.paste_generation.wrapping_add(1);
+        }
+        cx.notify();
+    }
+
     fn set_close_window_after_copy(
         &mut self,
         enabled: bool,
@@ -1915,11 +2354,18 @@ impl UploaderApp {
         self.load_state = LoadState::NeedsSetup;
         self.paste_generation = self.paste_generation.wrapping_add(1);
         self.state_generation = self.state_generation.wrapping_add(1);
-        self.staged_images.clear();
+        if let Some(control) = self.upload_control.take() {
+            control.cancel();
+        }
+        if let Some(job) = self.compression.take() {
+            job.control.cancel();
+        }
+        self.pending_import = None;
+        self.staged_attachments.clear();
         self.bulk_upload = false;
         self.pending_paste_repository = None;
         self.pending_menu_paste = false;
-        self.pending_replacement_images = None;
+        self.pending_replacement_attachments = None;
         self.upload_result = None;
         self.uploading = false;
         self.recording_global_shortcut = false;
@@ -2044,21 +2490,41 @@ impl UploaderApp {
         cx.open_url(WALKTHROUGH_URL);
     }
 
-    fn open_image_preview(
+    fn open_attachment_preview(
         &mut self,
         selected_id: u64,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(image) = self
-            .staged_images
+            .staged_attachments
             .iter()
             .find(|image| image.id == selected_id)
         else {
             return;
         };
+        if let Media::Video(video) = &image.media {
+            let video = video.clone();
+            let task = cx.background_spawn(async move { video.preview() });
+            cx.spawn_in(window, async move |this, window| {
+                if let Err(error) = task.await {
+                    let _ = this.update_in(window, |this, window, cx| {
+                        this.diagnostics
+                            .error(format!("Video preview failed: {error}"));
+                        window.push_notification(Notification::error(error.to_string()), cx);
+                    });
+                }
+            })
+            .detach();
+            return;
+        }
         let preview_name = image.name.clone();
-        let preview_images = self.staged_images.clone();
+        let preview_images = self
+            .staged_attachments
+            .iter()
+            .filter(|item| item.image().is_some())
+            .cloned()
+            .collect();
 
         if let Some((preview_window, preview)) = self.preview_window.clone() {
             let title = preview_name.clone();
@@ -2123,7 +2589,7 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.uploading || quick_copy_busy {
+        if self.uploading || self.import_busy() || quick_copy_busy {
             window.push_notification(
                 Notification::info("Finish the current upload before updating."),
                 cx,
@@ -2271,12 +2737,15 @@ impl UploaderApp {
         let view = cx.entity().downgrade();
         let bulk_upload = self.bulk_upload;
         let state_generation = self.state_generation;
-        let uploading = self.uploading;
-        let has_staged_images = !self.staged_images.is_empty();
+        let staging_generation = self.upload_generation;
+        let video_limit = self.settings.video_upload_limit();
+        let uploading = self.uploading || self.import_busy();
+        let has_staged_attachments = !self.staged_attachments.is_empty();
         div()
             .id("image-drop-zone")
+            .debug_selector(|| "image-drop-zone".into())
             .w_full()
-            .min_h(px(if has_staged_images { 112. } else { 150. }))
+            .min_h(px(if has_staged_attachments { 112. } else { 150. }))
             .rounded_xl()
             .border_2()
             .border_dashed()
@@ -2297,7 +2766,15 @@ impl UploaderApp {
                         } else {
                             paths.paths().iter().take(1).cloned().collect()
                         };
-                        Self::load_dropped_paths(view.clone(), state_generation, paths, window, cx);
+                        Self::load_dropped_paths(
+                            view.clone(),
+                            state_generation,
+                            staging_generation,
+                            paths,
+                            video_limit,
+                            window,
+                            cx,
+                        );
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.choose_file(window, cx);
@@ -2330,9 +2807,9 @@ impl UploaderApp {
                             .child("Press")
                             .child(Kbd::new(Keystroke::parse("cmd-v").expect("valid shortcut")))
                             .child(if bulk_upload {
-                                "or drop images here"
+                                "or drop images or videos here"
                             } else {
-                                "or drop an image here"
+                                "or drop an image or video here"
                             }),
                     )
                     .child(
@@ -2340,10 +2817,12 @@ impl UploaderApp {
                             .text_xs()
                             .text_center()
                             .text_color(cx.theme().muted_foreground)
-                            .child(if bulk_upload {
-                                "or click to select one or more PNG, JPEG, GIF, or WebP files"
+                            .child(if self.settings.allow_large_videos {
+                                "Images up to 10 MB · MP4, MOV, WebM up to 100 MB"
+                            } else if bulk_upload {
+                                "PNG, JPEG, GIF, WebP, MP4, MOV, WebM · up to 10 MB each"
                             } else {
-                                "or click to select a PNG, JPEG, GIF, or WebP file"
+                                "PNG, JPEG, GIF, WebP, MP4, MOV, WebM · up to 10 MB"
                             }),
                     ),
             )
@@ -2351,8 +2830,8 @@ impl UploaderApp {
 
     fn render_bulk_upload_control(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity().downgrade();
-        let has_batch = self.staged_images.len() > 1;
-        let disabled = self.uploading || has_batch;
+        let has_batch = self.staged_attachments.len() > 1;
+        let disabled = self.uploading || self.import_busy() || has_batch;
         h_flex()
             .w_full()
             .min_w_0()
@@ -2390,27 +2869,27 @@ impl UploaderApp {
             )
     }
 
-    fn remove_staged_image(&mut self, id: u64, cx: &mut Context<Self>) {
-        let previous_len = self.staged_images.len();
-        self.staged_images.retain(|image| image.id != id);
-        if self.staged_images.len() != previous_len {
+    fn remove_staged_attachment(&mut self, id: u64, cx: &mut Context<Self>) {
+        let previous_len = self.staged_attachments.len();
+        self.staged_attachments.retain(|image| image.id != id);
+        if self.staged_attachments.len() != previous_len {
             self.sync_upload_result();
             self.pending_menu_paste = false;
             self.pending_paste_repository = None;
-            self.diagnostics.info("Removed a staged image.");
+            self.diagnostics.info("Removed a staged attachment.");
             cx.notify();
         }
     }
 
     fn render_attachments(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let count = self.staged_images.len();
+        let count = self.staged_attachments.len();
         let has_uploaded_images = self
-            .staged_images
+            .staged_attachments
             .iter()
             .any(|image| image.upload_state.is_uploaded());
-        let attachments = self.staged_images.iter().map(|image| {
+        let attachments = self.staged_attachments.iter().map(|image| {
             let image_id = image.id;
-            let source = image.preview.clone();
+            let source = image.image().map(|data| data.preview.clone());
             let title = image.description.clone();
             let detail = format!(
                 "{} · {} · {}",
@@ -2422,27 +2901,36 @@ impl UploaderApp {
                 AttachmentUploadState::Preview => (
                     AttachmentStatus::Pending,
                     AssetIconName::Clock,
-                    "Draft",
+                    "Draft".to_owned(),
                     cx.theme().warning,
                 ),
-                AttachmentUploadState::Uploading => (
-                    AttachmentStatus::Uploading,
-                    AssetIconName::LoaderCircle,
-                    "Uploading",
+                AttachmentUploadState::Queued => (
+                    AttachmentStatus::Pending, AssetIconName::Clock, "Queued".to_owned(), cx.theme().muted_foreground,
+                ),
+                AttachmentUploadState::Uploading { sent, total } => (
+                    AttachmentStatus::Uploading, AssetIconName::LoaderCircle,
+                    if sent >= total { "Waiting for GitHub…".to_owned() } else {
+                        let (unit, divisor) = if *total >= 1_000_000 { ("MB", 1_000_000.) } else { ("KB", 1000.) };
+                        format!("Sending {}% · {:.1} / {:.1} {unit}", sent * 100 / total.max(&1), *sent as f64 / divisor, *total as f64 / divisor)
+                    },
                     cx.theme().primary,
                 ),
                 AttachmentUploadState::Uploaded { .. } => (
                     AttachmentStatus::Complete,
                     AssetIconName::CircleCheck,
-                    "Uploaded",
+                    "Uploaded".to_owned(),
                     cx.theme().success,
                 ),
                 AttachmentUploadState::Failed { .. } => (
                     AttachmentStatus::Failed,
                     AssetIconName::CircleX,
-                    "Failed",
+                    "Failed".to_owned(),
                     cx.theme().danger,
                 ),
+            };
+            let upload_percentage = match image.upload_state {
+                AttachmentUploadState::Uploading { sent, total } => Some(sent as f32 / total.max(1) as f32 * 100.),
+                _ => None,
             };
             let status_row = h_flex()
                 .items_center()
@@ -2455,7 +2943,7 @@ impl UploaderApp {
             let markdown = image
                 .upload_state
                 .uploaded_url()
-                .map(|url| crate::model::markdown_image(&image.description, url));
+                .map(|url| image.snippet(url, self.settings.image_copy_format()));
             let failure_message = image
                 .upload_state
                 .failure_message()
@@ -2470,16 +2958,24 @@ impl UploaderApp {
                 .w_full()
                 .cursor_pointer()
                 .status(status)
-                .media(AttachmentMedia::new().src(source))
+                .when(image.image().is_none(), |attachment| attachment.tooltip("Open video in your macOS video app"))
+                .media(match source {
+                    Some(source) => AttachmentMedia::new().src(source),
+                    None => AttachmentMedia::new().child(Icon::new(AssetIconName::Play).size(px(26.))),
+                })
                 .content(
                     AttachmentContent::new()
                         .title(AttachmentTitle::new(title))
                         .description(AttachmentDescription::new(detail))
-                        .child(status_row),
+                        .child(status_row)
+                        .when_some(upload_percentage, |content, value| content.child(
+                            Progress::new(format!("attachment-progress-{image_id}")).value(value).color(status_color).xsmall().w_full()
+                                .accessibility_label("Attachment upload progress")
+                        )),
                 )
                 .on_click(move |_, window, cx| {
                     let _ = preview_view.update(cx, |this, cx| {
-                        this.open_image_preview(image_id, window, cx);
+                        this.open_attachment_preview(image_id, window, cx);
                     });
                 })
                 .when(!self.uploading, |attachment| {
@@ -2502,6 +2998,7 @@ impl UploaderApp {
                             .when_some(markdown, |actions, markdown| {
                                 actions.child(
                                     Button::new(format!("copy-staged-image-markdown-{image_id}"))
+                                        .debug_selector(move || format!("copy-staged-image-markdown-{image_id}"))
                                         .ghost()
                                         .small()
                                         .icon(AssetIconName::Copy)
@@ -2514,7 +3011,7 @@ impl UploaderApp {
                                             ));
                                             let _ = copy_view.update(cx, |this, cx| {
                                                 this.diagnostics.info(
-                                                    "Copied an uploaded image's Markdown to the clipboard.",
+                                                    "Copied an uploaded attachment's Markdown to the clipboard.",
                                                 );
                                                 this.finish_copy(
                                                     "Markdown copied to the clipboard.",
@@ -2530,12 +3027,12 @@ impl UploaderApp {
                                     .ghost()
                                     .small()
                                     .icon(IconName::Close)
-                                    .accessibility_label("Remove staged image")
+                                    .accessibility_label("Remove staged attachment")
                                     .tooltip("Remove")
                                     .on_click(move |_, _, cx| {
                                         cx.stop_propagation();
                                         let _ = remove_view.update(cx, |this, cx| {
-                                            this.remove_staged_image(image_id, cx);
+                                            this.remove_staged_attachment(image_id, cx);
                                         });
                                     }),
                             ),
@@ -2548,6 +3045,7 @@ impl UploaderApp {
         });
 
         v_flex()
+            .debug_selector(|| "staged-attachments".into())
             .gap_2()
             .when(count > 1, |list| {
                 list.child(
@@ -2568,6 +3066,9 @@ impl UploaderApp {
                                 .when(count > 1 && self.upload_result.is_some(), |actions| {
                                     actions.child(
                                         Button::new("copy-all-staged-image-markdown")
+                                            .debug_selector(|| {
+                                                "copy-all-staged-image-markdown".into()
+                                            })
                                             .outline()
                                             .small()
                                             .icon(AssetIconName::Copy)
@@ -2586,8 +3087,8 @@ impl UploaderApp {
                                                 "Remove all"
                                             })
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                this.clear_staged_images(
-                                                    "Discarded all staged images.",
+                                                this.clear_staged_attachments(
+                                                    "Discarded all staged attachments.",
                                                     cx,
                                                 );
                                             })),
@@ -2607,7 +3108,7 @@ impl UploaderApp {
                         .text_color(cx.theme().muted_foreground)
                         .child("Press")
                         .child(Kbd::new(Keystroke::parse("cmd-c").expect("valid shortcut")))
-                        .child(if result.images.len() == 1 {
+                        .child(if result.attachments.len() == 1 {
                             "to copy the uploaded Markdown snippet."
                         } else {
                             "to copy all uploaded Markdown snippets."
@@ -2798,6 +3299,49 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
+                    .child(div().font_semibold().text_sm().child("Image copying"))
+                    .child(
+                        Checkbox::new("copy-images-as-markdown")
+                            .label("Copy images as Markdown")
+                            .checked(self.settings.copy_images_as_markdown)
+                            .on_click(cx.listener(|this, checked, window, cx| {
+                                this.set_copy_images_as_markdown(*checked, window, cx);
+                            })),
+                    )
+                    .child(
+                        div().text_xs().text_color(cx.theme().muted_foreground)
+                            .child("Use ![description](URL) instead of an image tag. Markdown images do not include width or height. Applies to individual copy, bulk copy, and Quick Copy."),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .p_4()
+                    .child(div().font_semibold().text_sm().child("Video uploads"))
+                    .child(
+                        Checkbox::new("allow-large-videos")
+                            .label("Allow videos up to 100 MB")
+                            .checked(self.settings.allow_large_videos)
+                            .disabled(self.uploading || self.import_busy())
+                            .on_click(cx.listener(|this, checked, window, cx| {
+                                this.set_allow_large_videos(*checked, window, cx);
+                            })),
+                    )
+                    .child(
+                        div().text_xs().text_color(cx.theme().muted_foreground)
+                            .child("Enable only if the destination repository is on a paid GitHub plan and you’re eligible to upload larger videos. Gatto does not verify your plan. Images and GIFs stay limited to 10 MB."),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .p_4()
                     .child(div().font_semibold().text_sm().child("General"))
                     .child(
                         Checkbox::new("start-at-login")
@@ -2881,10 +3425,11 @@ impl Render for UploaderApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_send = self.selected_repository.is_some()
             && self
-                .staged_images
+                .staged_attachments
                 .iter()
                 .any(|image| !image.upload_state.is_uploaded())
             && !self.uploading
+            && !self.import_busy()
             && !self.loading_token
             && !self.loading_repository
             && self.updater.read(cx).state != UpdateState::Installing;
@@ -2968,7 +3513,7 @@ impl Render for UploaderApp {
                                                             UpdateState::Failed => "↻ Update",
                                                             _ => "↑ Update",
                                                         })
-                                                        .disabled(self.uploading || update.state == UpdateState::Installing)
+                                                        .disabled(self.uploading || self.import_busy() || update.state == UpdateState::Installing)
                                                         .accessibility_label("Install update and restart Gatto")
                                                         .tooltip(update.message.clone())
                                                         .on_click(|_, window, cx| {
@@ -3017,18 +3562,27 @@ impl Render for UploaderApp {
                                 .when(
                                     !self.uploading
                                         && self
-                                            .staged_images
+                                            .staged_attachments
                                             .iter()
                                             .all(|image| !image.upload_state.is_uploaded()),
                                     |root| root.child(self.render_bulk_upload_control(cx)),
                                 )
                                 .child(self.render_drop_zone(cx))
+                                .when(self.compression.is_some(), |root| {
+                                    root.child(self.render_compression(cx))
+                                })
                                 .child(self.render_attachments(cx))
                         }),
                 );
             root.child(content)
                 .child(
-                    v_flex().items_end().gap_3().px_6().py_3().child(
+                    v_flex().items_end().gap_3().px_6().py_3()
+                    .when(self.uploading, |footer| footer.child(
+                        Button::new("cancel-upload").outline().label("Cancel upload")
+                            .disabled(self.upload_control.as_ref().is_some_and(|control| control.is_canceled()))
+                            .on_click(cx.listener(Self::cancel_upload))
+                    ).child(div().text_xs().child("Canceling cannot remove an attachment already accepted by GitHub.")))
+                    .child(
                         Button::new("send-image")
                             .primary()
                             .large()
@@ -3063,14 +3617,321 @@ mod tests {
 
     use super::*;
 
+    fn upload_window(
+        cx: &mut TestAppContext,
+    ) -> (Entity<UploaderApp>, &mut gpui_kit::VisualTestContext) {
+        cx.update(gpui_kit::init);
+        let captured = Rc::new(std::cell::RefCell::new(None));
+        let capture = captured.clone();
+        let (_, window_cx) = cx.add_window_view(move |window, cx| {
+            let app = cx.new(|cx| {
+                UploaderApp::with_settings(
+                    window,
+                    Diagnostics::new(),
+                    AppControllers::default(),
+                    AppSettings {
+                        owner: Some("acme".into()),
+                        ..Default::default()
+                    },
+                    None,
+                    false,
+                    cx,
+                )
+            });
+            *capture.borrow_mut() = Some(app.clone());
+            gpui_kit::base::Root::new(app, window, cx)
+        });
+        let view = captured.borrow().clone().unwrap();
+        (view, window_cx)
+    }
+
+    fn mixed_attachments() -> Vec<StagedAttachment> {
+        [
+            "packaging/rocket-cat-transparent.png",
+            "tests/fixtures/sample.mp4",
+        ]
+        .map(|path| {
+            StagedAttachment::from_path(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path),
+                Default::default(),
+            )
+            .unwrap()
+        })
+        .into()
+    }
+
+    fn large_video() -> tempfile::NamedTempFile {
+        use std::io::Write as _;
+        let mut file = tempfile::Builder::new().suffix(".mp4").tempfile().unwrap();
+        file.write_all(include_bytes!("../tests/fixtures/sample-audio.mp4"))
+            .unwrap();
+        // Legal padding grows the input above the gate without adding footage.
+        file.write_all(&((crate::model::MAX_ATTACHMENT_BYTES + 8) as u32).to_be_bytes())
+            .unwrap();
+        file.write_all(b"free").unwrap();
+        file.as_file()
+            .set_len(file.as_file().metadata().unwrap().len() + crate::model::MAX_ATTACHMENT_BYTES)
+            .unwrap();
+        file
+    }
+
+    #[gpui_kit::test]
+    fn oversized_video_cancel_skips_it_and_preserves_other_import_order(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let source = large_video();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.bulk_upload = true;
+                let mut before = mixed_attachments().remove(0);
+                before.name = "before.png".into();
+                let mut after = mixed_attachments().remove(0);
+                after.name = "after.png".into();
+                app.accept_attachment_results(
+                    vec![
+                        Ok(before),
+                        StagedAttachment::from_path(source.path().into(), Default::default()),
+                        Ok(after),
+                    ],
+                    window,
+                    cx,
+                );
+                assert!(app.import_busy());
+                assert!(
+                    app.compression.is_none(),
+                    "compression needs an explicit choice"
+                );
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.import_busy());
+                assert_eq!(
+                    app.staged_attachments
+                        .iter()
+                        .map(|item| item.name.as_str())
+                        .collect::<Vec<_>>(),
+                    ["before.png", "after.png"]
+                );
+            })
+        });
+    }
+
+    #[cfg(target_os = "macos")]
+    #[gpui_kit::test]
+    fn oversized_video_compress_choice_stages_only_the_finished_copy(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let source = large_video();
+        let original_len = source.as_file().metadata().unwrap().len();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.accept_attachment_result(
+                    StagedAttachment::from_path(source.path().into(), Default::default()),
+                    window,
+                    cx,
+                );
+                assert!(app.staged_attachments.is_empty());
+                assert!(app.import_busy());
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.import_busy());
+                assert_eq!(app.staged_attachments.len(), 1);
+                assert!(app.staged_attachments[0].name.ends_with("-compressed.mp4"));
+                assert!(app.staged_attachments[0].len() < crate::model::MAX_ATTACHMENT_BYTES);
+                assert!(
+                    app.upload_result.is_none(),
+                    "compression must not upload automatically"
+                );
+            })
+        });
+        assert_eq!(source.as_file().metadata().unwrap().len(), original_len);
+    }
+
+    #[gpui_kit::test]
+    fn lowering_video_limit_blocks_an_already_staged_large_upload(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let source = large_video();
+        let staged =
+            StagedAttachment::from_path(source.path().into(), VideoUploadLimit::Paid).unwrap();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = vec![staged];
+                assert!(!app.settings.allow_large_videos);
+                app.start_upload(window, cx, |_, _, _| {
+                    panic!("the lower limit must block this upload")
+                });
+                assert!(!app.uploading);
+                assert_eq!(app.staged_attachments.len(), 1);
+                app.settings.allow_large_videos = true;
+                app.start_upload(window, cx, |item, _, _| {
+                    assert!(item.len() > crate::model::MAX_ATTACHMENT_BYTES);
+                    Ok("https://github.com/user-attachments/assets/large-video".into())
+                });
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(app.staged_attachments[0].upload_state.is_uploaded());
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn idle_attachment_preview_keeps_original_spacing_below_drop_zone(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        for item in mixed_attachments() {
+            cx.update(|window, cx| {
+                view.update(cx, |app, cx| {
+                    app.load_state = LoadState::Ready;
+                    app.staged_attachments = vec![item];
+                    cx.notify();
+                });
+                window.draw(cx).clear(cx);
+            });
+            let drop_zone = cx.debug_bounds("image-drop-zone").unwrap();
+            let previews = cx.debug_bounds("staged-attachments").unwrap();
+            let gap = previews.origin.y - drop_zone.bottom();
+            assert_eq!(
+                gap,
+                px(20.),
+                "idle preview should have one section gap below the drop zone"
+            );
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mixed_batch_keeps_successes_and_retries_only_failed_attachments(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = mixed_attachments();
+                app.start_upload(window, cx, |item, _, progress| {
+                    progress(item.len(), item.len());
+                    if item.image().is_none() {
+                        Err(github::GithubError::Upload("temporary failure".into()))
+                    } else {
+                        Ok("https://github.com/user-attachments/assets/image".into())
+                    }
+                });
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                assert!(!app.uploading);
+                assert!(app.staged_attachments[0].upload_state.is_uploaded());
+                assert!(
+                    app.staged_attachments[1]
+                        .upload_state
+                        .failure_message()
+                        .unwrap()
+                        .contains("temporary failure")
+                );
+                app.start_upload(window, cx, |item, _, progress| {
+                    assert!(
+                        item.image().is_none(),
+                        "successful image must not upload twice"
+                    );
+                    progress(item.len(), item.len());
+                    Ok("https://github.com/user-attachments/assets/video".into())
+                });
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(
+                    app.staged_attachments
+                        .iter()
+                        .all(|item| item.upload_state.is_uploaded())
+                );
+                let snippet = app.upload_result.as_ref().unwrap().markdown();
+                assert!(snippet.starts_with("<img width="));
+                assert!(
+                    snippet.ends_with(" />\n\nhttps://github.com/user-attachments/assets/video")
+                );
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn canceled_batch_preserves_completed_urls_and_releases_queued_items_for_retry(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = mixed_attachments();
+                app.start_upload(window, cx, |_, control, _| {
+                    control.cancel();
+                    Ok("https://github.com/user-attachments/assets/image".into())
+                });
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.uploading);
+                assert!(app.staged_attachments[0].upload_state.is_uploaded());
+                assert!(
+                    app.staged_attachments[1]
+                        .upload_state
+                        .failure_message()
+                        .unwrap()
+                        .contains("canceled")
+                );
+                assert_eq!(app.upload_result.as_ref().unwrap().attachments.len(), 1);
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn clearing_during_upload_cancels_work_and_does_not_restore_an_old_draft(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = mixed_attachments();
+                app.start_upload(window, cx, |_, _, _| {
+                    Ok("https://github.com/user-attachments/assets/old".into())
+                });
+                let control = app.upload_control.clone().unwrap();
+                app.clear_staged_attachments("Closed window", cx);
+                assert!(control.is_canceled());
+                app.staged_attachments = mixed_attachments();
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.uploading);
+                assert!(app.upload_result.is_none());
+                assert!(
+                    app.staged_attachments
+                        .iter()
+                        .all(|item| item.upload_state == AttachmentUploadState::Preview)
+                );
+            })
+        });
+    }
+
     #[test]
     fn bulk_upload_result_preserves_markdown_order_with_newline_separators() {
         let result = UploadResult {
-            images: vec![
-                UploadedImage {
+            attachments: vec![
+                UploadedAttachment {
                     markdown: "![first](https://example.com/first)".into(),
                 },
-                UploadedImage {
+                UploadedAttachment {
                     markdown: "![second](https://example.com/second)".into(),
                 },
             ],
@@ -3078,7 +3939,7 @@ mod tests {
 
         assert_eq!(
             result.markdown(),
-            "![first](https://example.com/first)\n![second](https://example.com/second)"
+            "![first](https://example.com/first)\n\n![second](https://example.com/second)"
         );
     }
 
@@ -3252,32 +4113,54 @@ mod tests {
 
         let image_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packaging/rocket-cat-transparent.png");
-        for bulk_upload in [false, true] {
-            let markdown = "![first](https://example.com/first)";
+        for (bulk_upload, copy_images_as_markdown) in
+            [(false, false), (true, false), (false, true), (true, true)]
+        {
+            let pixel_size = StagedAttachment::from_path(image_path.clone(), Default::default())
+                .unwrap()
+                .image()
+                .unwrap()
+                .pixel_size;
+            let snippet = |description: &str, url: &str| {
+                if copy_images_as_markdown {
+                    format!("![{description}]({url})")
+                } else {
+                    crate::model::html_image(description, url, pixel_size)
+                }
+            };
+            let markdown = snippet("first", "https://example.com/first");
             let expected = if bulk_upload {
-                format!("{markdown}\n![second](https://example.com/second)")
+                format!(
+                    "{markdown}\n\n{}",
+                    snippet("second", "https://example.com/second")
+                )
             } else {
                 markdown.to_owned()
             };
             cx.update(|window, cx| {
                 view.update(cx, |app, cx| {
                     app.bulk_upload = bulk_upload;
-                    app.staged_images.clear();
-                    let mut image = StagedImage::from_path(image_path.clone()).unwrap();
+                    app.settings.copy_images_as_markdown = copy_images_as_markdown;
+                    app.staged_attachments.clear();
+                    let mut image =
+                        StagedAttachment::from_path(image_path.clone(), Default::default())
+                            .unwrap();
                     image.id = 1;
                     image.description = "first".into();
                     image.upload_state = AttachmentUploadState::Uploaded {
                         url: "https://example.com/first".into(),
                     };
-                    app.staged_images.push(image);
+                    app.staged_attachments.push(image);
                     if bulk_upload {
-                        let mut image = StagedImage::from_path(image_path.clone()).unwrap();
+                        let mut image =
+                            StagedAttachment::from_path(image_path.clone(), Default::default())
+                                .unwrap();
                         image.id = 2;
                         image.description = "second".into();
                         image.upload_state = AttachmentUploadState::Uploaded {
                             url: "https://example.com/second".into(),
                         };
-                        app.staged_images.push(image);
+                        app.staged_attachments.push(image);
                     }
                     app.sync_upload_result();
                     app.focus_handle.focus(window, cx);
@@ -3286,6 +4169,17 @@ mod tests {
                 window.draw(cx).clear(cx);
             });
             assert!(cx.debug_bounds("upload-markdown-copy-hint").is_some());
+            let copy = cx
+                .debug_bounds("copy-staged-image-markdown-1")
+                .expect("individual copy button is visible");
+            cx.simulate_mouse_down(copy.center(), MouseButton::Left, Modifiers::default());
+            cx.simulate_mouse_up(copy.center(), MouseButton::Left, Modifiers::default());
+            cx.update(|_, cx| {
+                assert_eq!(
+                    cx.read_from_clipboard().and_then(|item| item.text()),
+                    Some(markdown.clone())
+                );
+            });
             cx.simulate_keystrokes("cmd-c");
             cx.update(|_, cx| {
                 assert_eq!(
@@ -3293,6 +4187,19 @@ mod tests {
                     Some(expected.clone()),
                 );
             });
+            if bulk_upload {
+                let copy_all = cx
+                    .debug_bounds("copy-all-staged-image-markdown")
+                    .expect("bulk copy button is visible");
+                cx.simulate_mouse_down(copy_all.center(), MouseButton::Left, Modifiers::default());
+                cx.simulate_mouse_up(copy_all.center(), MouseButton::Left, Modifiers::default());
+                cx.update(|_, cx| {
+                    assert_eq!(
+                        cx.read_from_clipboard().and_then(|item| item.text()),
+                        Some(expected.clone())
+                    );
+                });
+            }
         }
     }
 

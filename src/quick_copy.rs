@@ -5,12 +5,7 @@ use std::{cell::Cell, rc::Rc, sync::Arc};
 use anyhow::{Context as _, Result, bail};
 use gpui_kit::{App, AppContext as _, ClipboardEntry, ClipboardItem, SystemNotification};
 
-use crate::{
-    diagnostics::Diagnostics,
-    github,
-    model::{StagedImage, markdown_image},
-    settings::AppSettings,
-};
+use crate::{diagnostics::Diagnostics, github, model::StagedAttachment, settings::AppSettings};
 
 #[derive(Clone)]
 pub struct QuickCopy {
@@ -71,9 +66,9 @@ impl QuickCopy {
                 match result {
                     Ok(markdown) => {
                         cx.write_to_clipboard(ClipboardItem::new_string(markdown));
-                        controller
-                            .diagnostics
-                            .info("Quick Copy uploaded the clipboard image and copied Markdown.");
+                        controller.diagnostics.info(
+                            "Quick Copy uploaded the clipboard attachment and copied Markdown.",
+                        );
                         notify(
                             cx,
                             "Quick Copy complete",
@@ -109,7 +104,7 @@ trait Backend: Send + Sync {
         &self,
         owner: &str,
         repository: &str,
-        image: &StagedImage,
+        image: &StagedAttachment,
         diagnostics: &Diagnostics,
     ) -> Result<String>;
 }
@@ -120,12 +115,19 @@ impl Backend for GithubBackend {
         &self,
         owner: &str,
         repository: &str,
-        image: &StagedImage,
+        image: &StagedAttachment,
         diagnostics: &Diagnostics,
     ) -> Result<String> {
         let token = github::load_token(diagnostics)?;
         let id = github::load_repository_id(owner, repository, diagnostics)?;
-        Ok(github::upload(&token, id, image, diagnostics)?)
+        Ok(github::upload(
+            &token,
+            id,
+            image,
+            diagnostics,
+            &github::UploadControl::default(),
+            |_, _| {},
+        )?)
     }
 }
 
@@ -146,22 +148,23 @@ fn upload_clipboard(
         .as_deref()
         .filter(|name| !name.trim().is_empty())
         .context("Quick Copy needs an account or organization in App Preferences first.")?;
-    let clipboard = clipboard.context("Copy a PNG, JPEG, GIF, or WebP image first.")?;
+    let clipboard = clipboard
+        .context("Copy a PNG, JPEG, GIF, or WebP image, or an image/video file in Finder first.")?;
     let image = if let Some(image) = clipboard.entries().iter().find_map(|entry| match entry {
         ClipboardEntry::Image(image) => Some(image),
         _ => None,
     }) {
-        StagedImage::from_clipboard(image)?
+        StagedAttachment::from_clipboard(image)?
     } else if let Some(path) = clipboard.entries().iter().find_map(|entry| match entry {
         ClipboardEntry::ExternalPaths(paths) => paths.paths().first(),
         _ => None,
     }) {
-        StagedImage::from_path(path.clone())?
+        StagedAttachment::from_path(path.clone(), settings.video_upload_limit())?
     } else {
-        bail!("Copy a PNG, JPEG, GIF, or WebP image first.");
+        bail!("Copy a PNG, JPEG, GIF, or WebP image, or an image/video file in Finder first.");
     };
     let url = backend.upload(owner, repository, &image, diagnostics)?;
-    Ok(markdown_image(&image.description, &url))
+    Ok(image.snippet(&url, settings.image_copy_format()))
 }
 
 #[cfg(test)]
@@ -179,7 +182,7 @@ mod tests {
             &self,
             owner: &str,
             repository: &str,
-            _: &StagedImage,
+            _: &StagedAttachment,
             _: &Diagnostics,
         ) -> Result<String> {
             self.calls
@@ -226,12 +229,20 @@ mod tests {
         cx.run_until_parked();
         cx.update(|cx| {
             assert!(cx.windows().is_empty());
+            let staged = StagedAttachment::from_path(
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("packaging/rocket-cat-transparent.png"),
+                Default::default(),
+            )
+            .unwrap();
+            let (width, height) = staged.image().unwrap().pixel_size;
+            let copied = cx.read_from_clipboard().unwrap().text().unwrap();
+            assert!(copied.starts_with(&format!(
+                r#"<img width="{width}" height="{height}" alt="clipboard-"#
+            )));
             assert!(
-                cx.read_from_clipboard()
-                    .unwrap()
-                    .text()
-                    .unwrap()
-                    .contains("https://github.com/user-attachments/assets/test-image")
+                copied
+                    .ends_with(r#"src="https://github.com/user-attachments/assets/test-image" />"#)
             );
         });
         assert_eq!(
@@ -334,5 +345,83 @@ mod tests {
             *backend.calls.lock().unwrap(),
             vec![("acme".into(), "alpha".into())]
         );
+    }
+
+    #[test]
+    fn large_finder_video_requires_saved_opt_in_before_quick_copy_uploads() {
+        use std::io::Write as _;
+        let mut file = tempfile::Builder::new().suffix(".mp4").tempfile().unwrap();
+        let video = include_bytes!("../tests/fixtures/sample.mp4");
+        file.write_all(video).unwrap();
+        let padding = crate::model::MAX_ATTACHMENT_BYTES + 8;
+        file.write_all(&(padding as u32).to_be_bytes()).unwrap();
+        file.write_all(b"free").unwrap();
+        file.as_file()
+            .set_len(video.len() as u64 + padding)
+            .unwrap();
+        let clipboard = || {
+            ClipboardItem::from(ClipboardEntry::ExternalPaths(gpui_kit::ExternalPaths(
+                [file.path().to_owned()].into_iter().collect(),
+            )))
+        };
+        let backend = FakeBackend {
+            calls: Mutex::new(Vec::new()),
+            fail: false,
+        };
+        let mut settings = settings();
+        let error = upload_clipboard(&settings, Some(clipboard()), &Diagnostics::new(), &backend)
+            .unwrap_err();
+        assert!(error.to_string().contains("10 MB"));
+        assert!(backend.calls.lock().unwrap().is_empty());
+        settings.allow_large_videos = true;
+        upload_clipboard(&settings, Some(clipboard()), &Diagnostics::new(), &backend).unwrap();
+        assert_eq!(backend.calls.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn image_copy_format_is_shared_by_quick_copy() {
+        let backend = FakeBackend {
+            calls: Mutex::new(Vec::new()),
+            fail: false,
+        };
+        let mut settings = settings();
+        for enabled in [true, false] {
+            settings.copy_images_as_markdown = enabled;
+            let copied =
+                upload_clipboard(&settings, Some(image()), &Diagnostics::new(), &backend).unwrap();
+            if enabled {
+                assert!(copied.starts_with("![clipboard-"));
+                assert!(
+                    copied.ends_with("](https://github.com/user-attachments/assets/test-image)")
+                );
+                assert!(!copied.contains("width="));
+            } else {
+                assert!(copied.starts_with("<img width="));
+            }
+        }
+    }
+
+    #[test]
+    fn copied_finder_video_uses_the_same_upload_flow_and_returns_a_bare_url() {
+        let backend = FakeBackend {
+            calls: Mutex::new(Vec::new()),
+            fail: false,
+        };
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4");
+        let clipboard = ClipboardItem::from(ClipboardEntry::ExternalPaths(
+            gpui_kit::ExternalPaths([path].into_iter().collect()),
+        ));
+        let settings = AppSettings {
+            copy_images_as_markdown: true,
+            ..settings()
+        };
+        let copied =
+            upload_clipboard(&settings, Some(clipboard), &Diagnostics::new(), &backend).unwrap();
+        assert_eq!(
+            copied,
+            "https://github.com/user-attachments/assets/test-image"
+        );
+        assert_eq!(backend.calls.lock().unwrap().len(), 1);
     }
 }

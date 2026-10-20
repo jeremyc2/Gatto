@@ -4,14 +4,14 @@
   <img src="packaging/rocket-cat-transparent.png" alt="Gatto, a cat with rocket boosters" width="220">
 </p>
 
-A macOS app for adding images to GitHub pull requests, issues, comments,
+A macOS app for adding images and videos to GitHub pull requests, issues, comments,
 and discussions.
 
-Paste, drop, or select an image. Upload it and copy the Markdown. For fewer steps,
-**Quick Copy** uploads your clipboard image in the background and copies the result.
+Paste an image or a copied Finder file, drag in media, or select a file. Upload it and copy the Markdown. For fewer steps,
+**Quick Copy** uploads your clipboard image or copied media file in the background and copies the result.
 
-Gatto uses the GitHub CLI (prerequisite) to connect to GitHub's image attachment
-service. Images go directly from your Mac to GitHub; Gatto doesn't have a backend.
+Gatto uses the GitHub CLI (prerequisite) to connect to GitHub's attachment
+service. Images and videos go directly from your Mac to GitHub; Gatto doesn't have a backend.
 
 ## Download
 
@@ -35,10 +35,11 @@ then the [walkthrough](docs/WALKTHROUGH.md) for your first upload.
 
 ## What you can do
 
-- Upload PNG, JPEG, GIF, and WebP from the clipboard, Finder, or a file picker.
+- Upload PNG, JPEG, GIF, WebP, MP4, MOV, and WebM.
+- Compress oversized videos locally; use a 10 MB limit or opt in to 100 MB for eligible paid GitHub plans.
 - Choose repositories owned by a personal GitHub account or an organization.
-- Upload batches, edit descriptions, retry failed images, and copy all results.
-- Preview images with zoom, pan, and previous/next navigation.
+- Upload mixed batches with progress, cancel uploads, retry failures, and copy results.
+- Preview images and animated GIFs with zoom and pan; open videos in your macOS video app.
 - Use Quick Copy from the menu bar, a global shortcut, or a custom URL.
 
 Gatto is obstinately dark-mode only.
@@ -51,8 +52,8 @@ from Terminal:
 | URL | Action |
 | --- | --- |
 | `gatto://open` | Open Gatto. |
-| `gatto://preview` | Preview the clipboard image. |
-| `gatto://quick-copy` | Upload the clipboard image and copy its Markdown. |
+| `gatto://preview` | Stage the clipboard image or copied media file. |
+| `gatto://quick-copy` | Upload the clipboard image or copied media file and copy its Markdown. |
 | `gatto://settings` | Open App Preferences. |
 
 Quick Copy requires a pinned repository. See the
@@ -75,6 +76,7 @@ Built with **[Rust](https://rust-lang.org/), [GPUI](https://gpui.rs/), and
 | Get help | [Troubleshooting and uninstall](SUPPORT.md), [security policy](SECURITY.md) |
 | Follow the project | [Changelog](CHANGELOG.md), [Code of Conduct](CODE_OF_CONDUCT.md) |
 | Contribute | [Development](CONTRIBUTING.md), [architecture](docs/ARCHITECTURE.md), [releases and size measurements](docs/RELEASING.md), [PR template](.github/PULL_REQUEST_TEMPLATE.md) |
+| Attachment research | [GitHub video support and limits](docs/research/github-video-attachments.md), [native video compression](docs/research/native-video-compression.md) |
 | Design decisions | [Window lifecycle](docs/adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md), [website scrolling](docs/adr/0002-preserve-native-scrolling-in-the-website-story.md), [website favicon](docs/adr/0003-use-the-luminous-black-cat-for-the-website-favicon.md), [installer research](docs/research/dmg-install-cleanup.md), [README research](docs/research/readme-examples.md), [website design research](docs/research/distinctive-website-design.md) |
 | Website | [Development and build](web/README.md) |
 | Game development research | [Current bitECS guide](docs/research/game-development/bitecs-current-guide.md), [latest Phaser TypeScript guide](docs/research/game-development/phaser-latest-typescript-guide.md), [controlling scope and shipping a playable game](docs/research/game-development/game-scope-and-shipping.md), [AI for complex NPCs](docs/research/game-development/ai-for-complex-npcs.md), [writing indie game endings and story beats](docs/research/game-development/indie-game-endings-and-story-beats.md) |
