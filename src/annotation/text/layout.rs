@@ -1,15 +1,11 @@
-//! One line-box layout for editing, geometry, native painting, and export.
+//! One CoreText line-box layout for editing, geometry, native painting, and export.
 use super::*;
 use std::ops::Range;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
 };
-#[cfg(not(target_os = "macos"))]
-use unicode_segmentation::UnicodeSegmentation;
-#[cfg(target_os = "macos")]
 mod macos;
-#[cfg(target_os = "macos")]
 use macos::{line_ranges, shape_line};
 
 #[derive(Clone)]
@@ -97,8 +93,6 @@ type Key = (String, u32, Option<u32>, u32);
 thread_local! {
     static CACHE: RefCell<HashMap<Key, Arc<Layout>>> = RefCell::default();
     static CACHE_BYTES: Cell<usize> = const { Cell::new(0) };
-    #[cfg(not(target_os = "macos"))]
-    static ADVANCES: RefCell<HashMap<char, f32>> = RefCell::default();
 }
 
 #[derive(Default)]
@@ -420,111 +414,4 @@ impl Layout {
             })
             .collect()
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn is_word_char(c: char) -> bool {
-    c.is_ascii() || ('\u{00c0}'..='\u{02ff}').contains(&c) || ('\u{0370}'..='\u{052f}').contains(&c)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn char_width(c: char, size: f32) -> f32 {
-    ADVANCES.with(|cache| {
-        if let Some(advance) = cache.borrow().get(&c) {
-            return advance * size;
-        }
-        let advance = if let Some(face) = font()
-            && let Some(glyph) = face.glyph_index(c)
-        {
-            f32::from(face.glyph_hor_advance(glyph).unwrap_or(0)) / f32::from(face.units_per_em())
-        } else {
-            shape_line(&c.to_string(), 1., 1.).width
-        };
-        let mut cache = cache.borrow_mut();
-        if cache.len() >= 2048 {
-            cache.clear();
-        }
-        cache.insert(c, advance);
-        advance * size
-    })
-}
-
-#[cfg(not(target_os = "macos"))]
-fn shape_line(text: &str, size: f32, line_height: f32) -> Line {
-    let Some(face) = font() else {
-        return Line {
-            width: 16.,
-            path: None,
-            parts: Vec::new(),
-            range: 0..text.len(),
-            carets: vec![(0, 0.)],
-            bitmaps: Vec::new(),
-        };
-    };
-    let scale = size / f32::from(face.units_per_em());
-    let baseline = (line_height - f32::from(face.ascender() - face.descender()) * scale) / 2.
-        + f32::from(face.ascender()) * scale;
-    let mut parts = TextParts::default();
-    let mut x = 0.;
-    let mut carets = Vec::new();
-    for (i, c) in text.char_indices() {
-        carets.push((i, x));
-        if let Some(glyph) = face.glyph_index(c) {
-            let mut builder = PathBuilder::new();
-            face.outline_glyph(
-                glyph,
-                &mut Outliner {
-                    path: &mut builder,
-                    x: 0.,
-                    y: 0.,
-                    scale,
-                },
-            );
-            parts.push(builder.finish(), Pos::new(x, baseline));
-            x += f32::from(face.glyph_hor_advance(glyph).unwrap_or(0)) * scale;
-        }
-    }
-    carets.push((text.len(), x));
-    let (path, parts) = parts.finish();
-    Line {
-        width: x,
-        path,
-        parts,
-        range: 0..text.len(),
-        carets,
-        bitmaps: Vec::new(),
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn line_ranges(paragraph: &str, size: f32, wrap: Option<f32>) -> Vec<Range<usize>> {
-    let mut ranges = Vec::new();
-    let mut start = 0;
-    let mut width = 0.;
-    let mut candidate = 0;
-    let mut candidate_width = 0.;
-    let mut previous = '\0';
-    for (i, cluster) in paragraph.grapheme_indices(true) {
-        let c = cluster.chars().next().unwrap();
-        if i > start && ((previous == ' ' && c != ' ') || !is_word_char(c)) {
-            candidate = i;
-            candidate_width = width;
-        }
-        let advance = cluster.chars().map(|c| char_width(c, size)).sum::<f32>();
-        if wrap.is_some_and(|limit| width + advance > limit) && i > start {
-            let end = if candidate > start { candidate } else { i };
-            ranges.push(start..end);
-            width = if end == i {
-                0.
-            } else {
-                width - candidate_width
-            };
-            start = end;
-            candidate = end;
-        }
-        width += advance;
-        previous = c;
-    }
-    ranges.push(start..paragraph.len());
-    ranges
 }

@@ -285,18 +285,19 @@ movement. Their shaft geometry excludes the label rectangle rather than painting
 an opaque cover over the source image. Labels contribute to hit and export bounds.
 
 `annotation/text/layout.rs` supplies shared line boxes, wrapping, caret positions,
-and glyph paths with whole-pixel line heights and preserved blank lines. On macOS,
+and glyph paths with whole-pixel line heights and preserved blank lines.
 CoreText handles contextual line breaking and shapes Arial with native kerning,
 ligatures, and system glyph fallback. Its outlines feed the same native geometry
 and PNG export. Glyphs without outlines, including color emoji, retain CoreText's
 fallback font and positions and are drawn into bounded RGBA bitmaps. The shared
 layout carries those bitmaps through scaling, hit testing, preview, and export.
-Other platforms use the existing TrueType outline fallback.
+Annotation text uses macOS CoreText exclusively, without a direct font-parser
+dependency or a separate layout path for unsupported platforms.
 Layout caches are bounded by entry count and estimated memory, shared across
-preview geometry and measurement; the portable fallback also caches character
-advances. A separate bounded line cache reuses unchanged shaping as paragraphs
-are edited. Shaped outlines retain positioned words, splitting unbroken runs into
-short fragments while preserving CoreText glyph placement. The native preview
+preview geometry and measurement. A separate bounded line cache reuses unchanged
+shaping as paragraphs are edited. Shaped outlines retain positioned words,
+splitting unbroken runs into short fragments while preserving CoreText glyph
+placement. The native preview
 shares bounded fragment meshes across edits, movement, and reflow, transforms only
 visible fragments, and submits two combined text layers for outline and ink.
 Editing does not tessellate a whole paragraph on every keystroke; PNG export still
@@ -355,8 +356,9 @@ Textures cover only the mark, use two pixels per annotation unit, and cap each
 side below 2,048 pixels. Moving a mark reuses its texture; geometry, rotation,
 text, or style changes replace it. Replaced, deleted, and closed textures are
 explicitly retired from GPUI's atlas alongside pixelation textures.
-`ttf-parser` supplies outlined glyph
-paths from the macOS Arial font, without bundling another font.
+CoreText supplies outlined glyph paths from the system Arial font, without
+bundling another font. GPUI and its SVG dependencies still bring in `ttf-parser`
+transitively; Gatto does not depend on it directly.
 
 PNG export runs from a background snapshot, composites opacity once per whole
 mark, expands to include off-image marks, and enforces dimension/allocation limits.

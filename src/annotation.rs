@@ -1058,61 +1058,6 @@ fn draw_cap(
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn font() -> Option<ttf_parser::Face<'static>> {
-    static FONT: OnceLock<Option<Vec<u8>>> = OnceLock::new();
-    let bytes = FONT
-        .get_or_init(|| {
-            [
-                "/System/Library/Fonts/Supplemental/Arial.ttf",
-                "/Library/Fonts/Arial.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            ]
-            .iter()
-            .find_map(|path| std::fs::read(path).ok())
-        })
-        .as_ref()?;
-    ttf_parser::Face::parse(bytes, 0).ok()
-}
-#[cfg(not(target_os = "macos"))]
-struct Outliner<'a> {
-    path: &'a mut PathBuilder,
-    x: f32,
-    y: f32,
-    scale: f32,
-}
-#[cfg(not(target_os = "macos"))]
-impl ttf_parser::OutlineBuilder for Outliner<'_> {
-    fn move_to(&mut self, x: f32, y: f32) {
-        self.path
-            .move_to(self.x + x * self.scale, self.y - y * self.scale);
-    }
-    fn line_to(&mut self, x: f32, y: f32) {
-        self.path
-            .line_to(self.x + x * self.scale, self.y - y * self.scale);
-    }
-    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.path.quad_to(
-            self.x + x1 * self.scale,
-            self.y - y1 * self.scale,
-            self.x + x * self.scale,
-            self.y - y * self.scale,
-        );
-    }
-    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.path.cubic_to(
-            self.x + x1 * self.scale,
-            self.y - y1 * self.scale,
-            self.x + x2 * self.scale,
-            self.y - y2 * self.scale,
-            self.x + x * self.scale,
-            self.y - y * self.scale,
-        );
-    }
-    fn close(&mut self) {
-        self.path.close();
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;

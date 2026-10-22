@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Remove Gatto's direct `ttf-parser` dependency and the unused non-macOS annotation
+  text fallback. Annotation text continues to use macOS CoreText for layout,
+  preview, and PNG export.
+
 ### Added
 
 - Hold Shift to draw closed shapes with equal width and height or resize corners
