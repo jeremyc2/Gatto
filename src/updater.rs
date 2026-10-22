@@ -1,7 +1,7 @@
 //! Process-lifetime update state, shared by the window and menu bar.
 use gpui_kit::{App, AppContext as _, Context, Entity, Global};
 
-use crate::{diagnostics::Diagnostics, menu_bar::MenuBarController};
+use crate::{diagnostics::Diagnostics, menu_bar::MenuBarController, settings::ReleaseChannel};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum UpdateState {
@@ -16,6 +16,9 @@ pub enum UpdateState {
 pub struct Updater {
     pub state: UpdateState,
     pub message: String,
+    channel: ReleaseChannel,
+    generation: isize,
+    menu: MenuBarController,
     #[cfg(target_os = "macos")]
     native: Option<native::Bridge>,
 }
@@ -33,12 +36,21 @@ impl Updater {
         entity
     }
 
-    pub fn start(cx: &mut App, diagnostics: Diagnostics, menu: MenuBarController) {
+    pub fn start(
+        cx: &mut App,
+        diagnostics: Diagnostics,
+        menu: MenuBarController,
+        channel: ReleaseChannel,
+    ) {
         let entity = Self::shared(cx);
+        entity.update(cx, |this, _| {
+            this.channel = channel;
+            this.menu = menu.clone();
+        });
         #[cfg(target_os = "macos")]
         {
             let (sender, events) = async_channel::unbounded();
-            match native::Bridge::load(sender) {
+            match native::Bridge::load(sender, channel) {
                 Ok(Some(bridge)) => entity.update(cx, |this, _| this.native = Some(bridge)),
                 Ok(None) => return, // Source builds have no bundled updater.
                 Err(error) => {
@@ -47,8 +59,11 @@ impl Updater {
                 }
             }
             cx.spawn(async move |cx| {
-                while let Ok((code, message)) = events.recv().await {
+                while let Ok((generation, code, message)) = events.recv().await {
                     cx.update(|cx| {
+                        if generation != entity.read(cx).generation {
+                            return;
+                        }
                         if code == 6 {
                             // Confirmation uses the existing upload guards and install path.
                             cx.dispatch_action(&crate::application_menu::InstallUpdate);
@@ -71,6 +86,13 @@ impl Updater {
     }
 
     fn receive(&mut self, code: isize, message: String, cx: &mut Context<Self>) {
+        if code == 5 {
+            if self.state == UpdateState::Idle {
+                self.message = message;
+                cx.notify();
+            }
+            return;
+        }
         self.state = match code {
             0 | 4 => UpdateState::Idle,
             1 => UpdateState::Available,
@@ -106,6 +128,38 @@ impl Updater {
         }
         false
     }
+
+    pub fn generation(&self) -> isize {
+        self.generation
+    }
+
+    pub fn set_channel(
+        &mut self,
+        channel: ReleaseChannel,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.state != UpdateState::Installing,
+            "Finish the update before changing release channels."
+        );
+        if self.channel == channel {
+            return Ok(());
+        }
+        self.channel = channel;
+        self.generation = self.generation.wrapping_add(1);
+        self.state = UpdateState::Idle;
+        self.message = "Checking the selected release channel…".into();
+        self.menu.invalidate_update_offer();
+        #[cfg(target_os = "macos")]
+        if let Some(bridge) = &self.native {
+            bridge.set_channel(channel, self.generation);
+        } else {
+            self.message =
+                "Channel saved. Update checks are available in packaged releases.".into();
+        }
+        cx.notify();
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -119,15 +173,20 @@ mod native {
     };
     use objc2_foundation::NSString;
 
+    unsafe extern "C" {
+        fn dlopen(path: *const std::ffi::c_char, mode: std::ffi::c_int) -> *mut std::ffi::c_void;
+        fn dlerror() -> *const std::ffi::c_char;
+    }
+
     pub struct Bridge {
         object: Retained<AnyObject>,
-        // The Objective-C class and all callbacks live in this library. Keep it
-        // loaded until process exit: unloading registered classes is unsafe.
-        _library: std::mem::ManuallyDrop<libloading::Library>,
     }
 
     impl Bridge {
-        pub fn load(events: async_channel::Sender<(isize, String)>) -> Result<Option<Self>> {
+        pub fn load(
+            events: async_channel::Sender<(isize, isize, String)>,
+            channel: crate::settings::ReleaseChannel,
+        ) -> Result<Option<Self>> {
             let executable = std::env::current_exe()?;
             let Some(contents) = executable.parent().and_then(|path| path.parent()) else {
                 return Ok(None);
@@ -138,25 +197,45 @@ mod native {
             let library = contents.join("Frameworks/libGattoUpdater.dylib");
             // SAFETY: Only load the bridge inside our signed app bundle. Hardened
             // runtime library validation checks its signing team at runtime.
-            let library =
-                std::mem::ManuallyDrop::new(unsafe { libloading::Library::new(library) }?);
+            use std::os::unix::ffi::OsStrExt as _;
+            let path = std::ffi::CString::new(library.as_os_str().as_bytes())?;
+            // Darwin RTLD_NOW (0x2) | RTLD_LOCAL (0x4) resolves the signed bridge
+            // before using its class without exporting its C/Swift symbols.
+            // Intentionally never dlclose: registered Objective-C classes and
+            // callbacks must remain loaded for the lifetime of this process.
+            if unsafe { dlopen(path.as_ptr(), 0x2 | 0x4) }.is_null() {
+                let error = unsafe { dlerror() };
+                let detail = if error.is_null() {
+                    "unknown dynamic loader error".into()
+                } else {
+                    unsafe { std::ffi::CStr::from_ptr(error) }.to_string_lossy()
+                };
+                anyhow::bail!("Could not load the signed updater bridge: {detail}");
+            }
             let class =
                 AnyClass::get(c"GattoUpdaterBridge").context("Missing updater bridge class")?;
             // SAFETY: These selectors and the block ABI match native/Updater.swift.
             // All calls and Sparkle callbacks run on the application main thread.
             let object: Retained<AnyObject> = unsafe { msg_send![class, new] };
-            let handler = RcBlock::new(move |code: isize, message: *mut NSString| {
-                // SAFETY: Swift supplies a nonnull NSString alive for this call.
-                let message = unsafe { &*message }.to_string();
-                let _ = events.try_send((code, message));
-            });
+            let handler = RcBlock::new(
+                move |generation: isize, code: isize, message: *mut NSString| {
+                    // SAFETY: Swift supplies a nonnull NSString alive for this call.
+                    let message = unsafe { &*message }.to_string();
+                    let _ = events.try_send((generation, code, message));
+                },
+            );
             unsafe {
+                let _: () = msg_send![&object, configureChannel: &*NSString::from_str(channel.key()), generation: 0isize];
                 let _: () = msg_send![&object, startWithHandler: &*handler];
             }
-            Ok(Some(Self {
-                object,
-                _library: library,
-            }))
+            Ok(Some(Self { object }))
+        }
+
+        pub fn set_channel(&self, channel: crate::settings::ReleaseChannel, generation: isize) {
+            // SAFETY: The Swift bridge copies the string on the main thread.
+            unsafe {
+                let _: () = msg_send![&self.object, configureChannel: &*NSString::from_str(channel.key()), generation: generation];
+            }
         }
 
         pub fn install(&self) {

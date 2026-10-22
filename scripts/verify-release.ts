@@ -2,6 +2,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { releaseChannel } from "./release-version";
 import { parseArgs } from "node:util";
 
 export function releaseChecksums(source: string, version: string): Map<string, string> {
@@ -36,7 +37,8 @@ if (import.meta.main) {
     options: { tag: { type: "string" }, directory: { type: "string" } },
   });
   const tag = values.tag;
-  if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error("Provide --tag vX.Y.Z");
+  if (!tag || !/^v\d+\.\d+\.\d+(?:-beta\.[1-9]\d*)?$/.test(tag))
+    throw new Error("Provide --tag vX.Y.Z or vX.Y.Z-beta.N");
   const directory = await mkdtemp(join(tmpdir(), "gatto-release-verify-"));
   const run = (args: string[]) => {
     const result = Bun.spawnSync(args);
@@ -47,7 +49,8 @@ if (import.meta.main) {
     const metadata = JSON.parse(
       run(["gh", "release", "view", tag, "--json", "assets,isPrerelease"]),
     );
-    if (metadata.isPrerelease) throw new Error("Expected a stable release");
+    if (metadata.isPrerelease !== (releaseChannel(tag.slice(1)) === "beta"))
+      throw new Error("Release tag and prerelease flag disagree");
     run([
       "gh",
       "release",

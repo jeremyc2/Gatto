@@ -473,6 +473,13 @@ preferences, or uninstalling, see [Support](../SUPPORT.md).
 
 ## Install an update
 
+The **Release channel** dropdown in **App Preferences → General** selects Stable
+or Beta. Beta also receives newer stable releases. Changing the dropdown checks
+availability and clears old offers; it never grants installation consent. When
+returning to Stable, an installed beta stays in place until Stable catches up.
+Gatto shows both versions while waiting and offers no downgrade. See
+[Setup](SETUP.md#updates) for defaults and persistence.
+
 A small **↑ Update** appears next to the header controls and in the menu bar menu
 when a new release is available. Click it once to install and restart. Finish
 active uploads first. **Updating…** shows progress; **↻ Update** retries a failure.

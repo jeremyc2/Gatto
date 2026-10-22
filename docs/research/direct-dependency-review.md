@@ -16,7 +16,49 @@ no dependencies, implementation, or security-policy exceptions were changed.
 Current architecture and security instructions remain in
 [Architecture](../ARCHITECTURE.md) and [Security](../../SECURITY.md).
 
-## Recommended order
+## Implementation follow-up (2026-10-22)
+
+The original inventory and assessments below describe the reviewed source at the
+date above. The subsequent implementation removes **six direct Rust dependencies**
+(`reqwest`, `tokio`, `futures-util`, `tray-icon`, `global-hotkey`, `libloading`) and
+**three JavaScript dependencies** (`toastify-js`, its types, and `typescript`).
+No replacement third-party package was added. Foundation/AppKit/Carbon adapters
+are tracked source compiled by Apple's installed tools; Core Text, image/Unicode
+handling, serialization and Sparkle remain.
+
+Measured against implementation starting commit `7372b41`:
+
+| Measurement | Before | After | Removed |
+| --- | ---: | ---: | ---: |
+| Reachable macOS Apple-silicon normal/build Rust package versions, using the metadata traversal described below | 533 | 498 | **35** |
+| Bun lock entries, including all platform binaries and the workspace entry | 221 | 198 | **23** |
+
+The combined changes remove additional Tokio-related macOS nodes that were
+retained when considering each root independently. A Tokio lock entry can still
+exist for other target configurations; this is not a claim about every target's
+graph. The later implementation starting commit had 221 Bun entries rather than
+the original review snapshot's 214. Comparing the actual starting/final lockfiles
+confirms 23 removed entries and no added entries. Release DMG/bundle size figures
+remain tied to their existing measured release until a new release is published.
+
+The website uses its existing notification styling and a manual-popover/fixed
+fallback; both TypeScript projects use Bun's built-in checker. Builds require
+installed local executables, explicit script-disabled installation, and a
+JavaScript audit gate. The one lint advisory remains visible under the expiring
+[Security policy exception](../../SECURITY.md); it has not been fixed or globally
+ignored. Native upload, main-thread shortcut/menu checks and release workflow
+guards are documented in [Contributing](../../CONTRIBUTING.md).
+
+Release compilation/check subprocesses strip inherited release-token variables;
+Bun runtime/check/test commands disable dotenv loading. Bun 1.4.3's built-in
+package-manager commands still load dotenv files despite the flag, so they are
+not a credential boundary; installation scripts are disabled. Signing credential preflight follows the final
+unsigned build. This is environment/phase separation, **not** isolation from the
+same user's Keychain, files or CLI credential stores. Stronger isolation still
+requires a separate credentialless build environment; no infrastructure or
+credential access was provisioned by this implementation.
+
+## Original recommended order
 
 | Priority | Proposed change | Prospective graph reduction | Cost and judgment |
 | --- | --- | --- | --- |

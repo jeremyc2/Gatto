@@ -3,6 +3,9 @@ import Sparkle
 
 @MainActor
 final class FakeClient: UpdateClient {
+    var sessionInProgress: Bool { !canCheckForUpdates }
+    var informationChecks = 0
+    func checkForUpdateInformation() { informationChecks += 1 }
     var canCheckForUpdates = true
     var installationChecks = 0
     var startupError: Error?
@@ -21,7 +24,7 @@ struct UpdaterTests {
         let client = FakeClient()
         let bridge = UpdaterBridge(client: client, defaults: defaults)
         var events: [Int] = []
-        bridge.start { state, _ in events.append(state) }
+        bridge.start { _, state, _ in events.append(state) }
         assert(client.installationChecks == 0)
         bridge.showUpdaterError(NSError(domain: "test", code: 1), acknowledgement: {})
         assert(events.last == 5, "background failures belong in diagnostics, not an install prompt")
@@ -51,6 +54,7 @@ struct UpdaterTests {
         queued.install()
         assert(busy.installationChecks == 2)
         testManualChecks(defaults: defaults)
+        testChannels(defaults: defaults)
         print("Passed: quiet background checks, one-click installs, manual checks, confirmation, cancellation and retry")
     }
 
@@ -63,7 +67,7 @@ struct UpdaterTests {
             respond = reply
         }
         var events: [Int] = []
-        bridge.start { state, _ in events.append(state) }
+        bridge.start { _, state, _ in events.append(state) }
         let error = NSError(domain: "test", code: 1)
         // A menu check is explicit, deduplicated, and never installs by itself.
         bridge.checkForUpdates()
@@ -143,7 +147,7 @@ struct UpdaterTests {
             prompts.append(prompt)
             reply(false)
         }
-        failed.start { _, _ in }
+        failed.start { _, _, _ in }
         failed.checkForUpdates()
         assert(prompts.last?.title == "Update checking is unavailable")
         assert(unavailable.installationChecks == 0)
@@ -155,6 +159,64 @@ struct UpdaterTests {
         fallback.checkForUpdates()
         fallback.finishCycle(error: NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue)))
         assert(prompts.last?.title == "No update available")
+    }
+
+    @MainActor static func testChannels(defaults: UserDefaults) {
+        let comparator = SUStandardVersionComparator.default
+        assert(comparator.compareVersion("0.17.0b10", toVersion: "0.17.0b9") == .orderedDescending)
+        assert(comparator.compareVersion("0.17.0", toVersion: "0.17.0b10") == .orderedDescending)
+        assert(!ReleaseChannel.stable.accepts(version: "0.18.0b1", channel: "beta"))
+        assert(!ReleaseChannel.stable.accepts(version: "0.18.0b1", channel: nil))
+        assert(ReleaseChannel.beta.accepts(version: "0.18.0", channel: nil))
+        assert(ReleaseChannel.beta.allowedChannels == ["beta"] && ReleaseChannel.stable.allowedChannels.isEmpty)
+        assert(ReleaseChannel.stable.feedURL != ReleaseChannel.beta.feedURL)
+        defaults.set("0.18.0b1", forKey: "GattoAvailableUpdate")
+        defaults.set("beta", forKey: "GattoAvailableUpdateChannel")
+        let client = FakeClient()
+        var respond: ((Bool) -> Void)?
+        let bridge = UpdaterBridge(client: client, defaults: defaults, installedVersion: "0.17.0b1") { _, reply in respond = reply }
+        bridge.configureChannel("beta", generation: 0)
+        var events: [(Int, Int, String)] = []
+        bridge.start { generation, state, message in events.append((generation, state, message as String)) }
+        assert(events.last?.1 == 1, "only matching channel caches restore")
+        bridge.confirmUpdate(displayVersion: "0.18.0b1", releaseURL: nil, informationOnly: false) { _ in }
+        client.canCheckForUpdates = false
+        bridge.configureChannel("stable", generation: 1)
+        let count = events.count
+        respond?(true)
+        bridge.showUpdaterError(NSError(domain: "old-channel", code: 1), acknowledgement: {})
+        bridge.finishCycle(error: nil)
+        assert(events.count == count, "stale prompts and checks cannot resurrect old offers or consent")
+        assert(defaults.string(forKey: "GattoAvailableUpdate") == nil)
+        assert(client.informationChecks == 0 && client.installationChecks == 0)
+        client.canCheckForUpdates = true
+        bridge.finishCycle(error: nil)
+        assert(client.informationChecks == 1 && client.installationChecks == 0, "switching only probes")
+        bridge.recordStableTarget("0.16.3", version: "0.16.3")
+        bridge.finishCycle(error: NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue)))
+        assert(events.last?.0 == 1 && events.last?.1 == 0)
+        assert(events.last!.2.contains("0.17.0-beta.1") && events.last!.2.contains("0.16.3"))
+        var choice: SPUUserUpdateChoice?
+        bridge.showReady(toInstallAndRelaunch: { choice = $0 })
+        assert(choice == .skip, "an older stable never downloads or installs")
+        bridge.beginCycle()
+        bridge.recordStableTarget("0.17.0", version: "0.17.0")
+        bridge.finishCycle(error: nil)
+        assert(events.last?.2 == "", "Stable catching up clears the wait")
+        bridge.configureChannel("beta", generation: 2)
+        assert(client.informationChecks == 2 && client.installationChecks == 0)
+        bridge.install()
+        let installedGeneration = bridge.generation
+        bridge.configureChannel("stable", generation: 3)
+        assert(bridge.generation == installedGeneration, "channel changes cannot interrupt an authorized installation")
+        // A beta cache never appears after restarting on Stable.
+        defaults.set("0.18.0b1", forKey: "GattoAvailableUpdate")
+        defaults.set("beta", forKey: "GattoAvailableUpdateChannel")
+        let stable = UpdaterBridge(client: FakeClient(), defaults: defaults, installedVersion: "0.16.3")
+        var states: [Int] = []
+        stable.start { _, state, _ in states.append(state) }
+        assert(states == [0] && defaults.string(forKey: "GattoAvailableUpdate") == nil)
+        print("Passed: channel isolation, restart caches, stale consent/checks, deferred refresh and return-to-Stable policy")
     }
 
 }

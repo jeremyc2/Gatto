@@ -4,6 +4,7 @@ mod annotation;
 mod app;
 mod application_menu;
 mod compression;
+mod desktop;
 mod diagnostics;
 mod github;
 mod global_shortcut;

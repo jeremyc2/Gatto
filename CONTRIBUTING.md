@@ -96,6 +96,8 @@ cargo check --all-targets
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets
 ./scripts/test-updater.sh
+./scripts/test-platform.sh
+bun audit:dependencies
 bun typecheck:scripts
 bun test scripts
 cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
@@ -123,7 +125,7 @@ Bun's types for editor diagnostics and `bun typecheck:scripts`.
 Use Bun for website tooling. From the repository root:
 
 ```sh
-bun install --frozen-lockfile
+bun install --frozen-lockfile --ignore-scripts
 bun build:web
 bun lint:web
 bun test:web
@@ -208,11 +210,20 @@ AVFoundation export. Tests check actual native H.264/AAC output, dimensions,
 duration, cancellation, and oversized-import choices without contacting GitHub
 or opening a player.
 
-Media uploads use Tokio and futures-util for streamed async HTTP and cancellation
-inside background workers; `tempfile` provides automatically removed, privately
-permissioned video snapshots. These were already transitive dependencies; the
-new direct requirements enable ownership and cancellation that a blocking body
-clone could not provide. Compression uses narrowly enabled `objc2` AVFoundation, AVFAudio, CoreMedia,
+Media uploads use a bounded Foundation URLSession stream inside background
+workers; `tempfile` provides automatically removed, privately permissioned video
+snapshots. Apple's installed clang/libtool compile the tracked native upload,
+menu and shortcut adapters during Cargo builds, without another downloaded
+compiler or binding package. `test-platform.sh` checks real AppKit menu behavior
+and runs the shortcut controller on macOS's main thread. Ordinary Rust/GPUI test
+workers cannot substitute for that AppKit thread. Bun's built-in `check` handles
+both TypeScript projects; package executables may not auto-install missing tools.
+Native updater checks include channel isolation, cached/in-flight offers and
+Stable/Beta feed signing. The disposable installation test exercises a beta
+install, Stable rejecting a beta feed, waiting on an older Stable, and promotion
+to Stable. Release versions use `x.y.z-beta.N` for Cargo/display/tags and `x.y.zbN`
+for macOS's build version; `prepare-release.ts --check` verifies the mapping.
+Compression uses narrowly enabled `objc2` AVFoundation, AVFAudio, CoreMedia,
 CoreVideo, and VideoToolbox bindings. They link macOS's existing decoders and
 hardware encoder; no software codec, capture framework, or external encoder
 executable is bundled. The first four additions are framework glue; the

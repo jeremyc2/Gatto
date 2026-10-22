@@ -5,6 +5,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fail() { echo "error: $*" >&2; exit 1; }
+# Builds get no inherited publishing/signing tokens. This is environment hygiene,
+# not a sandbox: use a separate credentialless build user for strong isolation.
+build() (
+  unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN
+  unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CF_API_TOKEN CF_API_KEY
+  unset APPLE_ID APPLE_PASSWORD APPLE_APP_SPECIFIC_PASSWORD ASC_KEY_ID ASC_ISSUER_ID
+  unset SIGN_IDENTITY NOTARY_PROFILE SPARKLE_ACCOUNT
+  "$@"
+)
 mode=release
 case "${1:-}" in
   "") ;;
@@ -21,7 +30,6 @@ for tool in bun gh git cargo plutil hdiutil diskutil; do
   command -v "$tool" >/dev/null || fail "missing required tool: $tool; see docs/RELEASING.md"
 done
 [[ "$(git branch --show-current)" == main ]] || fail "merge your work into main, then run this command there"
-gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run gh auth login"
 git fetch --quiet origin main --tags
 git merge-base --is-ancestor origin/main HEAD || fail "main is behind or diverged from origin/main; reconcile it first"
 [[ -z "$(git diff --name-only --diff-filter=U)" ]] || fail "resolve merge conflicts first"
@@ -40,7 +48,27 @@ refresh_readme() {
   fi
 }
 
+# Both ordinary publication and recovery use the version's channel.
+set_channel() {
+  channel=stable
+  publish_flags=(--latest)
+  create_flags=()
+  feed_flags=()
+  if [[ "$version" =~ -beta\.[1-9][0-9]*$ ]]; then
+    channel=beta
+    publish_flags=(--prerelease --latest=false)
+    create_flags=(--prerelease --latest=false)
+    feed_flags=(--channel beta)
+  fi
+}
+
 sync_metadata() {
+  ./scripts/publish-beta-feed.sh "$tag" \
+    || fail "$tag is published; beta feed refresh failed; run ./scripts/release.sh --resume"
+  if [[ "$channel" == beta ]]; then
+    echo "Published $tag as a prerelease. Beta feed verified; stable README and Homebrew cask remain unchanged."
+    return
+  fi
   refresh_readme \
     || fail "$tag is published; fix the error and run ./scripts/release.sh --resume"
   refresh_readme --check \
@@ -59,7 +87,9 @@ sync_metadata() {
 }
 
 if [[ "$mode" == resume ]]; then
+  gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run gh auth login"
   version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+  set_channel
   tag="v$version"
   archive="gatto-$version-$TARGET.dmg"
   draft="$(gh release view "$tag" --json isDraft --jq .isDraft)" \
@@ -81,7 +111,7 @@ if [[ "$mode" == resume ]]; then
     bun scripts/verify-release.ts --tag "$tag" --directory "$dist"
     read -r -p "Publish verified draft $tag? [y/N] " answer
     [[ "$answer" == y || "$answer" == Y ]] || fail "cancelled; verified draft retained"
-    gh release edit "$tag" --draft=false --latest
+    gh release edit "$tag" --draft=false "${publish_flags[@]}"
   else
     bun scripts/verify-release.ts --tag "$tag"
   fi
@@ -94,44 +124,36 @@ for tool in rustup security codesign xcrun spctl ditto ruby; do
 done
 cargo deny --version >/dev/null 2>&1 \
   || fail "install the one-time audit tool: cargo install --locked cargo-deny --version 0.20.2"
-if [[ -z "${SIGN_IDENTITY:-}" ]]; then
-  identities="$(security find-identity -v -p codesigning | grep 'Developer ID Application' || true)"
-  [[ -n "$identities" ]] || fail "no Developer ID Application certificate found in the keychain"
-  [[ "$(wc -l <<< "$identities")" -eq 1 ]] || fail "several identities found; set SIGN_IDENTITY"
-  SIGN_IDENTITY="$(sed -E 's/.*"(.*)".*/\1/' <<< "$identities")"
-fi
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
-  || fail "notarytool profile '$NOTARY_PROFILE' is missing or invalid"
-./scripts/prepare-updater.sh
-sparkle_key="$(dist/sparkle/bin/generate_keys --account "$SPARKLE_ACCOUNT" -p)" \
-  || fail "create the one-time Sparkle signing key; see docs/RELEASING.md"
-[[ -n "$sparkle_key" ]] || fail "Sparkle signing key is empty"
+build ./scripts/prepare-updater.sh
 
 bun scripts/prepare-release.ts
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+set_channel
 tag="v$version"
 if gh release view "$tag" >/dev/null 2>&1; then
   fail "$tag already has a release; use --resume to finish it"
 fi
 
 # Run required checks here so releasing does not rely on a remembered checklist.
-bun install --frozen-lockfile
-cargo check --all-targets
+build bun --no-env-file install --frozen-lockfile --ignore-scripts
+build bun --no-env-file audit:dependencies
+build cargo check --locked --all-targets
 bun scripts/prepare-release.ts --check
 plutil -lint packaging/Info.plist
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets --all-features -- -D warnings
-cargo test --locked --all-targets
-cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
-bun typecheck:scripts
-bun test scripts
-./scripts/test-updater.sh
-bun scripts/test-update-install.ts
+build cargo fmt --all -- --check
+build cargo clippy --locked --all-targets --all-features -- -D warnings
+build cargo test --locked --all-targets
+build cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
+build bun --no-env-file typecheck:scripts
+build bun --no-env-file test scripts
+build ./scripts/test-updater.sh
+build ./scripts/test-platform.sh
+build bun --no-env-file scripts/test-update-install.ts
 ruby -c Casks/gatto.rb
-bun build:web
-bun lint:web
-bun typecheck:web
-bun test:web
+build bun --no-env-file build:web
+build bun --no-env-file lint:web
+build bun --no-env-file typecheck:web
+build bun --no-env-file test:web
 
 git status --short
 git diff --stat HEAD
@@ -146,10 +168,23 @@ if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
   [[ "$(git rev-parse "$tag^{commit}")" == "$release_commit" ]] || fail "$tag already points to another commit"
 fi
 
-echo "Releasing $tag signed as: $SIGN_IDENTITY"
+build rustup target add "$TARGET" > /dev/null
+GIT_COMMIT_HASH="$(git rev-parse HEAD)" build cargo build --locked --release --target "$TARGET"
 
-rustup target add "$TARGET" > /dev/null
-GIT_COMMIT_HASH="$(git rev-parse HEAD)" cargo build --locked --release --target "$TARGET"
+# No third-party compilation or install steps follow credential preflight.
+gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run gh auth login"
+if [[ -z "${SIGN_IDENTITY:-}" ]]; then
+  identities="$(security find-identity -v -p codesigning | grep 'Developer ID Application' || true)"
+  [[ -n "$identities" ]] || fail "no Developer ID Application certificate found in the keychain"
+  [[ "$(wc -l <<< "$identities")" -eq 1 ]] || fail "several identities found; set SIGN_IDENTITY"
+  SIGN_IDENTITY="$(sed -E 's/.*"(.*)".*/\1/' <<< "$identities")"
+fi
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
+  || fail "notarytool profile '$NOTARY_PROFILE' is missing or invalid"
+sparkle_key="$(dist/sparkle/bin/generate_keys --account "$SPARKLE_ACCOUNT" -p)" \
+  || fail "create the one-time Sparkle signing key; see docs/RELEASING.md"
+[[ -n "$sparkle_key" ]] || fail "Sparkle signing key is empty"
+echo "Releasing $tag signed as: $SIGN_IDENTITY"
 
 dist="dist/release"
 bundle="$dist/$APP_NAME"
@@ -204,7 +239,7 @@ spctl --assess --type open --context context:primary-signature --verbose=2 "$dis
 dist/sparkle/bin/generate_appcast --account "$SPARKLE_ACCOUNT" \
   --download-url-prefix "https://github.com/jeremyc2/Gatto/releases/download/$tag/" \
   --link "https://github.com/jeremyc2/Gatto/releases/tag/$tag" \
-  --maximum-deltas 0 "$dist"
+  --maximum-deltas 0 ${feed_flags[@]+"${feed_flags[@]}"} "$dist"
 dist/sparkle/bin/sign_update --account "$SPARKLE_ACCOUNT" --verify "$dist/appcast.xml"
 (cd "$dist" && shasum -a 256 "$archive" appcast.xml > SHA256SUMS)
 
@@ -216,8 +251,8 @@ trap 'rm -f "$notes_file"' EXIT
 bun scripts/prepare-release.ts --print-notes > "$notes_file"
 # Keep incomplete uploads in a draft until their bytes have been verified.
 gh release create "$tag" "$dist/$archive" "$dist/appcast.xml" "$dist/SHA256SUMS" \
-  --target "$release_commit" --title "$tag" --notes-file "$notes_file" --draft
+  --target "$release_commit" --title "$tag" --notes-file "$notes_file" --draft ${create_flags[@]+"${create_flags[@]}"}
 bun scripts/verify-release.ts --tag "$tag" --directory "$dist" \
   || fail "draft upload verification failed; run ./scripts/release.sh --resume"
-gh release edit "$tag" --draft=false --latest
+gh release edit "$tag" --draft=false "${publish_flags[@]}"
 sync_metadata

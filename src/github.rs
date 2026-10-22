@@ -1,16 +1,14 @@
 use std::{
     env, io,
-    io::Read as _,
     path::PathBuf,
     process::{Command, Output},
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
@@ -24,6 +22,8 @@ use crate::{
 const ATTACHMENT_ENDPOINT: &str = "https://uploads.github.com/user-attachments/assets";
 const AUTH_HELP: &str =
     "GitHub CLI not found or unauthenticated. Please run gh auth login in your terminal.";
+
+mod native;
 
 #[derive(Debug, Error)]
 pub enum GithubError {
@@ -95,24 +95,15 @@ pub fn load_repository_id(
 #[derive(Clone, Default)]
 pub struct UploadControl {
     canceled: Arc<AtomicBool>,
-    wake: Arc<tokio::sync::Notify>,
 }
 
 impl UploadControl {
     pub fn cancel(&self) {
         self.canceled.store(true, Ordering::Release);
-        self.wake.notify_one();
     }
 
     pub fn is_canceled(&self) -> bool {
         self.canceled.load(Ordering::Acquire)
-    }
-
-    async fn cancelled(&self) {
-        let wake = self.wake.notified();
-        if !self.is_canceled() {
-            wake.await;
-        }
     }
 }
 
@@ -142,12 +133,8 @@ pub fn upload(
     if control.is_canceled() {
         return Err(GithubError::Canceled);
     }
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|_| GithubError::Upload("Could not start the upload worker. Try again.".into()))?;
     diagnostics.info("Streaming an attachment to GitHub.");
-    let result = runtime.block_on(upload_to(
+    let result = upload_to(
         ATTACHMENT_ENDPOINT,
         token,
         repository_id,
@@ -155,14 +142,14 @@ pub fn upload(
         control,
         Arc::new(progress),
         UploadTimeouts::default(),
-    ));
+    );
     if result.is_ok() {
         diagnostics.info("GitHub accepted the attachment.");
     }
     result
 }
 
-async fn upload_to(
+fn upload_to(
     endpoint: &str,
     token: &str,
     repository_id: u64,
@@ -171,129 +158,15 @@ async fn upload_to(
     progress: Arc<dyn Fn(u64, u64) + Send + Sync>,
     timeouts: UploadTimeouts,
 ) -> Result<String, GithubError> {
-    if control.is_canceled() {
-        return Err(GithubError::Canceled);
-    }
-    let activity = Arc::new(AtomicU64::new(0));
-    let started = Instant::now();
-    let send_activity = activity.clone();
-    let reader = attachment
-        .reader()
-        .map_err(|error| GithubError::Upload(error.to_string()))?;
-    let total = attachment.len();
-    progress(0, total);
-    let stream = futures_util::stream::try_unfold(
-        (reader, 0_u64, Instant::now()),
-        move |(mut reader, sent, last_progress)| {
-            let progress = progress.clone();
-            let activity = send_activity.clone();
-            async move {
-                let mut chunk = vec![0; 64 * 1024];
-                let count = reader.read(&mut chunk)?;
-                if count == 0 {
-                    if sent != total {
-                        return Err(io::Error::new(
-                            io::ErrorKind::UnexpectedEof,
-                            "The staged attachment became unreadable",
-                        ));
-                    }
-                    return Ok(None);
-                }
-                let sent = sent + count as u64;
-                if sent > total {
-                    return Err(io::Error::other("The staged attachment changed size"));
-                }
-                chunk.truncate(count);
-                activity.store(started.elapsed().as_millis() as u64, Ordering::Release);
-                let last_progress =
-                    if sent == total || last_progress.elapsed() >= Duration::from_millis(100) {
-                        progress(sent, total);
-                        Instant::now()
-                    } else {
-                        last_progress
-                    };
-                Ok::<_, io::Error>(Some((chunk, (reader, sent, last_progress))))
-            }
-        },
-    );
-    let client = Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(timeouts.total)
-        .redirect(reqwest::redirect::Policy::none())
-        .retry(reqwest::retry::never())
-        .build()
-        .map_err(|_| {
-            GithubError::Upload("Could not initialize the secure upload connection.".into())
-        })?;
-    let request = async {
-        let response = client
-            .post(endpoint)
-            .bearer_auth(token)
-            .header("Accept", "application/json")
-            .header("Content-Type", &attachment.mime_type)
-            .header("Content-Length", total)
-            .header("User-Agent", concat!("gatto/", env!("CARGO_PKG_VERSION")))
-            .query(&[
-                ("name", attachment.name.as_str()),
-                ("content_type", attachment.mime_type.as_str()),
-                ("repository_id", &repository_id.to_string()),
-            ])
-            .body(reqwest::Body::wrap_stream(stream))
-            .send()
-            .await
-            .map_err(upload_network_error)?;
-        activity.store(started.elapsed().as_millis() as u64, Ordering::Release);
-        let status = response.status();
-        let retry_after = response
-            .headers()
-            .get("retry-after")
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_owned);
-        // Bound responses too: an error proxy must not fill memory with HTML.
-        let mut response = response;
-        let mut body = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(upload_network_error)? {
-            if body.len() + chunk.len() > 64 * 1024 {
-                return Err(GithubError::Upload(
-                    "GitHub returned an oversized response. Check GitHub's status and retry."
-                        .into(),
-                ));
-            }
-            activity.store(started.elapsed().as_millis() as u64, Ordering::Release);
-            body.extend_from_slice(&chunk);
-        }
-        let body = String::from_utf8_lossy(&body);
-        if !status.is_success() {
-            return Err(GithubError::Upload(upload_http_error(
-                status,
-                &body,
-                retry_after.as_deref(),
-            )));
-        }
-        let uploaded: AttachmentResponse = serde_json::from_str(&body)
-            .map_err(|_| GithubError::Upload("GitHub returned an unreadable upload response. The attachment may have uploaded; retrying can create another copy.".into()))?;
-        let url = uploaded.url.or(uploaded.href)
-            .ok_or_else(|| GithubError::Upload("GitHub returned no attachment URL. The attachment may have uploaded; retrying can create another copy.".into()))?;
-        validate_attachment_url(&url)?;
-        Ok(url)
-    };
-    let stalled = async {
-        loop {
-            tokio::time::sleep(timeouts.idle.min(Duration::from_secs(1))).await;
-            if started.elapsed().as_millis() - activity.load(Ordering::Acquire) as u128
-                >= timeouts.idle.as_millis()
-            {
-                break GithubError::Upload("No upload activity for 90 seconds. Check your connection and retry; GitHub may already have received the file.".into());
-            }
-        }
-    };
-    tokio::select! {
-        // Preserve a received success even if cancellation arrives in the same poll.
-        biased;
-        result = request => result,
-        _ = control.cancelled() => Err(GithubError::Canceled),
-        error = stalled => Err(error),
-    }
+    native::upload(
+        endpoint,
+        token,
+        repository_id,
+        attachment,
+        control,
+        progress,
+        timeouts,
+    )
 }
 
 fn validate_attachment_url(url: &str) -> Result<(), GithubError> {
@@ -317,21 +190,8 @@ fn validate_attachment_url(url: &str) -> Result<(), GithubError> {
     }
 }
 
-fn upload_network_error(error: reqwest::Error) -> GithubError {
-    let message = if error.is_timeout() {
-        "The upload timed out. Check your connection and retry. If GitHub already received the file, retrying can create another copy."
-    } else if error.is_connect() {
-        "Could not connect securely to GitHub. Check your network, VPN, or proxy and retry."
-    } else if error.is_body() {
-        "Could not read or send the attachment. Add the file again and retry."
-    } else {
-        "The connection to GitHub was interrupted. Check your connection and retry; the upload may already have completed."
-    };
-    GithubError::Upload(message.into())
-}
-
-fn upload_http_error(status: StatusCode, body: &str, retry_after: Option<&str>) -> String {
-    let hint = match status.as_u16() {
+fn upload_http_error(status: u16, body: &str, retry_after: Option<&str>) -> String {
+    let hint = match status {
         401 => "GitHub authentication expired. Run gh auth login and reopen Gatto.",
         403 | 404 => {
             "GitHub denied the upload. Check repository write access, token permissions, and any organization SSO requirement."
@@ -537,7 +397,9 @@ struct AttachmentResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read as _;
     use std::os::unix::process::ExitStatusExt;
+    use std::time::Instant;
 
     fn output(code: i32, stdout: &str, stderr: &str) -> Output {
         Output {
@@ -608,22 +470,18 @@ mod tests {
         progress: Arc<dyn Fn(u64, u64) + Send + Sync>,
         timeout: Duration,
     ) -> Result<String, GithubError> {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(upload_to(
-                endpoint,
-                "test-token",
-                42,
-                item,
-                control,
-                progress,
-                UploadTimeouts {
-                    total: timeout,
-                    ..Default::default()
-                },
-            ))
+        upload_to(
+            endpoint,
+            "test-token",
+            42,
+            item,
+            control,
+            progress,
+            UploadTimeouts {
+                total: timeout,
+                ..Default::default()
+            },
+        )
     }
 
     #[test]
@@ -699,6 +557,61 @@ mod tests {
     }
 
     #[test]
+    fn native_transport_rejects_redirects_challenges_large_responses_and_post_replay() {
+        use std::io::Write as _;
+        for mode in ["redirect", "challenge", "oversized", "disconnect"] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let endpoint = format!("http://{}/", listener.local_addr().unwrap());
+            let destination = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            destination.set_nonblocking(true).unwrap();
+            let location = format!("http://{}/stolen", destination.local_addr().unwrap());
+            let worker = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                let request = receive_request(&mut socket);
+                assert!(
+                    request
+                        .headers
+                        .to_ascii_lowercase()
+                        .contains("authorization: bearer test-token")
+                );
+                let response = match mode {
+                    "redirect" => format!("HTTP/1.1 307 Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+                    "challenge" => "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"unexpected\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),
+                    "oversized" => format!("HTTP/1.1 201 Created\r\nContent-Length: 70000\r\nConnection: close\r\n\r\n{}", "x".repeat(70000)),
+                    _ => String::new(),
+                };
+                let _ = socket.write_all(response.as_bytes());
+                drop(socket);
+                std::thread::sleep(Duration::from_millis(100));
+                listener.set_nonblocking(true).unwrap();
+                assert!(
+                    matches!(listener.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock),
+                    "POST must not be automatically repeated"
+                );
+            });
+            let error = run_upload(
+                &endpoint,
+                &video_attachment(),
+                &UploadControl::default(),
+                Arc::new(|_, _| {}),
+                Duration::from_secs(5),
+            )
+            .unwrap_err();
+            if mode == "oversized" {
+                assert!(error.to_string().contains("oversized"), "{error}");
+            }
+            if mode == "challenge" {
+                assert!(error.to_string().contains("authentication"), "{error}");
+            }
+            assert!(
+                matches!(destination.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock),
+                "Redirect target must never receive the bearer token"
+            );
+            worker.join().unwrap();
+        }
+    }
+
+    #[test]
     fn cancellation_interrupts_waiting_for_github_and_timeout_is_actionable() {
         for mode in ["cancel", "timeout", "idle"] {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -726,19 +639,15 @@ mod tests {
                         Duration::from_secs(90)
                     },
                 };
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(upload_to(
-                        &endpoint,
-                        "test-token",
-                        42,
-                        &video_attachment(),
-                        &job_control,
-                        Arc::new(|_, _| {}),
-                        timeouts,
-                    ))
+                upload_to(
+                    &endpoint,
+                    "test-token",
+                    42,
+                    &video_attachment(),
+                    &job_control,
+                    Arc::new(|_, _| {}),
+                    timeouts,
+                )
             });
             ready.recv_timeout(Duration::from_secs(5)).unwrap();
             let started = Instant::now();

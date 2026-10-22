@@ -15,9 +15,35 @@ const APPLICATION_SUPPORT_DIRECTORY: &str = "Gatto";
 const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.gatto.plist";
 const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReleaseChannel {
+    Beta,
+    #[default]
+    #[serde(other)]
+    Stable,
+}
+
+impl ReleaseChannel {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Beta => "beta",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Stable => "Stable",
+            Self::Beta => "Beta",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AppSettings {
+    pub release_channel: ReleaseChannel,
     #[serde(alias = "organization")]
     pub owner: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
@@ -40,6 +66,7 @@ fn default_quick_copy_shortcut() -> String {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            release_channel: ReleaseChannel::Stable,
             owner: None,
             pinned_repositories: BTreeSet::new(),
             last_repository: None,
@@ -278,6 +305,35 @@ mod tests {
     };
 
     use super::{AppSettings, clear_persistence, write_settings};
+
+    #[test]
+    fn release_channel_defaults_and_persistence_remain_compatible() {
+        use super::ReleaseChannel;
+        assert_eq!(
+            AppSettings::default().release_channel,
+            ReleaseChannel::Stable
+        );
+        for json in ["{}", r#"{"release_channel":"future"}"#] {
+            assert_eq!(
+                serde_json::from_str::<AppSettings>(json)
+                    .unwrap()
+                    .release_channel,
+                ReleaseChannel::Stable
+            );
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        for channel in [ReleaseChannel::Beta, ReleaseChannel::Stable] {
+            let settings = AppSettings {
+                release_channel: channel,
+                ..Default::default()
+            };
+            write_settings(&settings, &path).unwrap();
+            let restored: AppSettings =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            assert_eq!(restored.release_channel, channel);
+        }
+    }
 
     #[cfg(target_os = "macos")]
     #[test]

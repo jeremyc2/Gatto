@@ -19,7 +19,10 @@ async function workflow(mode: string, resume = false) {
       join(root, "scripts/release.sh"),
       await Bun.file(new URL("./release.sh", import.meta.url)).text(),
     );
-    await Bun.write(join(root, "Cargo.toml"), '[package]\nname = "gatto"\nversion = "0.15.0"\n');
+    await Bun.write(
+      join(root, "Cargo.toml"),
+      `[package]\nname = "gatto"\nversion = "${mode.startsWith("beta-") ? "0.17.0-beta.1" : "0.15.0"}"\n`,
+    );
     await Bun.write(join(root, "packaging/Info.plist"), "test plist");
     await Bun.write(join(root, "packaging/AppIcon.icns"), "icon");
     await Bun.write(join(root, "packaging/Assets.car"), "assets");
@@ -31,8 +34,12 @@ import { join } from 'node:path';
 const root = process.env.GATTO_TEST_ROOT!;
 const mode = process.env.GATTO_TEST_MODE!;
 const args = process.argv.slice(2);
+if (tool === 'bun' && args[0] === '--no-env-file') args.shift();
 appendFileSync(join(root, 'calls'), JSON.stringify([tool, ...args]) + '\\n');
 const dirty = join(root, 'dirty');
+if ((tool === 'cargo' && ['check','clippy','test','build'].includes(args[0]!)) || (tool === 'bun' && ['install','audit:dependencies','typecheck:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
+ if (process.env.GH_TOKEN || process.env.CLOUDFLARE_API_TOKEN || process.env.APPLE_PASSWORD) appendFileSync(join(root,'build-exposures'), tool+' '+args.join(' ')+'\\n');
+}
 const draft = join(root, 'draft');
 const sha = 'a'.repeat(40);
 if (tool === 'git') {
@@ -54,18 +61,20 @@ if (tool === 'git') {
 } else if (tool === 'gh') {
  if (args[0] === 'release' && args[1] === 'view') {
   if (!args.includes('--json')) process.exit(1);
-  if (args.includes('isDraft')) console.log(mode === 'draft-resume' ? 'true' : 'false');
+  if (args.includes('isDraft')) console.log(['draft-resume','beta-draft-resume'].includes(mode) ? 'true' : 'false');
   if (args.includes('targetCommitish')) console.log(sha);
  }
  if (args[1] === 'create') writeFileSync(draft, 'draft');
- if (args[1] === 'edit' && !existsSync(draft) && mode !== 'draft-resume') throw new Error('Published without a verified draft');
+ if (args[1] === 'edit' && !existsSync(draft) && !['draft-resume','beta-draft-resume'].includes(mode)) throw new Error('Published without a verified draft');
 } else if (tool === 'bun') {
  if (args[0] === 'scripts/prepare-release.ts' && args.includes('--print-notes')) console.log('### Added\\n\\n- Test release.');
  if (args[0] === 'scripts/verify-release.ts' && mode === 'verify-failure') process.exit(1);
  if (args[0] === 'typecheck:scripts' && mode === 'check-failure') process.exit(1);
+ if (args[0] === 'audit:dependencies' && mode === 'audit-failure') process.exit(1);
  if (args[0] === 'scripts/update-homebrew-cask.ts' && mode === 'metadata-failure') process.exit(1);
  if (['scripts/update-readme-size.ts','scripts/update-homebrew-cask.ts'].includes(args[0]) && !args.includes('--check')) writeFileSync(dirty, 'metadata');
 } else if (tool === 'cargo' && args[0] === 'build') {
+ if (mode === 'build-failure') process.exit(1);
  mkdirSync(join(root,'target/aarch64-apple-darwin/release'),{recursive:true});
  writeFileSync(join(root,'target/aarch64-apple-darwin/release/gatto'),'binary');
 } else if (tool === 'ditto') {
@@ -109,6 +118,14 @@ chmod +x dist/sparkle/bin/*
     );
     await writeExecutable(join(root, "scripts/test-updater.sh"), "#!/bin/bash\nexit 0\n");
     await writeExecutable(
+      join(root, "scripts/publish-beta-feed.sh"),
+      `#!/bin/bash
+printf '["beta-feed","%s"]\\n' "$1" >> "$GATTO_TEST_ROOT/calls"
+if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
+`,
+    );
+    await writeExecutable(join(root, "scripts/test-platform.sh"), "#!/bin/bash\nexit 0\n");
+    await writeExecutable(
       join(root, "scripts/build-dmg.sh"),
       '#!/bin/bash\nif [[ "$1" == --prepare ]]; then printf template > "$3"; else printf image > "$2"; fi\n',
     );
@@ -116,7 +133,11 @@ chmod +x dist/sparkle/bin/*
     if (resume) {
       await rm(join(root, "dirty"));
       await mkdir(join(root, "dist/release"), { recursive: true });
-      for (const name of ["gatto-0.15.0-aarch64-apple-darwin.dmg", "appcast.xml", "SHA256SUMS"])
+      for (const name of [
+        `gatto-${mode.startsWith("beta-") ? "0.17.0-beta.1" : "0.15.0"}-aarch64-apple-darwin.dmg`,
+        "appcast.xml",
+        "SHA256SUMS",
+      ])
         if (mode !== "published-no-artifacts")
           await Bun.write(join(root, "dist/release", name), "original artifact");
     }
@@ -126,6 +147,9 @@ chmod +x dist/sparkle/bin/*
         cwd: root,
         env: {
           ...process.env,
+          GH_TOKEN: "gatto-fixture-not-a-real-token",
+          CLOUDFLARE_API_TOKEN: "gatto-fixture-not-a-real-token",
+          APPLE_PASSWORD: "gatto-fixture-not-a-real-password",
           PATH: `${bin}:${process.env.PATH}`,
           SIGN_IDENTITY: "Test Developer ID Application",
           GATTO_TEST_ROOT: root,
@@ -143,7 +167,13 @@ chmod +x dist/sparkle/bin/*
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    return { exit, calls, output: (await stdout) + (await stderr) };
+    const exposure = Bun.file(join(root, "build-exposures"));
+    return {
+      exit,
+      calls,
+      output: (await stdout) + (await stderr),
+      exposure: (await exposure.exists()) ? await exposure.text() : "",
+    };
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -154,8 +184,18 @@ const find = (calls: string[][], ...prefix: string[]) =>
 test("release checks precede commits; uploads are verified as a draft before publication; metadata is verified and pushed", async () => {
   const result = await workflow("release");
   expect(result.exit, result.output).toBe(0);
+  expect(result.exposure).toBe("");
   expect(find(result.calls, "bun", "typecheck:scripts")).toBeLessThan(
     find(result.calls, "git", "commit"),
+  );
+  const install = find(result.calls, "bun", "install");
+  expect(result.calls[install]).toContain("--frozen-lockfile");
+  expect(result.calls[install]).toContain("--ignore-scripts");
+  expect(find(result.calls, "bun", "audit:dependencies")).toBeLessThan(
+    find(result.calls, "git", "commit"),
+  );
+  expect(find(result.calls, "cargo", "build")).toBeLessThan(
+    find(result.calls, "xcrun", "notarytool", "history"),
   );
   const create = find(result.calls, "gh", "release", "create");
   expect(result.calls[create]).toContain("--draft");
@@ -173,6 +213,20 @@ test("failed checks prevent committing and publishing", async () => {
   const result = await workflow("check-failure");
   expect(result.exit).not.toBe(0);
   expect(find(result.calls, "git", "commit")).toBe(-1);
+  expect(find(result.calls, "gh", "release", "create")).toBe(-1);
+});
+test("a failed dependency audit prevents committing, signing and publishing", async () => {
+  const result = await workflow("audit-failure");
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "git", "commit")).toBe(-1);
+  expect(find(result.calls, "codesign")).toBe(-1);
+  expect(find(result.calls, "gh", "release", "create")).toBe(-1);
+});
+test("a failed final build never opens signing credentials or publishes", async () => {
+  const result = await workflow("build-failure");
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "xcrun", "notarytool", "history")).toBe(-1);
+  expect(find(result.calls, "codesign")).toBe(-1);
   expect(find(result.calls, "gh", "release", "create")).toBe(-1);
 });
 test("failed upload verification retains an unpublished draft", async () => {
@@ -221,4 +275,35 @@ test("a failed metadata push retains its local commit for recovery", async () =>
   expect(result.calls.filter((call) => call[0] === "git" && call[1] === "commit").length).toBe(2);
   expect(result.output).toContain("metadata is committed locally");
   expect(result.output).toContain("--resume");
+});
+
+test("beta publication remains a prerelease and refreshes only the signed beta feed", async () => {
+  const result = await workflow("beta-release");
+  expect(result.exit, result.output).toBe(0);
+  const create = result.calls[find(result.calls, "gh", "release", "create")]!;
+  expect(create).toContain("v0.17.0-beta.1");
+  expect(create).toContain("--prerelease");
+  expect(create).toContain("--latest=false");
+  const publish = result.calls[find(result.calls, "gh", "release", "edit")]!;
+  expect(publish).toContain("--prerelease");
+  expect(publish).toContain("--latest=false");
+  expect(find(result.calls, "beta-feed", "v0.17.0-beta.1")).toBeGreaterThan(
+    find(result.calls, "gh", "release", "edit"),
+  );
+  expect(find(result.calls, "bun", "scripts/update-homebrew-cask.ts")).toBe(-1);
+  expect(find(result.calls, "bun", "scripts/update-readme-size.ts")).toBe(-1);
+});
+test("beta draft recovery preserves prerelease flags and the stable cask", async () => {
+  const result = await workflow("beta-draft-resume", true);
+  expect(result.exit, result.output).toBe(0);
+  expect(result.calls[find(result.calls, "gh", "release", "edit")]).toContain("--prerelease");
+  expect(result.calls[find(result.calls, "gh", "release", "edit")]).toContain("--latest=false");
+  expect(find(result.calls, "bun", "scripts/update-homebrew-cask.ts")).toBe(-1);
+});
+test("feed publication failures retain a published release with a resume path", async () => {
+  const result = await workflow("beta-feed-failure");
+  expect(result.exit).not.toBe(0);
+  expect(result.output).toContain("--resume");
+  expect(find(result.calls, "gh", "release", "edit")).toBeGreaterThan(-1);
+  expect(find(result.calls, "bun", "scripts/update-homebrew-cask.ts")).toBe(-1);
 });

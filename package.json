@@ -6,24 +6,25 @@
   ],
   "type": "module",
   "scripts": {
-    "build:web": "bun web/scripts/build-portal-seam.ts && bunx --bun vite build --config web/vite.config.ts && bun web/scripts/prerender.ts",
-    "dev:web": "bunx --bun vite --config web/vite.config.ts",
-    "lint:web": "bunx --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bunx --bun oxfmt --check web package.json",
-    "format:web": "bunx --bun oxfmt --write web package.json",
-    "typecheck:web": "bunx --bun tsc --noEmit -p web/tsconfig.json",
-    "typecheck:scripts": "bunx --bun tsc --noEmit -p tsconfig.json",
-    "test:web": "bun test web/tests",
-    "preview:web": "bunx --bun vite preview --config web/vite.config.ts",
-    "size:web": "bun web/scripts/css-size.ts",
-    "deploy:web": "bun web/scripts/deploy.ts"
+    "audit:dependencies": "bun --no-env-file scripts/audit-dependencies.ts",
+    "build:web": "bun --no-env-file web/scripts/build-portal-seam.ts && bunx --no-env-file --no-install --bun vite build --config web/vite.config.ts && bun --no-env-file web/scripts/prerender.ts",
+    "dev:web": "bunx --no-env-file --no-install --bun vite --config web/vite.config.ts",
+    "lint:web": "bunx --no-env-file --no-install --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bunx --no-env-file --no-install --bun oxfmt --check web package.json",
+    "format:web": "bunx --no-env-file --no-install --bun oxfmt --write web package.json",
+    "typecheck:web": "bun --no-env-file check -p web/tsconfig.json",
+    "typecheck:scripts": "bun --no-env-file check -p tsconfig.json",
+    "test:web": "bun --no-env-file test web/tests",
+    "preview:web": "bunx --no-env-file --no-install --bun vite preview --config web/vite.config.ts",
+    "size:web": "bun --no-env-file web/scripts/css-size.ts",
+    "deploy:web": "bun --no-env-file web/scripts/deploy.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.3",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
-    "typescript": "7.0.2",
     "vite": "8.3.4"
   },
-  "packageManager": "bun@1.4.3"
+  "packageManager": "bun@1.4.3",
+  "trustedDependencies": []
 }

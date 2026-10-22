@@ -43,8 +43,10 @@ await Bun.write(
  @MainActor static func main() {
   let app = NSApplication.shared
   app.setActivationPolicy(.prohibited)
-  if Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String == "0.15.0" {
-   try! "0.15.0".write(toFile: ${JSON.stringify(marker)}, atomically: true, encoding: .utf8)
+  let installed = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as! String
+  let target = Bundle.main.object(forInfoDictionaryKey: "GattoTestTargetVersion") as? String ?? "0.15.0"
+  if installed == target {
+   try! target.write(toFile: ${JSON.stringify(marker)}, atomically: true, encoding: .utf8)
    return
   }
   let recent = CommandLine.arguments.contains("--recent")
@@ -53,7 +55,9 @@ await Bun.write(
   let cancel = CommandLine.arguments.contains("--manual-cancel")
   if cached { UserDefaults.standard.set("0.15.0", forKey: "GattoAvailableUpdate") }
   UserDefaults.standard.set(Date(timeIntervalSinceNow: (recent || cached || manual) ? 0 : -5 * 60 * 60), forKey: "SULastCheckTime")
-  let driver = UpdaterBridge(client: nil) { prompt, reply in
+  let waitForStable = CommandLine.arguments.contains("--stable-wait")
+  let testFeed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as! String
+  let driver = UpdaterBridge(client: nil, feedURLs: [.stable: testFeed, .beta: testFeed]) { prompt, reply in
    assert(manual && prompt.offersInstall && prompt.title == "Gatto 0.15.0 is available")
    assert(prompt.releaseURL?.absoluteString == "https://github.com/jeremyc2/Gatto/releases/tag/v0.15.0")
    if cancel {
@@ -64,9 +68,20 @@ await Bun.write(
     reply(true)
    }
   }
-  driver.start { state, message in
+  if CommandLine.arguments.contains("--beta") { driver.configureChannel("beta", generation: 0) }
+  var starting = true
+  let excludesBeta = CommandLine.arguments.contains("--stable-excludes-beta")
+  driver.start { _, state, message in
    NSLog("TEST state=%ld %@", state, message)
+   if excludesBeta && !starting && state == 0 {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { exit(0) }
+   }
+   if waitForStable && state == 0 && (message as String).contains("Latest Stable: 0.16.3") {
+    assert((message as String).contains("0.17.0-beta.1"))
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { exit(0) }
+   }
    if (state == 1 && !manual) || state == 6 {
+    if waitForStable || excludesBeta { exit(22) }
     if recent { exit(21) }
     DispatchQueue.main.async {
      try! "clicked".write(toFile: ${JSON.stringify(clicked)}, atomically: true, encoding: .utf8)
@@ -75,6 +90,7 @@ await Bun.write(
    }
    if state == 3 || state == 4 { exit(20) }
   }
+  starting = false
   if manual { driver.checkForUpdates() }
   if recent {
    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exit(0) }
@@ -172,6 +188,92 @@ try {
     );
     await child.exited;
     await stderrPromise;
+  }
+  // Exercise real Sparkle channel filtering and beta→stable transitions with
+  // signed fixtures. The installer remains the stock Sparkle implementation.
+  for (const scenario of [
+    {
+      mode: "--stable-excludes-beta",
+      installed: "0.16.3",
+      target: "0.17.0b1",
+      display: "0.17.0-beta.1",
+      beta: true,
+    },
+    {
+      mode: "--beta",
+      installed: "0.16.3",
+      target: "0.17.0b1",
+      display: "0.17.0-beta.1",
+      beta: true,
+    },
+    {
+      mode: "--stable-wait",
+      installed: "0.17.0b1",
+      target: "0.16.3",
+      display: "0.16.3",
+      beta: false,
+    },
+    {
+      mode: "--stable-caught-up",
+      installed: "0.17.0b1",
+      target: "0.17.0",
+      display: "0.17.0",
+      beta: false,
+    },
+  ]) {
+    for (const { dir, version, display } of [
+      {
+        dir: "installed",
+        version: scenario.installed,
+        display: scenario.installed.replace("b", "-beta."),
+      },
+      { dir: "new", version: scenario.target, display: scenario.display },
+    ]) {
+      const app = join(work, dir, "Gatto.app");
+      await Bun.$`rm -rf ${app}`;
+      await Bun.$`ditto ${work}/original.app ${app}`.quiet();
+      const plist = join(app, "Contents/Info.plist");
+      await Bun.$`plutil -replace CFBundleVersion -string ${version} ${plist}`;
+      await Bun.$`plutil -replace CFBundleShortVersionString -string ${display} ${plist}`;
+      await Bun.$`plutil -insert GattoTestTargetVersion -string ${scenario.target} ${plist}`;
+      await Bun.$`codesign --force --sign - ${app}`.quiet();
+    }
+    await Bun.$`rm -f ${work}/served/appcast.xml ${work}/served/gatto-test.zip ${marker} ${clicked}`;
+    await Bun.$`ditto -c -k --keepParent ${work}/new/Gatto.app ${work}/served/gatto-test.zip`.quiet();
+    const channelArgs = scenario.beta ? ["--channel", "beta"] : [];
+    await Bun.$`dist/sparkle/bin/generate_appcast --ed-key-file ${keyfile} --download-url-prefix http://127.0.0.1:${server.port}/ --maximum-deltas 0 ${channelArgs} ${work}/served`.quiet();
+    feedRequests = downloads = 0;
+    downloadedBeforeClick = false;
+    child = Bun.spawn([join(work, "installed/Gatto.app/Contents/MacOS/gatto"), scenario.mode], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const log = new Response(child.stderr).text();
+    const timeout = setTimeout(() => child?.kill(), 20000);
+    try {
+      const waiting = ["--stable-wait", "--stable-excludes-beta"].includes(scenario.mode);
+      if (!waiting) {
+        const deadline = Date.now() + 20000;
+        while (Date.now() < deadline && !(await Bun.file(marker).exists())) await Bun.sleep(100);
+      }
+      if ((await child.exited) !== 0) throw new Error(await log);
+      if (waiting) {
+        if (downloads !== 0 || (await Bun.file(marker).exists()) || feedRequests < 1)
+          throw new Error("Stable must retain the beta without downloading an older release");
+      } else if (
+        downloadedBeforeClick ||
+        Number(downloads) !== 1 ||
+        (await Bun.file(marker).text()) !== scenario.target
+      ) {
+        throw new Error(
+          "Channel update must download exactly once after consent and relaunch its target",
+        );
+      }
+      console.log(`Passed (${scenario.mode}): signed channel feed and install/wait behavior`);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 } finally {
   child?.kill();

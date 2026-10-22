@@ -7,16 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-### Changed
-
-- Widen the preview's Save button in both idle and loading states so its spinner
-  and full “Saving…” label fit without resizing or truncation.
-
-- Remove Gatto's direct `ttf-parser` dependency and the unused non-macOS annotation
-  text fallback. Annotation text continues to use macOS CoreText for layout,
-  preview, and PNG export.
+## [0.17.0-beta.1] - 2026-10-22
 
 ### Added
+
+- Choose Stable or Beta releases in App Preferences. Beta includes newer stable releases; returning to Stable keeps an installed beta until Stable catches up. Channel changes clear old offers and never install automatically.
+- Choose release operations from a numbered menu showing the resulting version
+  and channel, including advancing a beta or promoting it to Stable.
 
 - Hold Shift to draw closed shapes with equal width and height or resize corners
   proportionally, including rotated shapes. Keep selection handles active when
@@ -139,6 +136,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Add box selection, Shift-click selection, and Command+A, with shared movement,
   proportional resizing, rotation, styling, stacking, duplication, deletion,
   and one-step undo. Keep pixelation fixed and outside object selection.
+
+### Changed
+
+- Replace the app's direct HTTP, menu-bar, global shortcut and dynamic-loader
+  dependencies with bounded macOS adapters. Keep upload progress, cancellation,
+  safe retry behavior, menu actions and configurable shortcuts.
+- Replace Toastify with the website's own accessible notification and use Bun's
+  built-in TypeScript checker. Require locked local tools, disable install
+  scripts, audit JavaScript dependencies with visible expiring exceptions, and
+  run builds before signing credential checks.
+
+- Widen the preview's Save button in both idle and loading states so its spinner
+  and full “Saving…” label fit without resizing or truncation.
+
+- Remove Gatto's direct `ttf-parser` dependency and the unused non-macOS annotation
+  text fallback. Annotation text continues to use macOS CoreText for layout,
+  preview, and PNG export.
 
 ### Fixed
 

@@ -19,6 +19,29 @@ This result describes the databases and lockfile at the date above. It is not a
 guarantee that a dependency is defect-free, and newly published advisories can
 change the result without a code change.
 
+### Dependency reduction and current checks (2026-10-22)
+
+Gatto's upload, status-menu and hotkey adapters now use macOS APIs directly.
+The app no longer directly depends on reqwest, Tokio, futures-util, tray-icon,
+global-hotkey or libloading. Shared packages can remain through GPUI; see the
+[dependency review](docs/research/direct-dependency-review.md) for the original
+inventory and the measured follow-up. Cargo policy checks remain required.
+
+JavaScript releases run `bun audit:dependencies`, which audits development tools
+as well as browser packages and fails on registry errors, malformed reports,
+new advisories, or an expired/changed exception. It does not automatically fix
+or silently ignore findings.
+
+| Temporary exception | Affected functionality and reachability | Owner / removal condition |
+| --- | --- | --- |
+| [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), `braces 3.0.3` | Development-only `@stylexjs/eslint-plugin 0.19.1 → micromatch 4.0.8 → braces 3.0.3`. The inspected StyleX rules only call `micromatch.isMatch`, which delegates to picomatch rather than the vulnerable recursive braces walkers. The vulnerable package is still installed/imported; this is a scoped static assessment, not an exploitability proof. | Jeremy (@jeremyc2). Expires **2026-11-22 00:00 UTC**, or earlier when a compatible fixed release exists, the plugin/call path changes, or this branch is removed. |
+
+The gate verifies the exact three lock entries and SHA-512 identities, that the
+plugin remains a development dependency, and that no additional installed path
+reaches the vulnerable package. It prints the advisory and expiry even when
+accepted. Any changed identity, route, advisory or expiry requires a new review.
+The upstream advisory currently lists no patched version.
+
 ### Open maintenance notices
 
 RustSec reports five informational, transitive “unmaintained” notices. None is a
@@ -47,7 +70,7 @@ documented analysis.
   license allowlist.
 - Direct unmaintained dependencies, known vulnerabilities, unsoundness advisories,
   and yanked releases fail dependency-policy checks.
-- Dependabot checks Cargo packages and GitHub Actions weekly.
+- Dependabot checks Cargo packages, both JavaScript manifests, and GitHub Actions weekly.
 - CI and dependency-security definitions are stored in
   `.github/workflows.disabled/` and do not run in GitHub Actions. The retained
   security definition uses checksum-verified scanner binaries and a manual
@@ -64,17 +87,60 @@ platforms this macOS app does not execute. Release changes should therefore revi
 the lockfile diff, upstream ownership changes, newly added build scripts, and any
 new registry or Git source before building artifacts.
 
-The repository's own `build.rs` only reads an optional hexadecimal
+The repository's own `build.rs` reads an optional hexadecimal
 `GIT_COMMIT_HASH` value and, when needed, invokes
 `git rev-parse --short=12 HEAD` to embed non-sensitive build metadata. It rejects
 non-hexadecimal values, does not access the network, and does not modify the
-working tree.
+working tree. On macOS it also invokes Apple's installed clang/libtool to compile
+the tracked `native/Upload.m` and `native/Desktop.m` into a static archive in
+Cargo's build output directory. It downloads no compiler or native library.
+These adapters link system Foundation, AppKit, Carbon and CoreGraphics.
+
+JavaScript installs explicitly disable the default trusted-package script list;
+release installs additionally use `--ignore-scripts`. Package executables use
+`bunx --no-install --bun`, and Bun's built-in checker replaces the separate
+TypeScript compiler package. Existing installed package code still executes
+during builds and linting; disabling installation scripts is not a sandbox.
+
+Release build/check subprocesses clear inherited GitHub, Cloudflare and common
+Apple signing-token variables. Bun runtime/check/test commands disable automatic
+dotenv loading. The installed Bun 1.4.3 package-manager commands still read dotenv
+files despite `--no-env-file`; install scripts are disabled, and the audit runs
+only Bun's built-in registry client. Those commands are not a credential boundary.
+Signing/notarization credential preflight runs after the final unsigned build.
+This reduces accidental credential exposure but does **not** isolate the user's
+Keychain, filesystem, SSH agent or CLI credential stores. For a stronger boundary,
+build under a separate credentialless user/runner and transfer reviewed artifacts
+to a protected signing/publishing environment. No claim of that isolation is made
+for the local one-command workflow.
+
+### Release channels
+
+Stable and Beta use separate signed feeds. The Beta discovery feed additionally
+contains the latest stable item; untagged prereleases and unknown channels are
+rejected. Versioned release DMGs retain their archive signatures. Publishing
+merges only signature-verified feeds, restricts enclosure URLs to this repository's
+versioned DMGs, re-signs the combined feed, and verifies uploaded bytes. Beta
+publication never changes GitHub's latest stable release or the stable cask.
+Feed refresh failures stop the release workflow with a documented recovery path.
+
+Switching channels clears prior offers and consent. Generation checks reject
+in-flight callbacks and prompt replies from an earlier channel. Installation
+continues through the existing upload guards and Sparkle verification. A newer
+installed beta remains installed until Stable catches up; no custom comparator
+or lower-version installation bypasses Sparkle's downgrade protection. Data
+compatibility and manual rollback limitations are documented in Support.
 
 ## Authentication and media uploads
 
 Gatto uses GitHub’s existing issue and pull request attachment mechanism. It
 requests the active GitHub CLI token when needed, caches it in memory for the
 uploader session, and streams image/video bytes directly to GitHub’s attachment service.
+Foundation URLSession uses an ephemeral session with no credential/cookie/cache
+store. Redirects and authentication challenges other than normal server-trust
+validation are rejected. The source body stream is supplied once, response data
+is capped at 64 KiB, and the adapter waits for delegate invalidation before
+freeing callback state. TLS validation remains the operating system's default.
 It does not persist tokens in app configuration. Restart after switching CLI
 accounts; see [Support](SUPPORT.md#common-problems) for account recovery.
 

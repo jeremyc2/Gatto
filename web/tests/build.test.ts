@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { cssSize, staticDirectory } from "../scripts/css-size";
 
 beforeAll(async () => {
-  const process = Bun.spawn(["bun", "run", "build:web"], {
+  const process = Bun.spawn(["bun", "--no-env-file", "run", "build:web"], {
     cwd: new URL("../../", import.meta.url).pathname,
     env: Object.fromEntries([
       ...Object.entries(Bun.env).filter(

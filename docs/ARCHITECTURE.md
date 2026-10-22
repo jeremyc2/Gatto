@@ -93,7 +93,8 @@ without another app confirmation. macOS can still request authorization. Uploads
 already in progress prevent starting an update; new uploads and Quick Copy are
 blocked during installation. The user driver never consents to install without
 the click. Information-only releases and installation failures leave a retry
-control and actionable tooltip; background-check errors only enter diagnostics.
+control and actionable tooltip; background-check errors enter diagnostics and,
+when no offer exists, the status in Preferences.
 The macOS **Gatto → Check for Updates…** action requests a fresh check without
 granting installation consent. It queues behind an active background check and
 deduplicates repeated requests. Only this manual check presents native alerts:
@@ -107,10 +108,35 @@ Sparkle verifies the signed feed and archive before extraction, handles app
 replacement/recovery, and relaunches the app. Release packaging signs nested code
 and embeds the release Mac's persistent Ed25519 public key.
 
+`AppSettings.release_channel` persists Stable/Beta in the existing JSON settings;
+missing or unknown values default to Stable. Rust configures the bridge before
+starting it and owns a channel generation. Both the bridge's active check and
+queued Rust callbacks carry that generation. Switching clears the badge/menu
+offer and consent, rejects results and prompt replies from the old generation,
+and queues an information-only check after any active Sparkle session ends.
+It does not cancel an authorized installation; channel changes are disabled then.
+Preferences and the application menu use the same manual-check action.
+
+Stable uses the latest stable release's signed appcast and permits only default
+channel stable items. Beta uses the separately signed `beta` discovery feed and
+allows tagged beta items as well as stable items. Both feeds point at immutable,
+versioned DMGs. Publishing either channel refreshes the Beta feed with the newest
+item from each channel; Stable publication alone refreshes stable download/cask
+metadata. Beta versions use `x.y.zbN` internally and `x.y.z-beta.N` for display and
+tags, preserving Sparkle's version ordering without a custom comparator.
+
+Returning to Stable keeps a newer installed beta until Stable catches up. The
+native no-update delegate reads Sparkle's latest signed appcast item and reports
+both versions as a waiting status; it never offers a downgrade. Cached offers
+are scoped to their channel and must still be newer than the installed build.
+This beta adds no persisted-data migration; old settings readers ignore the new
+optional field. Manual rollback limitations live in Support.
+
 The available version and Sparkle check time/state use the app's macOS
 preferences domain (`~/Library/Preferences/com.jeremy-chandler.gatto.plist`);
 Sparkle caches use `~/Library/Caches/com.jeremy-chandler.gatto`. Reset app clears
-repository preferences and the login item while retaining updater state.
+repository preferences and the login item, resets the channel to Stable and
+invalidates its offer while retaining Sparkle's check schedule.
 The Homebrew cask lives in `Casks/gatto.rb` in the same repository and installs
 the published signed DMG, with GitHub CLI as a dependency.
 
@@ -158,11 +184,33 @@ active GitHub CLI account to avoid using a previously loaded session. Quick Copy
 reads the current CLI token for each background job.
 
 Media validation and CLI calls run on background tasks. Each HTTP upload uses
-an async reqwest client in a background worker's current-thread Tokio runtime;
-canceling drops the pending request. A batch uploads sequentially; each
+Foundation URLSession through `github/native.rs` and `native/Upload.m` on a
+background worker. A stock 64 KiB bound stream connects the existing Rust
+attachment reader to the OS transport without buffering a whole video. A serial
+delegate queue reports actual bytes sent, rejects redirects and request-body
+replay, and limits response accumulation to 64 KiB. Ephemeral sessions disable
+cookie, credential and cache storage; only default server-trust handling is
+permitted. Monotonic watchdogs enforce the 300-second total and 90-second
+inactivity deadlines. These are transport deadlines rather than a separate
+15-second TCP/TLS connect timer. Cancellation cancels the native task; the worker
+waits for delegate invalidation before releasing Rust callback state. A completed
+response wins a simultaneous cancellation. A batch uploads sequentially; each
 attachment transitions from preview or failed to queued, then uploading with
 byte progress, then uploaded or failed. Retrying skips uploaded attachments. The
 copy result is rebuilt from successful attachments in their current order.
+
+`desktop.rs` is a main-thread-only ownership boundary for `native/Desktop.m`.
+It owns AppKit's status item/menu and Carbon hotkey registrations; callbacks
+enqueue integer action IDs without reentering GPUI. Menu shortcuts are cleared
+directly, and keypad equivalents retain their numeric-pad modifier. Shortcut
+replacement registers the candidate before releasing the previous key; failed
+replacement leaves the old registration and observer state intact. Generation
+IDs reject queued events from earlier registrations. Ordinary keys use Carbon
+without a new permission prompt. The optional media-key event tap is created
+only for a selected media shortcut and preserves existing permission and
+suppression behavior. Failed native cleanup detaches callbacks before Rust frees
+their context. `build.rs` compiles both adapters with Apple's clang/libtool into
+the app binary; the Sparkle Swift bridge remains separately bundled and signed.
 Image and video variants share staging, retry, upload, and copy interfaces.
 File drops and Finder pastes preserve all input paths through validation and the
 replacement dialog. Switching to bulk keeps the existing attachment and appends

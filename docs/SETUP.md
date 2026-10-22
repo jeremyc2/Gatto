@@ -34,6 +34,22 @@ Homebrew.
 
 ### Updates
 
+Choose **Stable** or **Beta** in **App Preferences → General → Release channel**.
+Stable is the default, including when no preference was previously saved. Beta
+receives preview releases and newer stable releases. The preference survives
+restarts. Selecting a channel refreshes availability without downloading or
+installing anything; an offer from the previous channel is cleared.
+
+Switching from Beta to Stable keeps your installed beta until a stable release
+catches up. Gatto never installs an older version automatically. Preferences show
+the installed and latest stable versions while waiting; **Check for Updates…**
+reports the same status. You can return to Beta at any time.
+
+If your installed stable version has no channel dropdown, install a beta DMG
+from [GitHub Releases](https://github.com/jeremyc2/Gatto/releases) once, then
+select Beta to receive further previews. Installing a beta does not change the
+default channel by itself.
+
 Updater-enabled releases check GitHub quietly while Gatto is running, including
 with all windows closed. Sparkle checks a small signed release feed every four
 hours, remembering its last check across launches. An overdue check runs when

@@ -86,7 +86,19 @@ need a new DMG or Homebrew install once. Source builds do not check for updates.
 
 Updater state and Sparkle defaults live in
 `~/Library/Preferences/com.jeremy-chandler.gatto.plist`, with caches in
-`~/Library/Caches/com.jeremy-chandler.gatto`. Reset app retains that update state.
+`~/Library/Caches/com.jeremy-chandler.gatto`. The selected release channel lives in
+`~/Library/Application Support/Gatto/settings.json`. Reset app returns the channel
+to Stable and invalidates the previous channel's update offer; Sparkle's check
+schedule remains separate. A beta waiting for Stable is expected behavior, not
+an installation failure. Gatto keeps the beta until Stable catches up.
+
+This beta adds an optional settings field that older stable builds ignore; it
+does not migrate the settings/data schema. If manually reinstalling an older
+build, quit Gatto and back up `settings.json` first. Older builds may discard
+fields they do not recognize when saving. Future betas that change persisted data
+must document their own rollback limits; the channel control does not downgrade
+or migrate data.
+
 Homebrew users can uninstall with `brew uninstall --cask jeremyc2/gatto/gatto`;
 add `--zap` to remove the cask's declared per-user settings and caches too.
 

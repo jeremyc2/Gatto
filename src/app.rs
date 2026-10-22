@@ -21,6 +21,7 @@ use gpui_kit::component::{
     input::{Input, InputEvent, InputState},
     kbd::Kbd,
     link::Link,
+    menu::DropdownMenu as _,
     notification::Notification,
     progress::Progress,
     searchable_list::{SearchableGroup, SearchableVec},
@@ -49,7 +50,7 @@ use crate::{
         AttachmentUploadState, Media, OversizedVideo, Repository, StagedAttachment,
         UNSUPPORTED_MEDIA_MESSAGE, VideoUploadLimit, parse_owner,
     },
-    settings::AppSettings,
+    settings::{AppSettings, ReleaseChannel},
     theme::{self, AppButtonStyle as _},
     updater::{UpdateState, Updater},
     window_limits,
@@ -61,7 +62,9 @@ actions!(
         PasteImage,
         PreviewFromClipboard,
         CopyUploadMarkdown,
-        SwitchToBulkUpload
+        SwitchToBulkUpload,
+        SelectStableChannel,
+        SelectBetaChannel
     ]
 );
 
@@ -2330,11 +2333,50 @@ impl UploaderApp {
         });
     }
 
+    fn set_release_channel(
+        &mut self,
+        channel: ReleaseChannel,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if channel == self.settings.release_channel {
+            return;
+        }
+        if self.updater.read(cx).state == UpdateState::Installing {
+            return;
+        }
+        let mut settings = self.settings.clone();
+        settings.release_channel = channel;
+        if let Err(error) = settings.save() {
+            window.push_notification(
+                Notification::error(format!("Could not save release channel: {error}")),
+                cx,
+            );
+            return;
+        }
+        self.settings = settings;
+        if let Err(error) = self
+            .updater
+            .update(cx, |updater, cx| updater.set_channel(channel, cx))
+        {
+            self.diagnostics
+                .error(format!("Could not change release channel: {error}"));
+        }
+        cx.notify();
+    }
+
     fn reset_app(&mut self, window: &mut Window, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.updater.read(cx).state != UpdateState::Installing,
+            "Finish the update before resetting Gatto."
+        );
         self.global_shortcut.set_shortcut(None)?;
         AppSettings::reset()?;
 
         self.settings = AppSettings::default();
+        self.updater.update(cx, |updater, cx| {
+            updater.set_channel(ReleaseChannel::Stable, cx)
+        })?;
         self.owner_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
@@ -3163,6 +3205,7 @@ impl UploaderApp {
             .collect::<Vec<_>>();
         let owner_is_saved = parse_owner(&self.owner_input.read(cx).value())
             .is_ok_and(|owner| self.settings.owner.as_deref() == Some(owner.as_str()));
+        let channel = self.settings.release_channel;
         v_flex()
             .flex_none()
             .p_6()
@@ -3363,6 +3406,27 @@ impl UploaderApp {
                     .p_4()
                     .child(div().font_semibold().text_sm().child("General"))
                     .child(
+                        h_flex().justify_between().items_center()
+                            .child("Release channel")
+                            .child(Button::new("release-channel").app_secondary()
+                                .label(channel.label()).icon(IconName::ChevronDown)
+                                .accessibility_label("Release channel")
+                                .disabled(self.updater.read(cx).state == UpdateState::Installing)
+                                .dropdown_menu(move |menu, _, _| {
+                                    menu.menu_with_check("Stable", channel == ReleaseChannel::Stable, Box::new(SelectStableChannel))
+                                        .menu_with_check("Beta", channel == ReleaseChannel::Beta, Box::new(SelectBetaChannel))
+                                })),
+                    )
+                    .child(div().text_xs().text_color(cx.theme().muted_foreground)
+                        .child("Beta includes preview releases and newer stable releases. Returning to Stable keeps your installed beta until a stable release catches up. Changing channels never installs an update."))
+                    .child(Button::new("check-channel-updates").app_secondary().self_start()
+                        .label("Check for Updates…")
+                        .disabled(self.updater.read(cx).state == UpdateState::Installing)
+                        .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::application_menu::CheckForUpdates), cx)))
+                    .when(!self.updater.read(cx).message.is_empty(), |section| {
+                        section.child(div().text_xs().child(self.updater.read(cx).message.clone()))
+                    })
+                    .child(
                         Checkbox::new("start-at-login")
                             .label("Start at Login")
                             .checked(self.settings.start_at_login)
@@ -3452,6 +3516,12 @@ impl Render for UploaderApp {
             && !self.loading_repository
             && self.updater.read(cx).state != UpdateState::Installing;
         let root = v_flex()
+            .on_action(cx.listener(|this, _: &SelectStableChannel, window, cx| {
+                this.set_release_channel(ReleaseChannel::Stable, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &SelectBetaChannel, window, cx| {
+                this.set_release_channel(ReleaseChannel::Beta, window, cx)
+            }))
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
             .capture_key_down(cx.listener(Self::handle_key_down))

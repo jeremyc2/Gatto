@@ -6,8 +6,29 @@ protocol UpdateClient: AnyObject {
     var canCheckForUpdates: Bool { get }
     func start() throws
     func checkForUpdates()
+    var sessionInProgress: Bool { get }
+    func checkForUpdateInformation()
 }
 extension SPUUpdater: UpdateClient {}
+
+// The default channel is always included by Sparkle; beta additionally allows
+// explicitly tagged previews. A single signed beta feed carries both branches.
+enum ReleaseChannel: String {
+    case stable, beta
+    var feedURL: String {
+        switch self {
+        case .stable: return "https://github.com/jeremyc2/Gatto/releases/latest/download/appcast.xml"
+        case .beta: return "https://github.com/jeremyc2/Gatto/releases/download/beta/appcast.xml"
+        }
+    }
+    var allowedChannels: Set<String> { self == .beta ? ["beta"] : [] }
+    func accepts(version: String, channel: String?) -> Bool {
+        let stable = version.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression) != nil
+        let beta = version.range(of: #"^\d+\.\d+\.\d+b[1-9]\d*$"#, options: .regularExpression) != nil
+        if channel == "beta" { return self == .beta && beta }
+        return channel == nil && stable
+    }
+}
 
 struct UpdatePrompt {
     let title: String
@@ -22,7 +43,15 @@ struct UpdatePrompt {
 @objc(GattoUpdaterBridge)
 final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     private var updater: UpdateClient!
-    private var handler: ((Int, NSString) -> Void)?
+    private var handler: ((Int, Int, NSString) -> Void)?
+    private(set) var channel: ReleaseChannel = .stable
+    private(set) var generation = 0
+    private var cycleGeneration = 0
+    private var refreshPending = false
+    private let feedURLs: [ReleaseChannel: String]
+    private let installedVersion: String
+    private var waitingForStable: String?
+    private var acceptsCycle: Bool { cycleGeneration == generation }
     private let defaults: UserDefaults
     private let present: @MainActor (UpdatePrompt, @escaping (Bool) -> Void) -> Void
     private var manualRequested = false
@@ -33,9 +62,13 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     override convenience init() { self.init(client: nil) }
     init(client: UpdateClient?, defaults: UserDefaults = .standard,
+         installedVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0",
+         feedURLs: [ReleaseChannel: String] = [:],
          present: @escaping @MainActor (UpdatePrompt, @escaping (Bool) -> Void) -> Void = UpdaterBridge.presentAlert) {
         self.updater = client
         self.defaults = defaults
+        self.installedVersion = installedVersion
+        self.feedURLs = feedURLs
         self.present = present
         super.init()
     }
@@ -44,19 +77,22 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     private var failureShown = false
     private var version: String? {
         get { defaults.string(forKey: "GattoAvailableUpdate") }
-        set { defaults.set(newValue, forKey: "GattoAvailableUpdate") }
+        set {
+            defaults.set(newValue, forKey: "GattoAvailableUpdate")
+            defaults.set(newValue == nil ? nil : channel.rawValue, forKey: "GattoAvailableUpdateChannel")
+        }
     }
 
     @objc(startWithHandler:)
-    func start(handler: @escaping (Int, NSString) -> Void) {
+    func start(handler: @escaping (Int, Int, NSString) -> Void) {
         self.handler = handler
         let bundle = Bundle.main
         if updater == nil {
             let sparkle = SPUUpdater(hostBundle: bundle, applicationBundle: bundle,
                                      userDriver: self, delegate: self)
             updater = sparkle
-            availabilityObservation = sparkle.observe(\.canCheckForUpdates, options: [.new]) { [weak self] _, change in
-                if change.newValue == true {
+            availabilityObservation = sparkle.observe(\.sessionInProgress, options: [.new]) { [weak self] _, change in
+                if change.newValue == false {
                     DispatchQueue.main.async { [weak self] in self?.resumePendingOperation() }
                 }
             }
@@ -64,17 +100,57 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         do {
             try updater.start()
             if let available = version,
-               SUStandardVersionComparator.default.compareVersion(
-                available, toVersion: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
-               ) == .orderedDescending {
-                emit(1, "Install \(available) and restart Gatto")
+               (defaults.string(forKey: "GattoAvailableUpdateChannel") ?? "stable") == channel.rawValue,
+               channel.accepts(version: available, channel: available.contains("b") ? "beta" : nil),
+               SUStandardVersionComparator.default.compareVersion(available, toVersion: installedVersion) == .orderedDescending {
+                emit(1, "Install \(Self.displayVersion(available)) and restart Gatto")
             } else {
                 version = nil
                 emit(0, "")
             }
+            if channel == .stable && installedVersion.contains("b") {
+                refreshPending = true
+                resumePendingOperation()
+            }
         } catch {
             startupError = error.localizedDescription
             emit(4, "Updater unavailable: \(error.localizedDescription)")
+        }
+    }
+
+    @objc(configureChannel:generation:)
+    func configureChannel(_ name: NSString, generation: Int) {
+        let selected = ReleaseChannel(rawValue: name as String) ?? .stable
+        guard selected != channel || generation != self.generation else { return }
+        guard !installRequested else { return }
+        channel = selected
+        self.generation = generation
+        if handler == nil { cycleGeneration = generation; return }
+        version = nil
+        waitingForStable = nil
+        manualRequested = false
+        manualPending = false
+        manualResultShown = false
+        installPending = false
+        failureShown = false
+        emit(0, "Checking the selected release channel…")
+        refreshPending = true
+        resumePendingOperation()
+    }
+
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> { channel.allowedChannels }
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        feedURLs[channel] ?? channel.feedURL
+    }
+    func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
+        beginCycle()
+    }
+    func beginCycle() { cycleGeneration = generation; waitingForStable = nil }
+    func updater(_ updater: SPUUpdater, shouldProceedWithUpdate item: SUAppcastItem,
+                 updateCheck: SPUUpdateCheck) throws {
+        guard acceptsCycle, channel.accepts(version: item.versionString, channel: item.channel) else {
+            throw NSError(domain: "GattoUpdateChannel", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "The release channel changed. Checking the selected channel again."])
         }
     }
 
@@ -112,7 +188,8 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         guard updater != nil else { return }
         manualRequested = true
         manualResultShown = false
-        if updater.canCheckForUpdates {
+        if updater.canCheckForUpdates && !updater.sessionInProgress && !refreshPending {
+            beginCycle()
             updater.checkForUpdates()
         } else {
             manualPending = true
@@ -127,7 +204,8 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         installRequested = true
         failureShown = false
         emit(2, "Downloading update; Gatto will restart when ready")
-        if updater.canCheckForUpdates {
+        if updater.canCheckForUpdates && !updater.sessionInProgress && !refreshPending {
+            beginCycle()
             updater.checkForUpdates()
         } else {
             // A cached badge can be clicked while an information check is in flight.
@@ -137,8 +215,12 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     private func resumePendingOperation() {
-        guard updater.canCheckForUpdates else { return }
-        if installPending {
+        guard updater != nil, updater.canCheckForUpdates, !updater.sessionInProgress else { return }
+        beginCycle()
+        if refreshPending {
+            refreshPending = false
+            updater.checkForUpdateInformation()
+        } else if installPending {
             installPending = false
             updater.checkForUpdates()
         } else if manualPending {
@@ -147,9 +229,10 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         }
     }
 
-    private func emit(_ state: Int, _ message: String) { handler?(state, message as NSString) }
+    private func emit(_ state: Int, _ message: String) { handler?(generation, state, message as NSString) }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        guard acceptsCycle, channel.accepts(version: item.versionString, channel: item.channel) else { return }
         version = item.versionString
         if !installRequested { emit(1, "Install \(item.displayVersionString) and restart Gatto") }
     }
@@ -159,7 +242,8 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func finishCycle(error: Error?) {
-        if installPending || manualPending {
+        guard acceptsCycle else { resumePendingOperation(); return }
+        if refreshPending || installPending || manualPending {
             // Start from the completion callback before Sparkle's next status probe.
             resumePendingOperation()
             return
@@ -167,21 +251,39 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         if let error = error as NSError? {
             if error.domain == SUSparkleErrorDomain && error.code == SUError.noUpdateError.rawValue {
                 version = nil
-                if !failureShown { emit(0, "") }
+                if !failureShown { emit(0, waitingForStable ?? "") }
             } else if !installRequested {
                 // Checking silently must never raise an alert or overwrite a cached badge.
                 emit(5, "Update check failed: \(error.localizedDescription)")
             }
         } else if !installRequested && version == nil {
-            emit(0, "")
+            emit(0, waitingForStable ?? "")
         }
         if manualRequested && !manualResultShown, let error = error as NSError? {
             let noUpdate = error.domain == SUSparkleErrorDomain && error.code == SUError.noUpdateError.rawValue
             showManualMessage(title: noUpdate ? "No update available" : "Could not check for updates",
-                              detail: error.localizedDescription)
+                              detail: waitingForStable ?? error.localizedDescription)
         }
         installRequested = false
         manualRequested = false
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        guard acceptsCycle else { return }
+        recordNoUpdate(error)
+        emit(0, waitingForStable ?? "")
+    }
+    private func recordNoUpdate(_ error: Error) {
+        let item = (error as NSError).userInfo[SPULatestAppcastItemFoundKey] as? SUAppcastItem
+        recordStableTarget(item?.displayVersionString, version: item?.versionString)
+    }
+    private static func displayVersion(_ version: String) -> String {
+        version.replacingOccurrences(of: "b", with: "-beta.")
+    }
+    func recordStableTarget(_ display: String?, version: String?) {
+        guard channel == .stable, let version, let display,
+              SUStandardVersionComparator.default.compareVersion(installedVersion, toVersion: version) == .orderedDescending else { return }
+        waitingForStable = "Installed: \(Self.displayVersion(installedVersion)). Latest Stable: \(display). Gatto will keep the installed version until Stable catches up. No downgrade will be installed."
     }
 
     private func showManualMessage(title: String, detail: String,
@@ -194,6 +296,7 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     // exercised by the native harness without networking or a live feed.
     func confirmUpdate(displayVersion: String, releaseURL: URL?, informationOnly: Bool,
                        reply: @escaping (SPUUserUpdateChoice) -> Void) {
+        let requestedGeneration = generation
         manualResultShown = true
         present(UpdatePrompt(title: "Gatto \(displayVersion) is available",
                              detail: informationOnly
@@ -203,8 +306,9 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
             // End this check before routing consent back through Rust's current
             // upload guards. Cancel dismisses without skipping future reminders.
             reply(.dismiss)
-            self?.manualRequested = false
-            if install && !informationOnly { self?.emit(6, "") }
+            guard let self, self.generation == requestedGeneration else { return }
+            self.manualRequested = false
+            if install && !informationOnly { self.emit(6, "") }
         }
     }
 
@@ -216,6 +320,10 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {}
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState,
                          reply: @escaping (SPUUserUpdateChoice) -> Void) {
+        guard acceptsCycle, channel.accepts(version: appcastItem.versionString, channel: appcastItem.channel) else {
+            reply(.dismiss)
+            return
+        }
         if manualRequested && !manualPending {
             confirmUpdate(displayVersion: appcastItem.displayVersionString,
                           releaseURL: appcastItem.infoURL ?? appcastItem.releaseNotesURL,
@@ -236,16 +344,19 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {}
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) {
+        guard acceptsCycle else { acknowledgement(); return }
+        recordNoUpdate(error)
         version = nil
-        emit(0, "")
+        emit(0, waitingForStable ?? "")
         if manualRequested && !manualPending {
-            showManualMessage(title: "No update available", detail: error.localizedDescription,
+            showManualMessage(title: waitingForStable == nil ? "No update available" : "Waiting for Stable", detail: waitingForStable ?? error.localizedDescription,
                               acknowledgement: acknowledgement)
         } else {
             acknowledgement()
         }
     }
     func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) {
+        guard acceptsCycle else { acknowledgement(); return }
         if installRequested {
             failureShown = true
             emit(3, "Update failed: \(error.localizedDescription). Click to retry.")
@@ -260,6 +371,7 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         }
     }
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
+        guard acceptsCycle, installRequested else { cancellation(); return }
         emit(2, "Downloading update; Gatto will restart when ready")
     }
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}
@@ -267,7 +379,7 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     func showDownloadDidStartExtractingUpdate() { emit(2, "Preparing update and restart") }
     func showExtractionReceivedProgress(_ progress: Double) {}
     func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
-        reply(installRequested ? .install : .skip)
+        reply(acceptsCycle && installRequested ? .install : .skip)
     }
     func showInstallingUpdate(withApplicationTerminated applicationTerminated: Bool,
                              retryTerminatingApplication: @escaping () -> Void) {

@@ -7,7 +7,7 @@ prerenders the production page. Tests use Bun; Vitest is not used.
 From the repository root, with Bun 1.4.3 or later:
 
 ```sh
-bun install --frozen-lockfile
+bun install --frozen-lockfile --ignore-scripts
 bun dev:web
 ```
 
@@ -26,6 +26,11 @@ bun size:web
 ```
 
 The deployable static site is `web/dist/client/`.
+Bun's built-in checker runs both TypeScript projects; a separate TypeScript
+compiler package is not required. Package commands require the locked local
+installation and never fetch a missing executable automatically. Dependency
+installation scripts are disabled explicitly. Run `bun audit:dependencies` for
+the complete JavaScript dependency audit and any visible temporary exceptions.
 
 For responsive story changes, check all three chapters in the browser at
 1397 × 716 and 1920 × 720, plus phone and tablet sizes. Illustrations should fit

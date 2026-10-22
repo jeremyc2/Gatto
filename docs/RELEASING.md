@@ -58,8 +58,8 @@ dist/sparkle/bin/generate_keys --account gatto-updates
 Sparkle stores the private Ed25519 key in the login Keychain. Keep using this same
 key for all releases and back it up securely using Sparkle's documented key
 export/import procedure; never commit or log the private key. The release script
-reads only its public key into the app's Info.plist. It fails before building
-if the key is absent. Changing `SPARKLE_ACCOUNT` must select the same signing key
+reads only its public key into the app's Info.plist. It fails after the unsigned
+build and before signing if the key is absent. Changing `SPARKLE_ACCOUNT` must select the same signing key
 used by installed clients; key rotation requires a separate migration plan.
 
 `prepare-updater.sh` downloads Sparkle **2.10.0**, verifies its pinned SHA-256,
@@ -68,8 +68,9 @@ The SDK's license and notices are copied into the app's Resources directory.
 Review upstream release notes and the checksum when upgrading it. Sparkle is a
 permissively licensed native dependency used for signed feed/archive validation,
 macOS authorization, app replacement, and relaunch; these operations are not
-implemented by Gatto's upload dependencies. `block2` and `libloading` are already
-in Cargo.lock and provide the main-thread callback and bundled-library boundary.
+implemented by Gatto's upload adapter. `block2` provides the main-thread callback;
+the system dynamic loader opens the signed bundle-relative Swift bridge and
+keeps it loaded for the lifetime of the process, without a libloading dependency.
 Normal Cargo builds remain independent of the SDK and signing credentials.
 
 ## Release with one command
@@ -86,26 +87,31 @@ The script fetches the remote before proceeding.
 
 The script guides the release in this order:
 
-1. Verify GitHub authentication, signing identity, notarization profile, and the
-   persistent Sparkle key.
-2. Offer the prepared version, or prompt for a patch/minor/major/custom version
-   newer than the latest published release. Use a minor bump for new compatible
+1. Check tool availability and compile the pinned native updater SDK without
+   reading signing credentials.
+2. Show a numbered release menu with the exact destination version and channel:
+   the prepared version, next Beta, promotion to Stable, patch/minor/major Stable
+   releases, and a custom version. Use a minor bump for new compatible
    capabilities and a major bump for user-facing compatibility breaks. Reuse
    prepared/Unreleased changelog notes, or ask for a short categorized summary.
    It updates Cargo, the lockfile, both bundle versions, and the dated changelog.
-3. Install locked Bun dependencies and run Rust formatting, compilation, lint,
+3. Install locked Bun dependencies without lifecycle scripts, run the JavaScript
+   dependency audit, and run Rust formatting, compilation, lint,
    tests, and dependency policy checks; script type checks/tests; native updater
-   tests; a disposable install/relaunch test; cask syntax; and website build,
+   tests; native menu/hotkey checks; a disposable install/relaunch test; cask syntax; and website build,
    lint, type checks, and tests.
 4. Show the changed-file summary and ask before committing all pending code and
    release preparation changes and pushing `main`. A concurrent remote change
    makes a normal push fail; the script never force-pushes.
-5. Build, sign, notarize, and verify the app and DMG, then generate the signed
+5. Build the unsigned binary, then verify GitHub authentication, signing identity,
+   notarization profile and the persistent Sparkle key. Sign, notarize, and verify
+   the app and DMG, then generate the signed
    update feed and checksums. Ask before uploading a draft, verify uploaded bytes
-   against the local files, and publish it as the latest stable release using
-   the prepared changelog notes.
-6. Measure and verify the README figures for the exact tag, refresh and verify
-   the cask from the same release, then commit and push those two metadata files.
+   against the local files, and publish it using the prepared changelog notes.
+   Stable becomes GitHub's latest release; Beta is a prerelease with `latest=false`.
+6. Refresh and verify the signed Beta discovery feed for either channel. For
+   Stable, also measure/verify README figures and refresh/verify the Homebrew cask,
+   then commit and push those metadata files. Beta leaves stable metadata intact.
 
 The script is the recurring entry point. Code review, manual testing on affected
 hardware, and one-time credentials still require human judgment; automated checks
@@ -154,7 +160,7 @@ ejection is deliberately skipped outside the two supported Applications location
 use a disposable macOS user to verify the complete installation flow.
 Answering `y` creates the GitHub release/tag at the exact commit and uploads the
 DMG, signed appcast, and checksums, using the prepared changelog notes. After
-publication, the script automatically refreshes and verifies the
+stable publication, the script automatically refreshes and verifies the
 [README size figures](#readme-size-figures) for that exact tag using the local DMG.
 
 Nested Sparkle helpers, framework, and the Swift bridge are signed before the
@@ -165,6 +171,60 @@ The signed feed at the latest release's `appcast.xml` points to that release's
 immutable DMG URL. Do not edit the feed after signing it. `SHA256SUMS` covers the
 DMG and feed. Keep the latest release stable and compatible with macOS 13; the
 single-item feed does not preserve updates for older OS support branches.
+
+### Stable and Beta publishing
+
+The first beta is **0.17.0-beta.1**, including release channels and the dependency
+reduction. Keep these changes together when preparing its release. Run the usual
+release script and accept that prepared version. To continue the same beta,
+choose **Advance to the next Beta** (for example, beta.9 becomes beta.10).
+To promote it, choose **Promote this Beta to Stable** (0.17.0-beta.9 becomes
+0.17.0). Every option shows the exact version and whether it is Beta or Stable
+before selection. The prepared version remains the default until it is published.
+
+Select a number or type an option name: `prepared`, `beta`, `stable` (or
+`promote`), `patch`, `minor`, `major`, or `custom`. Explicit versions still work.
+From a stable version, the Beta option starts a preview of the next minor
+release. Patch/minor/major options produce Stable releases based on the newer of
+the current prepared version and latest published version; their destinations
+are displayed. Use Custom to start a beta of a different version. Invalid choices
+explain the problem and repeat the prompt without changing files. At beta.255,
+advancing the same beta is omitted; promotion and other version options remain.
+
+Beta sequence numbers are 1–255, matching Apple's bundle suffix range.
+
+Cargo, visible versions and tags use `0.17.0-beta.1` / `v0.17.0-beta.1`.
+`CFBundleVersion` uses **0.17.0b1**; Stable uses **0.17.0**. Sparkle ignores hyphen
+build suffixes, so putting the visible beta string in CFBundleVersion would make
+successive betas and the final release compare equal. Preparation checks both
+forms. Beta appcast items have `<sparkle:channel>beta</sparkle:channel>`; Stable
+items have no channel. Do not edit signed appcasts after generation.
+
+Stable subscribers use the existing `releases/latest/download/appcast.xml` URL.
+Beta subscribers use `releases/download/beta/appcast.xml`. The fixed `beta` tag
+belongs to a separate prerelease named **Beta channel feed**, containing discovery
+metadata rather than an installer. `publish-beta-feed.sh` downloads and verifies
+the previous Beta feed, the latest Stable feed and the published version's feed;
+the tracked Swift XML merger retains the newest release from each channel.
+It checks channel/version agreement and immutable Gatto DMG URLs, preserves
+archive signatures, signs the combined feed again, uploads it, downloads it back,
+and compares its exact bytes and signature. Beta users therefore also discover
+newer stable releases. This process adds no package dependency.
+
+Refresh that discovery feed after **either** channel publishes. A missing or
+failed refresh exits with a `--resume` recovery path; the verified versioned
+release stays published. Resume repeats the feed refresh safely and preserves
+the version's prerelease/latest flags. It needs the existing Sparkle signing key
+and SDK, including when recovering on a different machine. Never mark the fixed
+`beta` feed release as latest, replace a stable feed with a beta-only feed, or
+point Homebrew/the website's stable download at a beta. Resume has no new build
+step before accessing signing credentials.
+
+Channel changes invalidate cached offers and in-flight results. Switching to
+Stable while running a newer beta keeps that beta until a stable version catches
+up; it never performs a lower-version replacement. This follows Sparkle's
+downgrade protection. This beta's settings remain additive; see
+[Support](../SUPPORT.md#app-updates) for data compatibility and manual rollback.
 
 The script then refreshes `Casks/gatto.rb` from that exact release's checksum,
 verifies it with `--check`, and commits and pushes it with the README update so

@@ -121,14 +121,15 @@ The portal content shifts by half that band to stay centered between the cuts.
 The watercolor composition has no shadow. All ordinary component
 styling remains in StyleX.
 
-`SiteNotifications` wraps the framework-independent Toastify library with a
-persistent polite status region. It uses a manual popover for the top layer and
+`SiteNotifications` owns a small native DOM notification with a persistent polite
+status region. It uses a manual popover for the top layer and
 fixed positioning as its fallback. Dedicated notification tokens keep its cream
 surface, dark green text, gold border and shadow distinct in either appearance.
 It sits in the top right and uses a 320 ms slide on the individual `translate`
-property, independent of Toastify's inline `transform`. Reduced motion disables
-the entry animation. There is no vendor stylesheet. It keeps one active notice and
-extends the library's hover pause to keyboard focus. The portal's native button
+property. Reduced motion disables the entry animation. It has no external toast
+library or vendor stylesheet. It keeps one active notice and pauses its timer
+while hovered or keyboard-focused. Removing the component clears its timer and
+notice. The portal's native button
 uses a circular focus indicator and stays hidden from keyboard navigation while
 the scroll section is collapsed.
 Portal activation displays “Gattoverse mini game coming soon.” for six seconds;
@@ -143,6 +144,10 @@ current page while catching large regressions. Raise a budget only with a measur
 reason. Font and image payloads are separate from this CSS budget.
 
 Measured through 2026-10-18 with Vite 8.3.4 and StyleX 0.19.1:
+
+Rechecked on 2026-10-22 after removing Toastify: the production stylesheet remains
+23,326 raw bytes and 6,971 gzip bytes with the same Vite/StyleX versions. Removing
+the toast dependency changes its implementation, not the approved styling.
 
 | Build                                                               | Styling bytes | Gzip bytes |
 | ------------------------------------------------------------------- | ------------: | ---------: |

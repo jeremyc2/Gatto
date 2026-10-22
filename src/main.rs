@@ -3,6 +3,7 @@ mod app;
 mod application_menu;
 mod compression;
 mod custom_url;
+mod desktop;
 mod diagnostics;
 mod github;
 mod global_shortcut;
@@ -121,7 +122,12 @@ fn main() {
         let update_main = controller.clone();
         cx.on_action(move |_: &application_menu::InstallUpdate, cx| {
             let main = update_main.clone();
-            cx.defer(move |cx| perform_action(MenuAction::Update, &main, cx));
+            let generation = updater::Updater::shared(cx).read(cx).generation();
+            cx.defer(move |cx| {
+                if updater::Updater::shared(cx).read(cx).generation() == generation {
+                    perform_action(MenuAction::Update, &main, cx);
+                }
+            });
         });
         let check_main = controller.clone();
         cx.on_action(move |_: &application_menu::CheckForUpdates, cx| {
@@ -204,7 +210,7 @@ fn main() {
             }
         };
         menu_bar_controller.attach(menu_bar);
-        updater::Updater::start(cx, diagnostics.clone(), menu_bar_controller.clone());
+        updater::Updater::start(cx, diagnostics.clone(), menu_bar_controller.clone(), startup_settings.release_channel);
         #[cfg(target_os = "macos")]
         installer_cleanup::start(diagnostics.clone());
 

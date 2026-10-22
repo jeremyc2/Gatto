@@ -1,34 +1,14 @@
 // Interactive version/notes preparation used by release.sh. No publication here.
 import { resolve } from "node:path";
 
-const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-export function compareVersions(a: string, b: string): number {
-  if (!versionPattern.test(a) || !versionPattern.test(b))
-    throw new Error("Expected stable x.y.z versions");
-  const left = a.split(".").map(Number);
-  const right = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const difference = left[i]! - right[i]!;
-    if (difference) return Math.sign(difference);
-  }
-  return 0;
-}
-
-export function nextVersion(previous: string, choice: string): string {
-  compareVersions(previous, previous);
-  const [major, minor, patch] = previous.split(".").map(Number);
-  const result =
-    choice === "major"
-      ? `${major! + 1}.0.0`
-      : choice === "minor"
-        ? `${major}.${minor! + 1}.0`
-        : choice === "patch"
-          ? `${major}.${minor}.${patch! + 1}`
-          : choice;
-  if (compareVersions(result, previous) <= 0)
-    throw new Error("Release version must be newer than the published release");
-  return result;
-}
+import {
+  compareVersions,
+  releaseChannel,
+  bundleVersion,
+  releaseOptions,
+  selectReleaseVersion,
+} from "./release-version";
+export { compareVersions, nextVersion } from "./release-version";
 
 function section(source: string, version: string) {
   const headings = [...source.matchAll(/^## \[([^\]]+)\](?: - \d{4}-\d{2}-\d{2})?[ \t]*$/gm)];
@@ -53,8 +33,8 @@ export function prepareChangelog(
   date: string,
   notes: string,
 ): string {
-  if (!versionPattern.test(version) || !/^\d{4}-\d{2}-\d{2}$/.test(date))
-    throw new Error("Invalid release version/date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid release version/date");
+  bundleVersion(version);
   const categories = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"];
   const groups = new Map<string, string[]>();
   let category: string | undefined;
@@ -104,6 +84,7 @@ if (import.meta.main) {
     process.exit(0);
   }
   if (process.argv.includes("--check")) {
+    releaseChannel(current);
     const locked = /\[\[package\]\]\nname = "gatto"\nversion = "([^"]+)"/.exec(
       await Bun.file(resolve(root, "Cargo.lock")).text(),
     )?.[1];
@@ -112,7 +93,8 @@ if (import.meta.main) {
       const version = new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`).exec(
         metadata,
       )?.[1];
-      if (version !== current) throw new Error(`${key} does not match Cargo.toml`);
+      if (version !== (key === "CFBundleVersion" ? bundleVersion(current) : current))
+        throw new Error(`${key} does not match Cargo.toml`);
     }
     if (locked !== current) throw new Error("Cargo.lock does not match Cargo.toml");
     const notes = section(await changelog.text(), current)?.body;
@@ -124,40 +106,99 @@ if (import.meta.main) {
   if (published.exitCode !== 0)
     throw new Error("Cannot establish the last published release; check GitHub access");
   const previous = String(JSON.parse(published.stdout.toString()).tagName).replace(/^v/, "");
-  const suggested = compareVersions(current, previous) > 0 ? current : "patch";
-  const choice = prompt(
-    `Latest published: v${previous}. Release version (patch=fixes, minor=features, major=breaking, or x.y.z)`,
-    suggested,
+  // Include prereleases when preparing the next beta; GitHub's latest endpoint
+  // intentionally remains the stable baseline.
+  if (releaseChannel(previous) !== "stable")
+    throw new Error("GitHub's latest release must remain Stable");
+  const listed = Bun.spawnSync(
+    ["gh", "api", "--paginate", "--slurp", "repos/jeremyc2/Gatto/releases?per_page=100"],
+    { cwd: root },
   );
-  if (choice === null) throw new Error("Release preparation cancelled");
-  const version = nextVersion(previous, choice.trim());
-  if (compareVersions(version, current) < 0)
-    throw new Error("Cannot downgrade the version already prepared in Cargo.toml");
+  if (listed.exitCode !== 0) throw new Error("Cannot establish published beta versions");
+  const pages: { tag_name: string; draft: boolean; prerelease: boolean }[][] = JSON.parse(
+    listed.stdout.toString(),
+  );
+  const releases = pages.flat().map((release) => ({
+    tagName: release.tag_name,
+    isDraft: release.draft,
+    isPrerelease: release.prerelease,
+  }));
+  let latest = previous;
+  for (const release of releases) {
+    const candidate = release.tagName.replace(/^v/, "");
+    if (release.isDraft || !/^\d+\.\d+\.\d+(?:-beta\.[1-9]\d*)?$/.test(candidate)) continue;
+    if ((releaseChannel(candidate) === "beta") !== release.isPrerelease)
+      throw new Error(`Release channel disagrees with ${release.tagName}`);
+    if (compareVersions(candidate, latest) > 0) latest = candidate;
+  }
+  const isPrepared =
+    current !== previous &&
+    !releases.some((release) => !release.isDraft && release.tagName === `v${current}`);
+  const options = releaseOptions(current, previous, latest, isPrepared);
+  const suggested =
+    options.find((option) => option.key === "prepared") ??
+    options.find(
+      (option) => option.key === (releaseChannel(current) === "beta" ? "beta" : "patch"),
+    ) ??
+    options[0]!;
+  console.log(
+    `\nCurrent: v${current}\nLatest Stable: v${previous}\nLatest published overall: v${latest}\n\nChoose a release:`,
+  );
+  for (const [index, option] of options.entries())
+    console.log(
+      `  ${index + 1}. ${option.label} → ${option.version} (${releaseChannel(option.version) === "beta" ? "Beta" : "Stable"}) [${option.key}]`,
+    );
+  console.log(`  ${options.length + 1}. Custom version… [custom]\n`);
+  let version: string;
+  let selectedChoice: string;
+  for (;;) {
+    const choice = prompt("Enter a number, option name, or explicit version", suggested.key);
+    if (choice === null) throw new Error("Release preparation cancelled");
+    selectedChoice = choice.trim().toLowerCase();
+    let input = choice;
+    if (selectedChoice === "custom" || selectedChoice === String(options.length + 1)) {
+      const custom = prompt("Custom version (x.y.z for Stable, x.y.z-beta.N for Beta)");
+      if (custom === null) throw new Error("Release preparation cancelled");
+      input = custom;
+    }
+    try {
+      version = selectReleaseVersion(options, input, current, previous, latest);
+      selectedChoice = options.find((option) => option.version === version)?.key ?? selectedChoice;
+      break;
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : "Invalid release choice");
+    }
+  }
+  console.log(
+    `Selected ${releaseChannel(version) === "beta" ? "Beta prerelease" : "Stable release"}: v${version}`,
+  );
   const original = await changelog.text();
-  let notes =
-    compareVersions(current, previous) > 0
-      ? releaseNotes(original, current)
-      : (section(original, "Unreleased")?.body ?? "");
+  let notes = isPrepared
+    ? releaseNotes(original, current)
+    : (section(original, "Unreleased")?.body ?? "");
   if (!/^\s*- /m.test(notes)) {
     const summary = prompt("Release notes: describe the user-visible change in one sentence");
     if (!summary?.trim()) throw new Error("Release cancelled: release notes are required");
     const category = prompt(
       "Changelog category (Added/Changed/Deprecated/Removed/Fixed/Security)",
-      choice === "minor" ? "Added" : "Fixed",
+      selectedChoice === "minor" ? "Added" : "Fixed",
     );
     notes = `### ${category}\n\n- ${summary.trim()}`;
   }
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago" }).format(new Date());
   // Prepared notes can be moved to a newer version, but published history stays intact.
   let history = original;
-  if (current !== version && compareVersions(current, previous) > 0) {
+  if (current !== version && isPrepared) {
     const prepared = section(history, current);
     if (prepared) history = history.slice(0, prepared.start) + history.slice(prepared.end);
   }
   const updated = prepareChangelog(history, version, date, notes);
   const metadata = (await plist.text()).replace(
     /(<key>CFBundle(?:ShortVersionString|Version)<\/key>\s*<string>)[^<]+(<\/string>)/g,
-    (_match: string, before: string, after: string) => before + version + after,
+    (_match: string, before: string, after: string) =>
+      before +
+      (before.includes("<key>CFBundleVersion</key>") ? bundleVersion(version) : version) +
+      after,
   );
   await Bun.write(manifest, manifestText.replace(/^version = "[^"]+"$/m, `version = "${version}"`));
   await Bun.write(plist, metadata);
