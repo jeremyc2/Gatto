@@ -9,6 +9,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Widen the preview's Save button in both idle and loading states so its spinner
+  and full “Saving…” label fit without resizing or truncation.
+
 - Remove Gatto's direct `ttf-parser` dependency and the unused non-macOS annotation
   text fallback. Annotation text continues to use macOS CoreText for layout,
   preview, and PNG export.

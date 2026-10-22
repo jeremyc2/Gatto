@@ -387,7 +387,8 @@ any active import or upload before saving. Save shows a loading indicator while
 working and closes the preview after all changed images are saved. If saving
 fails, the preview stays open with its edits intact. Save is disabled when the
 preview matches the last saved version, including when no edits have been made.
-Save and Discard use text labels without tooltips.
+Save and Discard use text labels without tooltips. Save keeps the same width
+while showing its spinner and full **Saving…** label.
 
 Saving retains editable marks, undo/redo history, and the original image in memory
 when you reopen that attachment's preview. Changes after undo/redo/Discard can

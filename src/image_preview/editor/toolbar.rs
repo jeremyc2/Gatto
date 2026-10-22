@@ -829,7 +829,7 @@ impl ImagePreview {
             .child(
                 Button::new("annotation-apply")
                     .app_primary()
-                    .w(px(88.))
+                    .w(px(120.))
                     .label(if self.saving.is_some() {
                         "Saving…"
                     } else {

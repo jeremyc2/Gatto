@@ -4026,6 +4026,44 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn save_button_keeps_its_size_and_fits_loading_content(cx: &mut TestAppContext) {
+        let (view, cx) = editor_window(cx);
+        let idle = cx.update(|window, _| window.find("annotation-apply").bounds());
+        cx.simulate_keystrokes("r");
+        drag(&view, cx, Pos::new(100., 100.), Pos::new(230., 210.));
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            assert_eq!(window.find("annotation-apply").bounds(), idle);
+            window.click("annotation-apply", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).saving.is_some());
+            let button = window.find("annotation-apply");
+            assert_eq!(button.bounds(), idle, "Saving must not resize or move Save");
+            assert_eq!(button.label(), Some("Saving…"));
+
+            let label = button.label().unwrap();
+            let mut text_style = window.text_style();
+            text_style.font_family = cx.theme().font_family.clone();
+            let label_width = window
+                .text_system()
+                .shape_line(
+                    label.into(),
+                    window.rem_size() * 0.875,
+                    &[text_style.to_run(label.len())],
+                    None,
+                )
+                .width;
+            // App button padding (2 × 0.75 rem), medium spinner (1 rem), gap (0.5 rem).
+            let required_width = label_width + window.rem_size() * 3.;
+            assert!(
+                button.bounds().size.width >= required_width,
+                "Save needs {required_width:?} for its spinner and full label, got {:?}",
+                button.bounds().size.width
+            );
+        });
+    }
+
+    #[gpui_kit::test]
     fn rejected_saves_keep_edits_open_and_allow_retry_without_duplicate_exports(
         cx: &mut TestAppContext,
     ) {

@@ -56,11 +56,13 @@ focus treatment, loading indicators, and disabled states stay on the underlying
 GPUI Button.
 
 Upload uses the standard text-button size and icon proportions, with enough width
-for its progress label. Preview Save and Discard use the same styles and dimensions
-as their exit-dialog equivalents. Confirmation footers constrain GPUI's full-size
-wrappers so their buttons stay compact; the three-action exit dialog separates
-Discard from the Cancel/Save group. The annotation tool palettes and illustrated
-Rooftops score card retain their distinct controls.
+for its progress label. Preview Save and Discard use the same styles and height
+as their exit-dialog equivalents. The preview's Save button keeps a 120-point width
+in both idle and loading states to fit its spinner and full “Saving…” label.
+Confirmation footers constrain GPUI's full-size wrappers so their buttons stay
+compact; the three-action exit dialog separates Discard from the Cancel/Save
+group. The annotation tool palettes and illustrated Rooftops score card retain
+their distinct controls.
 
 This applies Refactoring UI's [hierarchy-first button guidance](https://medium.com/refactoring-ui/7-practical-tips-for-cheating-at-design-40c736799886):
 make the primary action obvious, with quieter treatments for supporting actions.
