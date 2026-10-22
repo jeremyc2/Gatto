@@ -70,6 +70,11 @@ documented analysis.
   license allowlist.
 - Direct unmaintained dependencies, known vulnerabilities, unsoundness advisories,
   and yanked releases fail dependency-policy checks.
+- Remove unused license allowances when they no longer match either supported
+  macOS target, including developer features. Duplicate-version warnings remain
+  enabled: the current duplicates also exist beneath GPUI Kit alone and require
+  upstream dependency convergence. A duplicate warning is not by itself a
+  vulnerability finding; advisory and source checks still apply to each version.
 - Dependabot checks Cargo packages, both JavaScript manifests, and GitHub Actions weekly.
 - CI and dependency-security definitions are stored in
   `.github/workflows.disabled/` and do not run in GitHub Actions. The retained

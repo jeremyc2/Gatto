@@ -3404,10 +3404,9 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("General"))
                     .child(
                         h_flex().justify_between().items_center()
-                            .child("Release channel")
+                            .child(div().font_semibold().text_sm().child("Release channel"))
                             .child(Button::new("release-channel").app_secondary()
                                 .label(channel.label()).icon(IconName::ChevronDown)
                                 .accessibility_label("Release channel")
@@ -3425,7 +3424,16 @@ impl UploaderApp {
                         .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::application_menu::CheckForUpdates), cx)))
                     .when(!self.updater.read(cx).message.is_empty(), |section| {
                         section.child(div().text_xs().child(self.updater.read(cx).message.clone()))
-                    })
+                    }),
+            )
+            .child(
+                v_flex()
+                    .gap_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .p_4()
+                    .child(div().font_semibold().text_sm().child("General"))
                     .child(
                         Checkbox::new("start-at-login")
                             .label("Start at Login")

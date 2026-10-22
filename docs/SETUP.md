@@ -34,7 +34,7 @@ Homebrew.
 
 ### Updates
 
-Choose **Stable** or **Beta** in **App Preferences → General → Release channel**.
+Choose **Stable** or **Beta** in **App Preferences → Release channel**.
 Stable is the default, including when no preference was previously saved. Beta
 receives preview releases and newer stable releases. The preference survives
 restarts. Selecting a channel refreshes availability without downloading or

@@ -473,7 +473,7 @@ preferences, or uninstalling, see [Support](../SUPPORT.md).
 
 ## Install an update
 
-The **Release channel** dropdown in **App Preferences → General** selects Stable
+The **Release channel** section in **App Preferences** selects Stable
 or Beta. Beta also receives newer stable releases. Changing the dropdown checks
 availability and clears old offers; it never grants installation consent. When
 returning to Stable, an installed beta stays in place until Stable catches up.

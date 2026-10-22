@@ -139,6 +139,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Give Release channel its own section in App Preferences, including the channel
+  dropdown, update check, and update status.
 - Replace the app's direct HTTP, menu-bar, global shortcut and dynamic-loader
   dependencies with bounded macOS adapters. Keep upload progress, cancellation,
   safe retry behavior, menu actions and configurable shortcuts.
