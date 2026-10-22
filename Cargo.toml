@@ -37,7 +37,7 @@ url = "2"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
 core-graphics = "0.25"
-core-text = "21"
+core-text = "22"
 block2 = "0.6"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = [
