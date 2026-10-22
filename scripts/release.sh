@@ -155,6 +155,9 @@ build bun --no-env-file lint:web
 build bun --no-env-file typecheck:web
 build bun --no-env-file test:web
 
+# Refresh documentation from this checkout before reviewing the release commit.
+build ./scripts/update-walkthrough-screenshots.sh
+
 git status --short
 git diff --stat HEAD
 read -r -p "Commit and push these changes for $tag, then build the release? [y/N] " answer

@@ -102,7 +102,8 @@ The script guides the release in this order:
    tests, and dependency policy checks; script type checks/tests; native updater
    tests; native menu/hotkey checks; a disposable install/relaunch test; cask syntax; and website build,
    lint, type checks, and tests.
-4. Show the changed-file summary and ask before committing all pending code and
+4. Regenerate walkthrough screenshots from the current app using the off-screen
+   Metal renderer. A capture failure stops the release. Show the changed-file summary and ask before committing all pending code and
    release preparation changes and pushing `main`. A concurrent remote change
    makes a normal push fail; the script never force-pushes.
 5. Build the unsigned binary, then verify GitHub authentication, signing identity,

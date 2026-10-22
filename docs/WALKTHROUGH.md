@@ -10,10 +10,8 @@ The main window's question-mark icon opens this walkthrough in your browser.
 Open Gatto from its menu bar icon and choose the repository to upload through.
 For frequent destinations, [pin a repository in App Preferences](SETUP.md#3-choose-your-account-or-organization).
 
-In App Preferences, press **Escape** or click **Done** to return to the main page.
-Escape also works from a focused text field or toolbar control. If a dialog is
-open, Escape dismisses the dialog first. While recording a global shortcut,
-**Escape** cancels recording first; press it again to return to the main page.
+Click **Done** or press **Escape** to return from App Preferences. If a dialog
+is open or you're recording a shortcut, Escape dismisses that first.
 
 ## 2. Stage an image or video
 
@@ -175,6 +173,8 @@ without stream/response activity or five minutes overall. Errors explain
 size/format problems, authentication/access failures, rate limits, or server
 and network failures. Retrying is always an explicit Upload action.
 
+### Closing Gatto
+
 Closing the main window cancels active compression and uploads and clears
 attachments and results. Copy your Markdown before closing; drafts and upload
 history are not saved between sessions.
@@ -193,246 +193,127 @@ menu or the cat icon's dropdown (the menu bar extra). Both show **⌘,**.
 
 ## Inspect an image
 
-Click an attachment's preview to open the native image editor. Image and GIF
-previews start maximized. You can resize the window; reopening it keeps your
-chosen size for the rest of the app session. The centered bottom toolbar offers
-selection, pan, pen, eraser, arrow/line,
-text, pixelation, and a shape picker. Hover for tooltips and shortcuts. GIFs remain
-preview-only and play with their recorded timing; playback pauses when inactive,
-and macOS Reduce Motion shows the first frame.
+Click a staged image to open it in the editor. Add a note, point out a detail,
+or pixelate an area before uploading. Your original file stays unchanged.
 
-Use the bottom-left **+**/**−** controls to zoom. Click the percentage to open
-**Zoom in**, **Zoom out**, **Zoom to 100%**, and **Zoom to fit**. The percentage
-shows the actual image scale; 100% draws one image pixel per logical screen pixel.
-Large images open fitted to the window; small images open at 100% without enlargement.
-Annotation sizes are calibrated once to that opening view. The same size preset
-then produces matching border thickness and text size before and after zooming;
-existing and new annotations zoom together with the image. Resizing the window or
-reopening saved work keeps the image's established sizes. Size changes on selected
-objects keep their original object scale.
-Move between images in the top bar. Select the hand tool or
-hold **Space** and drag to pan; the middle mouse button and scrolling also pan.
-Pinch to zoom, or hold **Command** or **Control** while scrolling to zoom around
-the pointer. Drawing and
-selection stay attached to image coordinates at every zoom level.
+<img src="images/walkthrough/image-editor.png" alt="Gatto image editor with text, an arrow, and shapes added to the rocket cat" width="820">
 
-- Double-click empty space for free-form text, or choose **T** and click. It grows
-  horizontally as you type; explicit newlines are preserved. Drag deliberately
-  sideways with **T** to choose a wrapping width, in either direction. Tiny or
-  very quick drags keep free-form text. A wrapping text box shows a blue outline
-  while drawing its width and while typing; the outline grows with new lines.
-  Free-form text has no outline while typing. Single-click either kind with
-  **Select** to show its resize handles. Dragging any text resize handle sets a
-  fixed wrapping width: left/right edges reflow text, while corners scale its letters.
-  The editing outline has no resize handles and disappears when focus is removed.
-  The text tool always creates new text;
-  use **Select** and double-click existing text, or press **Return** with it
-  selected, to edit it. Opening existing text selects its entire value so typing
-  replaces it; **Right** moves to the end and **Left** to the beginning.
-  Double-clicking text while already editing also selects all of it.
-  **Return** adds a newline while editing;
-  **Command+Return** or **Escape** finishes without closing the preview.
-  Text uses one font, Arial, with a contrasting outline over the image—even
-  while editing. Empty or whitespace-only standalone text is removed when you
-  finish. Clipboard text is pasted as plain text. Color emoji remain visible in
-  text and labels and in saved images.
-- Double-click any shape or arrow to add or edit its attached text. You can
-  select a transparent shape by its border first, then double-click either its
-  border or interior. **Return** also edits the selected object's label.
-  Existing shape, arrow, and line labels are highlighted in full for replacement.
-  Selecting an object and typing keeps the normal tool shortcuts.
-  Shape labels keep their chosen letter size, wrap across the rectangular
-  bounds with padding, and grow the shape taller when needed. Text may overlap
-  pointed or curved outlines. Resizing cannot shrink a shape below its text's
-  minimum size; delete text to reduce that minimum. Deleting characters releases
-  extra height down to the base shape size. Labels remain visible on small
-  shapes, which grow to fit them, including X boxes and checkboxes.
-- Use the text alignment icons for left, center, or right alignment; shapes
-  also offer top, middle, and bottom alignment. Labels default to centered.
-  Text inside closed shapes is always white with a black outline, independent
-  of the shape color. Standalone text keeps its selectable palette color.
-  Changing an automatically sized text object's content preserves its chosen
-  alignment anchor. S/M/L/XL use 18/24/36/44 logical screen points in the opening view for standalone
-  text, 18/22/26/32 for shape labels, and 18/20/24/28 for arrow labels. Shape and
-  arrow labels follow the same size choice as their border; resizing a shape
-  normally keeps the text size, while scaling a group scales its text too.
-- Arrow and line labels stay on one line while they fit between the caps, with a
-  small gap. Longer labels wrap between words using the actual path length and
-  each cap's size; shortening and lengthening recomputes wrapping without changing
-  the font size. **Enter** inserts a manual line break; **Shift+Enter** also works.
-  Typing on a very short arrow or line extends it enough to keep words intact.
-  Endpoint resizing stops at the text/cap minimum and keeps the other endpoint
-  fixed; removing text allows further shortening. Multiline labels reserve room
-  for their full padded rectangle at every angle, leaving visible shaft beyond
-  both caps. Bending and group rotation enforce the same minimum.
-  Labels sit along the actual path and move with its endpoints and curve.
-  The shaft leaves a transparent gap beneath the label, keeping the image visible.
-  Dragging an arrow or line label moves the entire object and its text together.
-  Double-click its text to edit it. The curve handle stays separate from the
-  label. Labels share the object's movement, stacking, deletion, and history.
-- Select a mark to move it. An unselected transparent shape lets interior clicks
-  pass through; click its outline or the text itself to select and move it.
-  Text hit areas include a small space around each character, while blank lines,
-  long spaces, and unused text-box padding pass through to objects below.
-  Once selected, its interior also
-  moves it until you select something else, click empty space, or press **Escape**.
-  Filled shapes can be selected and moved from their interiors.
-  Selections have blue outlines and four blue corner handles with black centers.
-  Drag any edge or corner of the selection box to resize; edge handles stay hidden. You can drag through
-  the opposite edge or corner and keep growing on the other side; text stays
-  readable. This also works with rotated objects and grouped selections, while
-  shape labels still enforce their minimum content size. The pointer shows the
-  resize direction with a small, outlined double-headed arrow; moving keeps the
-  regular pointer. Text corners scale the lettering,
-  while its left/right edges change wrapping width. Just outside a corner, the
-  small, outlined curved double-arrow cursor rotates the object, including text and
-  pen strokes. Its curve faces the correct way at each of the four corners. Rotate
-  and resize cursors follow the object's angle on hover and throughout a drag,
-  including grouped selections. Hold **Shift** while rotating to snap to
-  15-degree increments.
-  Drag an arrow's endpoints or its curve handle to reposition or bend it.
-  Selected arrows show a blue path and those three handles. Each continuous pen
-  stroke (**P**) is one object; select it to move or resize the entire stroke.
-  Active drags continue across floating controls. Releasing there finishes the
-  drag without activating the control underneath.
-- Drag from empty canvas with the select tool to draw a selection box. Objects
-  touched by the box are selected together; fixed pixelation strokes are excluded.
-  **Shift**-click objects to add or remove them, or **Command+A** to select all
-  annotations. A shared box moves and rotates the selection; resizing preserves
-  proportions, including text and stroke widths. Shared color, fill, stroke,
-  opacity, size, clone, delete, and stacking controls apply to the selection.
-  Mixed selections show their common controls. Click empty space or press
-  **Escape** to deselect. Each group edit is one undo step.
-- Right-click an object for **Bring to front**, **Bring forward**, **Send backward**,
-  and **Send to back**. Forward/backward moves past the next overlapping object;
-  front/back moves to the end of the annotation stack. Ordering changes can be undone.
-- The upper-right palette shows only the options for the current tool or selected
-  mark; eraser, hand, and an empty selection hide it. Pixelation shows only brush
-  size. A single color
-  sets matching tones for border and fill: strokes use the brighter palette tone,
-  and fills use a darker version of that same color. Choose transparent, soft,
-  solid, or diagonal-pattern fill, and solid/dashed/dotted strokes.
-  Rectangles and polygon shapes have slightly rounded corners.
-  The X runs diagonally from corner to corner. X-box and checkbox symbols use
-  the same color, width, and solid/dashed/dotted style as their borders.
-  S/M/L/XL stroke widths are 2/3.5/5/10 logical screen points in the opening view. One size is always highlighted, including the
-  default. Custom sizes highlight the closest preset without changing the mark.
-  Standalone text uses its own letter sizes for the same size choices. Drag the opacity slider
-  to fade a whole mark. Rectangle (**R**) and ellipse (**O**) have separate bottom
-  toolbar buttons. The bottom chevron opens the shape menu just above it:
-  rectangle, ellipse, triangle, diamond, hexagon, oval, rhombus, star, cloud, heart,
-  crossed box, checked box, four directional block arrows, and line (**K**).
-  Click once to place a closed shape at its default size, centered at the pointer,
-  or drag to set its size. This also works with transparent fill. Clicking with
-  the arrow tool places nothing. Clicking with the line tool places a dot with
-  overlapping endpoints; use **Select** and drag the dot to pull one end out into
-  a line. These new objects stay unselected and follow the tool-lock setting.
-  Ellipse has a continuous curved outline; oval is a capsule with straight sides
-  and semicircular ends. The **Shape** button in the upper-right properties opens
-  the same menu beside that button, centered on its row and kept inside the window.
-  Floating controls use compact spacing, with larger handles on both sliders.
-  The history bar touches the tool bar, slightly inset from its rounded corner.
-  Choose a shape to change the selected object, or to set
-  the current shape tool before drawing. The bottom menu chooses the next drawing
-  tool without changing an existing object.
-  Arrow cap controls independently cycle through none, open arrow, triangle, and circle; choose none at both ends for a line.
-- Undo, redo, delete, and **Clone** sit just above the bottom toolbar.
-  **Command+D** also clones the selection directly to its right, one full visible
-  selection width away, without shifting downward. **Command+C** copies editable
-  objects and **Command+V** pastes them centered at the cursor on the canvas;
-  pasting while over controls uses the canvas center. Groups keep their relative
-  positions, text, rotation, and styles. Each clone or paste is one undo step.
-  Text editing keeps its normal text copy/paste shortcuts.
-  **Discard** sits beside **Save** at the top right. After an **Are you sure?**
-  confirmation, it discards unsaved edits, erases the preview's edit history,
-  and closes the preview. The latest saved annotations stay editable when reopened.
-  Discard cannot be undone and is disabled when there are no unsaved edits or
-  history to discard. **Save** also closes the preview once saving finishes.
-  Selection outlines and drag handles stay hidden during a drawing stroke and
-  appear when selecting a finished object. Newly drawn objects and newly finished
-  text are left unselected. Changing the tool's color, fill, stroke, opacity, or
-  arrow caps prepares the next object; it does not change the object just created.
-  Choose **Select** (**V**) and click an object to change its attributes.
-  Tools return to selection after drawing, except for
-  the pixelation brush, which stays active. The lock button (**L**) keeps the
-  chosen tool active. Hold **Shift** while drawing a closed shape to give it equal
-  width and height. Hold **Shift** while dragging a corner to preserve an object's
-  proportions, including rotated shapes and pen strokes. Release **Shift** during
-  the drag to resize freely; edge handles keep their usual behavior. Rotation
-  separately snaps in 15-degree increments while **Shift** is held. Use eraser (**E**) or select a mark and press
-  **Delete**. **Command+Z** undoes edits; **Shift+Command+Z** redoes them.
-- Use the circular, colored pixelation brush (**X**) at the far right of the
-  toolbar, after the shape overflow, to paint opaque mosaic pixels over the source
-  image. Hovering previews the pixelated image inside the blue brush circle;
-  moving away removes that preview. Only clicking or dragging applies a stroke.
-  Annotations remain visible above both the preview and painted pixelation.
-  A continuous size slider runs from a 30-point to a 138-point brush
-  diameter on screen, with finer control over small brushes. The starting diameter
-  is 64 points. Small and large circles identify the ends of the slider. The blue
-  circle and hover preview keep the same screen diameter when zooming; new strokes
-  match that circle. Changing size affects only future strokes. Completed strokes
-  stay fixed to the image and zoom with it. Click for a circular dab or drag for a
-  continuous stroke.
-  Painted pixelation stays fixed; it cannot be selected, moved, resized, or erased.
-  Undo/redo removes/restores a whole stroke. Pixelation stays within the source
-  image and beneath all annotations, so it never covers text, arrows, or shapes.
-  The flattened PNG contains the replacement pixels, with no hidden source layer.
-  The original source file stays unchanged.
+The drawing tools are along the bottom. Options for the tool you're using—such
+as color, size, and fill—appear at the upper right. Hover over a button to see
+what it does and its keyboard shortcut.
 
-**Save** (**Command+S**) replaces changed staged images with their annotated versions
-for the next upload, resets their previous uploaded results, preserves their
-descriptions. PNGs retain their filename; other still-image formats become PNGs
-with the same filename stem. The original file on disk stays unchanged. Finish
-any active import or upload before saving. Save shows a loading indicator while
-working and closes the preview after all changed images are saved. If saving
-fails, the preview stays open with its edits intact. Save is disabled when the
-preview matches the last saved version, including when no edits have been made.
-Save and Discard use text labels without tooltips. Save keeps the same width
-while showing its spinner and full **Saving…** label.
+### Get a closer look
 
-Saving retains editable marks, undo/redo history, and the original image in memory
-when you reopen that attachment's preview. Discard restores the latest saved
-annotations as editable objects on the original image, so you can still move,
-resize, or edit them and save again. Upload sends a flat PNG with no editable
-source layer. Changes after undo/redo/Discard can be saved again. **Escape**
-finishes text, clears focus and selection, and leaves the preview open. Finishing new text follows the tool-lock rule;
-otherwise Escape keeps the current tool. Repeated presses cannot close the preview.
+Use **+** and **−** at the bottom left to zoom. Click the percentage for
+**Zoom to fit** or **Zoom to 100%**. Choose the hand tool and drag to move around
+the image; scrolling and pinch-to-zoom work too.
 
-The window close button and **Command+W** close immediately if there are no unsaved
-edits. Otherwise they ask **Save changes before closing?**, with **Save**,
-**Discard**, and **Cancel**. Save is the primary button; Cancel and Discard use
-matching outlined neutral buttons, with Discard separated on the left. The
-preview header uses the same Save and Discard button styles. Save saves all
-changed images and closes after success;
-Cancel keeps the editing session. Discard removes unsaved edits and undo/redo
-history across all images in that preview. Saved versions remain staged, and
-reopening keeps their latest saved annotations editable on the original image.
-A pending Save cannot finish after exit and restore discarded edits. History is never written to disk.
+Use the arrows in the top bar to move between staged images. You can resize the
+editor window, and Gatto remembers that size for the rest of the app session.
+GIFs play here but cannot be edited. Playback pauses when the window is inactive;
+with macOS Reduce Motion enabled, Gatto shows the first frame.
 
-Drawing beyond the original image expands the applied image, with transparent
-space around the artwork. Applied images are limited to 64 megapixels, 16,384
-pixels per side, and the 10 MB attachment limit.
+### Add a note or callout
 
-Click a video's play tile to open it in the default macOS video application
-(often QuickTime Player). That separate application supplies playback, audio,
-seeking, and codec error messages. WebM may require a compatible player; if
-macOS cannot launch one, Gatto reports the failure. A container passing upload
-validation does not guarantee its codec plays in every application or browser.
-Videos uploaded without compression retain their original bytes and audio. Each private
-temporary video copy stays available while staged or while the launched viewer
-application is running, even after its draft is removed.
+Choose the text tool and click where you want to write. For a longer note, drag
+out a text box first so the words wrap. Double-click existing text to change it.
+Click away when you're finished, or press **Escape** to finish typing.
 
-| Key | Preview action |
+<img src="images/walkthrough/image-editor-text-editing.png" alt="A shape label being edited directly on the image, with text options beside it" width="820">
+
+Use an arrow to point to a detail, a shape to highlight an area, or the pen to
+draw freely. Drag to draw an arrow or set a shape's size. You can also click to
+place a shape, then resize it later. Double-click a shape or arrow to add a label
+that moves with it.
+
+The small chevron in the bottom toolbar opens more shapes. After selecting a
+shape you've drawn, use **Shape** in its options to change it. Try a transparent
+fill to keep the image visible, or a soft fill to highlight an area. The same
+panel lets you change colors, line styles, size, and opacity.
+
+<img src="images/walkthrough/image-editor-shapes.png" alt="The shape menu offers callout shapes, symbols, and directional arrows" width="820">
+
+Most tools switch back to selection after drawing. Turn on the lock in the
+toolbar if you'd like to keep using the same tool.
+
+### Adjust what you've added
+
+Choose the selection tool, then click a mark to move it. For a transparent shape,
+click its outline or label. Drag a corner to resize; drag just outside a corner
+to rotate. Hold **Shift** to keep proportions while resizing or to rotate in
+small, even steps. An arrow's handles let you move its ends and bend its path.
+
+To work on several marks at once, drag a selection box from an empty area.
+You can move, resize, rotate, or restyle them together. Click an empty area to
+clear the selection.
+
+<img src="images/walkthrough/image-editor-group.png" alt="Several annotations selected together inside a shared blue resize box" width="820">
+
+The small bar above the tools has **Undo**, **Redo**, delete, and **Clone**.
+Clone makes another copy of your selection. You can also copy and paste marks
+between images in the editor. Right-click a mark to bring it forward or send it
+behind other marks.
+
+### Pixelate an area
+
+Choose the pixelation brush at the right end of the toolbar. Move over the image
+to preview the effect, then click or drag to apply it. Use the size slider to
+cover a smaller or larger area. Text, arrows, and shapes stay visible above it.
+
+<img src="images/walkthrough/image-editor-brush.png" alt="The pixelation brush previews a mosaic inside its blue circle, with a brush-size slider at the upper right" width="820">
+
+Pixelation stays where you paint it; it cannot be moved or erased with the
+eraser. Use **Undo** to remove a stroke. Check the result before sharing.
+The uploaded PNG contains the pixelated image with no hidden original layer;
+your original file on disk stays unchanged.
+
+### Save and upload
+
+Click **Save** when you're happy with the result. Gatto saves the changed images
+back to your staged attachments and closes the editor. Your descriptions stay
+in place. If you edited an image that was already uploaded, upload it again to
+get a link to the new version.
+
+Saved marks remain editable when you reopen the image during the same draft.
+Uploads contain a finished PNG; they do not include editable marks. Non-PNG
+images become PNGs with the same filename stem. Drawing outside the original
+image adds transparent space around it. Saved images must still fit the 10 MB
+attachment limit and cannot exceed 64 megapixels or 16,384 pixels on either side.
+
+**Discard** asks for confirmation, then closes the editor without your unsaved
+changes. Your last saved version stays staged and its marks remain editable.
+Discard also clears undo/redo history for all images in that editor session.
+
+Closing the window with unsaved changes gives you a choice: **Save**,
+**Discard**, or **Cancel** to keep editing.
+
+<img src="images/walkthrough/image-editor-exit.png" alt="The editor asks whether to save changes before closing, with Discard, Cancel, and Save choices" width="820">
+
+Finish any import or upload before saving. If a save fails, the editor stays
+open with your work intact. Edits and history stay in memory only; copy your
+upload links before closing the main Gatto window, which clears the draft.
+
+A few useful shortcuts:
+
+| Shortcut | Action |
 | --- | --- |
-| **Command+=** or **Command+Plus** | Zoom in. |
-| **Command+Minus** | Zoom out. |
-| **Command+0** | Fit to window and reset pan. |
-| **Shift+0** | Zoom to 100%. |
-| **Shift+1** | Fit to window and reset pan. |
-| **← / →** | Previous / next image. |
-| **Command+A** | Select all movable annotations (or all text while editing). |
-| **Escape** | Finish text and clear focus/selection; keep the preview open. |
-| **Command+W** | Ask to exit and discard the preview editing session. |
+| **Command+S** | Save changed images and close the editor. |
+| **Command+Z** / **Shift+Command+Z** | Undo / redo. |
+| **Delete** | Remove selected marks. |
+| **Escape** | Finish typing or clear the selection; keep the editor open. |
+| **Command+W** | Close the editor, asking about unsaved changes. |
+
+### Preview a video
+
+Click a video's play tile to open it in your usual macOS video player, often
+QuickTime Player. Use that app to play, pause, seek, or adjust the volume.
+WebM may need a compatible player; Gatto reports an error if it cannot open one.
+A video that uploads successfully may still need a different player or format
+for some viewers.
+
+Videos uploaded without compression keep their original bytes and audio.
+Gatto keeps a private temporary copy available while the video is staged or its
+player is running, even if you remove it from the draft.
 
 ## Faster clipboard uploads
 

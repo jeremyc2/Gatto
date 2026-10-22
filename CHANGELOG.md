@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Update tiny-skia to 0.12, Core Graphics to 0.25, and Core Text to 22 for
+  annotation rendering and native text layout.
+- Make the image-editing walkthrough easier to follow with short, task-focused
+  guidance and screenshots for text, shapes, selection, pixelation, and saving.
+
+### Fixed
+
+- Refresh walkthrough screenshots before reviewing and committing each release;
+  stop the release if screenshot generation fails.
+
 ## [0.17.0] - 2026-10-22
 
 ### Changed

@@ -150,11 +150,15 @@ release-size updates, and link checks. Record user-visible changes under
 ### Walkthrough screenshots
 
 Run `./scripts/update-walkthrough-screenshots.sh` on macOS and inspect the PNGs.
+The all-in-one release script also runs this before its commit review, so the
+release includes screenshots of the current app.
 The script renders the production GPUI interface through its off-screen Metal
 renderer with fixed in-memory examples. It does not contact GitHub, read or
 modify saved preferences, use UI automation, or require Screen Recording
 permission. It overwrites `docs/images/walkthrough/`, including the Rooftops game,
-results, and exported scorecard images. Game captures show an early coin jump,
+results, and exported scorecard images. Editor captures include the overview,
+text editing, shape choices, grouped selections, pixelation brush, and save/close
+dialogs. Use these alongside the matching tasks in the walkthrough. Game captures show an early coin jump,
 a mid-level owl encounter, and the results screen in `rooftops-1.png` through
 `rooftops-3.png`; the scorecard is `rooftops-score.png`.
 
@@ -237,6 +241,15 @@ Keep new dependencies to a minimum. In a dependency change, explain:
 
 When updating GPUI Kit, confirm its published package metadata pins a compatible
 GPUI release. Update the compatibility note above in the same pull request.
+Gatto's annotation renderer uses tiny-skia 0.12, Core Graphics 0.25, and Core Text
+22. Update the latter two together: Core Text exposes Core Graphics types at
+its API boundary. These remain in-process drawing and native framework bindings;
+no extra encoder or runtime is bundled. GPUI and its SVG renderer still require
+older versions transitively, so duplicate-version warnings are expected. Check
+preview/export agreement and pixelation edges with the renderer commands above
+when updating these dependencies. Measure release sizes after publication using
+the procedure in [Releasing](docs/RELEASING.md#readme-size-figures).
+
 Commit the resulting `Cargo.lock` change, review every newly introduced package and
 source, and do not bypass an advisory without a documented, time-bounded rationale.
 

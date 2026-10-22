@@ -13,11 +13,15 @@ async function workflow(mode: string, resume = false) {
     await chmod(name, 0o755);
   };
   try {
-    for (const path of [bin, join(root, "scripts"), join(root, "packaging"), join(root, "Casks")])
+    for (const path of [bin, join(root, "scripts"), join(root, "packaging"), join(root, "Casks"), join(root, "docs/images/walkthrough")])
       await mkdir(path, { recursive: true });
     await Bun.write(
       join(root, "scripts/release.sh"),
       await Bun.file(new URL("./release.sh", import.meta.url)).text(),
+    );
+    await writeExecutable(
+      join(root, "scripts/update-walkthrough-screenshots.sh"),
+      await Bun.file(new URL("./update-walkthrough-screenshots.sh", import.meta.url)).text(),
     );
     await Bun.write(
       join(root, "Cargo.toml"),
@@ -28,6 +32,7 @@ async function workflow(mode: string, resume = false) {
     await Bun.write(join(root, "packaging/Assets.car"), "assets");
     await Bun.write(join(root, "README.md"), "old figures");
     await Bun.write(join(root, "Casks/gatto.rb"), "old cask");
+    await Bun.write(join(root, "docs/images/walkthrough/image-editor.png"), "stale screenshot");
     const common = `
 import { appendFileSync, mkdirSync, writeFileSync, cpSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,7 +42,7 @@ const args = process.argv.slice(2);
 if (tool === 'bun' && args[0] === '--no-env-file') args.shift();
 appendFileSync(join(root, 'calls'), JSON.stringify([tool, ...args]) + '\\n');
 const dirty = join(root, 'dirty');
-if ((tool === 'cargo' && ['check','clippy','test','build'].includes(args[0]!)) || (tool === 'bun' && ['install','audit:dependencies','typecheck:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
+if ((tool === 'cargo' && ['check','clippy','test','build','run'].includes(args[0]!)) || (tool === 'bun' && ['install','audit:dependencies','typecheck:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
  if (process.env.GH_TOKEN || process.env.CLOUDFLARE_API_TOKEN || process.env.APPLE_PASSWORD) appendFileSync(join(root,'build-exposures'), tool+' '+args.join(' ')+'\\n');
 }
 const draft = join(root, 'draft');
@@ -73,6 +78,10 @@ if (tool === 'git') {
  if (args[0] === 'audit:dependencies' && mode === 'audit-failure') process.exit(1);
  if (args[0] === 'scripts/update-homebrew-cask.ts' && mode === 'metadata-failure') process.exit(1);
  if (['scripts/update-readme-size.ts','scripts/update-homebrew-cask.ts'].includes(args[0]) && !args.includes('--check')) writeFileSync(dirty, 'metadata');
+} else if (tool === 'cargo' && args[0] === 'run') {
+ if (mode === 'screenshot-failure') process.exit(1);
+ mkdirSync(args.at(-1)!, {recursive:true});
+ writeFileSync(join(args.at(-1)!, 'image-editor.png'), 'fresh screenshot');
 } else if (tool === 'cargo' && args[0] === 'build') {
  if (mode === 'build-failure') process.exit(1);
  mkdirSync(join(root,'target/aarch64-apple-darwin/release'),{recursive:true});
@@ -171,6 +180,7 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
     return {
       exit,
       calls,
+      screenshot: await Bun.file(join(root, "docs/images/walkthrough/image-editor.png")).text(),
       output: (await stdout) + (await stderr),
       exposure: (await exposure.exists()) ? await exposure.text() : "",
     };
@@ -238,6 +248,8 @@ test("failed upload verification retains an unpublished draft", async () => {
 test("published release recovery only verifies and syncs metadata", async () => {
   const result = await workflow("published-resume", true);
   expect(result.exit, result.output).toBe(0);
+  expect(find(result.calls, "cargo", "run")).toBe(-1);
+  expect(result.screenshot).toBe("stale screenshot");
   expect(find(result.calls, "cargo", "build")).toBe(-1);
   expect(find(result.calls, "gh", "release", "create")).toBe(-1);
   expect(find(result.calls, "git", "add", "--", "README.md", "Casks/gatto.rb")).toBeGreaterThan(-1);
@@ -306,4 +318,22 @@ test("feed publication failures retain a published release with a resume path", 
   expect(result.output).toContain("--resume");
   expect(find(result.calls, "gh", "release", "edit")).toBeGreaterThan(-1);
   expect(find(result.calls, "bun", "scripts/update-homebrew-cask.ts")).toBe(-1);
+});
+
+test("release regenerates walkthrough screenshots before committing", async () => {
+  const result = await workflow("release");
+  expect(result.exit, result.output).toBe(0);
+  const capture = find(result.calls, "cargo", "run");
+  expect(result.screenshot).toBe("fresh screenshot");
+  expect(capture).toBeGreaterThan(-1);
+  expect(result.calls[capture]).toContain("walkthrough-screenshots");
+  expect(capture).toBeLessThan(find(result.calls, "git", "add", "--all"));
+  expect(result.exposure).toBe("");
+});
+test("screenshot failure prevents committing, signing and publishing", async () => {
+  const result = await workflow("screenshot-failure");
+  expect(result.exit).not.toBe(0);
+  expect(find(result.calls, "git", "commit")).toBe(-1);
+  expect(find(result.calls, "codesign")).toBe(-1);
+  expect(find(result.calls, "gh", "release", "create")).toBe(-1);
 });
