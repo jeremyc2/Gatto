@@ -60,7 +60,7 @@ actions!(
     gatto,
     [
         PasteImage,
-        PreviewFromClipboard,
+        StageFromClipboard,
         CopyUploadMarkdown,
         SwitchToBulkUpload,
         SelectStableChannel,
@@ -587,9 +587,9 @@ impl UploaderApp {
         }
     }
 
-    fn paste_and_preview_from_menu(
+    fn stage_from_clipboard_menu(
         &mut self,
-        _: &PreviewFromClipboard,
+        _: &StageFromClipboard,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3534,7 +3534,7 @@ impl Render for UploaderApp {
             .track_focus(&self.focus_handle)
             .capture_key_down(cx.listener(Self::handle_key_down))
             .on_action(cx.listener(Self::on_paste))
-            .on_action(cx.listener(Self::paste_and_preview_from_menu))
+            .on_action(cx.listener(Self::stage_from_clipboard_menu))
             .on_action(cx.listener(Self::switch_to_bulk_upload))
             .size_full()
             .bg(cx.theme().background);

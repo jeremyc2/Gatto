@@ -610,7 +610,7 @@ fn segment_distance(p: Pos, a: Pos, b: Pos) -> f32 {
 }
 
 /// Shares the original image and edit history within an editing session.
-/// Save and clean close retain it; confirmed unsaved exit discards it.
+/// Save and clean close retain it; Discard restores its saved editable marks.
 /// Staged image bytes remain independent.
 #[derive(Clone, Default)]
 pub struct Session(Arc<Mutex<Option<RetainedDocument>>>);
@@ -643,9 +643,6 @@ impl Session {
             image,
             saved_marks,
         });
-    }
-    pub fn discard(&self) {
-        *self.0.lock().unwrap_or_else(|error| error.into_inner()) = None;
     }
 }
 

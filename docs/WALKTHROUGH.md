@@ -345,9 +345,9 @@ selection stay attached to image coordinates at every zoom level.
   Text editing keeps its normal text copy/paste shortcuts.
   **Discard** sits beside **Save** at the top right. After an **Are you sure?**
   confirmation, it discards unsaved edits, erases the preview's edit history,
-  and closes the preview. Previously saved image versions are kept.
-  Discard cannot be undone and is disabled when there is no work or history to
-  discard. **Save** also closes the preview once saving finishes.
+  and closes the preview. The latest saved annotations stay editable when reopened.
+  Discard cannot be undone and is disabled when there are no unsaved edits or
+  history to discard. **Save** also closes the preview once saving finishes.
   Selection outlines and drag handles stay hidden during a drawing stroke and
   appear when selecting a finished object. Newly drawn objects and newly finished
   text are left unselected. Changing the tool's color, fill, stroke, opacity, or
@@ -391,9 +391,11 @@ Save and Discard use text labels without tooltips. Save keeps the same width
 while showing its spinner and full **Saving…** label.
 
 Saving retains editable marks, undo/redo history, and the original image in memory
-when you reopen that attachment's preview. Changes after undo/redo/Discard can
-be saved again. **Escape** finishes text, clears focus and selection,
-and leaves the preview open. Finishing new text follows the tool-lock rule;
+when you reopen that attachment's preview. Discard restores the latest saved
+annotations as editable objects on the original image, so you can still move,
+resize, or edit them and save again. Upload sends a flat PNG with no editable
+source layer. Changes after undo/redo/Discard can be saved again. **Escape**
+finishes text, clears focus and selection, and leaves the preview open. Finishing new text follows the tool-lock rule;
 otherwise Escape keeps the current tool. Repeated presses cannot close the preview.
 
 The window close button and **Command+W** close immediately if there are no unsaved
@@ -402,11 +404,10 @@ edits. Otherwise they ask **Save changes before closing?**, with **Save**,
 matching outlined neutral buttons, with Discard separated on the left. The
 preview header uses the same Save and Discard button styles. Save saves all
 changed images and closes after success;
-Cancel keeps the editing session. Discard removes its edits and undo/redo
-history, including edits on other images in that preview. Saved versions remain
-staged. After discarding on exit, reopening starts a fresh editing session from
-the staged image. A pending Save cannot finish after exit and restore discarded
-edits. History is never written to disk.
+Cancel keeps the editing session. Discard removes unsaved edits and undo/redo
+history across all images in that preview. Saved versions remain staged, and
+reopening keeps their latest saved annotations editable on the original image.
+A pending Save cannot finish after exit and restore discarded edits. History is never written to disk.
 
 Drawing beyond the original image expands the applied image, with transparent
 space around the artwork. Applied images are limited to 64 megapixels, 16,384
@@ -437,7 +438,7 @@ application is running, even after its draft is removed.
 
 With at least one repository pinned, these actions appear in Gatto’s menu bar menu:
 
-- **Preview from Clipboard** stages the image or copied Finder media file in the main window and shows **⌘V**.
+- **Stage from Clipboard** stages the image or copied Finder media file in the main window and shows **⌘V**.
 - **Quick Copy** uploads it in the background, copies its Markdown, and sends a macOS notification when it finishes. When its global shortcut is enabled, the menu shows the registered shortcut. The hint follows changes in App Preferences and disappears while the shortcut is disabled or being recorded.
 
 To customize the enabled global shortcut in App Preferences, click **Record

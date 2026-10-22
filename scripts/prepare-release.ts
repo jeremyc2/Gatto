@@ -10,6 +10,17 @@ import {
 } from "./release-version";
 export { compareVersions, nextVersion } from "./release-version";
 
+export function prepareLockfile(source: string, version: string): string {
+  bundleVersion(version);
+  const packageVersion = /(^\[\[package\]\]\r?\nname = "gatto"\r?\nversion = ")[^"]+("\r?$)/m;
+  if (!packageVersion.test(source)) throw new Error("Missing Gatto package in Cargo.lock");
+  // Change only the local package version; preserve every dependency pin and checksum.
+  return source.replace(
+    packageVersion,
+    (_match, before: string, after: string) => before + version + after,
+  );
+}
+
 function section(source: string, version: string) {
   const headings = [...source.matchAll(/^## \[([^\]]+)\](?: - \d{4}-\d{2}-\d{2})?[ \t]*$/gm)];
   const index = headings.findIndex((match) => match[1] === version);
@@ -72,6 +83,7 @@ export function prepareChangelog(
 if (import.meta.main) {
   const root = resolve(import.meta.dir, "..");
   const manifest = Bun.file(resolve(root, "Cargo.toml"));
+  const lockfile = Bun.file(resolve(root, "Cargo.lock"));
   const plist = Bun.file(resolve(root, "packaging/Info.plist"));
   const changelog = Bun.file(resolve(root, "CHANGELOG.md"));
   const manifestText = await manifest.text();
@@ -200,7 +212,9 @@ if (import.meta.main) {
       (before.includes("<key>CFBundleVersion</key>") ? bundleVersion(version) : version) +
       after,
   );
+  const locked = prepareLockfile(await lockfile.text(), version);
   await Bun.write(manifest, manifestText.replace(/^version = "[^"]+"$/m, `version = "${version}"`));
+  await Bun.write(lockfile, locked);
   await Bun.write(plist, metadata);
   await Bun.write(changelog, updated);
   console.log(`Prepared v${version}:\n${notes}`);

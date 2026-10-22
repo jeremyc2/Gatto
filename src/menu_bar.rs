@@ -8,7 +8,7 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuAction {
     Open,
-    PreviewFromClipboard,
+    StageFromClipboard,
     QuickCopy,
     Settings,
     Update,
@@ -62,7 +62,7 @@ impl MenuBarController {
         }
         match event {
             1 => Some(MenuAction::Open),
-            2 => Some(MenuAction::PreviewFromClipboard),
+            2 => Some(MenuAction::StageFromClipboard),
             3 => Some(MenuAction::QuickCopy),
             4 => Some(MenuAction::Settings),
             id if *id == self.update_identifier() => Some(MenuAction::Update),

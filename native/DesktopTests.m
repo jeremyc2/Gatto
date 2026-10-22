@@ -17,6 +17,7 @@ int main(int argc, const char **argv) {
         assert(owner.menu.numberOfItems == 5);
         GattoMenuPasteVisible(handle,true);
         assert(owner.menu.numberOfItems == 8);
+        assert([owner.preview.title isEqualToString:@"Stage from Clipboard"]);
         assert([owner.preview.keyEquivalent isEqualToString:@"v"]);
         GattoMenuShortcut(handle,"Command+Shift+Numpad1","1",9,true);
         assert(owner.quick.keyEquivalentModifierMask & NSEventModifierFlagNumericPad);

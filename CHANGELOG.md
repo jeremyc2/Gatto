@@ -7,6 +7,24 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-22
+
+### Changed
+
+- Rename the menu bar action to **Stage from Clipboard**, keeping its **⌘V** shortcut.
+
+### Fixed
+
+- Keep the latest saved annotations editable after Discard. Restore saved objects
+  on the original image while clearing unsaved changes and undo/redo history,
+  including across multiple preview images. Reopening still allows moving,
+  resizing, editing, and saving those objects; uploaded PNGs contain flat pixels.
+
+
+- Update Gatto's Cargo.lock version during release preparation, including when
+  reusing a prepared release, so locked release checks pass without changing
+  dependency pins.
+
 ## [0.17.0-beta.1] - 2026-10-22
 
 ### Added

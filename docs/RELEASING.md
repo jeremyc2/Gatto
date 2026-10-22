@@ -95,6 +95,8 @@ The script guides the release in this order:
    capabilities and a major bump for user-facing compatibility breaks. Reuse
    prepared/Unreleased changelog notes, or ask for a short categorized summary.
    It updates Cargo, the lockfile, both bundle versions, and the dated changelog.
+   The lockfile update changes only Gatto's package version, preserving dependency
+   pins and checksums. Reusing a prepared version also repairs a stale lockfile.
 3. Install locked Bun dependencies without lifecycle scripts, run the JavaScript
    dependency audit, and run Rust formatting, compilation, lint,
    tests, and dependency policy checks; script type checks/tests; native updater

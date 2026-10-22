@@ -66,7 +66,7 @@ void *GattoMenuCreate(const uint8_t *bytes, size_t length, GattoEvent callback, 
         owner.menu = [NSMenu new];
         owner.menu.autoenablesItems = NO;
         owner.open = [owner item:@"Open App" key:@"" tag:1];
-        owner.preview = [owner item:@"Preview from Clipboard" key:@"v" tag:2];
+        owner.preview = [owner item:@"Stage from Clipboard" key:@"v" tag:2];
         owner.quick = [owner item:@"Quick Copy" key:@"" tag:3];
         owner.preferences = [owner item:@"App Preferences" key:@"," tag:4];
         owner.update = [owner item:@"↑ Update" key:@"" tag:5];

@@ -235,7 +235,7 @@ impl From<CustomUrlAction> for MenuAction {
     fn from(action: CustomUrlAction) -> Self {
         match action {
             CustomUrlAction::Open => Self::Open,
-            CustomUrlAction::Preview => Self::PreviewFromClipboard,
+            CustomUrlAction::Preview => Self::StageFromClipboard,
             CustomUrlAction::QuickCopy => Self::QuickCopy,
             CustomUrlAction::Settings => Self::Settings,
         }
@@ -363,10 +363,10 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
         MenuAction::Open => {
             main.show(cx);
         }
-        MenuAction::PreviewFromClipboard => {
+        MenuAction::StageFromClipboard => {
             let (handle, _) = main.show(cx);
             let _ = handle.update(cx, |_, window, cx| {
-                window.dispatch_action(Box::new(app::PreviewFromClipboard), cx);
+                window.dispatch_action(Box::new(app::StageFromClipboard), cx);
             });
         }
         MenuAction::QuickCopy => {

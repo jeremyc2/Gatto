@@ -944,10 +944,9 @@ impl ImagePreview {
     }
     fn can_discard(&self) -> bool {
         self.images.iter().any(|image| {
-            image
-                .document
-                .as_ref()
-                .is_some_and(|doc| !doc.marks.is_empty() || doc.can_undo() || doc.can_redo())
+            image.document.as_ref().is_some_and(|doc| {
+                doc.marks != image.saved_marks || doc.can_undo() || doc.can_redo()
+            })
         })
     }
     fn apply_annotation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1072,7 +1071,7 @@ impl ImagePreview {
             let preview = preview.clone();
             alert.width(px(420.))
                 .title("Are you sure?")
-                .description("Discard unsaved edits and close the preview? Saved images are kept. Undo/redo history will be erased. This can’t be undone.")
+                .description("Discard unsaved edits and close the preview? Saved annotations stay editable. Undo/redo history will be erased. This can’t be undone.")
                 .show_cancel(true)
                 .cancel_text("Cancel")
                 .ok_text("Discard")
@@ -1111,7 +1110,7 @@ impl ImagePreview {
                 .width(px(440.))
                 .title("Save changes before closing?")
                 .description(
-                    "Discard removes unsaved edits and edit history. Saved images are kept.",
+                    "Discard removes unsaved edits and edit history. Saved annotations stay editable.",
                 )
                 .footer(
                     DialogFooter::new()
@@ -3826,12 +3825,14 @@ mod tests {
         });
     }
     #[gpui_kit::test]
-    fn escape_clears_element_focus_and_exit_requires_confirmation_then_discards_the_session(
+    fn exit_discard_restores_saved_marks_for_every_image_and_clears_history(
         cx: &mut TestAppContext,
     ) {
         let original = fixture_attachment();
         let other = fixture_attachment();
         let id = original.id;
+        let mut saved_mark = Mark::new(Tool::Rectangle, Pos::new(10., 10.), Style::default());
+        saved_mark.points[1] = Pos::new(90., 90.);
         let (view, cx) = editor_for(cx, original.clone());
         cx.update(|_, cx| {
             view.update(cx, |preview, cx| {
@@ -3843,13 +3844,12 @@ mod tests {
         drag(&view, cx, Pos::new(100., 100.), Pos::new(230., 210.));
         cx.update(|_, cx| {
             view.update(cx, |preview, _| {
-                let doc = preview.images[1].document.as_mut().unwrap();
+                let image = &mut preview.images[1];
+                image.saved_marks = vec![saved_mark.clone()];
+                let doc = image.document.as_mut().unwrap();
+                doc.marks = image.saved_marks.clone();
                 doc.checkpoint();
-                doc.marks.push(Mark::new(
-                    Tool::Rectangle,
-                    Pos::new(10., 10.),
-                    Style::default(),
-                ));
+                doc.marks[0].points[0].x += 40.;
             })
         });
         let before = cx.update(|_, cx| view.read(cx).doc().unwrap().marks.clone());
@@ -3907,9 +3907,21 @@ mod tests {
                     "Confirmation approves the native close exactly once"
                 );
                 preview.show(vec![original, other], id, cx);
+                assert!(
+                    preview.images[0]
+                        .document
+                        .as_ref()
+                        .unwrap()
+                        .marks
+                        .is_empty()
+                );
+                assert_eq!(
+                    preview.images[1].document.as_ref().unwrap().marks,
+                    vec![saved_mark]
+                );
                 for image in &preview.images {
                     let doc = image.document.as_ref().unwrap();
-                    assert!(doc.marks.is_empty());
+                    assert_eq!(doc.marks, image.saved_marks);
                     assert!(!doc.can_undo());
                     assert!(!doc.can_redo());
                 }
@@ -4199,9 +4211,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn saving_closes_then_reopening_keeps_saved_history_and_discard_erases_it(
-        cx: &mut TestAppContext,
-    ) {
+    fn saving_then_discarding_keeps_saved_annotations_editable(cx: &mut TestAppContext) {
         let original = fixture_attachment();
         let source = original.image().unwrap().preview.clone();
         let session = original.image().unwrap().annotation_session.clone();
@@ -4296,6 +4306,40 @@ mod tests {
                 assert!(preview.doc().unwrap().can_undo());
             });
         });
+        // Save a moved shape again, then make a third, unsaved change.
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let doc = preview.doc_mut().unwrap();
+                doc.checkpoint();
+                for point in &mut doc.marks[0].points {
+                    point.x += 20.;
+                }
+                preview.apply_annotation(window, cx);
+            });
+        });
+        cx.run_until_parked();
+        let mut latest = applied
+            .borrow_mut()
+            .take()
+            .expect("Second save exports edits");
+        latest.id = id;
+        if let crate::model::Media::Image(image) = &mut latest.media {
+            image.annotation_session = staged.image().unwrap().annotation_session.clone();
+        }
+        staged = latest;
+        let saved_marks = cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let saved = preview.doc().unwrap().marks.clone();
+                preview.annotation_saved(id, Ok(()), window, cx);
+                preview.show(vec![staged.clone()], id, cx);
+                let doc = preview.doc_mut().unwrap();
+                doc.checkpoint();
+                doc.marks[0].points[0].x += 50.;
+                preview.refresh_annotations(cx);
+                assert!(preview.has_unsaved_changes());
+                saved
+            })
+        });
         cx.update(|window, cx| {
             window.click("annotation-revert", cx);
             assert!(window.has_active_dialog(cx));
@@ -4324,17 +4368,46 @@ mod tests {
         cx.update(|_, cx| {
             view.update(cx, |preview, cx| {
                 preview.clear(cx);
-                let applied_size = staged.image().unwrap().pixel_size;
                 preview.show(vec![staged], id, cx);
                 let doc = preview.doc().unwrap();
                 assert_eq!(
                     doc.base.dimensions(),
-                    applied_size,
-                    "Previously applied pixels remain staged after exit"
+                    (400, 300),
+                    "Discard must keep the original source, not decode flattened staged pixels"
                 );
-                assert!(doc.marks.is_empty());
+                assert_eq!(
+                    doc.marks, saved_marks,
+                    "Discard must restore the latest save"
+                );
+                assert!(Arc::ptr_eq(&preview.images[0].image, &source));
                 assert!(!doc.can_undo());
                 assert!(!doc.can_redo());
+                assert!(!preview.has_unsaved_changes());
+                assert!(!preview.can_discard());
+            });
+        });
+        // Reopened saved shapes still respond to selection and dragging.
+        drag(&view, cx, Pos::new(140., 100.), Pos::new(170., 130.));
+        let expected_png = cx.update(|_, cx| {
+            let preview = view.read(cx);
+            let doc = preview.doc().unwrap();
+            assert_eq!(preview.editor.selected, Some(0));
+            assert_ne!(doc.marks, saved_marks);
+            assert!(preview.has_unsaved_changes());
+            assert!(doc.can_undo());
+            doc.png(None).unwrap().0
+        });
+        cx.update(|window, cx| window.click("annotation-apply", cx));
+        cx.run_until_parked();
+        let exported = applied
+            .borrow_mut()
+            .take()
+            .expect("Save after Discard succeeds");
+        assert_eq!(exported.image().unwrap().bytes.as_ref(), expected_png);
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                preview.annotation_saved(id, Ok(()), window, cx);
+                assert!(preview.images.is_empty());
             });
         });
     }

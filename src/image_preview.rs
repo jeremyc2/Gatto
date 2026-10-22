@@ -255,9 +255,12 @@ impl ImagePreview {
         self.saving = None;
         for image in &mut self.images {
             if discard {
-                // Confirmed unsaved exit forgets editable history; staged bytes remain intact.
-                image.document = None;
-                image.session.discard();
+                // Restore the last save as editable marks on the original source.
+                // A snapshot clears undo/redo without baking those marks into the image.
+                if let Some(document) = &mut image.document {
+                    *document = document.snapshot();
+                    document.marks.clone_from(&image.saved_marks);
+                }
             }
             let textures = image.annotations.borrow_mut().retired_images(true);
             cx.defer(move |cx| {

@@ -456,17 +456,18 @@ retaining the original document, saved baseline, and history for reopening.
 Both the native close button and Command+W close clean previews immediately.
 Unsaved edits open a Save/Discard/Cancel dialog. Save uses the same acknowledged
 batch export as the toolbar action; Cancel preserves the session, while Discard
-clears every preview document and shared retained session before closing. After
-that destructive exit, reopening decodes staged bytes as a fresh document, retaining
-saved pixels without editable marks/history. Clean closes and Save preserve history.
+restores each document's saved-mark baseline and clears undo/redo before closing.
+The restored documents retain their original source image, annotation scale, and
+editable saved marks in the shared sessions. Reopening never has to decode a saved
+PNG as the source after Discard. Clean closes and Save preserve history.
 All closes preserve the hide/reuse workaround on macOS.
 An incrementing session generation suppresses late Save results after exit,
 including if the same attachment is reopened before PNG export completes.
 The top-right Discard action opens a confirmation dialog, then uses the same
-destructive close as the exit dialog: it releases every preview document and
-its shared retained session, keeping previously staged saved pixels. It cannot
-be undone. It is disabled with no work or history in any preview image; Save is
-disabled if every image matches its saved baseline. Both actions close the preview.
+restore-and-close behavior as the exit dialog: it retains the latest saved marks
+as editable objects and keeps previously staged saved pixels. It cannot
+be undone. It is disabled with no unsaved work or history in any preview image;
+Save is disabled if every image matches its saved baseline. Both actions close the preview.
 
 `image_preview/editor.rs` owns native GPUI pointer gestures; its `toolbar.rs`
 module supplies the bottom icon toolbar, contextual twelve-color palette,
@@ -586,7 +587,7 @@ The Dock icon hides when no windows are presented. Quit ends the process.
 `application_menu` installs native App Preferences, Check for Updates, Close
 Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
 Command+Q bindings for every app window. The cat icon's menu also shows the
-preferences, quit and clipboard preview shortcuts. Successful global Quick Copy
+preferences, quit and clipboard staging shortcuts. Successful global Quick Copy
 registrations notify the menu controller, which refreshes its shortcut hint;
 disabling or temporarily unregistering during recording clears that hint.
 Close captures the
