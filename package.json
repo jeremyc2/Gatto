@@ -16,7 +16,7 @@
     "test:web": "bun --no-env-file test web/tests",
     "preview:web": "bunx --no-env-file --no-install --bun vite preview --config web/vite.config.ts",
     "size:web": "bun --no-env-file web/scripts/css-size.ts",
-    "deploy:web": "bun --no-env-file web/scripts/deploy.ts"
+    "deploy:web": "bun --env-file=.env web/scripts/deploy.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.3",
