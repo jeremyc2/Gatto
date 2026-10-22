@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-10-22
+
 ### Changed
 
 - Update tiny-skia to 0.12, Core Graphics to 0.25, and Core Text to 22 for
