@@ -91,6 +91,7 @@ pub struct ImageData {
     pub bytes: Arc<[u8]>,
     pub preview: Arc<Image>,
     pub pixel_size: (u32, u32),
+    pub annotation_session: crate::annotation::Session,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -242,6 +243,7 @@ impl StagedAttachment {
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             media: Media::Image(ImageData {
+                annotation_session: Default::default(),
                 preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
                 bytes,
                 pixel_size,
@@ -249,7 +251,7 @@ impl StagedAttachment {
         })
     }
 
-    fn from_bytes(name: String, bytes: Vec<u8>, path: Option<&Path>) -> Result<Self> {
+    pub(crate) fn from_bytes(name: String, bytes: Vec<u8>, path: Option<&Path>) -> Result<Self> {
         let guessed = ::image::guess_format(&bytes).context(UNSUPPORTED_MEDIA_MESSAGE)?;
         let format = match guessed {
             ::image::ImageFormat::Png => ImageFormat::Png,
@@ -279,6 +281,7 @@ impl StagedAttachment {
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             media: Media::Image(ImageData {
+                annotation_session: Default::default(),
                 preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
                 bytes,
                 pixel_size,

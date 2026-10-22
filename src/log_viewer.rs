@@ -1,20 +1,22 @@
 use gpui_kit::{
-    App, Context, FocusHandle, Focusable, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, Styled as _, Window,
+    App, ClipboardItem, Context, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Styled as _, Window,
     component::scroll::ScrollableElement as _,
     component::{
-        ActiveTheme as _, IconName, Sizable as _, StyledExt as _, WindowExt as _, button::Button,
-        clipboard::Clipboard, h_flex, notification::Notification, v_flex,
+        ActiveTheme as _, IconName, StyledExt as _, WindowExt as _, button::Button, h_flex,
+        notification::Notification, v_flex,
     },
     div,
 };
 
 use crate::diagnostics::Diagnostics;
+use crate::theme::AppButtonStyle as _;
 
 pub struct LogViewer {
     diagnostics: Diagnostics,
     focus_handle: FocusHandle,
     lines: Vec<String>,
+    copied: bool,
 }
 
 impl LogViewer {
@@ -24,6 +26,7 @@ impl LogViewer {
             diagnostics,
             focus_handle: cx.focus_handle(),
             lines,
+            copied: false,
         }
     }
 
@@ -82,26 +85,43 @@ impl Render for LogViewer {
                             .gap_2()
                             .child(
                                 Button::new("refresh-logs")
-                                    .small()
-                                    .outline()
+                                    .app_icon()
                                     .icon(IconName::RefreshCw)
                                     .tooltip("Refresh")
                                     .accessibility_label("Refresh application logs")
                                     .on_click(cx.listener(Self::refresh)),
                             )
                             .child(
-                                Clipboard::new("copy-all-logs")
-                                    .small()
-                                    .value(log_text)
+                                Button::new("copy-all-logs")
+                                    .app_icon()
+                                    .icon(if self.copied {
+                                        IconName::Check
+                                    } else {
+                                        IconName::Copy
+                                    })
                                     .tooltip("Copy")
                                     .accessibility_label("Copy all application logs")
-                                    .on_copied(move |_, window, cx| {
+                                    .on_click(move |_, window, cx| {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            log_text.clone(),
+                                        ));
                                         diagnostics
                                             .info("Copied application log to the clipboard.");
                                         let lines = diagnostics.lines();
                                         let _ = view.update(cx, |this, cx| {
                                             this.lines = lines;
+                                            this.copied = true;
                                             cx.notify();
+                                            cx.spawn(async move |view, cx| {
+                                                cx.background_executor()
+                                                    .timer(std::time::Duration::from_secs(2))
+                                                    .await;
+                                                let _ = view.update(cx, |this, cx| {
+                                                    this.copied = false;
+                                                    cx.notify();
+                                                });
+                                            })
+                                            .detach();
                                         });
                                         window.push_notification(
                                             Notification::success(

@@ -156,6 +156,28 @@ results, and exported scorecard images. Game captures show an early coin jump,
 a mid-level owl encounter, and the results screen in `rooftops-1.png` through
 `rooftops-3.png`; the scorecard is `rooftops-score.png`.
 
+Check pixelation edges with the same native renderer:
+
+```sh
+cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- /tmp/gatto-pixelation-edges --check-pixelation-edges
+```
+
+This compares flat images before and after painting across tile boundaries at
+fractional zoom levels, fails if filtering introduces visible color changes, and
+writes the rendered PNGs to the supplied directory.
+
+Check annotation opacity and color emoji against saved PNG output with the same
+native renderer:
+
+```sh
+cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- /tmp/gatto-annotation-rendering --check-annotation-rendering
+```
+
+This checks translucent shapes, outlined and rotated text, and emoji in text,
+shape, and arrow labels. It compares interior preview pixels against PNG export
+and writes both images for inspection. Editor pointer tests enable reduced
+motion so dialog interactions use stable bounds during parallel test runs.
+
 For behavior changes, manually exercise the affected workflow with non-sensitive
 images and an accessible test repository. Relevant paths include first-run setup,
 paste/drop/file selection, a partially failed batch and retry, Markdown copying,

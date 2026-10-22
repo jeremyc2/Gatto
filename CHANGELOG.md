@@ -7,6 +7,167 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Hold Shift to draw closed shapes with equal width and height or resize corners
+  proportionally, including rotated shapes. Keep selection handles active when
+  Shift is already held, preserve label minimums, and retain 15-degree Shift rotation.
+
+- Anchor the properties shape menu beside the Shape button, centered on its row
+  and kept inside the preview. Tighten floating palette and toolbar spacing and
+  enlarge opacity and pixelation slider handles. Join the history bar directly to
+  the tool bar with a small right inset, and keep XL labels fully visible.
+
+- Speed up rapid typing by reusing unchanged text outlines and line shaping,
+  keeping long words in bounded fragments, and batching visible text drawing.
+  Apply the same rendering path to standalone text and shape, arrow, and line labels.
+
+- Show blue wrapping bounds while creating or editing fixed-width text, without
+  resize handles. Keep free-form text unboxed while typing, and turn it into a
+  fixed-width box when directly resized. Selecting either kind shows its handles.
+
+- Highlight all existing text when opening it for editing or double-clicking
+  within an active input, including standalone text and shape/arrow/line labels.
+  Typing replaces the selection; arrow keys move to its beginning or end.
+
+- Move objects with their labels when dragging the text, including arrows and
+  lines. Transparent shapes pass through blank text-box areas until selected.
+  Confirmed Discard closes the preview and clears its editing history.
+- Rename Duplicate to Clone, place clones a full selection width to the right,
+  and add Command+D. Copy editable selections with Command+C and paste at the
+  canvas cursor with Command+V, preserving grouped geometry and styles.
+- Narrow the pixelation brush slider to 30–138 screen points, keeping its 64-point
+  default and continuous sizing with a paintable minimum.
+
+- Preserve visible shaft beyond both arrow caps when multiline labels grow or
+  arrows are shortened, bent, or rotated in a group. Check the full label footprint
+  at every angle without shrinking text or moving a fixed opposite endpoint.
+
+- Keep the pixelation brush circle and hover preview at a constant screen size
+  while zooming, with new strokes matching the circle and existing strokes fixed
+  to the image. Remove dark brush outlines and tile seams during zoomed previews.
+
+- Keep short arrow and line labels on one line, wrap longer labels between words
+  using the path length and cap clearance, and preserve manual Enter line breaks.
+  Prevent fractional-width rounding from splitting words. Keep enough space for
+  text while typing or resizing endpoints, without shrinking its font.
+
+- Move Pixelate to the far right after shape overflow and give it a circular,
+  colored icon. Preview mosaic pixels inside the blue brush circle on hover,
+  beneath annotations, without changing artwork or history until painting.
+
+- Replace pixelation brush size presets with a continuous slider, matching the
+  opacity control. Offer fine control for small brushes with a paintable minimum.
+
+- Simplify selection indicators to blue outlines and blue corner handles with
+  black centers. Keep edge resizing and hover cursors active without visible
+  midpoint handles, including group selections.
+
+- Standardize app actions around the landing page's outlined neutral buttons and
+  purple primary buttons. Match attachment, preference, log, preview, and dialog
+  actions; balance Upload's label and icon proportions. Share button sizing and
+  confirmation footers while preserving annotation-tool styling.
+
+- Simplify the unsaved-changes dialog with compact, consistently sized buttons:
+  Save is primary, Cancel and Discard share a neutral style, and spacing separates
+  Discard from the other choices. Shorten the heading and explanation.
+
+- Render text inside closed shapes in white with a black outline regardless of
+  the shape color, while keeping standalone text colors selectable.
+
+- Give rectangles and polygon shapes slightly rounded corners. Allow resize
+  handles to cross the opposite edge or corner and continue on the other side,
+  including rotated objects and groups. Reflect geometry while keeping text
+  readable, preserving label minimums, and updating resize cursor direction.
+
+- Calibrate annotation presets once to each image's opening view, including text,
+  labels, and click-created shapes. Drawing before and after zooming
+  produces matching stroke widths and font sizes. Retain those units when
+  resizing the window or reopening saved work. Fit large images into the preview
+  without enlarging small images; retain one actual zoom percentage.
+- Place default-size closed shapes with a click, including transparent shapes.
+  Line clicks place a visible dot with overlapping, draggable endpoints; arrow
+  clicks leave the artwork and undo/redo history unchanged.
+- Add a native Rust image annotation editor with a tldraw-style bottom toolbar,
+  contextual twelve-color palette, outlined text, wrapping and resize handles,
+  sixteen closed shapes plus a line, patterned fills, curved arrows with independent caps, pen,
+  pixelation, erasing, and undo/redo. Preserve GIF playback as preview-only.
+  Save flattened edits, including off-image annotations, then close the preview
+  while retaining the original and full history for reopening. Use text-labelled
+  Save and Discard actions, disable unavailable actions, show saving progress,
+  and offer Save, Discard, and Cancel when exiting with unsaved edits. Discard confirms restoring the
+  original and clearing all undo/redo history. Stroke presets use tldraw’s 2/3.5/5/10 size steps.
+  Live drawing caches native GPU geometry; PNG rasterization runs in the background.
+  Right-click objects to bring them forward/to front or send them backward/to back.
+  Move and resize each continuous pen stroke as one object. Give pixelation a
+  photo-thumbnail icon.
+  Paint pixelation with a circular brush and blue cursor preview, with four brush
+  sizes. Strokes stay fixed and can be undone/redone, but cannot be selected,
+  moved, resized, or erased.
+  Put rectangle and ellipse directly in the bottom toolbar, with the shared
+  17-item shape picker above its chevron and beside the shape properties button.
+  Add a zoom percentage menu with zoom in/out, actual 100%, and fit commands.
+  Keep the preview open on Escape, clearing only focus/selection. Confirm exit
+  through the close button or Command+W, discard preview edits/history on exit,
+  and reopen from the last applied image.
+- Resize objects from selection borders and corners with directional cursors,
+  move selected transparent shapes from their interiors, and rotate shapes,
+  text, and pen strokes just outside selection corners. Keep rotation consistent
+  across preview, hit testing, history, and exported images.
+- Rework text using tldraw's documented behavior: fixed text presets, automatic
+  or fixed-width standalone text, left/center/right alignment, and shape-label
+  top/middle/bottom alignment. Shape labels wrap across padded rectangular bounds,
+  grow their hosts, and enforce content minima during resizing rather than
+  shrinking or disappearing. Include labels on X boxes and checkboxes.
+  Add editable arrow labels with path-relative positioning, dragging, center snap,
+  endpoint clearance, and transparent shaft cutouts.
+  Use one native glyph layout for editing, hit testing, preview, and export,
+  including rotated caret/selection coordinates, native composition, plain-text
+  clipboard operations, and local text undo/redo. Remove opaque editing fields
+  and editing-only width/padding changes. Preserve one font and plain text.
+  Replace generic fill-option icons with swatches showing transparent, soft,
+  solid, and hatched fills.
+- Add box selection, Shift-click selection, and Command+A, with shared movement,
+  proportional resizing, rotation, styling, stacking, duplication, deletion,
+  and one-step undo. Keep pixelation fixed and outside object selection.
+
+### Fixed
+
+- Preserve native color emoji in annotation text and labels, including selection
+  and PNG export. Match whole-object opacity between preview and saved images.
+
+- Open image and GIF previews maximized on first use, allow resizing without a
+  maximum content size, and preserve the chosen size when reopening the window.
+- Leave completed drawings and new text unselected, so palette changes prepare
+  the next object without restyling the last one or adding artwork undo steps.
+- Hide selection outlines and handles while drawing, preserving selection and
+  transform controls for finished objects.
+- Orient rotate cursors around all four selection corners and follow object or
+  group rotation. Align edge and corner resize cursors to the rotated axes, and
+  update cursor direction immediately during a drag.
+- Update rotation and directional resize cursors on hover with small outlined
+  double-arrow silhouettes, keeping the regular pointer while moving objects.
+  Preserve canvas cursor priority over floating element defaults.
+- Always highlight one active size preset, including default stroke and brush
+  sizes and the closest preset for custom text or stroke sizes.
+- Give every shape a darker fill and matching brighter strokes from one palette
+  choice. Extend X-box diagonals to the corners and match checkbox proportions
+  to the reference, with both symbols following their border's color and dash
+  style in the preview and exported image.
+- Keep mirrored filled arrow shapes solid where their borders overlap the fill.
+- Match rectangle, ellipse, and shape-menu icons to the other tool icons' size
+  and proportions.
+- Keep object handles and canvas drags moving across floating controls instead
+  of freezing until the pointer leaves a menu.
+- Keep filled arrowheads solid where their caps overlap the shaft.
+- Render pixelation with cached textures, updating only newly painted tiles, to
+  avoid rebuilding thousands of mosaic primitives per frame. Apply it only to
+  the source image beneath annotations, in both the editor and exported output.
+- Highlight selected arrows along their path, with endpoint and bend handles,
+  without a bounding rectangle.
+- Trim arrow shafts inside filled triangle caps so their rounded ends cannot
+  protrude beyond the tip, in both preview and exported output.
+
 ## [0.16.3] - 2026-10-20
 
 ### Fixed

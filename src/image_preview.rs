@@ -1,3 +1,7 @@
+mod editor;
+pub use editor::AppliedAnnotation;
+
+use crate::annotation::{Document, Pos, PreviewCache, Session};
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -10,19 +14,32 @@ use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _,
     button::{Button, ButtonVariants as _},
     h_flex,
+    menu::{ContextMenuExt as _, DropdownMenu as _},
 };
 use gpui_kit::{
     App, Bounds, Context, Corners, CursorStyle, FocusHandle, Focusable, Image,
     InteractiveElement as _, IntoElement, KeyBinding, MouseButton, MouseDownEvent, MouseMoveEvent,
     ParentElement as _, PinchEvent, Pixels, Point, Render, ScrollWheelEvent, SharedString,
-    Styled as _, Window, actions, canvas, div, point, prelude::FluentBuilder as _, px, size,
+    StatefulInteractiveElement as _, Styled as _, Window, actions, canvas, div, point,
+    prelude::FluentBuilder as _, px, size,
 };
 
 use crate::model::StagedAttachment;
 
 actions!(
     image_preview,
-    [ZoomIn, ZoomOut, FitImage, PreviousImage, NextImage]
+    [
+        ZoomIn,
+        ZoomOut,
+        FitImage,
+        ActualSize,
+        PreviousImage,
+        NextImage,
+        BringToFront,
+        BringForward,
+        SendBackward,
+        SendToBack
+    ]
 );
 
 const KEY_CONTEXT: &str = "ImagePreview";
@@ -45,25 +62,67 @@ pub struct ImagePreview {
     drag: Option<DragState>,
     focus_handle: FocusHandle,
     animation: Rc<RefCell<AnimationClock>>,
+    editor: editor::Editor,
+    close_confirmed: bool,
+    session_generation: u64,
+    saving: Option<editor::SaveBatch>,
 }
 
-#[derive(Clone)]
 struct PreviewImage {
     id: u64,
     image: Arc<Image>,
     name: SharedString,
     pixel_size: (u32, u32),
+    document: Option<Document>,
+    saved_marks: Vec<crate::annotation::Mark>,
+    session: Session,
+    annotations: Rc<RefCell<PreviewCache>>,
 }
 
 impl PreviewImage {
     fn from_attachment(attachment: StagedAttachment) -> Option<Self> {
         let image = attachment.image()?;
+        let retained = if attachment.mime_type == "image/gif" {
+            None
+        } else {
+            image
+                .annotation_session
+                .open(&image.bytes, image.preview.clone())
+                .ok()
+        };
+        let (document, source, saved_marks) = retained
+            .map_or((None, image.preview.clone(), Vec::new()), |session| {
+                (Some(session.document), session.image, session.saved_marks)
+            });
+        let pixel_size = document
+            .as_ref()
+            .map_or(image.pixel_size, |doc| doc.base.dimensions());
+        let mut annotations = PreviewCache::default();
+        if let Some(document) = &document {
+            annotations.update(document);
+        }
         Some(Self {
             id: attachment.id,
-            image: image.preview.clone(),
+            image: source,
             name: attachment.name.clone().into(),
-            pixel_size: image.pixel_size,
+            pixel_size,
+            document,
+            saved_marks,
+            session: image.annotation_session.clone(),
+            annotations: Rc::new(RefCell::new(annotations)),
         })
+    }
+}
+
+impl Drop for PreviewImage {
+    fn drop(&mut self) {
+        if let Some(document) = self.document.take() {
+            self.session.retain(
+                document,
+                self.image.clone(),
+                std::mem::take(&mut self.saved_marks),
+            );
+        }
     }
 }
 
@@ -141,6 +200,10 @@ impl ImagePreview {
             drag: None,
             focus_handle: cx.focus_handle(),
             animation: Rc::new(RefCell::new(AnimationClock::default())),
+            editor: editor::Editor::default(),
+            close_confirmed: false,
+            session_generation: 0,
+            saving: None,
         }
     }
 
@@ -150,10 +213,29 @@ impl ImagePreview {
         selected_id: u64,
         cx: &mut Context<Self>,
     ) {
+        self.finish_text(cx);
+        self.close_confirmed = false;
+        // Keep open documents and reload closed sessions from their staged attachments.
+        let mut previous = std::mem::take(&mut self.images);
         self.images = images
             .into_iter()
-            .filter_map(PreviewImage::from_attachment)
+            .filter_map(|attachment| {
+                if let Some(index) = previous.iter().position(|image| image.id == attachment.id) {
+                    Some(previous.remove(index))
+                } else {
+                    PreviewImage::from_attachment(attachment)
+                }
+            })
             .collect();
+        for image in previous {
+            let textures = image.annotations.borrow_mut().retired_images(true);
+            cx.defer(move |cx| {
+                for texture in textures {
+                    cx.drop_image(texture, None);
+                }
+            });
+        }
+        self.editor = editor::Editor::default();
         *self.animation.borrow_mut() = AnimationClock::default();
         self.current_index = self
             .images
@@ -164,7 +246,28 @@ impl ImagePreview {
     }
 
     pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.release_documents(true, cx);
+    }
+
+    fn release_documents(&mut self, discard: bool, cx: &mut Context<Self>) {
+        self.finish_text(cx);
+        self.session_generation = self.session_generation.wrapping_add(1);
+        self.saving = None;
+        for image in &mut self.images {
+            if discard {
+                // Confirmed unsaved exit forgets editable history; staged bytes remain intact.
+                image.document = None;
+                image.session.discard();
+            }
+            let textures = image.annotations.borrow_mut().retired_images(true);
+            cx.defer(move |cx| {
+                for texture in textures {
+                    cx.drop_image(texture, None);
+                }
+            });
+        }
         self.images.clear();
+        self.editor = editor::Editor::default();
         *self.animation.borrow_mut() = AnimationClock::default();
         self.current_index = 0;
         self.fit(cx);
@@ -181,9 +284,11 @@ impl ImagePreview {
     }
 
     fn select_image(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index >= self.images.len() || index == self.current_index {
+        if self.saving.is_some() || index >= self.images.len() || index == self.current_index {
             return;
         }
+        self.finish_text(cx);
+        self.editor = editor::Editor::default();
         self.current_index = index;
         *self.animation.borrow_mut() = AnimationClock::default();
         self.fit(cx);
@@ -206,7 +311,8 @@ impl ImagePreview {
         cx: &mut Context<Self>,
     ) {
         let old_zoom = self.zoom;
-        let new_zoom = requested_zoom.clamp(MIN_ZOOM, MAX_ZOOM);
+        let fit = self.fit_scale(window);
+        let new_zoom = (requested_zoom * fit).clamp(MIN_ZOOM, MAX_ZOOM) / fit;
         if (new_zoom - old_zoom).abs() < f32::EPSILON {
             return;
         }
@@ -224,6 +330,26 @@ impl ImagePreview {
     fn zoom_by(&mut self, factor: f32, window: &Window, cx: &mut Context<Self>) {
         self.set_zoom_at(
             self.zoom * factor,
+            Self::viewport_center(window),
+            window,
+            cx,
+        );
+    }
+
+    fn fit_scale(&self, window: &Window) -> f32 {
+        let viewport = window.viewport_size();
+        let (w, h) = self
+            .current()
+            .map(|image| image.pixel_size)
+            .unwrap_or((1, 1));
+        (viewport.width.as_f32() / w.max(1) as f32)
+            .min((viewport.height.as_f32() - TOOLBAR_HEIGHT).max(1.) / h.max(1) as f32)
+            .min(1.)
+    }
+
+    fn actual_size(&mut self, _: &ActualSize, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_zoom_at(
+            1. / self.fit_scale(window),
             Self::viewport_center(window),
             window,
             cx,
@@ -259,35 +385,6 @@ impl ImagePreview {
         self.select_image(self.current_index + 1, window, cx);
     }
 
-    fn mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        self.drag = Some(DragState {
-            pointer_origin: event.position,
-            image_origin: self.offset,
-        });
-        cx.notify();
-    }
-
-    fn mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(drag) = self.drag else {
-            return;
-        };
-        if !event.dragging() {
-            self.drag = None;
-            cx.notify();
-            return;
-        }
-        self.offset = point(
-            drag.image_origin.x + event.position.x - drag.pointer_origin.x,
-            drag.image_origin.y + event.position.y - drag.pointer_origin.y,
-        );
-        cx.notify();
-    }
-
-    fn mouse_up(&mut self, _: &gpui_kit::MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
-        self.drag = None;
-        cx.notify();
-    }
-
     fn scroll(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
         let delta = event.delta.pixel_delta(window.line_height());
         if event.modifiers.platform || event.modifiers.control {
@@ -306,41 +403,50 @@ impl ImagePreview {
         cx.stop_propagation();
     }
 
-    fn render_image(&self) -> impl IntoElement {
-        let current = self.current().cloned();
+    fn render_image(&self, window: &Window) -> impl IntoElement {
+        let brush = self.pixelate_preview(window);
+        let current = self.current().map(|image| {
+            (
+                image.image.clone(),
+                image.pixel_size,
+                image.annotations.clone(),
+            )
+        });
         let zoom = self.zoom;
         let offset = self.offset;
         let animation = self.animation.clone();
 
         canvas(
             move |_, window, cx| {
-                current.as_ref().and_then(|image| {
-                    image
-                        .image
-                        .clone()
-                        .use_render_image(window, cx)
-                        .map(|render_image| (render_image, image.pixel_size))
-                })
+                current
+                    .as_ref()
+                    .and_then(|(image, pixel_size, annotations)| {
+                        image
+                            .clone()
+                            .use_render_image(window, cx)
+                            .map(|render_image| (render_image, *pixel_size, annotations.clone()))
+                    })
             },
             move |bounds, render_image, window, cx| {
-                let Some((render_image, (natural_width, natural_height))) = render_image else {
+                let Some((render_image, (natural_width, natural_height), annotations)) =
+                    render_image
+                else {
                     return;
                 };
                 let natural_width = natural_width.max(1) as f32;
                 let natural_height = natural_height.max(1) as f32;
                 let fit = (bounds.size.width.as_f32() / natural_width)
-                    .min(bounds.size.height.as_f32() / natural_height);
+                    .min(bounds.size.height.as_f32() / natural_height)
+                    .min(1.);
                 let image_size = size(
                     px(natural_width * fit * zoom),
                     px(natural_height * fit * zoom),
                 );
-                let image_bounds = Bounds::new(
-                    point(
-                        bounds.origin.x + (bounds.size.width - image_size.width) / 2. + offset.x,
-                        bounds.origin.y + (bounds.size.height - image_size.height) / 2. + offset.y,
-                    ),
-                    image_size,
+                let original_origin = point(
+                    bounds.origin.x + (bounds.size.width - image_size.width) / 2. + offset.x,
+                    bounds.origin.y + (bounds.size.height - image_size.height) / 2. + offset.y,
                 );
+                let image_bounds = Bounds::new(original_origin, image_size);
                 let playing = render_image.frame_count() > 1
                     && !cx.reduce_motion()
                     && window.is_window_active();
@@ -361,9 +467,66 @@ impl ImagePreview {
                     frame,
                     false,
                 );
+                annotations.borrow().paint(
+                    Pos::new(original_origin.x.as_f32(), original_origin.y.as_f32()),
+                    fit * zoom,
+                    brush,
+                    window,
+                );
             },
         )
         .size_full()
+    }
+    fn zoom_controls(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .absolute()
+            .bottom_2()
+            .left_2()
+            .gap_0p5()
+            .p_1()
+            .rounded_lg()
+            .bg(gpui_kit::rgb(0x202024))
+            .border_1()
+            .border_color(gpui_kit::rgb(0x383840))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_mouse_move(cx.listener(Self::editor_controls_hover))
+            .child(
+                Button::new("preview-zoom-out")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Minus)
+                    .tooltip("Zoom out · ⌘−")
+                    .accessibility_label("Zoom out")
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.zoom_by(1. / ZOOM_STEP, window, cx)),
+                    ),
+            )
+            .child(
+                Button::new("preview-fit")
+                    .ghost()
+                    .small()
+                    .label(format!("{:.0}%", self.fit_scale(window) * self.zoom * 100.))
+                    .tooltip("Zoom")
+                    .accessibility_label("Zoom menu")
+                    .dropdown_menu_with_anchor(gpui_kit::Anchor::BottomLeft, |menu, _, _| {
+                        menu.menu("Zoom in", Box::new(ZoomIn))
+                            .menu("Zoom out", Box::new(ZoomOut))
+                            .menu("Zoom to 100%", Box::new(ActualSize))
+                            .menu("Zoom to fit", Box::new(FitImage))
+                    }),
+            )
+            .child(
+                Button::new("preview-zoom-in")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Plus)
+                    .tooltip("Zoom in · ⌘+")
+                    .accessibility_label("Zoom in")
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.zoom_by(ZOOM_STEP, window, cx)),
+                    ),
+            )
     }
 }
 
@@ -374,28 +537,47 @@ impl Focusable for ImagePreview {
 }
 
 impl Render for ImagePreview {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Establish preset sizes before any zooming, using this image's opening view.
+        self.annotation_scale(window);
+        let editable = self.editable();
+        let menu_view = cx.entity().downgrade();
         let cursor = if self.drag.is_some() {
             CursorStyle::ClosedHand
-        } else {
+        } else if !editable || self.editor.tool == crate::annotation::Tool::Pan || self.editor.space
+        {
             CursorStyle::OpenHand
+        } else if self.editor.tool == crate::annotation::Tool::Select {
+            self.selection_cursor().style()
+        } else if self.editor.tool == crate::annotation::Tool::Text {
+            CursorStyle::IBeam
+        } else {
+            CursorStyle::Crosshair
         };
-        let zoom_label = format!("{:.0}%", self.zoom * 100.);
         let image_count = self.images.len();
         let image_name = self
             .current()
             .map(|image| image.name.clone())
             .unwrap_or_else(|| "Image preview".into());
         let position_label = format!("{} of {}", self.current_index + 1, image_count);
-        let can_go_back = self.current_index > 0;
-        let can_go_forward = self.current_index + 1 < image_count;
+        let can_go_back = self.saving.is_none() && self.current_index > 0;
+        let can_go_forward = self.saving.is_none() && self.current_index + 1 < image_count;
 
         div()
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle(cx))
+            .on_action(cx.listener(Self::dismiss_editor))
+            .on_action(cx.listener(Self::close_editor))
+            .on_action(cx.listener(Self::bring_to_front))
+            .on_action(cx.listener(Self::bring_forward))
+            .on_action(cx.listener(Self::send_backward))
+            .on_action(cx.listener(Self::send_to_back))
+            .on_key_down(cx.listener(Self::editor_key_down))
+            .on_key_up(cx.listener(Self::editor_key_up))
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::fit_image))
+            .on_action(cx.listener(Self::actual_size))
             .on_action(cx.listener(Self::previous_image))
             .on_action(cx.listener(Self::next_image))
             .size_full()
@@ -424,6 +606,9 @@ impl Render for ImagePreview {
                         h_flex()
                             .items_center()
                             .gap_1()
+                            .when(editable, |toolbar| {
+                                toolbar.child(self.annotation_actions(cx))
+                            })
                             .when(image_count > 1, |toolbar| {
                                 toolbar
                                     .child(
@@ -468,46 +653,7 @@ impl Render for ImagePreview {
                                                 );
                                             })),
                                     )
-                            })
-                            .child(
-                                Button::new("preview-zoom-out")
-                                    .ghost()
-                                    .small()
-                                    .icon(IconName::ZoomOut)
-                                    .accessibility_label("Zoom out")
-                                    .tooltip("Zoom out")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.zoom_by(1. / ZOOM_STEP, window, cx);
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .w(px(54.))
-                                    .text_center()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(zoom_label),
-                            )
-                            .child(
-                                Button::new("preview-zoom-in")
-                                    .ghost()
-                                    .small()
-                                    .icon(IconName::ZoomIn)
-                                    .accessibility_label("Zoom in")
-                                    .tooltip("Zoom in")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.zoom_by(ZOOM_STEP, window, cx);
-                                    })),
-                            )
-                            .child(
-                                Button::new("preview-fit")
-                                    .ghost()
-                                    .small()
-                                    .icon(IconName::Maximize2)
-                                    .accessibility_label("Fit image")
-                                    .tooltip("Fit to window")
-                                    .on_click(cx.listener(|this, _, _, cx| this.fit(cx))),
-                            ),
+                            }),
                     ),
             )
             .child(
@@ -518,23 +664,81 @@ impl Render for ImagePreview {
                     .min_h_0()
                     .overflow_hidden()
                     .cursor(cursor)
-                    .on_mouse_down(MouseButton::Left, cx.listener(Self::mouse_down))
-                    .on_mouse_move(cx.listener(Self::mouse_move))
-                    .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
-                    .on_mouse_up_out(MouseButton::Left, cx.listener(Self::mouse_up))
+                    .on_mouse_down(MouseButton::Left, cx.listener(Self::editor_mouse_down))
+                    .on_mouse_down(MouseButton::Middle, cx.listener(Self::editor_mouse_down))
+                    .on_mouse_down(MouseButton::Right, cx.listener(Self::editor_right_click))
+                    .on_mouse_move(cx.listener(Self::editor_mouse_move))
+                    .on_hover(cx.listener(|this, hovered: &bool, window, cx| {
+                        let p = window.mouse_position();
+                        let size = window.viewport_size();
+                        if !hovered
+                            && (p.y < px(TOOLBAR_HEIGHT)
+                                || p.x < px(0.)
+                                || p.y > size.height
+                                || p.x > size.width)
+                        {
+                            let was_active =
+                                std::mem::replace(&mut this.editor.canvas_hover, false);
+                            let brush = this.editor.brush_cursor.take().is_some();
+                            if was_active
+                                || brush
+                                || this.editor.selection_cursor != Default::default()
+                            {
+                                this.editor.selection_cursor = Default::default();
+                                cx.notify();
+                            }
+                        }
+                    }))
+                    .on_mouse_up(MouseButton::Left, cx.listener(Self::editor_mouse_up))
+                    .on_mouse_up_out(MouseButton::Left, cx.listener(Self::editor_mouse_up))
                     .on_scroll_wheel(cx.listener(Self::scroll))
                     .on_pinch(cx.listener(Self::pinch))
-                    .child(self.render_image()),
+                    .on_mouse_up(MouseButton::Middle, cx.listener(Self::editor_mouse_up))
+                    .on_mouse_up_out(MouseButton::Middle, cx.listener(Self::editor_mouse_up))
+                    .child(self.render_image(window))
+                    .child(self.zoom_controls(window, cx))
+                    .when(editable, |surface| {
+                        surface
+                            .child(self.annotation_overlays(window, cx))
+                            .child(self.annotation_toolbar(cx))
+                            .child(self.annotation_properties(cx))
+                            .child(self.preview_cursor_layer(cursor, window, cx))
+                    })
+                    .when(self.saving.is_some(), |surface| {
+                        surface.child(
+                            div()
+                                .id("annotation-saving-shield")
+                                .absolute()
+                                .inset_0()
+                                .occlude()
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                                .on_mouse_down(MouseButton::Middle, |_, _, cx| {
+                                    cx.stop_propagation()
+                                })
+                                .on_scroll_wheel(|_, _, cx| cx.stop_propagation()),
+                        )
+                    })
+                    .context_menu(move |menu, _, cx| {
+                        if let Some(view) = menu_view.upgrade() {
+                            view.read(cx).stacking_menu(menu, cx)
+                        } else {
+                            menu
+                        }
+                    }),
             )
     }
 }
 
 pub fn init_keybindings(cx: &mut App) {
+    editor::init_text_keybindings(cx);
     cx.bind_keys([
         KeyBinding::new("cmd-=", ZoomIn, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-+", ZoomIn, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd--", ZoomOut, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-0", FitImage, Some(KEY_CONTEXT)),
+        KeyBinding::new("shift-0", ActualSize, Some(KEY_CONTEXT)),
+        KeyBinding::new("shift-1", FitImage, Some(KEY_CONTEXT)),
         KeyBinding::new("left", PreviousImage, Some(KEY_CONTEXT)),
         KeyBinding::new("right", NextImage, Some(KEY_CONTEXT)),
     ]);

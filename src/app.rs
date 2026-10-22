@@ -14,10 +14,9 @@ use gpui_kit::component::{
         Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia,
         AttachmentStatus, AttachmentTitle,
     },
-    button::{Button, ButtonVariants as _},
+    button::Button,
     checkbox::Checkbox,
     combobox::{Combobox, ComboboxEvent, ComboboxState},
-    dialog::{DialogAction, DialogClose, DialogFooter},
     h_flex,
     input::{Input, InputEvent, InputState},
     kbd::Kbd,
@@ -30,12 +29,12 @@ use gpui_kit::component::{
     v_flex,
 };
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext as _, BoxShadow, ClipboardEntry, ClipboardItem, Context,
-    Entity, ExternalPaths, FocusHandle, Focusable, Image, ImageFormat, InteractiveElement as _,
-    IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton, ObjectFit, ParentElement as _,
-    PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledImage as _, Subscription, Window, WindowBounds, WindowOptions, actions, div, img,
-    prelude::FluentBuilder as _, px, size,
+    AnyWindowHandle, App, AppContext as _, Bounds, BoxShadow, ClipboardEntry, ClipboardItem,
+    Context, Entity, ExternalPaths, FocusHandle, Focusable, Image, ImageFormat,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton,
+    ObjectFit, ParentElement as _, PathPromptOptions, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Window,
+    WindowBounds, WindowOptions, actions, div, img, prelude::FluentBuilder as _, px, size,
 };
 
 use crate::{
@@ -51,6 +50,7 @@ use crate::{
         UNSUPPORTED_MEDIA_MESSAGE, VideoUploadLimit, parse_owner,
     },
     settings::AppSettings,
+    theme::{self, AppButtonStyle as _},
     updater::{UpdateState, Updater},
     window_limits,
 };
@@ -1055,7 +1055,7 @@ impl UploaderApp {
             let closed = resolved.clone();
             alert.width(px(480.)).title(format!("Video exceeds {limit_mb} MB"))
                 .description(format!("{name} is {:.1} MB. Compress it to an H.264 MP4 below {limit_mb} MB? The original stays unchanged. Resolution is preserved; visual quality may decrease and audio becomes mono AAC. For best results, keep recordings under 15 seconds.", video.bytes as f64 / 1_000_000.))
-                .show_cancel(true).cancel_text("Cancel").ok_text("Compress")
+                .show_cancel(true).cancel_text("Cancel").ok_text("Compress").footer(theme::confirmation_footer("ok", "Compress", 104.))
                 .on_ok(move |_, window, cx| {
                     accepted.set(true);
                     let _ = accept_view.update(cx, |this, cx| {
@@ -1169,8 +1169,7 @@ impl UploaderApp {
                     )
                     .child(
                         Button::new("cancel-compression")
-                            .outline()
-                            .small()
+                            .app_secondary()
                             .label(if job.control.is_canceled() {
                                 "Canceling…"
                             } else {
@@ -1352,6 +1351,7 @@ impl UploaderApp {
                 .show_cancel(true)
                 .cancel_text("Cancel")
                 .ok_text("Save description")
+                .footer(theme::confirmation_footer("ok", "Save description", 148.))
                 .on_ok(move |_, window, cx| {
                     let requested_name = rename_input.read(cx).value().to_string();
                     match rename_view.update(cx, |this, cx| {
@@ -1446,8 +1446,7 @@ impl UploaderApp {
                         )
                         .child(
                             Button::new("switch-to-bulk-upload")
-                                .secondary()
-                                .small()
+                                .app_secondary()
                                 .self_start()
                                 .flex_none()
                                 .label("Switch to bulk upload")
@@ -1466,20 +1465,11 @@ impl UploaderApp {
                                 }),
                         ),
                 )
-                .footer(
-                    DialogFooter::new()
-                        .child(DialogClose::new().trigger(|button| button.label("Cancel")))
-                        .child(
-                            DialogAction::new().child(
-                                Button::new("replace-image")
-                                    .primary()
-                                    .label("Replace attachment")
-                                    .child(Kbd::new(
-                                        Keystroke::parse("enter").expect("valid shortcut"),
-                                    )),
-                            ),
-                        ),
-                )
+                .footer(theme::confirmation_footer(
+                    "replace-image",
+                    "Replace attachment",
+                    176.,
+                ))
                 .on_ok(move |_, window, cx| {
                     let _ = replace_view.update(cx, |this, cx| {
                         this.pending_replacement_attachments = None;
@@ -2323,6 +2313,7 @@ impl UploaderApp {
                 .show_cancel(true)
                 .cancel_text("Cancel")
                 .ok_text("Reset app")
+                .footer(theme::confirmation_footer("ok", "Reset app", 104.))
                 .on_ok(move |_, window, cx| {
                     match uploader.update(cx, |this, cx| this.reset_app(window, cx)) {
                         Ok(Ok(())) => true,
@@ -2551,17 +2542,25 @@ impl UploaderApp {
         let uploader = cx.entity().downgrade();
         let window_title = format!("{preview_name} — Gatto Preview");
         let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(980.), px(720.)), cx)),
-            window_min_size: Some(size(px(420.), px(320.))),
+            window_bounds: Some(WindowBounds::Maximized(Bounds::centered(
+                None,
+                size(px(980.), px(720.)),
+                cx,
+            ))),
+            window_min_size: Some(size(px(640.), px(500.))),
             ..Default::default()
         };
         let result = gpui_kit::open_window(options, cx, move |window, cx| {
             window.set_window_title(&window_title);
-            window_limits::set_maximum_content_size(window, 2200., 1600.);
             let preview = cx.new(|cx| ImagePreview::new(preview_images, selected_id, cx));
             let close_preview = preview.downgrade();
             window.on_window_should_close(cx, move |window, cx| {
-                let _ = close_preview.update(cx, |preview, cx| preview.clear(cx));
+                if close_preview
+                    .update(cx, |preview, cx| preview.should_close(window, cx))
+                    .is_ok_and(|approved| !approved)
+                {
+                    return false;
+                }
                 let should_close = window_limits::close(window, cx);
                 let _ = uploader.update(cx, |this, _| {
                     if should_close {
@@ -2576,7 +2575,22 @@ impl UploaderApp {
             preview
         });
         match result {
-            Ok((handle, preview)) => self.preview_window = Some((handle, preview)),
+            Ok((handle, preview)) => {
+                cx.subscribe(
+                    &preview,
+                    move |this, preview, event: &crate::image_preview::AppliedAnnotation, cx| {
+                        let result = this.apply_annotations(event);
+                        let _ = handle.update(cx, |_, window, cx| {
+                            preview.update(cx, |preview, cx| {
+                                preview.annotation_saved(event.id, result, window, cx);
+                            });
+                        });
+                        cx.notify();
+                    },
+                )
+                .detach();
+                self.preview_window = Some((handle, preview));
+            }
             Err(error) => {
                 self.diagnostics
                     .error(format!("Could not open image preview: {error}"));
@@ -2586,6 +2600,35 @@ impl UploaderApp {
                 );
             }
         }
+    }
+
+    fn apply_annotations(
+        &mut self,
+        event: &crate::image_preview::AppliedAnnotation,
+    ) -> Result<(), &'static str> {
+        if self.uploading || self.import_busy() {
+            return Err("Finish the current upload or import before applying annotations.");
+        }
+        let Some(attachment) = self
+            .staged_attachments
+            .iter_mut()
+            .find(|item| item.id == event.id)
+        else {
+            return Err("The original attachment was removed. Add the image again to edit it.");
+        };
+        let mut edited = event.attachment.clone();
+        edited.id = attachment.id;
+        edited.description = attachment.description.clone();
+        if let (Media::Image(original), Media::Image(replacement)) =
+            (&attachment.media, &mut edited.media)
+        {
+            replacement.annotation_session = original.annotation_session.clone();
+        }
+        *attachment = edited;
+        self.sync_upload_result();
+        self.diagnostics
+            .info("Applied image annotations to a staged attachment.");
+        Ok(())
     }
 
     pub fn install_update(
@@ -2624,8 +2667,7 @@ impl UploaderApp {
                     .when(self.load_state == LoadState::Failed, |row| {
                         row.child(
                             Button::new("retry-repositories")
-                                .small()
-                                .outline()
+                                .app_icon()
                                 .icon(IconName::RefreshCw)
                                 .tooltip("Retry")
                                 .accessibility_label("Retry loading repositories")
@@ -2729,8 +2771,7 @@ impl UploaderApp {
             )
             .child(
                 Button::new("setup-open-settings")
-                    .primary()
-                    .small()
+                    .app_primary()
                     .label("Open App Preferences")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_settings(cx);
@@ -2970,8 +3011,7 @@ impl UploaderApp {
                         AttachmentActions::new()
                             .child(
                                 Button::new(format!("set-staged-image-description-{image_id}"))
-                                    .ghost()
-                                    .small()
+                                    .app_icon()
                                     .icon(AssetIconName::ALargeSmall)
                                     .accessibility_label("Edit description")
                                     .tooltip("Edit description")
@@ -2986,8 +3026,7 @@ impl UploaderApp {
                                 actions.child(
                                     Button::new(format!("copy-staged-image-markdown-{image_id}"))
                                         .debug_selector(move || format!("copy-staged-image-markdown-{image_id}"))
-                                        .ghost()
-                                        .small()
+                                        .app_icon()
                                         .icon(AssetIconName::Copy)
                                         .accessibility_label("Copy Markdown")
                                         .tooltip("Copy Markdown")
@@ -3011,8 +3050,7 @@ impl UploaderApp {
                             })
                             .child(
                                 Button::new(format!("remove-staged-image-{image_id}"))
-                                    .ghost()
-                                    .small()
+                                    .app_icon()
                                     .icon(IconName::Close)
                                     .accessibility_label("Remove staged attachment")
                                     .tooltip("Remove")
@@ -3056,8 +3094,7 @@ impl UploaderApp {
                                             .debug_selector(|| {
                                                 "copy-all-staged-image-markdown".into()
                                             })
-                                            .outline()
-                                            .small()
+                                            .app_secondary()
                                             .icon(AssetIconName::Copy)
                                             .label("Copy all")
                                             .on_click(cx.listener(Self::copy_all_upload_markdown)),
@@ -3066,8 +3103,7 @@ impl UploaderApp {
                                 .when(!self.uploading, |actions| {
                                     actions.child(
                                         Button::new("remove-all-staged-images")
-                                            .outline()
-                                            .small()
+                                            .app_secondary()
                                             .label(if has_uploaded_images {
                                                 "Reset"
                                             } else {
@@ -3138,8 +3174,7 @@ impl UploaderApp {
                     .child(div().font_semibold().text_lg().child("App Preferences"))
                     .child(
                         Button::new("close-settings")
-                            .outline()
-                            .small()
+                            .app_secondary()
                             .label("Done")
                             .on_click(cx.listener(Self::close_settings)),
                     ),
@@ -3170,8 +3205,7 @@ impl UploaderApp {
                     .child(Input::new(&self.owner_input))
                     .child(
                         Button::new("save-owner")
-                            .primary()
-                            .small()
+                            .app_primary()
                             .self_start()
                             .label(if owner_is_saved {
                                 "Account/organization is saved"
@@ -3194,8 +3228,7 @@ impl UploaderApp {
                         .when(can_pin, |card| {
                             card.child(
                                 Button::new("pin-selected-repository")
-                                    .outline()
-                                    .small()
+                                    .app_secondary()
                                     .self_start()
                                     .label("Pin")
                                     .on_click(cx.listener(Self::pin_selected_repository)),
@@ -3221,8 +3254,7 @@ impl UploaderApp {
                                 .child(div().text_sm().child(repository))
                                 .child(
                                     Button::new(format!("unpin-{repository_for_action}"))
-                                        .ghost()
-                                        .small()
+                                        .app_secondary()
                                         .label("Unpin")
                                         .on_click(cx.listener(move |this, _, window, cx| {
                                             this.unpin_repository(
@@ -3263,7 +3295,7 @@ impl UploaderApp {
                             )
                             .child(
                                 Button::new("record-global-quick-copy-shortcut")
-                                    .outline()
+                                    .app_secondary()
                                     .label(if self.recording_global_shortcut {
                                         "Press shortcut…"
                                     } else {
@@ -3348,8 +3380,7 @@ impl UploaderApp {
                     )
                     .child(
                         Button::new("reset-app")
-                            .outline()
-                            .small()
+                            .app_secondary()
                             .self_start()
                             .label("Reset app")
                             .on_click(cx.listener(Self::confirm_reset)),
@@ -3494,7 +3525,7 @@ impl Render for UploaderApp {
                                                     let update = self.updater.read(cx);
                                                     row.child(Button::new("install-update")
                                                         .debug_selector(|| "install-update".into())
-                                                        .outline().xsmall()
+                                                        .app_icon()
                                                         .label(match update.state {
                                                             UpdateState::Installing => "Updating…",
                                                             UpdateState::Failed => "↻ Update",
@@ -3509,8 +3540,7 @@ impl Render for UploaderApp {
                                                 })
                                                 .child(
                                                     Button::new("open-logs")
-                                                        .outline()
-                                                        .xsmall()
+                                                        .app_icon()
                                                         .icon(AssetIconName::Logs)
                                                         .accessibility_label("Application logs")
                                                         .tooltip("Logs")
@@ -3520,8 +3550,7 @@ impl Render for UploaderApp {
                                                 )
                                                 .child(
                                                     Button::new("open-settings")
-                                                        .outline()
-                                                        .xsmall()
+                                                        .app_icon()
                                                         .icon(IconName::Settings)
                                                         .accessibility_label("App Preferences")
                                                         .tooltip("Preferences")
@@ -3531,8 +3560,7 @@ impl Render for UploaderApp {
                                                 )
                                                 .child(
                                                     Button::new("open-walkthrough")
-                                                        .outline()
-                                                        .xsmall()
+                                                        .app_icon()
                                                         .icon(AssetIconName::CircleQuestionMark)
                                                         .accessibility_label("Open walkthrough")
                                                         .tooltip("Help")
@@ -3565,20 +3593,20 @@ impl Render for UploaderApp {
                 .child(
                     v_flex().items_end().gap_3().px_6().py_3()
                     .when(self.uploading, |footer| footer.child(
-                        Button::new("cancel-upload").outline().label("Cancel upload")
+                        Button::new("cancel-upload").app_secondary().label("Cancel upload")
                             .disabled(self.upload_control.as_ref().is_some_and(|control| control.is_canceled()))
                             .on_click(cx.listener(Self::cancel_upload))
                     ).child(div().text_xs().child("Canceling cannot remove an attachment already accepted by GitHub.")))
                     .child(
                         Button::new("send-image")
-                            .primary()
-                            .large()
+                            .app_primary()
                             .label(if self.uploading {
                                 "Uploading…".to_owned()
                             } else {
                                 "Upload".to_owned()
                             })
                             .icon(AssetIconName::Upload)
+                            .min_w(px(112.))
                             .loading(self.uploading)
                             .disabled(!can_send)
                             .on_click(cx.listener(Self::send)),
@@ -3660,6 +3688,75 @@ mod tests {
             .set_len(file.as_file().metadata().unwrap().len() + crate::model::MAX_ATTACHMENT_BYTES)
             .unwrap();
         file
+    }
+
+    #[gpui_kit::test]
+    fn applying_annotations_preserves_identity_and_description_and_invalidates_only_its_url(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                let mut attachments = mixed_attachments();
+                attachments[0].description = "Keep this alt text".into();
+                for (i, attachment) in attachments.iter_mut().enumerate() {
+                    attachment.upload_state = AttachmentUploadState::Uploaded {
+                        url: format!("https://github.com/user-attachments/assets/{i}"),
+                    };
+                }
+                let original = attachments[0].image().unwrap();
+                let mut history = original
+                    .annotation_session
+                    .open(&original.bytes, original.preview.clone())
+                    .unwrap();
+                history.document.checkpoint();
+                history.document.marks.push(crate::annotation::Mark::new(
+                    crate::annotation::Tool::Rectangle,
+                    crate::annotation::Pos::new(10., 10.),
+                    Default::default(),
+                ));
+                original.annotation_session.retain(
+                    history.document,
+                    history.image,
+                    history.saved_marks,
+                );
+                let id = attachments[0].id;
+                app.staged_attachments = attachments;
+                app.sync_upload_result();
+                let edited = StagedAttachment::from_bytes(
+                    "edited.png".into(),
+                    include_bytes!("../packaging/menu-bar-icon.png").to_vec(),
+                    None,
+                )
+                .unwrap();
+                let event = crate::image_preview::AppliedAnnotation {
+                    id,
+                    attachment: edited,
+                };
+                app.uploading = true;
+                assert!(app.apply_annotations(&event).is_err());
+                assert!(app.staged_attachments[0].upload_state.is_uploaded());
+                app.uploading = false;
+                app.apply_annotations(&event).unwrap();
+                let attachment = &app.staged_attachments[0];
+                assert_eq!(attachment.id, id);
+                assert_eq!(attachment.description, "Keep this alt text");
+                assert_eq!(attachment.name, "edited.png");
+                assert_eq!(attachment.upload_state, AttachmentUploadState::Preview);
+                let image = attachment.image().unwrap();
+                let history = image
+                    .annotation_session
+                    .open(&image.bytes, image.preview.clone())
+                    .unwrap();
+                assert_eq!(history.document.marks.len(), 1);
+                assert!(
+                    history.document.can_undo(),
+                    "Applying must carry the attachment's original history forward"
+                );
+                assert_eq!(app.upload_result.as_ref().unwrap().attachments.len(), 1);
+                assert!(app.staged_attachments[1].upload_state.is_uploaded());
+            })
+        });
     }
 
     fn four_image_paths() -> (tempfile::TempDir, Vec<PathBuf>) {

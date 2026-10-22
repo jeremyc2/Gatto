@@ -50,6 +50,20 @@ fn close_focused_window(dismiss: bool, cx: &mut App) {
         // window before deferring so another window cannot become the target.
         cx.defer(move |cx| {
             let _ = handle.update(cx, |_, window, cx| {
+                if let Some(root) = window.root::<gpui_kit::base::Root>().flatten() {
+                    let content = root.read(cx).view().clone();
+                    if let Ok(preview) = content.downcast::<crate::image_preview::ImagePreview>() {
+                        // Preview Escape never reaches the app-wide close fallback, even when blurred.
+                        preview.update(cx, |preview, cx| {
+                            if dismiss {
+                                preview.dismiss_editor(&DismissWindow, window, cx);
+                            } else {
+                                preview.confirm_exit(window, cx);
+                            }
+                        });
+                        return;
+                    }
+                }
                 if dismiss && !is_extra_window(window, cx) {
                     // Key bindings run before raw key listeners. Route Escape
                     // to the main view even when no control has keyboard focus.
@@ -178,25 +192,49 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn escape_closes_preview_after_keyboard_focus_is_cleared(cx: &mut TestAppContext) {
-        let closed = observe_close(cx);
+    fn preview_escape_clears_focus_and_clean_command_w_skips_confirmation_without_focus(
+        cx: &mut TestAppContext,
+    ) {
+        use gpui_kit::component::WindowExt as _;
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::image_preview::init_keybindings(cx);
+            init(cx);
+        });
         let (_, cx) = cx.add_window_view(|window, cx| {
             window.activate_window();
             let view = cx.new(|cx| crate::image_preview::ImagePreview::new(Vec::new(), 0, cx));
+            window.focus(&view.read(cx).focus_handle(cx), cx);
             gpui_kit::base::Root::new(view, window, cx)
         });
+        cx.simulate_keystrokes("escape escape");
         cx.update(|window, cx| {
-            assert!(is_extra_window(window, cx));
-            window.blur(cx);
+            assert!(
+                window.focused(cx).is_some(),
+                "Keyboard handling returns to the artwork"
+            );
+            assert!(
+                !window.has_active_dialog(cx),
+                "Escape must never request preview exit"
+            );
+            window.blur(cx); // Exercise Command+W's app-wide fallback too.
         });
-        cx.simulate_keystrokes("escape");
-        assert!(closed.get(), "Escape must close the focused preview window");
-        closed.set(false);
-        cx.simulate_keystrokes("tab escape");
-        assert!(
-            closed.get(),
-            "Escape must also work from a preview toolbar control"
-        );
+        cx.simulate_keystrokes("cmd-w");
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(
+                !window.has_active_dialog(cx),
+                "Clean previews close without confirmation"
+            );
+        });
+        cx.simulate_keystrokes("tab escape escape");
+        cx.update(|window, cx| {
+            assert!(
+                window.focused(cx).is_some(),
+                "Keyboard handling returns to the artwork"
+            );
+            assert!(!window.has_active_dialog(cx));
+        });
     }
 
     #[gpui_kit::test]

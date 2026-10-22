@@ -1,3 +1,4 @@
+mod annotation;
 mod app;
 mod application_menu;
 mod compression;

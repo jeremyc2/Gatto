@@ -1,5 +1,62 @@
-use gpui_kit::component::{Theme, ThemeMode};
-use gpui_kit::{Hsla, rgb};
+use gpui_kit::component::{
+    Sizable as _, Size, Theme, ThemeMode,
+    button::{Button, ButtonVariant, ButtonVariants as _},
+    dialog::{DialogAction, DialogClose, DialogFooter},
+};
+use gpui_kit::{Hsla, ParentElement as _, Styled as _, div, px, rgb};
+
+/// App actions share the landing page's geometry and outlined secondary style.
+/// Annotation tools keep their own compact, selectable treatment.
+pub trait AppButtonStyle {
+    fn app_primary(self) -> Self;
+    fn app_secondary(self) -> Self;
+    fn app_icon(self) -> Self;
+}
+
+impl AppButtonStyle for Button {
+    fn app_primary(self) -> Self {
+        self.primary().with_size(Size::Medium).min_w(px(80.)).px_3()
+    }
+
+    fn app_secondary(self) -> Self {
+        self.with_variant(ButtonVariant::Default)
+            .outline()
+            .with_size(Size::Medium)
+            .min_w(px(80.))
+            .px_3()
+    }
+
+    fn app_icon(self) -> Self {
+        self.with_variant(ButtonVariant::Default).outline().xsmall()
+    }
+}
+
+/// Fixed slots keep Base's full-size dialog wrappers from stretching the buttons.
+pub fn confirmation_footer(id: &'static str, label: &'static str, width: f32) -> DialogFooter {
+    DialogFooter::new()
+        .child(
+            div().w(px(88.)).h(px(32.)).flex_none().child(
+                DialogClose::new().child(
+                    Button::new("cancel")
+                        .app_secondary()
+                        .w(px(88.))
+                        .h(px(32.))
+                        .label("Cancel"),
+                ),
+            ),
+        )
+        .child(
+            div().w(px(width)).h(px(32.)).flex_none().child(
+                DialogAction::new().child(
+                    Button::new(id)
+                        .app_primary()
+                        .w(px(width))
+                        .h(px(32.))
+                        .label(label),
+                ),
+            ),
+        )
+}
 
 fn color(hex: u32) -> Hsla {
     rgb(hex).into()

@@ -1990,6 +1990,9 @@ dependencies = [
  "anyhow",
  "async-channel",
  "block2 0.6.2",
+ "core-foundation 0.10.1",
+ "core-graphics 0.24.0",
+ "core-text",
  "futures-util",
  "global-hotkey",
  "gpui-kit",
@@ -2009,8 +2012,11 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
+ "tiny-skia",
  "tokio",
  "tray-icon",
+ "ttf-parser",
+ "unicode-segmentation",
  "url",
 ]
 

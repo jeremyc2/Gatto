@@ -44,6 +44,27 @@ Each installed launch can retry cleanup; once ejected, later launches do nothing
 Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite,
 with the app’s existing dependencies.
 
+## App buttons
+
+`theme.rs` owns `AppButtonStyle` and the shared confirmation footer. Ordinary
+text actions use 32-point buttons with the same type size, corner radius, and
+horizontal padding. Primary actions use the app's purple fill. Secondary actions
+use the landing page's neutral background and subtle outline. Compact utility
+buttons use the same outline at 20 points, including attachment description,
+copy, and remove actions and log-window controls. Accessible names, keyboard
+focus treatment, loading indicators, and disabled states stay on the underlying
+GPUI Button.
+
+Upload uses the standard text-button size and icon proportions, with enough width
+for its progress label. Preview Save and Discard use the same styles and dimensions
+as their exit-dialog equivalents. Confirmation footers constrain GPUI's full-size
+wrappers so their buttons stay compact; the three-action exit dialog separates
+Discard from the Cancel/Save group. The annotation tool palettes and illustrated
+Rooftops score card retain their distinct controls.
+
+This applies Refactoring UI's [hierarchy-first button guidance](https://medium.com/refactoring-ui/7-practical-tips-for-cheating-at-design-40c736799886):
+make the primary action obvious, with quieter treatments for supporting actions.
+
 ## Release updates
 
 `updater.rs` owns a process-lifetime GPUI entity observed by the uploader view.
@@ -232,9 +253,12 @@ Explicit quit mode keeps the menu bar process alive after all windows are hidden
 The main-window controller retains shared diagnostics and menu/shortcut services
 and creates the uploader view on first use, loading saved preferences. Main-window
 close cancels shortcut recording and discards staged attachments and copy results.
-Utility windows close independently: preview close releases its image references,
+Utility windows close independently: confirmed preview exit releases its image references,
 logs refresh on reopening, and Rooftops resets its run on close. Other platforms
 use native destruction.
+
+The shared image/GIF preview starts with maximized window bounds and no content
+size cap. Reusing its retained window preserves subsequent manual resizing.
 
 The rationale, trade-offs, and conditions for removing this workaround are recorded
 in [ADR 0001](adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md).
@@ -242,6 +266,259 @@ in [ADR 0001](adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md).
 Dock reopening activates existing presented windows without changing their pages.
 If none are presented, it opens the main page. AppKit visibility includes occluded
 and minimized windows; GPUI's drawing visibility is not used for this decision.
+
+`annotation.rs` owns image-coordinate marks, full-session undo/redo, hit testing, and
+text layout. `annotation/geometry.rs` supplies the shared rotated frame for
+hit testing, selection, painting, and export. Marks retain local points and a
+rotation about their bounds' center. `annotation/text.rs` defines fixed-size
+labels, horizontal/vertical alignment, rectangular label padding, content minima,
+and extra vertical growth above a shape's base height. Every closed geometry can
+host a label. Closed-shape labels use white glyphs with black outlines in native
+preview, live editing, and export, independently of the shape palette. Standalone
+text and arrow/line labels keep their selectable palette colors. Normal resizing
+clamps the shape to its text rather than shrinking
+or hiding the letters; group scaling changes both geometry and text size.
+Standalone text stores automatic width or a wrapping width, and preserves its
+alignment anchor while editing. Arrow labels retain a fraction along the actual
+path, clamp away from endpoints where possible, and project/snap during label
+movement. Their shaft geometry excludes the label rectangle rather than painting
+an opaque cover over the source image. Labels contribute to hit and export bounds.
+
+`annotation/text/layout.rs` supplies shared line boxes, wrapping, caret positions,
+and glyph paths with whole-pixel line heights and preserved blank lines. On macOS,
+CoreText handles contextual line breaking and shapes Arial with native kerning,
+ligatures, and system glyph fallback. Its outlines feed the same native geometry
+and PNG export. Glyphs without outlines, including color emoji, retain CoreText's
+fallback font and positions and are drawn into bounded RGBA bitmaps. The shared
+layout carries those bitmaps through scaling, hit testing, preview, and export.
+Other platforms use the existing TrueType outline fallback.
+Layout caches are bounded by entry count and estimated memory, shared across
+preview geometry and measurement; the portable fallback also caches character
+advances. A separate bounded line cache reuses unchanged shaping as paragraphs
+are edited. Shaped outlines retain positioned words, splitting unbroken runs into
+short fragments while preserving CoreText glyph placement. The native preview
+shares bounded fragment meshes across edits, movement, and reflow, transforms only
+visible fragments, and submits two combined text layers for outline and ink.
+Editing does not tessellate a whole paragraph on every keystroke; PNG export still
+uses the shared vector outlines and bitmap glyphs.
+`image_preview/editor/text_input.rs` implements GPUI's native `EntityInputHandler`
+over those same line boxes and rotated coordinates. It only paints the caret,
+composition underline, and translucent text selection; the annotation renderer
+continues to paint the glyphs during editing. There is no second text widget,
+editing-only background, width clamp, or padding. UTF-16 platform ranges, native
+composition, grapheme navigation/deletion, plain-text clipboard operations, and
+local text undo/redo share this input. The first actual change checkpoints the
+artwork; opening editing alone does not. Left/right and clipboard/history actions
+have their own text key context so preview navigation cannot consume caret keys.
+Opening existing text focuses it with its entire UTF-8 value selected; native
+selection reporting converts that range to UTF-16. Double-clicks within an active
+input also select its full value. Left/right collapse the selection to the start
+or end through the existing caret navigation, and typing replaces it. Empty new
+text starts with a collapsed selection as before; selecting alone adds no history.
+Rich formatting and font-family choices are deliberately excluded by user request.
+Arrow/line labels use natural-width layout until they exceed the sampled path
+length minus cap geometry and a small gap. Wrapped labels retain at least the
+measured width of their longest word, rounded up in annotation units; they never
+feed a fractional natural width into the fixed-width floor. Cap dimensions share
+constants with the rendering paths. Text changes extend an undersized host;
+endpoint drags preserve the fixed tip and font while enforcing that content
+minimum. Clearance includes the padded label rectangle, stroke radius, and 12
+annotation units of visible shaft beyond each cap. Multiline labels use their
+actual two-dimensional footprint at every angle. If no safe placement exists,
+the host grows around the fixed endpoint or label anchor, remeasuring wrapping
+while retaining the font and relative curve geometry. Bending and group
+transforms enforce this constraint too; an expanded member invalidates the
+cached group frame. Label placement tests a balanced position between asymmetric
+caps before sampling and refining toward the requested position. Refinement
+always retains a verified safe point, including curves with disconnected safe
+intervals. Preview, editing, and export share this layout and clearance policy.
+`annotation/shapes.rs` supplies sixteen closed shapes, a line option, and clipped
+hatch fills. Directional polygon templates normalize winding before optional
+geometry reflections; native fills remain separate from strokes. Shape icons
+use the same 16-pixel square as other tool glyphs, with centered geometry and no
+flex shrinking, in the toolbar, properties panel, and shared shape menu.
+One palette choice supplies the brighter stroke tone and a matching fill at
+80 percent of each RGB channel. Native preview paints fills separately from
+strokes so the two tones remain distinct. X boxes use corner-to-corner diagonals;
+checkboxes use a centered, rising tick. Both symbols use the border's color,
+width, and dash pattern. Preview and export share the stroked symbol geometry;
+hit testing and tool icons retain the complete shape, including its symbol.
+`annotation/preview.rs` caches tessellated native GPUI geometry per
+mark; pointer updates rebuild changed geometry only, without copying base pixels,
+allocating full-image layers or encoding PNGs. The same
+paths feed the `tiny-skia` export rasterizer. Opaque vector marks reuse their
+local mesh during rotation; frame painting transforms its vertices and bounds.
+`annotation/raster.rs` caches composed textures for translucent marks and marks
+containing bitmap glyphs. It uses the same whole-mark painter as PNG export,
+compositing opacity once after fill, stroke, glyph outlines, and color bitmaps.
+Textures cover only the mark, use two pixels per annotation unit, and cap each
+side below 2,048 pixels. Moving a mark reuses its texture; geometry, rotation,
+text, or style changes replace it. Replaced, deleted, and closed textures are
+explicitly retired from GPUI's atlas alongside pixelation textures.
+`ttf-parser` supplies outlined glyph
+paths from the macOS Arial font, without bundling another font.
+
+PNG export runs from a background snapshot, composites opacity once per whole
+mark, expands to include off-image marks, and enforces dimension/allocation limits.
+Pixelation replaces the covered area with opaque mosaic tiles sampled from the
+source, using the same cached colors for 16-pixel blocks in preview and export.
+`annotation/pixelation.rs` rasterizes round-ended brush segments at source pixel
+centers. Preview caches sparse 256-pixel BGRA tiles and uploads only tiles with
+newly covered pixels as a stroke grows. Transparent coverage retains mosaic RGB
+so linear filtering cannot introduce dark fringes. Each texture has a one-pixel
+gutter sampling adjacent coverage, cropped to the logical tile when painted;
+boundary edits also refresh existing neighboring gutters to prevent tile seams.
+Cached interiors are copied into padded textures without recalculating colors.
+Undo/redo rebuilds the covered tiles from
+the remaining strokes. Each frame paints cached tile textures, without per-block
+primitives or full-image rasterization. Replaced tiles are explicitly evicted
+from the GPU atlas; closing or replacing a preview also releases its textures.
+Export uses the same brush coverage. `annotation/pixelation/hover.rs` paints a
+transient circular mosaic preview between committed source effects and annotation
+geometry. It shares source mosaic colors, caches smaller color grids for subpixel
+cells, clips coverage to the circle/image/viewport, and batches the cells into one
+GPUI paint layer. Pointer movement creates no document marks, history checkpoints,
+encoded images, or texture uploads. Leaving the canvas or hovering over controls
+removes the preview; the toolbar's circular photo icon sits after shape overflow.
+Export uses only committed marks. Pixelation size and opacity share the same
+slider renderer. Brush diameter is continuous from 30 to 138 logical screen points
+(default 64); squared slider travel gives small brushes finer control. Size
+changes update only the next stroke, without checkpoints or modifying existing
+strokes. Hover and new strokes divide that screen diameter by the current camera
+scale; committed coverage remains fixed in image space. The minimum remains a
+paintable brush.
+Both renderers paint pixelation only within the source image and below every
+annotation; hit testing excludes pixelation entirely. It cannot be selected,
+transformed, erased, or reordered, but each stroke remains undoable. Pixelation alone cannot enlarge
+the output. Saved outputs
+contain no recoverable source layer. Each staged image owns an in-memory `Session`
+that retains the original document and source image independently of the flattened
+upload bytes. The open preview paints from the original coordinate system, rather
+than annotating an already flattened replacement. Each preview image and retained
+session stores a saved-mark baseline separately from undo/redo history. Save compares
+the current marks to that baseline, exports all changed images in a background batch,
+and shows a loading indicator while blocking additional edits. Each uploader event
+is acknowledged after the staged replacement is accepted; errors leave the preview
+open and retryable. Only after every acknowledgement does Save close the preview,
+retaining the original document, saved baseline, and history for reopening.
+Both the native close button and Command+W close clean previews immediately.
+Unsaved edits open a Save/Discard/Cancel dialog. Save uses the same acknowledged
+batch export as the toolbar action; Cancel preserves the session, while Discard
+clears every preview document and shared retained session before closing. After
+that destructive exit, reopening decodes staged bytes as a fresh document, retaining
+saved pixels without editable marks/history. Clean closes and Save preserve history.
+All closes preserve the hide/reuse workaround on macOS.
+An incrementing session generation suppresses late Save results after exit,
+including if the same attachment is reopened before PNG export completes.
+The top-right Discard action opens a confirmation dialog, then uses the same
+destructive close as the exit dialog: it releases every preview document and
+its shared retained session, keeping previously staged saved pixels. It cannot
+be undone. It is disabled with no work or history in any preview image; Save is
+disabled if every image matches its saved baseline. Both actions close the preview.
+
+`image_preview/editor.rs` owns native GPUI pointer gestures; its `toolbar.rs`
+module supplies the bottom icon toolbar, contextual twelve-color palette,
+shape picker, and opacity slider. Rectangle and ellipse have dedicated toolbar
+buttons. A shared 17-item picker anchors above the bottom chevron for choosing
+a drawing tool, or beside the properties panel for changing the selected shape.
+Ellipse is a continuous ellipse; oval is a capsule with semicircular ends.
+The editor coordinates
+selection handles, text input, style controls, and the text-labelled Save/Discard actions.
+Creation gestures clear object selection on release. New text clears selection
+when editing finishes; editing explicitly selected existing text retains that
+selection. Unlocked tools return to Select, while locked tools remain active.
+Palette changes with no selection update defaults for the next object without
+changing document history, including opacity changes.
+`editor/selection.rs` resolves corner/edge resizing, rotation just outside corners,
+and movement with rotated opposite anchors held fixed. Shared handle math
+normalizes crossed dimensions, swaps the effective drag handle, and preserves the
+opposite anchor through reflections. Shape geometry stores horizontal/vertical
+flip flags; pen points reflect directly, while text dimensions and fonts stay
+positive and glyphs never mirror. Polygon outlines use short quadratic corner
+curves, shared by fills, strokes, hit testing, icons, and PNG export. Transparent interiors pass
+through until selected; selected interiors move the object. `editor/cursor.rs`
+adds cached native macOS rotate and directional resize cursors. They use 24-point
+images with dark arrow silhouettes, thin white outlines, outer dark keylines,
+and centered hotspots; moving uses the regular pointer. Two-times rasterization
+keeps cursor edges crisp on Retina screens. `editor/group.rs` adds geometry-aware marquee selection, additive
+selection, a shared rotated frame, and snapshots for uniform group transforms.
+Arrow points transform directly; boxed marks retain their local rotation during
+ordinary group scaling. Group reflections map points through the rotated frame,
+reflect member geometry, and adjust member rotation without mirroring labels.
+Preview cache reuse includes flip flags so a reflection always rebuilds its mesh.
+Selection never enters document history; a group edit checkpoints once.
+Shared style edits change only the requested property on each mark.
+`editor/clipboard.rs` clones selections one full visible width to the right and
+copies editable marks through versioned GPUI clipboard metadata with readable
+label text as the plain-text representation. Paste validates the metadata and
+centers copies at the canvas pointer after converting pan/zoom coordinates;
+controls use the viewport center. Geometry, labels, rotation, stacking order,
+and per-object units survive copying. Each insertion checkpoints once and selects
+the new marks. Command+D/C/V apply outside the native text editing context.
+Visible copy extents include stroke thickness, arrow caps, labels, and rotation.
+Text hit testing uses padded character advance boxes over the shared shaped line
+geometry. Blank rows and whitespace do not make an unfocused transparent shape
+opaque to selection. Focused shapes retain interior dragging; selected arrow/line
+labels now move their entire host rather than sliding or editing on a single click.
+`annotation/stack.rs` preserves selected objects' relative order and fixed
+pixelation slots during group stacking. Mixed selections expose common controls.
+Cursor requests paint after the floating controls and take window-level priority
+only over the artwork. Rotate gestures retain their corner index; the cursor
+orientation combines that corner with the current individual or group frame's
+rotation. Resize cursors follow the rotated handle axis rather than snapping to
+45-degree directions. Native cursor images are generated lazily and cached at
+one-degree precision (up to 360 rotate and 180 resize orientations). Active drag
+cursors update after geometry changes in the same pointer event. Every pointer
+move reapplies the semantic cursor, even when its kind is unchanged. Hover changes caused by child hitboxes do not clear the canvas
+cursor while the pointer remains inside the artwork area.
+Escape leaves input/selection focus and returns keyboard handling to the
+artwork. Shape labels open on a double-click of the outline or selected interior;
+plain typing preserves letter tool shortcuts. Return edits standalone text only.
+Double-click targeting gives the selected object's body priority over objects
+underneath, including transparent shapes that have no label yet.
+The native input remains upright while
+editing rotated text; finished glyphs rotate with the object.
+Fill swatches depict the same transparent, soft, solid, and hatched treatments.
+Floating controls suppress idle brush hover, but let movement propagate during
+an active canvas gesture or pan so dragging across a palette or toolbar cannot
+freeze the object. A release over a control completes the existing drag.
+Selection boxes use a blue outline and four blue corner handles with black
+centers. Edge hit testing and resize cursors remain active without midpoint
+indicators, for individual objects and groups. Arrows use a matching blue path
+highlight and endpoint/bend handles without a bounding box.
+The shared arrow path trims the shaft inside filled triangle caps, including
+curved arrows, so its rounded end does not protrude beyond the tip.
+Each continuous pen stroke is a single mark whose points move and resize together.
+Native right-click menus select the hit object and offer the four standard
+stacking commands; `StackOrder` makes them undoable. Forward/backward skips
+nonoverlapping marks. Pixelation strokes stay in the source-effect layer, below
+the annotation stack. Zoom/pan
+transform pointer coordinates into original-image space. The uploader subscribes
+to apply events, rejects changes during import/upload, replaces the staged image
+with a validated flattened PNG, preserves its identity and description, and clears
+stale upload results. Save and Command+S apply background PNG snapshots and close
+after the uploader acknowledges them, without writing separate files or resetting
+history. Stroke presets use 2/3.5/5/10 annotation units. Each document establishes
+one annotation scale from its first fitted view, before user zooming, and retains
+it through snapshots, save/reopen, undo/redo, and reverting the artwork. Creation
+uses that shared unit to convert stroke, font, label spacing, and tap-shape size
+into image coordinates. Editor defaults and palette values
+stay in annotation units; selection normalizes them, and style edits convert back
+using each mark's retained scale. Group scaling and standalone text corner scaling
+update that unit too. Text layout measures in annotation units before scaling the
+shared glyph paths and caret positions. New and existing marks therefore have
+matching widths and font sizes regardless of creation zoom; both zoom with the
+image. Pixelation instead keeps its cursor diameter constant on screen, converting
+it to image coordinates when each stroke starts. Window resizing does not
+recalibrate the document's annotation unit.
+
+The bottom-left percentage opens a native zoom menu. Displayed percentages and
+100% use image pixels per logical screen pixel; the internal zoom remains relative
+to the fitted image, capped at 1 so fitting never enlarges small sources. The
+renderer, pointer transform, and percentage share that fit rule. Zoom limits apply to actual scale. Command+/− changes zoom,
+Shift+0 sets 100%, and Shift+1 or Command+0 fits the source image and resets pan.
+GIFs omit editor controls and keep their existing animation path.
+
 The custom image preview uses decoded GIF frame delays and requests redraws
 while the active window animates; it pauses when inactive and respects Reduce
 Motion. Image navigation excludes videos. Video previews run `/usr/bin/open -W`
@@ -263,9 +540,12 @@ disabling or temporarily unregistering during recording clears that hint.
 Close captures the
 focused window, defers access until keyboard dispatch releases its borrow, then
 uses the existing native close request and per-window cleanup callbacks.
-An unscoped Escape action uses the same close path for the focused extra window,
-even when no control has keyboard focus. It identifies main-window content through
-the GPUI Root and routes Escape to that view to cancel shortcut recording first,
+An unscoped Escape action uses the same close path for extra windows other than
+the image preview, even when no control has keyboard focus. It identifies preview
+content through the GPUI Root and routes Escape to its focus/selection cleanup,
+never the close callback. Preview Command+W requests confirmation only for unsaved edits.
+The same Root inspection identifies main-window content and routes Escape to that
+view to cancel shortcut recording first,
 then return from Preferences to the main page on the next press. The main page
 keeps its draft. Scoped dialog actions dismiss an open dialog first. Key bindings
 run before raw key listeners, so the global action must handle main-window
