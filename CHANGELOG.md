@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-10-22
+
+### Changed
+
+- Separate the upload footer with a full-width divider. Show a denied cursor over
+  disabled Upload buttons and a reminder to add an image or video when empty.
+
 ## [0.17.1] - 2026-10-22
 
 ### Changed

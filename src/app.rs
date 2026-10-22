@@ -3669,7 +3669,8 @@ impl Render for UploaderApp {
                 );
             root.child(content)
                 .child(
-                    v_flex().items_end().gap_3().px_6().py_3()
+                    v_flex().w_full().flex_none().border_t_1().border_color(cx.theme().border)
+                    .items_end().gap_3().px_6().py_3()
                     .when(self.uploading, |footer| footer.child(
                         Button::new("cancel-upload").app_secondary().label("Cancel upload")
                             .disabled(self.upload_control.as_ref().is_some_and(|control| control.is_canceled()))
@@ -3687,6 +3688,10 @@ impl Render for UploaderApp {
                             .min_w(px(112.))
                             .loading(self.uploading)
                             .disabled(!can_send)
+                            .when(!can_send, |button| button.cursor_not_allowed())
+                            .when(self.staged_attachments.is_empty(), |button| {
+                                button.tooltip("Add an image or video first")
+                            })
                             .on_click(cx.listener(Self::send)),
                     ),
                 )

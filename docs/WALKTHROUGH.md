@@ -18,51 +18,39 @@ is open or you're recording a shortcut, Escape dismisses that first.
 Return to the main window and paste an image, drag a file into the drop zone, or
 click the drop zone to select a file. Gatto accepts PNG, JPEG, GIF, and WebP
 images, plus MP4, MOV, and WebM videos. You can also copy an image or video file
-in Finder and paste it into Gatto; a text URL is not a video clipboard payload.
-Unsupported file types produce an error notification when selected, dropped, or
-pasted.
+in Finder and paste it into Gatto. To add a video, copy the file itself rather
+than a link to it.
 
-By default, each file must be at most **10 MB** (10,000,000 bytes), so the video
-limit works with Free and paid GitHub plans. Eligible paid-plan users can enable
+By default, each file must be at most **10 MB**. Eligible paid-plan users can enable
 **Allow videos up to 100 MB** in [App Preferences](SETUP.md#4-set-your-preferences).
-This raises only the video limit to 100,000,000 bytes; images and GIFs stay at
-10 MB. Gatto does not verify eligibility. For videos above the selected limit,
-Gatto offers **Cancel** or **Compress** before staging.
-Gatto checks for empty, unreadable, oversized, and invalid video containers
-before uploading. H.264 MP4 offers the widest playback compatibility.
+Check that your destination repository's plan allows larger videos before
+enabling this. Images and GIFs stay limited to 10 MB. For larger videos, choose
+**Compress** to try making them fit, or **Cancel** to skip them.
 
-<img src="images/walkthrough/06-video-staged.png" alt="Gatto with a video ready to upload and a play tile for opening its macOS player" width="620">
+<img src="images/walkthrough/06-video-staged.png" alt="A video ready to upload" width="620">
 
 <img src="images/walkthrough/03-image-staged.png" alt="Gatto with its rocket cat artwork staged and ready to upload" width="620">
 
-The attachment stays in Gatto while it uploads. You can edit its description, remove it, or preview it before sending.
+Before uploading, you can edit an attachment's description, remove it, or click
+it to preview it.
 
 ### Compress a larger video
 
-When a selected video exceeds your 10 MB or 100 MB limit, choose **Compress** to create a smaller
-H.264 MP4 using macOS's hardware encoder, or **Cancel** to skip that video.
-Compression runs locally, preserves its original pixel dimensions and
-orientation, and leaves the source file unchanged. Existing audio becomes
-mono AAC at 64 kbps; silent clips stay silent. Gatto caps video at about 30 fps
-while preserving source timing. Visual quality can decrease.
+When a selected video exceeds your limit, choose **Compress** to make a smaller
+copy, or **Cancel** to skip it. Your original file stays unchanged. Compression
+can reduce picture and audio quality; preview the copy before sharing it.
 
 <img src="images/walkthrough/08-video-too-large.png" alt="Gatto offers Cancel or Compress for an oversized video" width="620">
 
-The progress panel shows the compression pass and percentage. Use **Cancel
-compression** to stop that file. Gatto stages a compressed copy only after the
-MP4 finishes, its dimensions are verified, and its actual size is below the selected limit.
-You still choose **Upload** separately. In a batch, the choices are offered in
-file order; canceling skips that file and preserves the order of the others.
+Wait for compression to finish, then click **Upload** when you're ready. Use
+**Cancel compression** to skip that file. In a batch, you can continue with the
+remaining files.
 
-<img src="images/walkthrough/09-video-compressing.png" alt="Gatto's local video compression progress and cancellation control" width="620">
+<img src="images/walkthrough/09-video-compressing.png" alt="A video being compressed before upload" width="620">
 
-Bitrate depends on duration so shorter clips can keep more detail. Gatto can
-retry once at a lower bitrate if the first completed file is too large. A
-long or complex video may still need trimming. macOS decoder/encoder support
-is required; some WebM codecs, HDR recordings, multiple media tracks, and
-unsupported dimensions need an SDR H.264 MP4 export first. No extra encoder
-application is required. Quick Copy reports oversized videos and directs you
-to the main window to choose compression; it does not compress without consent.
+If compression fails or the result is still too large, trim the video or export
+it as a standard H.264 MP4 and try again. If Quick Copy reports that a video is
+too large, add it in the main window to choose compression.
 
 ### Record a clear demonstration
 
@@ -82,52 +70,39 @@ For best results:
   and WebM. If the video exceeds your selected limit, choose **Compress** when importing it;
   trim the clip if compression cannot fit it at the original resolution.
 
-Compression keeps the original pixel dimensions but can soften text or motion.
-A short, focused recording generally gives a clearer result than a long clip
-compressed into the same size limit.
-
 ## 3. Upload and copy the Markdown
 
-Click **Upload**. After GitHub accepts the attachment, its status changes to **Uploaded** and the attachment gains a copy button.
+Click **Upload** and wait for **Uploaded**, then click the attachment's copy
+button to copy its snippet.
 
 <img src="images/walkthrough/04-upload-complete.png" alt="Gatto showing an uploaded image with a Markdown copy action" width="620">
 
-Normal uploads leave the clipboard unchanged. Click an attachment’s copy button
-to copy its snippet. Press **Command+C** to copy every successful upload in
-attachment order, separated by blank lines.
-For a single upload, the shortcut copies just that attachment; its hint appears after
-the first success. Paste the Markdown into an issue, pull request, comment,
-discussion, or Markdown file. By default, images copy in this form:
+Uploading alone does not copy anything. Press **Command+C** to copy all completed
+uploads in attachment order, or use an attachment's copy button to copy just one.
+Paste the Markdown into an issue, pull request, comment, discussion, or Markdown
+file. By default, images copy in this form:
 
 ```md
 <img width="640" height="480" alt="Gatto rocket cat" src="https://github.com/user-attachments/assets/…" />
 ```
 
-The copied snippet is an HTML image element supported in GitHub Markdown. Its
-width and height use the image's pixel dimensions (the example above is 640 ×
-480); GitHub fits larger images to the available space. Gatto does not recover
-the display size of an image copied from another app or a Retina scale factor.
 To use Markdown image syntax instead, enable **Copy images as Markdown** in
-[App Preferences](SETUP.md#4-set-your-preferences). The checkbox is unchecked by
-default. With it enabled, the same image copies as:
+[App Preferences](SETUP.md#4-set-your-preferences). The same image then copies as:
 
 ```md
 ![Gatto rocket cat](https://github.com/user-attachments/assets/…)
 ```
 
-Markdown snippets keep the description as alt text but omit width and height.
-Changing the preference also changes the next copy of images already uploaded
-in the current window; you do not need to upload them again. Individual copy,
-Quick Copy, and bulk copy use the selected format. Videos always copy as a bare
-attachment URL, which GitHub turns into a player in a PR description:
+Both formats use your description as alt text. The preference also applies to
+Quick Copy and previously uploaded images; copy them again to use the new
+format. Videos copy as a link that GitHub can display as a player:
 
 ```md
 https://github.com/user-attachments/assets/…
 ```
 
-Bulk copy separates every attachment with a blank line so videos can render in
-their own paragraphs. Video descriptions stay in Gatto; the copied video URL
-has no image alt-text field.
+When pasting a video link, keep it on its own line. Video descriptions are for
+your reference in Gatto and aren't included in the copied link.
 
 ## Bulk uploads and retries
 
@@ -138,40 +113,34 @@ again. In single-attachment mode, adding more files opens a replacement dialog;
 choose **Switch to bulk upload** (or press **B** in that dialog) to keep the existing
 attachment and add every new file in order. **Cancel** keeps the current attachment;
 **Replace attachment** replaces it with the first new file.
-The bulk toggle is disabled during uploads and while more than one attachment
-remains; remove attachments until at most one remains to return to single-attachment mode.
+To turn off bulk upload, finish any active upload and remove attachments until
+at most one remains.
 
-**Upload** sends each pending or failed attachment in order. Each attachment shows
-its own status. If part of a batch fails, successful uploads remain available to
+Click **Upload** to send the batch. If part of a batch fails, successful uploads remain available to
 copy. Click **Upload** again to retry pending or failed attachments; already uploaded
 attachments are skipped. **Copy all** uses the same completed results as **Command+C**.
 Removing an attachment removes it from Gatto’s current list; it does not delete
 the attachment from GitHub.
 
-The 100 MB preference is unavailable during uploads or compression. If you
-switch it off with a larger video already staged, Gatto blocks that upload.
-Remove the video and add it again to choose compression below 10 MB. Already
-uploaded attachments remain available to copy.
+Finish any upload or compression before changing the 100 MB preference. If you
+turn it off with a larger video already staged, remove the video and add it again
+to compress it below 10 MB.
 
 Use **Edit description** to change an image's alt text. The default is
 its filename. This changes the copied Markdown, including after an upload; it
 does not rename the file uploaded to GitHub.
 
-During uploads, each attachment shows **Queued**, transfer progress, or
-**Waiting for GitHub…** after all bytes have entered the HTTP upload stream.
-The percentage is transfer progress, not confirmation that GitHub saved the
-attachment. Only **Uploaded** confirms GitHub returned its attachment URL.
+Wait for **Uploaded** before trying to copy an attachment. If you see
+**Waiting for GitHub…**, leave the upload running until it finishes or reports
+an error.
 
 <img src="images/walkthrough/07-mixed-upload-progress.png" alt="A mixed image and video batch with a completed image, transfer progress, and a cancel action" width="620">
 
-**Cancel upload** aborts the current request and stops the rest of the batch.
-Completed URLs remain available; canceled and pending attachments can be
-retried. Cancellation, a lost connection, or a timeout cannot undo a file GitHub
+Click **Cancel upload** to stop the upload and the rest of the batch. Completed
+uploads remain available to copy; click **Upload** to retry the unfinished files.
+Cancellation, a lost connection, or a timeout cannot undo a file GitHub
 already received, so retrying an uncertain result can create another copy.
-Connection attempts time out after 15 seconds; uploads stop after 90 seconds
-without stream/response activity or five minutes overall. Errors explain
-size/format problems, authentication/access failures, rate limits, or server
-and network failures. Retrying is always an explicit Upload action.
+If an upload fails, follow the error message and click **Upload** to try again.
 
 ### Closing Gatto
 
@@ -179,17 +148,15 @@ Closing the main window cancels active compression and uploads and clears
 attachments and results. Copy your Markdown before closing; drafts and upload
 history are not saved between sessions.
 
-Gatto’s menu bar, Dock, and app window share the same icon. Gatto remains in the
-menu bar when windows close. Its Dock icon appears while a window is open;
-clicking it focuses open windows or reopens the main page.
+Gatto remains in the menu bar when you close its windows. Choose **Open App**
+from its menu bar menu to open it again.
 **Command+W** closes the focused window; **Command+Q** quits Gatto. These actions
-also appear in the app menus, and the cat icon's menu includes **Quit** with **⌘Q**.
+also appear in the app menus.
 **Escape** closes Application logs and other extra windows. In the image preview,
 it only clears focus and selection; it never closes the preview. The main window
 keeps its draft; Escape still dismisses its dialogs or returns from App Preferences.
 Press **Command+,** while Gatto is focused to open App Preferences, or choose
-**App Preferences** from either the **Gatto** application menu beside the Apple
-menu or the cat icon's dropdown (the menu bar extra). Both show **⌘,**.
+**App Preferences** from the **Gatto** application menu or its menu bar icon.
 
 ## Inspect an image
 
@@ -198,9 +165,8 @@ or pixelate an area before uploading. Your original file stays unchanged.
 
 <img src="images/walkthrough/image-editor.png" alt="Gatto image editor with text, an arrow, and shapes added to the rocket cat" width="820">
 
-The drawing tools are along the bottom. Options for the tool you're using—such
-as color, size, and fill—appear at the upper right. Hover over a button to see
-what it does and its keyboard shortcut.
+Choose a drawing tool, then adjust its color, size, or fill in the tool options.
+Hover over a tool to see its name and keyboard shortcut.
 
 ### Get a closer look
 
@@ -208,10 +174,9 @@ Use **+** and **−** at the bottom left to zoom. Click the percentage for
 **Zoom to fit** or **Zoom to 100%**. Choose the hand tool and drag to move around
 the image; scrolling and pinch-to-zoom work too.
 
-Use the arrows in the top bar to move between staged images. You can resize the
-editor window, and Gatto remembers that size for the rest of the app session.
-GIFs play here but cannot be edited. Playback pauses when the window is inactive;
-with macOS Reduce Motion enabled, Gatto shows the first frame.
+Use the arrows to move between staged images. You can preview GIFs here, but
+cannot edit them. If a GIF isn't playing, bring the editor to the front and
+check whether macOS Reduce Motion is enabled.
 
 ### Add a note or callout
 
@@ -249,8 +214,8 @@ clear the selection.
 
 <img src="images/walkthrough/image-editor-group.png" alt="Several annotations selected together inside a shared blue resize box" width="820">
 
-The small bar above the tools has **Undo**, **Redo**, delete, and **Clone**.
-Clone makes another copy of your selection. You can also copy and paste marks
+Use **Undo** or **Redo** to revisit a change, delete to remove selected marks,
+or **Clone** to duplicate them. You can also copy and paste marks
 between images in the editor. Right-click a mark to bring it forward or send it
 behind other marks.
 
@@ -264,8 +229,7 @@ cover a smaller or larger area. Text, arrows, and shapes stay visible above it.
 
 Pixelation stays where you paint it; it cannot be moved or erased with the
 eraser. Use **Undo** to remove a stroke. Check the result before sharing.
-The uploaded PNG contains the pixelated image with no hidden original layer;
-your original file on disk stays unchanged.
+Your original file on disk stays unchanged.
 
 ### Save and upload
 
@@ -274,11 +238,10 @@ back to your staged attachments and closes the editor. Your descriptions stay
 in place. If you edited an image that was already uploaded, upload it again to
 get a link to the new version.
 
-Saved marks remain editable when you reopen the image during the same draft.
-Uploads contain a finished PNG; they do not include editable marks. Non-PNG
-images become PNGs with the same filename stem. Drawing outside the original
-image adds transparent space around it. Saved images must still fit the 10 MB
-attachment limit and cannot exceed 64 megapixels or 16,384 pixels on either side.
+You can reopen a saved image to adjust its marks while it's still in your draft.
+Edited images upload as PNGs; recipients cannot edit the marks separately.
+Keep saved images under 10 MB. If an edit is too large to save, reduce the image
+size or remove marks that extend far beyond its edges.
 
 **Discard** asks for confirmation, then closes the editor without your unsaved
 changes. Your last saved version stays staged and its marks remain editable.
@@ -290,8 +253,8 @@ Closing the window with unsaved changes gives you a choice: **Save**,
 <img src="images/walkthrough/image-editor-exit.png" alt="The editor asks whether to save changes before closing, with Discard, Cancel, and Save choices" width="820">
 
 Finish any import or upload before saving. If a save fails, the editor stays
-open with your work intact. Edits and history stay in memory only; copy your
-upload links before closing the main Gatto window, which clears the draft.
+open with your work intact. Copy your upload links before closing the main
+Gatto window, which clears the draft.
 
 A few useful shortcuts:
 
@@ -311,19 +274,16 @@ WebM may need a compatible player; Gatto reports an error if it cannot open one.
 A video that uploads successfully may still need a different player or format
 for some viewers.
 
-Videos uploaded without compression keep their original bytes and audio.
-Gatto keeps a private temporary copy available while the video is staged or its
-player is running, even if you remove it from the draft.
-
 ## Faster clipboard uploads
 
 With at least one repository pinned, these actions appear in Gatto’s menu bar menu:
 
-- **Stage from Clipboard** stages the image or copied Finder media file in the main window and shows **⌘V**.
-- **Quick Copy** uploads it in the background, copies its Markdown, and sends a macOS notification when it finishes. When its global shortcut is enabled, the menu shows the registered shortcut. The hint follows changes in App Preferences and disappears while the shortcut is disabled or being recorded.
+- **Stage from Clipboard** adds the image or copied Finder media file to the main window, ready for you to review and upload.
+- **Quick Copy** uploads it immediately, copies its Markdown, and notifies you when it finishes.
 
-To customize the enabled global shortcut in App Preferences, click **Record
-shortcut** and press a supported chord with at least two modifier keys.
+To use Quick Copy from another app, enable its global shortcut in App Preferences.
+To change it, click **Record shortcut** and press a key combination with at least
+two modifier keys.
 
 When multiple repositories are pinned, Quick Copy uses the most recently selected pinned
 repository, falling back to the alphabetically first pinned repository. Quick Copy works
@@ -341,12 +301,11 @@ From Terminal, use macOS's `open` command:
 open "gatto://quick-copy"
 ```
 
-Quick Copy requires a configured account or organization and at least one pinned repository. Gatto chooses
-the preferred pinned repository using the same rules as the menu bar and global keyboard shortcut.
-Install and open `Gatto.app` for macOS to register its URL scheme.
+Before using these links, install and open `Gatto.app`. For Quick Copy, configure
+your account or organization and pin at least one repository in App Preferences.
 
-Action URLs intentionally accept no query parameters, fragments, repository names, or additional
-path components; repository selection remains controlled by App Preferences.
+Use the URLs exactly as listed. To change the destination repository, select
+and pin it in App Preferences rather than adding it to the URL.
 
 ## Diagnostics and recovery
 
@@ -355,26 +314,21 @@ preferences, or uninstalling, see [Support](../SUPPORT.md).
 
 ## Install an update
 
-The **Release channel** section in **App Preferences** selects Stable
-or Beta. Beta also receives newer stable releases. Changing the dropdown checks
-availability and clears old offers; it never grants installation consent. When
-returning to Stable, an installed beta stays in place until Stable catches up.
-Gatto shows both versions while waiting and offers no downgrade. See
-[Setup](SETUP.md#updates) for defaults and persistence.
+Choose **Stable** or **Beta** under **Release channel** in **App Preferences**.
+Choose Beta if you want to try prerelease versions. Switching channels checks
+for updates but doesn't install one. If you switch from Beta back to Stable,
+keep using your installed version until a newer stable release is available.
 
-A small **↑ Update** appears next to the header controls and in the menu bar menu
-when a new release is available. Click it once to install and restart. Finish
-active uploads first. **Updating…** shows progress; **↻ Update** retries a failure.
-See [Setup](SETUP.md#updates) for timing and the first updater-enabled install.
+When an update is available, click **↑ Update** in the main window or menu bar
+menu to install it and restart Gatto. Finish active uploads first. If an update
+fails, click **↻ Update** to retry.
+See [Setup](SETUP.md#updates) if you need help getting updates.
 
 To check immediately, choose **Gatto → Check for Updates…** in the macOS menu
-bar. If a release is available, a small native pop-up shows its version and a
-link to the GitHub release. Choose **Update** to install and restart, or **Cancel**
-to leave it for later. Active uploads must finish before installation can start.
-The command also reports when no update is available or the check fails.
-Scheduled checks remain quiet and keep the existing Update controls current.
+bar. If a release is available, review its release notes, then choose **Update**
+to install and restart, or **Cancel** to leave it for later.
 
-<img src="images/walkthrough/05-update.png" alt="Gatto's small Update control beside the header controls" width="620">
+<img src="images/walkthrough/05-update.png" alt="An update available to install" width="620">
 
 ## Start quietly at login
 
