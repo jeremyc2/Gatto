@@ -143,7 +143,7 @@ the published signed DMG, with GitHub CLI as a dependency.
 ## Data flow
 
 ```text
-Paste, drop, or file selection
+Paste, drop, file selection, or Finder Quick Action
              |
              v
       Validate media and selected upload limit
@@ -217,6 +217,31 @@ replacement dialog. Switching to bulk keeps the existing attachment and appends
 the whole accepted batch in order; a multi-file input to an empty draft enables
 bulk upload directly. Cancel keeps the draft, while Replace uses the first new
 attachment.
+
+The optional **Send to Gatto** Automator Quick Action is bundled under
+`Contents/Resources` before signing. The app menu opens macOS's workflow installer;
+installation and removal are per-user and explicit. Both DMG and Homebrew ship
+the same bundle. The workflow accepts Finder filesystem selections broadly so a
+mixed selection can reach Gatto's validator intact. A single Run Shell Script
+action passes the entire argument list to `/usr/bin/open -b
+com.jeremy-chandler.gatto -- "$@"`; paths are never interpolated as shell code or
+filtered by extension. Launch Services launches or reuses Gatto and GPUI delivers
+the file URLs through `on_open_urls`. The early channel retains whole events
+until the app controller is ready, including at cold launch. `open_request.rs`
+decodes local file URLs without changing existing `gatto://` actions. File events
+activate the main window and use the existing attachment validation, draft choice,
+and compression flow, with the current video policy. They never authorize upload.
+Busy operations and active dialogs reject a new selection with retry feedback;
+an in-flight Finder validation blocks a second request. Close/reset invalidate
+pending results through the existing generation guards.
+
+An Automator workflow uses the system-provided runtime without adding an app
+extension, another executable, or an automatic per-user installer. Apple documents
+its Finder integration in
+[Create a workflow](https://support.apple.com/guide/automator/create-a-workflow-aut7cac58839/mac).
+Bare source executables remain usable through drop/paste; Finder's bundle-ID
+launch requires an installed app. See [Setup](SETUP.md#install-the-finder-quick-action-optional).
+
 The shared image formatter defaults to an HTML `<img>` element accepted in GitHub
 Markdown, with `width` and `height` from the validated pixel dimensions and
 escaped `alt` and `src` attributes. The saved `copy_images_as_markdown` preference

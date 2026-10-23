@@ -132,7 +132,13 @@ From the repository root:
 ```
 
 The script installs the `aarch64-apple-darwin` Rust target, performs a locked release
-build, and creates `dist/release/Gatto.app` with the plist, binary, and icon assets.
+build, and creates `dist/release/Gatto.app` with the plist, binary, icon assets,
+and **Send to Gatto.workflow** in `Contents/Resources`. The workflow is sealed by
+the outer app signature; it uses macOS's Run Shell Script action and has no nested
+executable to sign. Both DMG and Homebrew users install it explicitly from the
+Gatto menu using macOS's workflow installer. Updates leave any separately installed
+per-user copy intact; [Setup](SETUP.md#install-the-finder-quick-action-optional)
+documents replacement and removal.
 It signs with hardened runtime and a timestamp, verifies the signature, submits
 a temporary ZIP for notarization, staples and validates the ticket, and runs
 Gatekeeper assessment. The ZIP is temporary and is not distributed. It then builds
@@ -280,6 +286,17 @@ Install before enabling Start at Login. Do not ask users to bypass a
 failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Verify updates and Homebrew
+
+Run `./scripts/test-platform.sh` for native menu/hotkey checks and an Automator
+workflow test against a disposable signed app. It verifies cold and existing-app
+file delivery without changing the installed Gatto or installing a user service.
+Before publishing, also use **Gatto → Install Finder Quick Action…** on a disposable
+macOS user, enable it through Finder's Quick Actions customization if needed, and
+send a single image, a mixed image/video batch, and a selection containing an
+unsupported file. Verify the existing-draft choices and oversized-video prompt,
+that nothing uploads automatically, and that removing the workflow from
+`~/Library/Services` removes the action. Test the minimum supported macOS as well
+as the release Mac; the automated harness cannot verify Finder's settings UI.
 
 Run `./scripts/test-updater.sh` for native timing, consent, and signed-feed
 verification/tamper tests, and

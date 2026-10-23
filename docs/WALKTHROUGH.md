@@ -34,6 +34,27 @@ enabling this. Images and GIFs stay limited to 10 MB. For larger videos, choose
 Before uploading, you can edit an attachment's description, remove it, or click
 it to preview it.
 
+### Send files from Finder
+
+[Install the optional Quick Action](SETUP.md#install-the-finder-quick-action-optional)
+once. Select one or more files in Finder, then choose **Quick Actions → Send to
+Gatto** from the right-click menu. Gatto launches if needed, or brings its main
+window forward, and stages your selection for review. Click **Upload** yourself
+when ready.
+
+One file uses the normal draft. Multiple accepted files enable bulk upload in an
+empty draft. If a draft already exists, use the existing **Replace**, **Cancel**,
+or **Switch to Bulk Upload** choice. Switching to bulk keeps the draft and adds
+the full accepted selection in order. Replace uses the first accepted new file.
+Unsupported or unreadable files receive a warning; supported files still reach
+the staging flow. The same format checks, size limits, and video-compression
+choices apply as when dropping files.
+
+Finish an active upload, import, update, or dialog before sending another
+selection. If Gatto is busy it keeps the current draft and asks you to invoke the
+action again. You can stage before configuring GitHub, then finish setup before
+uploading.
+
 ### Compress a larger video
 
 When a selected video exceeds your limit, choose **Compress** to make a smaller

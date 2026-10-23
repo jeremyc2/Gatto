@@ -32,6 +32,26 @@ Homebrew. Releases with in-app updating can also use the **↑ Update** control.
 For casks with in-app updating, add `--greedy` when explicitly upgrading through
 Homebrew.
 
+### Install the Finder Quick Action (optional)
+
+After installing and opening Gatto, choose **Gatto → Install Finder Quick Action…**
+from the macOS menu bar. macOS opens the bundled **Send to Gatto** workflow;
+choose **Install** in its installer. This installs the action for your user in
+`~/Library/Services/Send to Gatto.workflow`. The same steps work for the DMG and
+Homebrew installations, including apps installed in your own Applications folder.
+
+In Finder, select files, then right-click and choose **Quick Actions → Send to
+Gatto**. If it is hidden, choose **Quick Actions → Customize…** and enable it in
+the Finder extensions settings. Depending on macOS, it may also appear under
+**Services**; look for **Send to Gatto** in **System Settings → Keyboard → Keyboard
+Shortcuts → Services** if it is disabled there. See the
+[Finder workflow](WALKTHROUGH.md#send-files-from-finder) for staging behavior and
+[Support](../SUPPORT.md#finder-quick-action) for removal and troubleshooting.
+
+Updates replace the bundled workflow, while your installed copy stays in
+`~/Library/Services`. Choose the installation command again and confirm replacement
+to update that copy when a release changes the action.
+
 ### Updates
 
 Choose **Stable** or **Beta** in **App Preferences → Release channel**.

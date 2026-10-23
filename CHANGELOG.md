@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Optional **Send to Gatto** Finder Quick Action. Install it from the Gatto menu,
+  then send one or more Finder files to the existing staging flow. Gatto launches
+  or activates for review, preserves batch and draft choices, and reports invalid
+  files while keeping supported media. Upload still requires an explicit click.
+
 ## [0.17.3] - 2026-10-23
 
 ### Added

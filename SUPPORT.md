@@ -102,6 +102,30 @@ or migrate data.
 Homebrew users can uninstall with `brew uninstall --cask jeremyc2/gatto/gatto`;
 add `--zap` to remove the cask's declared per-user settings and caches too.
 
+## Finder Quick Action
+
+Install and enable **Send to Gatto** using the
+[setup instructions](docs/SETUP.md#install-the-finder-quick-action-optional).
+Keep Gatto installed and launch it once before using the action. If macOS cannot
+find Gatto, open the installed app and try again. A plain `cargo run` executable
+is not a registered app bundle; the Finder action needs an installed `Gatto.app`.
+If multiple copies of Gatto are installed, macOS chooses the registered copy for
+its bundle identifier; keep the intended version in Applications and remove
+unneeded copies.
+
+If an upload, import, update, or dialog is already active, finish it and choose
+**Send to Gatto** again. An unsupported or unreadable selection shows a warning;
+mixed selections retain their supported files. For unexpectedly missing or old
+action behavior, choose **Gatto → Install Finder Quick Action…** again to replace
+the per-user workflow with the version bundled in the app.
+
+To remove the action, use Finder's **Go → Go to Folder…**, enter
+`~/Library/Services`, and move **Send to Gatto.workflow** to the Trash. You can
+disable it through Finder's **Quick Actions → Customize…** instead. Removing or
+resetting Gatto does not delete this separately installed workflow; remove it
+when uninstalling, including after a Homebrew uninstall. Removal leaves drafts
+and original media files unchanged.
+
 ## Reset and uninstall
 
 **App Preferences → Reset app** asks for confirmation, removes saved preferences
@@ -114,7 +138,8 @@ loses them.
 To uninstall, reset the app, choose **Quit** from the menu bar, and move
 `Gatto.app` to the Trash. If the app cannot open, quit it and remove the two files
 listed in [Local data and recovery](#local-data-and-recovery). Keep or remove
-Rooftops scorecards as you prefer.
+Rooftops scorecards as you prefer. Remove the optional
+[Finder Quick Action](#finder-quick-action) separately if installed.
 
 ## Development builds
 

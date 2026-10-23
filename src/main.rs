@@ -14,6 +14,7 @@ mod installer_cleanup;
 mod log_viewer;
 mod menu_bar;
 mod model;
+mod open_request;
 mod quick_copy;
 mod rooftops;
 mod rooftops_score;
@@ -55,11 +56,9 @@ fn main() {
             controller.reopen(cx);
         }
     });
-    let (custom_url_sender, custom_url_events) = async_channel::unbounded();
+    let (open_sender, open_events) = async_channel::unbounded();
     application.on_open_urls(move |urls| {
-        for url in urls {
-            let _ = custom_url_sender.try_send(url);
-        }
+        let _ = open_sender.try_send(urls);
     });
 
     application.run(move |cx| {
@@ -154,6 +153,21 @@ fn main() {
             let main = preferences_main.clone();
             cx.defer(move |cx| perform_action(MenuAction::Settings, &main, cx));
         });
+        let install_main = controller.clone();
+        cx.on_action(move |_: &application_menu::InstallFinderQuickAction, cx| {
+            let main = install_main.clone();
+            cx.defer(move |cx| {
+                if let Some(path) = open_request::quick_action_path()
+                    && let Ok(url) = url::Url::from_file_path(path)
+                {
+                    cx.open_url(url.as_str());
+                } else {
+                    handle_open_request(open_request::OpenRequest::Invalid(
+                        "The Finder Quick Action is missing. Reinstall a packaged release of Gatto.".into()
+                    ), &main, cx);
+                }
+            });
+        });
         controller.start(login_launch, cx);
         let composition_main = controller.clone();
         cx.on_action(move |_: &application_menu::CreateComposition, cx| {
@@ -161,18 +175,12 @@ fn main() {
             cx.defer(move |cx| main.show_composer(cx));
         });
         *main_window.borrow_mut() = Some(controller.clone());
-        let custom_url_main = controller.clone();
+        let open_main = controller.clone();
         cx.spawn(async move |cx| {
-            while let Ok(url) = custom_url_events.recv().await {
-                cx.update(|cx| match CustomUrlAction::parse(&url) {
-                    Ok(action) => perform_action(action.into(), &custom_url_main, cx),
-                    Err(error) => {
-                        let (handle, view) = custom_url_main.show(cx);
-                        let _ = handle.update(cx, |_, window, cx| {
-                            view.update(cx, |this, cx| {
-                                this.report_custom_url_error(error.to_string(), window, cx);
-                            });
-                        });
+            while let Ok(urls) = open_events.recv().await {
+                cx.update(|cx| {
+                    for request in open_request::OpenRequest::from_urls(urls) {
+                        handle_open_request(request, &open_main, cx);
                     }
                 });
             }
@@ -235,6 +243,23 @@ fn main() {
         })
         .detach();
     });
+}
+
+fn handle_open_request(request: open_request::OpenRequest, main: &MainWindow, cx: &mut App) {
+    use open_request::OpenRequest;
+    match request {
+        OpenRequest::Action(action) => perform_action(action.into(), main, cx),
+        request => {
+            let (handle, view) = main.show(cx);
+            let _ = handle.update(cx, |_, window, cx| {
+                view.update(cx, |this, cx| match request {
+                    OpenRequest::Files(paths) => this.stage_opened_files(paths, window, cx),
+                    OpenRequest::Invalid(error) => this.report_open_error(error, window, cx),
+                    OpenRequest::Action(_) => unreachable!(),
+                });
+            });
+        }
+    }
 }
 
 impl From<CustomUrlAction> for MenuAction {
