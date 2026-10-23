@@ -509,6 +509,32 @@ strokes so the two tones remain distinct. X boxes use corner-to-corner diagonals
 checkboxes use a centered, rising tick. Both symbols use the border's color,
 width, and dash pattern. Preview and export share the stroked symbol geometry;
 hit testing and tool icons retain the complete shape, including its symbol.
+`annotation/marker.rs` owns numbered walkthrough badges. Documents and undo
+snapshots carry the next number, starting at 1 with a maximum of 99 markers.
+Deletion renumbers surviving markers in sequence order rather than stacking
+order; descriptions remain attached to the same marks. Clones and pastes allocate
+fresh numbers atomically and use the destination image's existing marker size.
+Corner resizing changes all markers' scale together, including their numerals,
+while retaining a square frame. Group transforms keep numerals upright and update
+the shared size; marker selections do not expose rotation or edge stretching.
+Each marker's palette color stays independent. The badge painter returns shared
+vector paths for the fill, two concentric border lines, and a fitted one- or
+two-digit numeral; text and border ink contrast with the fill. Preview uses native
+vector geometry at every zoom, and PNG export rasterizes the same paths.
+
+Marker descriptions live separately from canvas text. Saving stores every
+marker's number and description in numeric order in `ImageData` alongside the
+exported PNG, retaining blank descriptions. Single and bulk copying append all
+items to that image's snippet, with indented
+continuation lines and no heading. The editing session preserves the source,
+badges, descriptions, colors, and size across reopening; Discard restores the
+saved state. `image_preview/editor/marker_notes.rs` uses a native multiline
+textarea in a full-width bottom overlay for a single selected marker. Opening
+or closing it does not participate in camera scale or position calculations.
+Input focus keeps typing and clipboard shortcuts inside the textarea. The
+attachment's ordered-list icon is present whenever markers exist, even if every
+description is blank. Design sources are in [numbered marker research](design/numbered-markers.md).
+
 `annotation/preview.rs` caches tessellated native GPUI geometry per
 mark; pointer updates rebuild changed geometry only, without copying base pixels,
 allocating full-image layers or encoding PNGs. The same

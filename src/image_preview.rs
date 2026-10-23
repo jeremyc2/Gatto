@@ -74,6 +74,7 @@ struct PreviewImage {
     name: SharedString,
     pixel_size: (u32, u32),
     document: Option<Document>,
+    saved_next_marker: u32,
     saved_marks: Vec<crate::annotation::Mark>,
     saved_comparison: Option<crate::annotation::Comparison>,
     session: Session,
@@ -91,15 +92,18 @@ impl PreviewImage {
                 .open(&image.bytes, image.preview.clone())
                 .ok()
         };
-        let (document, source, saved_marks, saved_comparison) =
-            retained.map_or((None, image.preview.clone(), Vec::new(), None), |session| {
+        let (document, source, saved_marks, saved_comparison, saved_next_marker) = retained.map_or(
+            (None, image.preview.clone(), Vec::new(), None, 1),
+            |session| {
                 (
                     Some(session.document),
                     session.image,
                     session.saved_marks,
                     session.saved_comparison,
+                    session.saved_next_marker,
                 )
-            });
+            },
+        );
         let pixel_size = document
             .as_ref()
             .map_or(image.pixel_size, |doc| doc.base.dimensions());
@@ -113,6 +117,7 @@ impl PreviewImage {
             name: attachment.name.clone().into(),
             pixel_size,
             document,
+            saved_next_marker,
             saved_marks,
             saved_comparison,
             session: image.annotation_session.clone(),
@@ -128,6 +133,7 @@ impl Drop for PreviewImage {
                 document,
                 self.image.clone(),
                 crate::annotation::EditState {
+                    next_marker: self.saved_next_marker,
                     marks: std::mem::take(&mut self.saved_marks),
                     comparison: self.saved_comparison.take(),
                 },
@@ -269,6 +275,7 @@ impl ImagePreview {
                 // A snapshot clears undo/redo without baking those marks into the image.
                 if let Some(document) = &mut image.document {
                     *document = document.snapshot();
+                    document.next_marker = image.saved_next_marker;
                     document.marks.clone_from(&image.saved_marks);
                     document.comparison.clone_from(&image.saved_comparison);
                 }
@@ -538,7 +545,7 @@ impl ImagePreview {
     fn zoom_controls(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .absolute()
-            .bottom_2()
+            .bottom(px(8. + self.marker_notes_height()))
             .left_2()
             .gap_0p5()
             .p_1()
@@ -596,6 +603,7 @@ impl Focusable for ImagePreview {
 
 impl Render for ImagePreview {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_marker_notes(window, cx);
         // Establish preset sizes before any zooming, using this image's opening view.
         self.annotation_scale(window);
         let editable = self.editable();
@@ -767,6 +775,7 @@ impl Render for ImagePreview {
                                     .child(self.annotation_properties(cx))
                             })
                             .child(self.preview_cursor_layer(cursor, window, cx))
+                            .child(self.marker_notes(cx))
                     })
                     .when(self.saving.is_some(), |surface| {
                         surface.child(

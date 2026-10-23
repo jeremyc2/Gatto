@@ -77,6 +77,7 @@ impl PreviewCache {
                     && mark.style.opacity == 1.
                     && old.mark.tool == mark.tool
                     && old.mark.points == mark.points
+                    && old.mark.number == mark.number
                     && old.mark.text == mark.text
                     && old.mark.wrap == mark.wrap
                     && old.mark.label_position == mark.label_position
@@ -96,7 +97,7 @@ impl PreviewCache {
                 frame: mark.frame(),
                 paths,
                 text,
-                raster: if mark.tool != Tool::Redact
+                raster: if !matches!(mark.tool, Tool::Redact | Tool::Marker)
                     && (mark.style.opacity < 1. || mark.has_bitmap_text())
                 {
                     super::raster::RasterPreview::new(mark)
@@ -208,6 +209,13 @@ impl PreviewCache {
 type NativePath = (gpui_kit::Path<Pixels>, [u8; 3], f32);
 type NativePaths = Vec<NativePath>;
 fn body_paths(mark: &Mark) -> NativePaths {
+    if mark.tool == Tool::Marker {
+        return mark
+            .marker_layers()
+            .into_iter()
+            .filter_map(|(path, color)| Some((native_path(&path)?, color, 1.)))
+            .collect();
+    }
     let color = COLORS[mark.style.color];
     if mark.tool == Tool::Text {
         return Vec::new();
@@ -618,6 +626,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn marker_preview_uses_vector_paths_for_badge_and_two_digit_number() {
+        let mut doc = Document::from_image(image::RgbaImage::new(100, 100));
+        let mut mark = Mark::new(Tool::Marker, Pos::new(50., 50.), Style::default());
+        mark.number = Some(99);
+        doc.marks.push(mark);
+        let mut cache = PreviewCache::default();
+        cache.update(&doc);
+        assert!(
+            cache.marks[0].raster.is_none(),
+            "Markers must stay vector at any zoom"
+        );
+        assert!(
+            cache.marks[0].paths.len() >= 3,
+            "Circle borders and numeral need vector geometry"
+        );
+    }
+
+    #[test]
     fn composed_textures_reuse_moves_and_retire_on_change_removal_and_close() {
         let mut doc =
             Document::decode(include_bytes!("../../packaging/menu-bar-icon.png")).unwrap();
@@ -728,6 +754,7 @@ mod tests {
         mark.points[1] = Pos::new(240., 160.);
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::new(300, 200)),
             marks: vec![mark],
@@ -780,6 +807,7 @@ mod tests {
         let mesh = paths(&mark);
         let doc = Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::from_pixel(
                 480,
@@ -835,6 +863,7 @@ mod tests {
             }));
             let doc = Document {
                 annotation_scale: OnceLock::new(),
+                next_marker: 1,
                 comparison: None,
                 base: base.clone(),
                 marks: vec![mark.clone()],
@@ -901,6 +930,7 @@ mod tests {
                 let mesh = paths(&mark);
                 let doc = Document {
                     annotation_scale: OnceLock::new(),
+                    next_marker: 1,
                     comparison: None,
                     base: Arc::new(image::RgbaImage::new(200, 200)),
                     marks: vec![mark.clone()],
@@ -951,6 +981,7 @@ mod tests {
                         let stroke = COLORS[color];
                         let doc = Document {
                             annotation_scale: OnceLock::new(),
+                            next_marker: 1,
                             comparison: None,
                             base: Arc::new(image::RgbaImage::new(280, 280)),
                             marks: vec![mark],
@@ -1044,6 +1075,7 @@ mod tests {
                     mark.rotation = rotation;
                     let doc = Document {
                         annotation_scale: OnceLock::new(),
+                        next_marker: 1,
                         comparison: None,
                         base: Arc::new(image::RgbaImage::new(280, 280)),
                         marks: vec![mark.clone()],
@@ -1102,6 +1134,7 @@ mod tests {
             let mesh = paths(&mark);
             let doc = Document {
                 annotation_scale: OnceLock::new(),
+                next_marker: 1,
                 comparison: None,
                 base: Arc::new(image::RgbaImage::new(320, 240)),
                 marks: vec![mark],
@@ -1157,6 +1190,7 @@ mod tests {
             mark.translate(120. - center.x, 120. - center.y);
             let mut doc = Document {
                 annotation_scale: OnceLock::new(),
+                next_marker: 1,
                 comparison: None,
                 base: Arc::new(image::RgbaImage::new(240, 240)),
                 marks: vec![mark],
@@ -1254,6 +1288,7 @@ mod tests {
                 let mesh = paths(&mark);
                 let doc = Document {
                     annotation_scale: OnceLock::new(),
+                    next_marker: 1,
                     comparison: None,
                     base: Arc::new(image::RgbaImage::new(600, 400)),
                     marks: vec![mark],
@@ -1347,6 +1382,7 @@ mod tests {
         use gpui_kit::test::TestWindowExt as _;
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::from_fn(2400, 1600, |x, y| {
                 image::Rgba([(x % 255) as u8, (y % 255) as u8, 100, 255])

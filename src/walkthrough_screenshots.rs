@@ -63,6 +63,10 @@ fn generate() -> Result<()> {
         )
     })?;
 
+    if std::env::args().any(|arg| arg == "--markers-only") {
+        return render_image_editor(&output_directory.join("image-editor.png"));
+    }
+
     // Advanced comparison diagnostics are opt-in, outside the walkthrough.
     if std::env::args().any(|arg| arg == "--comparison-only") {
         return render_comparison(&output_directory);
@@ -697,21 +701,27 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
     cx.capture_screenshot(handle)
         .context("GPUI's Metal screenshot renderer is unavailable")?
         .save(output)?;
-    for variant in [
-        "marquee",
-        "group",
-        "shapes",
-        "shape-properties",
-        "x-box",
-        "checkbox",
-        "brush",
-        "revert",
-        "zoom",
-        "exit",
-        "saving",
-        "text-editing",
-        "text-finished",
-    ] {
+    let variants = if std::env::args().any(|arg| arg == "--markers-only") {
+        vec!["markers"]
+    } else {
+        vec![
+            "marquee",
+            "group",
+            "shapes",
+            "shape-properties",
+            "x-box",
+            "checkbox",
+            "brush",
+            "revert",
+            "zoom",
+            "exit",
+            "saving",
+            "text-editing",
+            "text-finished",
+            "markers",
+        ]
+    };
+    for variant in variants {
         cx.update_window(handle, |_, window, cx| {
             use gpui_kit::InputEvent as _;
             match variant {
@@ -793,6 +803,9 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
                 "saving" => {
                     window.click("cancel", cx);
                     window.click("annotation-apply", cx);
+                }
+                "markers" => {
+                    preview.update(cx, |preview, cx| preview.walkthrough_markers(window, cx))
                 }
                 "text-editing" | "text-finished" => {
                     preview.update(cx, |preview, cx| {

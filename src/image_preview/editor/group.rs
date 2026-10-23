@@ -225,9 +225,19 @@ impl ImagePreview {
                 }
             }
         }
+        let marker_scale = next
+            .0
+            .iter()
+            .find(|(_, mark)| mark.tool == Tool::Marker)
+            .map(|(_, mark)| mark.style.scale);
         let doc = self.doc_mut().unwrap();
         for (i, mark) in next.0 {
             doc.marks[i] = mark;
+        }
+        if matches!(gesture.mode, Mode::Resize(_))
+            && let Some(scale) = marker_scale
+        {
+            doc.resize_markers(scale);
         }
         self.editor.group_frame = next.1;
 
@@ -297,7 +307,10 @@ fn projected_group(
         if matches!(gesture.mode, Mode::Resize(_)) && mark.tool != Tool::Text {
             mark.style = mark.style.clone().with_scale(mark.style.scale * ratio);
         }
-        if matches!(mark.tool, Tool::Arrow | Tool::Line) {
+        if mark.tool == Tool::Marker {
+            mark.points = vec![map(original.points[0]); 2];
+            mark.rotation = 0.;
+        } else if matches!(mark.tool, Tool::Arrow | Tool::Line) {
             for p in &mut mark.points {
                 *p = map(*p);
             }

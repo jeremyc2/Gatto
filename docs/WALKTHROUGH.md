@@ -222,6 +222,17 @@ panel lets you change colors, line styles, size, and opacity.
 Most tools switch back to selection after drawing. Turn on the lock in the
 toolbar if you'd like to keep using the same tool.
 
+### Add numbered steps
+
+Choose **Numbered marker** (**N**) and click the image to add numbered steps.
+Select a marker to move it, change its color, or write a description in the
+area at the bottom. Drag a corner to resize all markers together.
+
+Only the numbers appear on the image. When you copy it after uploading, the
+steps and descriptions appear as a numbered list underneath.
+
+<img src="images/walkthrough/image-editor-markers.png" alt="Numbered steps with a description being edited below the image" width="820">
+
 ### Adjust what you've added
 
 Choose the selection tool, then click a mark to move it. For a transparent shape,

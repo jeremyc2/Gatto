@@ -15,7 +15,11 @@ fn bounds(marks: &[Mark]) -> Option<Rect> {
 
 fn valid(mark: &Mark) -> bool {
     let style = &mark.style;
-    (mark.tool.is_shape() || matches!(mark.tool, Tool::Text | Tool::Pen | Tool::Arrow | Tool::Line))
+    (mark.tool.is_shape()
+        || matches!(
+            mark.tool,
+            Tool::Marker | Tool::Text | Tool::Pen | Tool::Arrow | Tool::Line
+        ))
         && mark.points.len() >= 2
         && mark
             .points
@@ -53,9 +57,36 @@ impl ImagePreview {
         let Some(doc) = self.doc_mut() else {
             return;
         };
+        let count = marks
+            .iter()
+            .filter(|mark| mark.tool == Tool::Marker)
+            .count();
+        if doc.marker_count() + count > 99 {
+            self.editor.status = Some("Each image can have up to 99 markers.".into());
+            cx.notify();
+            return;
+        }
         doc.checkpoint();
         let start = doc.marks.len();
+        let mut number = doc.next_marker;
+        let marker_scale = doc
+            .marks
+            .iter()
+            .find(|mark| mark.tool == Tool::Marker)
+            .map(|mark| mark.style.scale)
+            .or_else(|| {
+                marks
+                    .iter()
+                    .find(|mark| mark.tool == Tool::Marker)
+                    .map(|mark| mark.style.scale)
+            });
         for mark in &mut marks {
+            if mark.tool == Tool::Marker {
+                mark.number = Some(number);
+                number += 1;
+                mark.rotation = 0.;
+                mark.style = mark.style.clone().with_scale(marker_scale.unwrap());
+            }
             mark.translate(delta.x, delta.y);
         }
         if let Some(bottom) = bottom
@@ -68,12 +99,14 @@ impl ImagePreview {
                 }
             }
         }
+        doc.next_marker = number;
         doc.marks.extend(marks);
         let indices = (start..doc.marks.len()).collect();
         let style = doc.marks.last().unwrap().style.clone().with_scale(1.);
         self.editor.gesture = None;
         self.set_selection(indices);
         self.editor.tool = Tool::Select;
+        self.editor.status = None;
         self.editor.style = style;
         self.refresh_annotations(cx);
     }

@@ -2,6 +2,7 @@ mod clipboard;
 mod comparison;
 mod cursor;
 mod group;
+mod marker_notes;
 mod selection;
 mod text_input;
 mod toolbar;
@@ -34,6 +35,7 @@ pub(super) struct SaveBatch {
 
 #[derive(Default)]
 pub(super) struct Editor {
+    notes: Option<marker_notes::NotesEdit>,
     comparison_edit: Option<comparison::CaptionEdit>,
     comparison_subscription: Option<Subscription>,
     pub tool: Tool,
@@ -229,6 +231,7 @@ impl ImagePreview {
             };
         }
         self.editor.tool = tool;
+
         self.editor.selection_cursor = SelectionCursor::Arrow;
         self.editor.shapes_open = None;
         self.clear_selection();
@@ -243,6 +246,7 @@ impl ImagePreview {
         }
     }
     pub(super) fn finish_text(&mut self, cx: &mut Context<Self>) {
+        self.editor.notes = None;
         self.finish_comparison_label(cx);
         if let Some(input) = self.editor.editing.take() {
             let created = std::mem::take(&mut self.editor.editing_created);
@@ -461,6 +465,7 @@ impl ImagePreview {
         let p = self.image_pos(event.position, window);
         let (_, scale) = self.transform(window);
         let tolerance = 7. / scale;
+
         self.finish_text(cx);
         window.focus(&self.focus_handle, cx);
         if event.click_count == 2 && self.editor.tool == Tool::Select {
@@ -474,6 +479,13 @@ impl ImagePreview {
                 })
                 .or_else(|| self.doc().and_then(|d| d.hit(p, tolerance)));
             if let Some(index) = target
+                && self.doc().unwrap().marks[index].tool == Tool::Marker
+            {
+                self.set_selection(vec![index]);
+                self.focus_marker_notes(window, cx);
+                return;
+            }
+            if let Some(index) = target
                 && {
                     let mark = &self.doc().unwrap().marks[index];
                     mark.tool == Tool::Text || mark.can_edit_label()
@@ -485,6 +497,39 @@ impl ImagePreview {
             self.create_text(p, None, window, cx);
             return;
         }
+        if self.editor.tool == Tool::Marker {
+            if self
+                .selection_target(p, scale)
+                .is_some_and(|(index, _)| self.doc().unwrap().marks[index].tool == Tool::Marker)
+            {
+                self.begin_selection(event, p, scale, cx);
+                return;
+            }
+            let mut mark = Mark::new(
+                Tool::Marker,
+                p,
+                self.editor
+                    .style
+                    .clone()
+                    .with_scale(self.annotation_scale(window)),
+            );
+            comparison::keep_above_bottom(&mut mark, self.comparison_annotation_bottom());
+            let doc = self.doc_mut().unwrap();
+            if doc.marker_count() >= 99 {
+                self.editor.status = Some("Each image can have up to 99 markers.".into());
+                cx.notify();
+                return;
+            }
+            doc.checkpoint();
+            doc.number_marker(&mut mark);
+            self.editor.status = None;
+            let doc = self.doc_mut().unwrap();
+            let index = doc.marks.len();
+            doc.marks.push(mark);
+            self.set_selection(vec![index]);
+            self.refresh_annotations(cx);
+            return;
+        }
         if self.editor.tool == Tool::Select {
             self.begin_selection(event, p, scale, cx);
             return;
@@ -494,6 +539,7 @@ impl ImagePreview {
             doc.checkpoint();
             if let Some(index) = doc.hit(p, tolerance) {
                 doc.marks.remove(index);
+                doc.renumber_markers();
             }
             self.editor.gesture = Some(Gesture {
                 start: p,
@@ -619,11 +665,21 @@ impl ImagePreview {
             self.doc_mut().unwrap().checkpoint();
             self.editor.gesture.as_mut().unwrap().checkpointed = true;
         }
+        if gesture.original.tool == Tool::Marker && matches!(gesture.mode, Mode::Resize(_)) {
+            let mut resized = gesture.original.clone();
+            apply_mark_gesture(&mut resized, &gesture, p, true, false, scale);
+            let doc = self.doc_mut().unwrap();
+            doc.resize_markers(resized.style.scale);
+            doc.marks[gesture.index] = resized;
+            self.refresh_annotations(cx);
+            return;
+        }
         if matches!(gesture.mode, Mode::Erase) {
             if let Some(doc) = self.doc_mut()
                 && let Some(index) = doc.hit(p, 8. / scale)
             {
                 doc.marks.remove(index);
+                doc.renumber_markers();
             }
             self.refresh_annotations(cx);
             return;
@@ -775,6 +831,7 @@ impl ImagePreview {
                 self.clear_selection();
             }
         }
+
         self.refresh_annotations(cx);
     }
     fn create_text(
@@ -818,6 +875,9 @@ impl ImagePreview {
                     let mut style = mark.style.clone().with_scale(1.);
                     change(&mut style);
                     mark.style = style.with_scale(scale);
+                    if mark.tool == Tool::Marker {
+                        mark.style.opacity = 1.;
+                    }
                     mark.set_text(mark.text.clone());
                     changed_bounds |= before != mark.world_bounds();
                 }
@@ -838,12 +898,14 @@ impl ImagePreview {
             for i in indices.into_iter().rev() {
                 doc.marks.remove(i);
             }
+            doc.renumber_markers();
         }
         self.clear_selection();
         self.refresh_annotations(cx);
     }
     fn history(&mut self, redo: bool, cx: &mut Context<Self>) {
         self.finish_text(cx);
+
         self.clear_selection();
         self.editor.gesture = None;
         if let Some(doc) = self.doc_mut() {
@@ -873,6 +935,16 @@ impl ImagePreview {
         if command && key == "s" {
             self.apply_annotation(window, cx);
             cx.stop_propagation();
+            return;
+        }
+        if self.marker_notes_focused(window, cx) {
+            if key == "escape" || (command && key == "enter") {
+                window.focus(&self.focus_handle, cx);
+                self.editor.notes = None;
+                self.clear_selection();
+                cx.notify();
+                cx.stop_propagation();
+            }
             return;
         }
         if self.editor.editing.is_some() && command && key == "enter" {
@@ -923,6 +995,7 @@ impl ImagePreview {
             "backspace" | "delete" => self.delete_selected(cx),
             "v" => self.select_tool(Tool::Select, window, cx),
             "h" => self.select_tool(Tool::Pan, window, cx),
+            "n" => self.select_tool(Tool::Marker, window, cx),
             "t" => self.select_tool(Tool::Text, window, cx),
             "r" => self.select_tool(Tool::Rectangle, window, cx),
             "o" => self.select_tool(Tool::Ellipse, window, cx),
@@ -936,6 +1009,11 @@ impl ImagePreview {
                 cx.notify();
             }
             "enter" => {
+                if self.selected_marker().is_some() {
+                    self.focus_marker_notes(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if let Some(index) = self.editor.selected
                     && self.doc().is_some_and(|d| {
                         d.marks[index].tool == Tool::Text || d.marks[index].can_edit_label()
@@ -963,7 +1041,9 @@ impl ImagePreview {
     fn has_unsaved_changes(&self) -> bool {
         self.images.iter().any(|image| {
             image.document.as_ref().is_some_and(|doc| {
-                doc.marks != image.saved_marks || doc.comparison != image.saved_comparison
+                doc.marks != image.saved_marks
+                    || doc.comparison != image.saved_comparison
+                    || doc.next_marker != image.saved_next_marker
             })
         })
     }
@@ -990,7 +1070,10 @@ impl ImagePreview {
             .iter()
             .filter_map(|image| {
                 let doc = image.document.as_ref()?;
-                if doc.marks == image.saved_marks && doc.comparison == image.saved_comparison {
+                if doc.marks == image.saved_marks
+                    && doc.comparison == image.saved_comparison
+                    && doc.next_marker == image.saved_next_marker
+                {
                     return None;
                 }
                 let name = std::path::Path::new(image.name.as_ref())
@@ -1007,6 +1090,7 @@ impl ImagePreview {
                 .collect(),
         });
         self.editor.gesture = None;
+
         self.editor.group_gesture = None;
         self.editor.marquee = None;
         self.editor.shapes_open = None;
@@ -1030,7 +1114,11 @@ impl ImagePreview {
                                 bytes.len() as u64,
                                 crate::model::MAX_ATTACHMENT_BYTES,
                             )?;
-                            Ok((id, StagedAttachment::from_bytes(name, bytes, None)?))
+                            let mut attachment = StagedAttachment::from_bytes(name, bytes, None)?;
+                            if let crate::model::Media::Image(image) = &mut attachment.media {
+                                image.marker_descriptions = doc.marker_descriptions();
+                            }
+                            Ok((id, attachment))
                         })
                         .collect()
                 })
@@ -1076,6 +1164,7 @@ impl ImagePreview {
         }
         let (_, state) = batch.pending.remove(index);
         if let Some(image) = self.images.iter_mut().find(|image| image.id == id) {
+            image.saved_next_marker = state.next_marker;
             image.saved_marks = state.marks;
             image.saved_comparison = state.comparison;
         }
@@ -1226,6 +1315,7 @@ impl ImagePreview {
             return;
         }
         let tool = self.editor.tool;
+
         let finished_creation = self.editor.editing_created;
         self.finish_text(cx);
         if !finished_creation {
@@ -1397,7 +1487,7 @@ impl ImagePreview {
                 overlay.child(
                     div()
                         .absolute()
-                        .bottom_3()
+                        .bottom(px(70. + self.marker_notes_height()))
                         .left(px(64.))
                         .right_3()
                         .p_2()
@@ -1545,6 +1635,44 @@ fn frame_outline(
 
 #[cfg(feature = "walkthrough-screenshots")]
 impl ImagePreview {
+    #[allow(dead_code)]
+    pub fn walkthrough_markers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.finish_text(cx);
+        self.session_generation += 1;
+        self.saving = None;
+        self.editor = Editor::default();
+        self.zoom = 1.;
+        self.offset = point(px(0.), px(0.));
+        let doc = self.doc_mut().unwrap();
+        doc.marks.clear();
+        doc.next_marker = 1;
+        for (position, description) in [
+            (Pos::new(130., 90.), "Check the launch destination."),
+            (
+                Pos::new(390., 230.),
+                "Choose a repository, then upload the screenshot.\nWait for the upload to finish.",
+            ),
+            (Pos::new(205., 380.), "Ready for takeoff."),
+        ] {
+            let mut mark = Mark::new(
+                Tool::Marker,
+                position,
+                Style {
+                    color: [4, 7, 9][doc.next_marker as usize - 1],
+                    ..Style::default()
+                },
+            );
+            doc.number_marker(&mut mark);
+            mark.description = description.into();
+            doc.marks.push(mark);
+        }
+        self.editor.tool = Tool::Marker;
+        self.set_selection(vec![1]);
+        self.editor.style = self.doc().unwrap().marks[1].style.clone().with_scale(1.);
+        self.sync_marker_notes(window, cx);
+        self.refresh_annotations(cx);
+    }
+
     #[allow(dead_code)]
     pub fn walkthrough_text_edit(
         &mut self,
@@ -2067,6 +2195,317 @@ mod tests {
             assert!(view.read(cx).doc().unwrap().comparison.is_none());
         });
     }
+    #[gpui_kit::test]
+    fn marker_notes_support_multiline_history_cloning_and_movement(cx: &mut TestAppContext) {
+        let (view, cx) = editor_window(cx);
+        cx.simulate_keystrokes("n");
+        for p in [Pos::new(80., 90.), Pos::new(220., 130.)] {
+            let at = pointer(&view, cx, p);
+            cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+            cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::default());
+        }
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                assert_eq!(
+                    preview
+                        .doc()
+                        .unwrap()
+                        .marks
+                        .iter()
+                        .map(|m| m.number)
+                        .collect::<Vec<_>>(),
+                    vec![Some(1), Some(2)]
+                );
+                assert_eq!(preview.editor.selected, Some(1));
+                preview.focus_marker_notes(window, cx);
+            })
+        });
+        cx.simulate_input("Open settings");
+        cx.simulate_keystrokes("enter");
+        cx.simulate_input("Choose a repository");
+        cx.simulate_keystrokes("cmd-a cmd-c");
+        cx.update(|_, cx| {
+            assert_eq!(
+                cx.read_from_clipboard().and_then(|item| item.text()),
+                Some("Open settings\nChoose a repository".into())
+            )
+        });
+        cx.update(|_, cx| {
+            view.update(cx, |preview, _| {
+                assert_eq!(
+                    preview.doc().unwrap().marks[1].description,
+                    "Open settings\nChoose a repository"
+                );
+                assert!(preview.doc().unwrap().marks[1].text.is_empty());
+            })
+        });
+        cx.simulate_keystrokes("escape");
+        cx.simulate_keystrokes("cmd-z");
+        cx.update(|_, cx| assert!(view.read(cx).doc().unwrap().marks[1].description.is_empty()));
+        cx.simulate_keystrokes("cmd-shift-z");
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                assert_eq!(
+                    preview.doc().unwrap().marks[1].description,
+                    "Open settings\nChoose a repository"
+                );
+                preview.set_selection(vec![1]);
+                preview.clone_selected(cx);
+                assert_eq!(preview.doc().unwrap().marks[2].number, Some(3));
+                assert_eq!(
+                    preview.doc().unwrap().marks[2].description,
+                    "Open settings\nChoose a repository"
+                );
+                preview.copy_selected(cx);
+                preview.paste_selected(window, cx);
+                assert_eq!(preview.doc().unwrap().marks[3].number, Some(4));
+                preview.delete_selected(cx);
+                assert_eq!(preview.doc().unwrap().next_marker, 4);
+                preview.select_tool(Tool::Select, window, cx);
+                preview.set_selection(vec![1]);
+            })
+        });
+        drag(&view, cx, Pos::new(220., 130.), Pos::new(245., 160.));
+        cx.update(|_, cx| {
+            let preview = view.read(cx);
+            let mark = &preview.doc().unwrap().marks[1];
+            assert_eq!(mark.number, Some(2));
+            assert_eq!(mark.points[0], Pos::new(245., 160.));
+            assert_eq!(mark.description, "Open settings\nChoose a repository");
+        });
+    }
+
+    #[gpui_kit::test]
+    fn marker_corner_resize_updates_all_sizes_colors_stay_individual_and_rotation_is_disabled(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = editor_window(cx);
+        cx.simulate_keystrokes("n");
+        for p in [Pos::new(80., 90.), Pos::new(220., 130.)] {
+            let at = pointer(&view, cx, p);
+            cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+            cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::default());
+        }
+        let at = pointer(&view, cx, Pos::new(80., 90.));
+        cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| window.click(("annotation-color", 6usize), cx));
+        let bounds = cx.update(|_, cx| {
+            let preview = view.read(cx);
+            assert_eq!(preview.doc().unwrap().marks[0].style.color, 6);
+            assert_ne!(preview.doc().unwrap().marks[1].style.color, 6);
+            preview.doc().unwrap().marks[0].bounds()
+        });
+        drag(
+            &view,
+            cx,
+            bounds.corners()[2],
+            Pos::new(bounds.x + bounds.w * 2., bounds.y + bounds.h * 2.),
+        );
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let doc = preview.doc().unwrap();
+                let a = doc.marks[0].bounds();
+                assert!((a.w - bounds.w * 2.).abs() < 0.1);
+                assert_eq!(a.w, a.h);
+                assert_eq!(a.w, doc.marks[1].bounds().w);
+                assert_eq!(doc.marks[1].points[0], Pos::new(220., 130.));
+                assert_eq!(doc.marks[0].rotation, 0.);
+                assert!(!matches!(
+                    preview.selection_target(
+                        Pos::new(a.x - 5., a.y - 5.),
+                        preview.transform(window).1
+                    ),
+                    Some((_, Mode::Rotate(_)))
+                ));
+                // A later placement uses the shared size.
+                let doc = preview.doc_mut().unwrap();
+                let mut mark = Mark::new(Tool::Marker, Pos::new(330., 220.), Style::default());
+                doc.number_marker(&mut mark);
+                assert_eq!(mark.bounds().w, a.w);
+                preview.history(false, cx);
+                assert_eq!(preview.doc().unwrap().marks[0].bounds().w, bounds.w);
+                assert_eq!(preview.doc().unwrap().marks[1].bounds().w, bounds.w);
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn marker_limit_rejects_placement_clone_and_paste_without_partial_edits(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = editor_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let doc = preview.doc_mut().unwrap();
+                for _ in 0..99 {
+                    let mut mark = Mark::new(Tool::Marker, Pos::new(50., 50.), Style::default());
+                    assert!(doc.number_marker(&mut mark));
+                    doc.marks.push(mark);
+                }
+                preview.select_tool(Tool::Marker, window, cx);
+            })
+        });
+        let at = pointer(&view, cx, Pos::new(250., 200.));
+        cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                assert_eq!(preview.doc().unwrap().marker_count(), 99);
+                assert!(!preview.doc().unwrap().can_undo());
+                preview.set_selection(vec![0]);
+                preview.copy_selected(cx);
+                preview.clone_selected(cx);
+                preview.paste_selected(window, cx);
+                assert_eq!(preview.doc().unwrap().marker_count(), 99);
+                assert!(!preview.doc().unwrap().can_undo());
+                preview.delete_selected(cx);
+                assert_eq!(preview.doc().unwrap().next_marker, 99);
+                preview.paste_selected(window, cx);
+                assert_eq!(preview.doc().unwrap().marker_count(), 99);
+                assert_eq!(
+                    preview.doc().unwrap().marks.last().unwrap().number,
+                    Some(99)
+                );
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn marker_pane_never_changes_image_transform(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, fixture_attachment_size(2000, 1600));
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let doc = preview.doc_mut().unwrap();
+                let mut mark = Mark::new(Tool::Marker, Pos::new(300., 300.), Style::default());
+                doc.number_marker(&mut mark);
+                doc.marks.push(mark);
+                let before = (
+                    preview.transform(window),
+                    preview.fit_scale(window),
+                    preview.zoom,
+                    preview.offset,
+                );
+                preview.set_selection(vec![0]);
+                preview.sync_marker_notes(window, cx);
+                assert_eq!(
+                    (
+                        preview.transform(window),
+                        preview.fit_scale(window),
+                        preview.zoom,
+                        preview.offset
+                    ),
+                    before,
+                    "Opening marker notes must preserve image position and scale"
+                );
+                preview.clear_selection();
+                assert_eq!(
+                    (
+                        preview.transform(window),
+                        preview.fit_scale(window),
+                        preview.zoom,
+                        preview.offset
+                    ),
+                    before
+                );
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn selecting_and_dragging_marker_keeps_pointer_coordinates_stable(cx: &mut TestAppContext) {
+        let (view, cx) = editor_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let doc = preview.doc_mut().unwrap();
+                let mut mark = Mark::new(Tool::Marker, Pos::new(80., 90.), Style::default());
+                doc.number_marker(&mut mark);
+                doc.marks.push(mark);
+                preview.select_tool(Tool::Select, window, cx);
+                preview.refresh_annotations(cx);
+            })
+        });
+        drag(&view, cx, Pos::new(80., 90.), Pos::new(105., 120.));
+        cx.update(|_, cx| {
+            let preview = view.read(cx);
+            assert_eq!(
+                preview.doc().unwrap().marks[0].points[0],
+                Pos::new(105., 120.)
+            );
+            assert_eq!(preview.marker_notes_height(), marker_notes::HEIGHT);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn marker_save_reopen_and_discard_preserve_metadata_and_counter(cx: &mut TestAppContext) {
+        let attachment = fixture_attachment();
+        let id = attachment.id;
+        let session = attachment.image().unwrap().annotation_session.clone();
+        let (view, cx) = editor_for(cx, attachment);
+        let applied = Rc::new(RefCell::new(None));
+        let capture = applied.clone();
+        let _subscription = cx.update(|_, cx| {
+            cx.subscribe(&view, move |_, event: &AppliedAnnotation, _| {
+                *capture.borrow_mut() = Some(event.attachment.clone());
+            })
+        });
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                let doc = preview.doc_mut().unwrap();
+                let mut mark = Mark::new(Tool::Marker, Pos::new(80., 80.), Style::default());
+                doc.checkpoint();
+                doc.number_marker(&mut mark);
+                mark.description = "Click the button".into();
+                doc.marks.push(mark);
+                doc.resize_markers(1.5);
+                preview.apply_annotation(window, cx);
+            })
+        });
+        cx.run_until_parked();
+        let mut staged = applied
+            .borrow_mut()
+            .take()
+            .expect("Save must export markers");
+        assert_eq!(
+            staged.image().unwrap().marker_descriptions,
+            vec![(1, "Click the button".into())]
+        );
+        assert!(
+            staged
+                .snippet("https://example.com/image", Default::default())
+                .ends_with("\n\n1. Click the button")
+        );
+        staged.id = id;
+        if let crate::model::Media::Image(image) = &mut staged.media {
+            image.annotation_session = session;
+        }
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                preview.annotation_saved(id, Ok(()), window, cx);
+                preview.show(vec![staged.clone()], id, cx);
+                assert_eq!(preview.doc().unwrap().next_marker, 2);
+                assert_eq!(preview.doc().unwrap().marks[0].style.scale, 1.5);
+                assert_eq!(
+                    preview.doc().unwrap().marks[0].description,
+                    "Click the button"
+                );
+                assert!(!preview.has_unsaved_changes());
+                let doc = preview.doc_mut().unwrap();
+                doc.checkpoint();
+                doc.next_marker = 4;
+                doc.marks[0].description = "Unsaved".into();
+                preview.clear(cx);
+                preview.show(vec![staged], id, cx);
+                assert_eq!(preview.doc().unwrap().next_marker, 2);
+                assert_eq!(preview.doc().unwrap().marks[0].style.scale, 1.5);
+                assert_eq!(
+                    preview.doc().unwrap().marks[0].description,
+                    "Click the button"
+                );
+            })
+        });
+    }
+
     fn fixture_attachment() -> StagedAttachment {
         fixture_attachment_size(400, 300)
     }

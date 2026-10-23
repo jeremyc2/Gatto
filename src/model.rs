@@ -88,6 +88,7 @@ pub enum Media {
 
 #[derive(Clone)]
 pub struct ImageData {
+    pub marker_descriptions: Vec<(u32, String)>,
     pub bytes: Arc<[u8]>,
     pub preview: Arc<Image>,
     pub pixel_size: (u32, u32),
@@ -216,10 +217,24 @@ impl StagedAttachment {
 
     pub fn snippet(&self, url: &str, format: ImageCopyFormat) -> String {
         match &self.media {
-            Media::Image(image) => match format {
-                ImageCopyFormat::Html => html_image(&self.description, url, image.pixel_size),
-                ImageCopyFormat::Markdown => markdown_image(&self.description, url),
-            },
+            Media::Image(image) => {
+                let mut snippet = match format {
+                    ImageCopyFormat::Html => html_image(&self.description, url, image.pixel_size),
+                    ImageCopyFormat::Markdown => markdown_image(&self.description, url),
+                };
+                for (index, (number, description)) in image.marker_descriptions.iter().enumerate() {
+                    snippet.push_str(if index == 0 { "\n\n" } else { "\n" });
+                    let prefix = format!("{number}. ");
+                    let indent = " ".repeat(prefix.len());
+                    snippet.push_str(&prefix);
+                    snippet.push_str(
+                        &description
+                            .replace("\r\n", "\n")
+                            .replace('\n', &format!("\n{indent}")),
+                    );
+                }
+                snippet
+            }
             Media::Video(_) => url.to_owned(),
         }
     }
@@ -243,6 +258,7 @@ impl StagedAttachment {
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             media: Media::Image(ImageData {
+                marker_descriptions: Vec::new(),
                 annotation_session: Default::default(),
                 preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
                 bytes,
@@ -305,6 +321,7 @@ impl StagedAttachment {
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             media: Media::Image(ImageData {
+                marker_descriptions: Vec::new(),
                 annotation_session: Default::default(),
                 preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
                 bytes,
@@ -407,6 +424,67 @@ fn escape_html_attribute(value: &str) -> String {
 #[cfg(test)]
 mod image_snippet_tests {
     use super::{html_image, markdown_image};
+
+    #[test]
+    fn seven_markers_copy_all_numbers_with_only_fifth_or_no_description() {
+        use super::{ImageCopyFormat, Media, StagedAttachment};
+        use crate::annotation::{Document, Mark, Pos, Style, Tool};
+        for fifth in ["Choose a repository", ""] {
+            let mut doc = Document::from_image(image::RgbaImage::new(100, 100));
+            for i in 1..=7 {
+                let mut mark = Mark::new(Tool::Marker, Pos::new(50., 50.), Style::default());
+                doc.number_marker(&mut mark);
+                if i == 5 {
+                    mark.description = fifth.into();
+                }
+                doc.marks.push(mark);
+            }
+            let mut item = StagedAttachment::from_bytes(
+                "test.png".into(),
+                include_bytes!("../packaging/menu-bar-icon.png").to_vec(),
+                None,
+            )
+            .unwrap();
+            if let Media::Image(image) = &mut item.media {
+                image.marker_descriptions = doc.marker_descriptions();
+            }
+            assert_eq!(item.image().unwrap().marker_descriptions.len(), 7);
+            let expected = (1..=7)
+                .map(|i| format!("{i}. {}", if i == 5 { fifth } else { "" }))
+                .collect::<Vec<_>>()
+                .join("\n");
+            for format in [ImageCopyFormat::Html, ImageCopyFormat::Markdown] {
+                let snippet = item.snippet("https://example.com/image", format);
+                assert_eq!(snippet.split_once("\n\n").unwrap().1, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn descriptions_copy_below_each_image_with_multiline_continuations() {
+        use super::{ImageCopyFormat, Media, StagedAttachment};
+        let mut item = StagedAttachment::from_bytes(
+            "test.png".into(),
+            include_bytes!("../packaging/menu-bar-icon.png").to_vec(),
+            None,
+        )
+        .unwrap();
+        if let Media::Image(image) = &mut item.media {
+            image.marker_descriptions = vec![
+                (2, "First line\nSecond line\n\nNew paragraph".into()),
+                (10, "Last".into()),
+            ];
+        }
+        for format in [ImageCopyFormat::Html, ImageCopyFormat::Markdown] {
+            let snippet = item.snippet("https://example.com/image", format);
+            assert!(
+                snippet.ends_with(
+                    "\n\n2. First line\n   Second line\n   \n   New paragraph\n10. Last"
+                )
+            );
+            assert!(!snippet.contains("Marker"));
+        }
+    }
 
     #[test]
     fn preserves_dimensions_and_escapes_html_attributes() {

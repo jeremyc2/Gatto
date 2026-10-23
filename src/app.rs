@@ -3117,6 +3117,7 @@ impl UploaderApp {
                 .failure_message()
                 .map(ToOwned::to_owned);
             let preview_view = cx.entity().downgrade();
+            let marker_view = cx.entity().downgrade();
             let rename_view = cx.entity().downgrade();
             let copy_view = cx.entity().downgrade();
             let remove_view = cx.entity().downgrade();
@@ -3135,7 +3136,18 @@ impl UploaderApp {
                     AttachmentContent::new()
                         .title(AttachmentTitle::new(title))
                         .description(AttachmentDescription::new(detail))
-                        .child(status_row)
+                        .child(h_flex().gap_2().items_center().child(status_row)
+                            .when(image.image().is_some_and(|image| !image.marker_descriptions.is_empty()), |row| row.child(
+                                Button::new(format!("marker-descriptions-{image_id}"))
+                                    .debug_selector(move || format!("marker-descriptions-{image_id}"))
+                                    .app_icon().icon(AssetIconName::ListOrdered)
+                                    .accessibility_label("Marker descriptions")
+                                    .tooltip("Marker descriptions · included when copying this image")
+                                    .on_click(move |_, window, cx| {
+                                        cx.stop_propagation();
+                                        let _ = marker_view.update(cx, |this, cx| this.open_attachment_preview(image_id, window, cx));
+                                    })
+                            )))
                         .when_some(upload_percentage, |content, value| content.child(
                             Progress::new(format!("attachment-progress-{image_id}")).value(value).color(status_color).xsmall().w_full()
                                 .accessibility_label("Attachment upload progress")
@@ -3978,6 +3990,7 @@ mod tests {
                     history.document,
                     history.image,
                     crate::annotation::EditState {
+                        next_marker: 1,
                         marks: history.saved_marks,
                         comparison: history.saved_comparison,
                     },
@@ -4880,10 +4893,13 @@ mod tests {
                     crate::model::html_image(description, url, pixel_size)
                 }
             };
-            let markdown = snippet("first", "https://example.com/first");
+            let markdown = format!(
+                "{}\n\n1. \n2. \n3. \n4. \n5. Choose repository\n6. \n7. ",
+                snippet("first", "https://example.com/first")
+            );
             let expected = if bulk_upload {
                 format!(
-                    "{markdown}\n\n{}",
+                    "{markdown}\n\n{}\n\n1. ",
                     snippet("second", "https://example.com/second")
                 )
             } else {
@@ -4899,6 +4915,20 @@ mod tests {
                             .unwrap();
                     image.id = 1;
                     image.description = "first".into();
+                    if let Media::Image(data) = &mut image.media {
+                        data.marker_descriptions = (1..=7)
+                            .map(|number| {
+                                (
+                                    number,
+                                    if number == 5 {
+                                        "Choose repository".into()
+                                    } else {
+                                        String::new()
+                                    },
+                                )
+                            })
+                            .collect();
+                    }
                     image.upload_state = AttachmentUploadState::Uploaded {
                         url: "https://example.com/first".into(),
                     };
@@ -4909,6 +4939,9 @@ mod tests {
                                 .unwrap();
                         image.id = 2;
                         image.description = "second".into();
+                        if let Media::Image(data) = &mut image.media {
+                            data.marker_descriptions = vec![(1, String::new())];
+                        }
                         image.upload_state = AttachmentUploadState::Uploaded {
                             url: "https://example.com/second".into(),
                         };
@@ -4921,6 +4954,13 @@ mod tests {
                 window.draw(cx).clear(cx);
             });
             assert!(cx.debug_bounds("upload-markdown-copy-hint").is_some());
+            assert!(cx.debug_bounds("marker-descriptions-1").is_some());
+            if bulk_upload {
+                assert!(
+                    cx.debug_bounds("marker-descriptions-2").is_some(),
+                    "Markers with blank descriptions must still show the icon"
+                );
+            }
             let copy = cx
                 .debug_bounds("copy-staged-image-markdown-1")
                 .expect("individual copy button is visible");
