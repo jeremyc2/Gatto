@@ -30,7 +30,19 @@
         if (error) *error = @"Select local files in Finder and try Send to Gatto again.";
         return;
     }
-    [NSApp.delegate application:NSApp openURLs:urls];
+    // Finder may supply file-reference URLs (file:///.file/id=...). Resolve them
+    // while Foundation still knows their identity, before GPUI serializes them
+    // for Rust's path-based importer.
+    NSMutableArray<NSURL *> *pathURLs = [NSMutableArray arrayWithCapacity:urls.count];
+    for (NSURL *url in urls) {
+        NSURL *pathURL = url.filePathURL;
+        if (!pathURL) {
+            if (error) *error = @"A selected file could not be located. Select it again in Finder and retry Send to Gatto.";
+            return;
+        }
+        [pathURLs addObject:pathURL];
+    }
+    [NSApp.delegate application:NSApp openURLs:pathURLs];
 }
 @end
 

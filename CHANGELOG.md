@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.6] - 2026-10-23
+
+### Fixed
+
+- **Send to Gatto** resolves Finder file references before importing, preventing
+  `Could not inspect /.file/id=…` errors for selected files.
+
 ## [0.17.5] - 2026-10-23
 
 ### Added

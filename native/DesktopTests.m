@@ -28,6 +28,33 @@ int main(int argc, const char **argv) {
         NSString *error = nil;
         [service sendToGatto:board userData:nil error:&error];
         assert(!error && [receiver.selection isEqualToArray:selection]);
+        // Finder services can supply file-reference URLs. GPUI serializes these
+        // as strings, so the service must resolve them before handing them off.
+        NSString *fixture = [NSTemporaryDirectory() stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"gatto-service-%@ 猫 #?.png", NSUUID.UUID.UUIDString]];
+        assert([[NSData dataWithBytes:"image" length:5] writeToFile:fixture atomically:YES]);
+        NSURL *file = [NSURL fileURLWithPath:fixture];
+        NSURL *reference = file.fileReferenceURL;
+        assert(reference.isFileReferenceURL);
+        [board clearContents];
+        [board writeObjects:@[reference, selection.lastObject]];
+        receiver.selection = nil;
+        [service sendToGatto:board userData:nil error:&error];
+        NSString *expectedURL = reference.filePathURL.absoluteString;
+        assert([NSFileManager.defaultManager removeItemAtPath:fixture error:nil]);
+        assert(!error && receiver.selection.count == 2);
+        NSURL *delivered = receiver.selection.firstObject;
+        assert(!delivered.isFileReferenceURL && "Service forwarded a /.file/id= reference instead of a path URL");
+        assert([delivered.absoluteString isEqualToString:expectedURL]);
+        assert([receiver.selection.lastObject isEqual:selection.lastObject]);
+        // A stale Finder reference should report an actionable service error,
+        // never pass the synthetic /.file/id= path to the importer.
+        [board clearContents];
+        [board writeObjects:@[[NSURL URLWithString:reference.absoluteString]]];
+        receiver.selection = nil;
+        [service sendToGatto:board userData:nil error:&error];
+        assert(error && !receiver.selection);
+        error = nil;
         [board clearContents];
         [board setPropertyList:[selection valueForKey:@"path"] forType:NSFilenamesPboardType];
         receiver.selection = nil;

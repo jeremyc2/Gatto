@@ -118,6 +118,8 @@ retrying. Finder service placement and visibility are controlled by macOS;
 **System Settings → Keyboard → Keyboard Shortcuts → Services**.
 
 If an upload, import, update, or dialog is already active, finish it and try again.
+If the service says a selected file could not be located, select it again in
+Finder and retry; a file reference can become stale after the file is deleted.
 Unsupported or unreadable files show a warning; mixed service selections retain
 supported files. Nothing uploads until you click Upload.
 
