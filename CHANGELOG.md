@@ -36,6 +36,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Update GPUI Kit from 0.7.3 to 0.8.0 while retaining the compatible GPUI 0.3.9
+  backend and existing features.
 - Rename the menu bar action to **Draft from Clipboard**, keeping its **⌘V** shortcut.
 
 ## [0.17.2] - 2026-10-22

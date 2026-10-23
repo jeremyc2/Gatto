@@ -217,10 +217,17 @@ configuration remains in `.github/dependabot.yml`. Restoring workflow files to
 
 ## Dependencies
 
-The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.7.3`, which pins
+The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.8.0`, which pins
 and re-exports its compatible GPUI `0.3.9` snapshot. Import GPUI through that
 facade; upgrade the pair together. Check `Cargo.toml` for the minimum Rust version
 and `rust-toolchain.toml` for the selected toolchain.
+
+The 0.8.0 update retains the default GPUI backend and existing component/assets
+features. GPUI Fast 0.1.10 and its additional GPU/platform packages are optional
+lockfile entries, not enabled app dependencies. No new runtime, WebView, or
+syntax-highlighting feature is enabled. All added packages use crates.io and
+pass the existing advisory, license, and source policy. Keep the README size
+figures tied to the published release until a new release is measured.
 
 `tests/fixtures/sample.mp4` is a locally generated, two-second H.264 fixture
 with ten 64 × 64 solid-color frames and no audio or external artwork.
