@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-10-23
+
 ### Added
 
 - Open **Side-by-Side Comparison** from the native Advanced menu or menu bar
