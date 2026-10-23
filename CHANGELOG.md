@@ -7,11 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-### Changed
-
-- File imports consistently protect the current selection while files are being read.
-- The image editor's Pen tool uses a freehand scribble icon, matching its drawing
-  action. Its label and **P** shortcut are unchanged (#26).
+## [0.17.5] - 2026-10-23
 
 ### Added
 
@@ -22,6 +18,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - `scripts/build-app.sh` compiles and packages a fresh local `dist/local/Gatto.app`
   without publishing. `scripts/build-dmg.sh` packages that bundle by default and
   prints the finished DMG's absolute path.
+
+### Changed
+
+- File imports consistently protect the current selection while files are being read.
+- The image editor's Pen tool uses a freehand scribble icon, matching its drawing
+  action. Its label and **P** shortcut are unchanged (#26).
 
 ## [0.17.4] - 2026-10-23
 
