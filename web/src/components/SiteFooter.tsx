@@ -19,10 +19,7 @@ export function SiteFooter() {
             <Link href="https://github.com/jeremyc2/Gatto/blob/main/LICENSE">MIT license</Link>
           </nav>
         </div>
-        <div {...stylex.attrs(styles.footerBottom)}>
-          <p {...stylex.attrs(styles.copyright)}>Open source under the MIT license.</p>
-          <FontCredits />
-        </div>
+        <FontCredits />
       </Container>
     </footer>
   );
@@ -53,13 +50,4 @@ const styles = stylex.create({
     justifyContent: { default: "normal", [media.phone]: "flex-end" },
     maxWidth: { default: "none", [media.phone]: 200 },
   },
-  footerBottom: {
-    display: { default: "flex", [media.phone]: "block" },
-    justifyContent: "space-between",
-    gap: 20,
-    color: colors.muted,
-    fontSize: 12,
-    marginBlockStart: 25,
-  },
-  copyright: { margin: 0, marginBlockEnd: { default: 0, [media.phone]: 12 } },
 });

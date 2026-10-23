@@ -5,6 +5,18 @@ controls, and detailed illustrations. Preserve the approved website while making
 these choices reusable. Add a shared abstraction when multiple consumers need
 one contract; keep individual compositions local.
 
+Landing-page copy stays brief and focused on sharing. The existing three-item
+feature row covers batches, annotations, and side-by-side comparison; video
+support appears in the sharing copy. Keep tool lists, file-format lists, and
+advanced workflows out of this page.
+
+Read the copy in scroll order when editing it. State the app's purpose once,
+then let each section add something. Cut repeated explanations before reaching
+for synonyms. Use ordinary product terms where they help people act; avoid
+stock marketing promises, forced contrasts, and giving every line the same
+clipped slogan rhythm. The license link in the footer supplies the license
+information without repeating the download section's open-source claim.
+
 ## Structure
 
 | Layer             | Location                                                   | Responsibility                                                                                                               |
@@ -148,6 +160,12 @@ Measured through 2026-10-18 with Vite 8.3.4 and StyleX 0.19.1:
 Rechecked on 2026-10-22 after removing Toastify: the production stylesheet remains
 23,326 raw bytes and 6,971 gzip bytes with the same Vite/StyleX versions. Removing
 the toast dependency changes its implementation, not the approved styling.
+
+Rechecked on 2026-10-23 after removing the file-format footnote: 23,300 raw
+bytes and 6,959 gzip bytes, within the same budgets.
+
+The subsequent copy pass removes the duplicate footer license sentence and its
+unused styles: 23,135 raw bytes and 6,910 gzip bytes, measured the same day.
 
 | Build                                                               | Styling bytes | Gzip bytes |
 | ------------------------------------------------------------------- | ------------: | ---------: |

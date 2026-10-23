@@ -5,14 +5,14 @@ import { Container } from "../design-system/Container";
 import { Heading, Text } from "../design-system/Typography";
 import { VisuallyHidden } from "../design-system/VisuallyHidden";
 const features = [
-  { title: "Bring a batch.", description: "Send several images at once." },
+  { title: "Bring a batch.", description: "Add several files at once." },
   {
-    title: "Look closer.",
-    description: "Preview an image and give it a useful description before sharing.",
+    title: "Make your point.",
+    description: "Annotate before uploading.",
   },
   {
-    title: "Take a shortcut.",
-    description: "Global keyboard shortcuts for taking a copied image from start to finish.",
+    title: "Side by side.",
+    description: "Compare two images.",
   },
 ];
 export function Features() {
@@ -32,9 +32,6 @@ export function Features() {
             </article>
           ))}
         </div>
-        <Text size="caption" muted xstyle={styles.formatNote}>
-          PNG, JPEG, GIF &amp; WebP
-        </Text>
       </Container>
     </section>
   );
@@ -62,5 +59,4 @@ const styles = stylex.create({
   },
   featureHeading: { marginBlockEnd: 14 },
   featureDescription: { maxWidth: { default: "29ch", [media.phone]: "38ch" }, marginBlockEnd: 13 },
-  formatNote: { marginBlockStart: 45 },
 });

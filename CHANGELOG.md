@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh the website's brief feature copy for videos, annotations, and
+  side-by-side comparison; remove the file-format footnote.
+- Replace the website headline with “GitHub, illustrated.” and trim repeated
+  explanations through the story, feature row, and footer.
+
 ## [0.18.0] - 2026-10-23
 
 ### Added

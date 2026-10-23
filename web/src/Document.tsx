@@ -13,10 +13,10 @@ export default function Document(props: { children: JSX.Element }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta
           name="description"
-          content="Gatto is a small Mac app for getting images into GitHub conversations. Bring an image, upload it to GitHub, and copy the Markdown."
+          content="Gatto is a small Mac app for adding images and videos to GitHub pull requests, issues, and comments."
         />
         <meta name="color-scheme" content="light dark" />
-        <title>Gatto — Your image. Ready to share.</title>
+        <title>Gatto — GitHub, illustrated.</title>
         <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
         <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />

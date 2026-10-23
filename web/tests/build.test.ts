@@ -23,12 +23,11 @@ beforeAll(async () => {
 
 test("prerenders all scenes, concise copy and the two README download badges", async () => {
   const html = await Bun.file(new URL("index.html", staticDirectory)).text();
-  expect(html).toContain("Your image.");
-  expect(html).toContain("Choose a repository. Paste or drop an image. Upload.");
-  expect(html).toContain("Send several images at once.");
-  expect(html).toContain(
-    "Global keyboard shortcuts for taking a copied image from start to finish.",
-  );
+  expect(html).toContain("Gatto — GitHub, illustrated.");
+  expect(html).toContain("Choose a repository, then drop in your files.");
+  expect(html).toContain("Add several files at once.");
+  expect(html).toContain("Annotate before uploading.");
+  expect(html).toContain("Compare two images.");
   expect(html.match(/id="chapter-(?:bring|upload|copy)"/g)).toHaveLength(3);
   expect(html.match(/alt="Download Gatto for macOS"/g)).toHaveLength(2);
   const preloadedFonts = [

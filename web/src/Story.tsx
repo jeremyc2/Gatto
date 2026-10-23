@@ -24,7 +24,7 @@ const chapters = [
     label: "Find",
     image: bringImage,
     alt: "Three black cats discover a watercolor flower picture. The small kitten's nose and paw meet the paper on the floor.",
-    status: "Find: bring an image.",
+    status: "Find: bring an image or video.",
   },
   {
     id: "upload",
@@ -203,12 +203,13 @@ export function Story() {
                 {chapter.id === "bring" ? (
                   <>
                     <Heading as="h1" size="display" xstyle={styles.title} id="bring-heading">
-                      Your image.
+                      GitHub,
                       <br />
-                      Ready to share.
+                      illustrated.
                     </Heading>
                     <Text size="lead" xstyle={styles.lead}>
-                      A little Mac app for sharing images in pull requests, issues, and comments.
+                      A little Mac app for sharing images and videos in pull requests, issues, and
+                      comments.
                     </Text>
                     <DownloadBadge />
                   </>
@@ -220,7 +221,7 @@ export function Story() {
                       on GitHub.
                     </Heading>
                     <Text size="lead" xstyle={styles.lead}>
-                      Choose a repository. Paste or drop an image. Upload.
+                      Choose a repository, then drop in your files.
                     </Text>
                   </>
                 ) : (
@@ -231,7 +232,7 @@ export function Story() {
                       Carry on.
                     </Heading>
                     <Text size="lead" xstyle={styles.lead}>
-                      Copy the Markdown. Paste it where the conversation is happening.
+                      Paste the Markdown into your conversation.
                     </Text>
                   </>
                 )}
