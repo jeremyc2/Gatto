@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Local DMG previews default to `dist/release/Gatto.app` and
+  `dist/gatto-preview.dmg` when `scripts/build-dmg.sh` runs without arguments.
 - Optional **Send to Gatto** Finder Quick Action. Install it from the Gatto menu,
   then send one or more Finder files to the existing staging flow. Gatto launches
   or activates for review, preserves batch and draft choices, and reports invalid

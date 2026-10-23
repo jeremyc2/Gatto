@@ -329,11 +329,16 @@ expected window layout.
 Build a local DMG from an existing app bundle without signing, notarizing, or publishing:
 
 ```sh
-./scripts/build-dmg.sh dist/release/Gatto.app dist/gatto-preview.dmg
+./scripts/build-dmg.sh
 open dist/gatto-preview.dmg
 ```
 
-The output path must not already exist. The preview preserves the input bundle's
+The script defaults to the repository's `dist/release/Gatto.app` bundle and
+`dist/gatto-preview.dmg` output, even when run from another directory. Pass an
+app bundle path and optionally an output path to override these defaults:
+`./scripts/build-dmg.sh /path/to/Gatto.app /path/to/preview.dmg`.
+The output path must not already exist. Release preparation with `--prepare`
+still requires explicit bundle and output paths. The preview preserves the input bundle's
 signature, but the disk image itself is unsigned and is not a release artifact.
 It creates a fresh volume UUID, so it does not receive the release's automatic
 ejection pairing. Eject it in Finder when finished. The build uses a temporary
