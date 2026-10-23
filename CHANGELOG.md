@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.7] - 2026-10-23
+
+### Changed
+
+- Custom URLs now match menu wording with `draft-from-clipboard` and
+  `app-preferences`. Added `side-by-side-comparison` to open the comparison picker (#27).
+
 ## [0.17.6] - 2026-10-23
 
 ### Fixed

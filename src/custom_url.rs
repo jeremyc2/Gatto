@@ -6,9 +6,10 @@ pub const SCHEME: &str = "gatto";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CustomUrlAction {
     Open,
-    Preview,
+    DraftFromClipboard,
     QuickCopy,
-    Settings,
+    AppPreferences,
+    SideBySideComparison,
 }
 
 impl CustomUrlAction {
@@ -43,9 +44,10 @@ impl CustomUrlAction {
 
         match action {
             "open" => Ok(Self::Open),
-            "preview" => Ok(Self::Preview),
+            "draft-from-clipboard" => Ok(Self::DraftFromClipboard),
             "quick-copy" => Ok(Self::QuickCopy),
-            "settings" => Ok(Self::Settings),
+            "app-preferences" => Ok(Self::AppPreferences),
+            "side-by-side-comparison" => Ok(Self::SideBySideComparison),
             _ => Err(CustomUrlError::UnsupportedAction),
         }
     }
@@ -76,17 +78,35 @@ mod tests {
             Ok(CustomUrlAction::Open)
         );
         assert_eq!(
-            CustomUrlAction::parse("gatto://preview"),
-            Ok(CustomUrlAction::Preview)
+            CustomUrlAction::parse("gatto://draft-from-clipboard"),
+            Ok(CustomUrlAction::DraftFromClipboard)
         );
         assert_eq!(
             CustomUrlAction::parse("gatto://quick-copy"),
             Ok(CustomUrlAction::QuickCopy)
         );
         assert_eq!(
-            CustomUrlAction::parse("gatto://settings"),
-            Ok(CustomUrlAction::Settings)
+            CustomUrlAction::parse("gatto://app-preferences"),
+            Ok(CustomUrlAction::AppPreferences)
         );
+    }
+
+    #[test]
+    fn parses_side_by_side_comparison() {
+        assert_eq!(
+            CustomUrlAction::parse("gatto://side-by-side-comparison"),
+            Ok(CustomUrlAction::SideBySideComparison)
+        );
+    }
+
+    #[test]
+    fn rejects_retired_action_names() {
+        for name in ["preview", "settings"] {
+            assert_eq!(
+                CustomUrlAction::parse(&format!("gatto://{name}")),
+                Err(CustomUrlError::UnsupportedAction)
+            );
+        }
     }
 
     #[test]
@@ -96,8 +116,8 @@ mod tests {
             Ok(CustomUrlAction::QuickCopy)
         );
         assert_eq!(
-            CustomUrlAction::parse("gatto:///preview"),
-            Ok(CustomUrlAction::Preview)
+            CustomUrlAction::parse("gatto:///draft-from-clipboard"),
+            Ok(CustomUrlAction::DraftFromClipboard)
         );
     }
 

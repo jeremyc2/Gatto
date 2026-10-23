@@ -64,7 +64,7 @@ mod tests {
             [
                 "file:///tmp/a.png",
                 "file://server/share/b.png",
-                "gatto://settings",
+                "gatto://app-preferences",
                 "file:///tmp/b.mp4",
                 "file:///tmp/a.png?upload=true",
                 "https://example.com/a.png",
@@ -73,7 +73,10 @@ mod tests {
             .into(),
         );
         assert!(matches!(&requests[0], OpenRequest::Invalid(_)));
-        assert_eq!(requests[1], OpenRequest::Action(CustomUrlAction::Settings));
+        assert_eq!(
+            requests[1],
+            OpenRequest::Action(CustomUrlAction::AppPreferences)
+        );
         assert!(matches!(&requests[2], OpenRequest::Invalid(_)));
         assert!(matches!(&requests[3], OpenRequest::Invalid(_)));
         assert_eq!(

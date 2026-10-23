@@ -54,9 +54,10 @@ from Terminal:
 | URL | Action |
 | --- | --- |
 | `gatto://open` | Open Gatto. |
-| `gatto://preview` | Stage the clipboard image or copied media file. |
+| `gatto://draft-from-clipboard` | Create a draft from the clipboard image or copied media file. |
 | `gatto://quick-copy` | Upload the clipboard image or copied media file and copy its Markdown. |
-| `gatto://settings` | Open App Preferences. |
+| `gatto://app-preferences` | Open App Preferences. |
+| `gatto://side-by-side-comparison` | Open Side-by-Side Comparison to combine two images into one draft. |
 
 Quick Copy requires a pinned repository. See the
 [walkthrough](docs/WALKTHROUGH.md#automate-gatto-with-custom-urls) for automation

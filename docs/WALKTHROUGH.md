@@ -324,7 +324,7 @@ clipboard unchanged and sends a notification; copy the media and invoke it again
 
 ## Automate Gatto with custom URLs
 
-The [README’s URL table](../README.md#automate) lists the four supported actions.
+The [README’s URL table](../README.md#automate) lists the five supported actions.
 Use them from Shortcuts, shell scripts, launchers, or other macOS automation.
 
 From Terminal, use macOS's `open` command:
@@ -335,6 +335,10 @@ open "gatto://quick-copy"
 
 Before using these links, install and open `Gatto.app`. For Quick Copy, configure
 your account or organization and pin at least one repository in App Preferences.
+
+The URL names match the menu actions: **Draft from Clipboard**,
+**Quick Copy**, **App Preferences**, and **Side-by-Side Comparison**, alongside
+opening Gatto.
 
 Use the URLs exactly as listed. To change the destination repository, select
 and pin it in App Preferences rather than adding it to the URL.

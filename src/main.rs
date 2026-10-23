@@ -252,9 +252,10 @@ impl From<CustomUrlAction> for MenuAction {
     fn from(action: CustomUrlAction) -> Self {
         match action {
             CustomUrlAction::Open => Self::Open,
-            CustomUrlAction::Preview => Self::StageFromClipboard,
+            CustomUrlAction::DraftFromClipboard => Self::StageFromClipboard,
             CustomUrlAction::QuickCopy => Self::QuickCopy,
-            CustomUrlAction::Settings => Self::Settings,
+            CustomUrlAction::AppPreferences => Self::Settings,
+            CustomUrlAction::SideBySideComparison => Self::CreateComposition,
         }
     }
 }
@@ -497,6 +498,28 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
 #[cfg(test)]
 mod startup_tests {
     use super::*;
+
+    #[test]
+    fn custom_urls_dispatch_matching_menu_actions() {
+        for (url, expected) in [
+            ("gatto://open", MenuAction::Open),
+            (
+                "gatto://draft-from-clipboard",
+                MenuAction::StageFromClipboard,
+            ),
+            ("gatto://quick-copy", MenuAction::QuickCopy),
+            ("gatto://app-preferences", MenuAction::Settings),
+            (
+                "gatto://side-by-side-comparison",
+                MenuAction::CreateComposition,
+            ),
+        ] {
+            assert_eq!(
+                MenuAction::from(CustomUrlAction::parse(url).unwrap()),
+                expected
+            );
+        }
+    }
 
     #[gpui_kit::test]
     fn login_launch_does_not_create_a_main_window(cx: &mut gpui_kit::TestAppContext) {
