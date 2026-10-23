@@ -288,6 +288,7 @@ mod tests {
     fn boundary_paint_refreshes_neighbor_gutters_without_changing_coverage() {
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::from_pixel(
                 530,
@@ -355,6 +356,7 @@ mod tests {
     fn brush_tiles_match_export_and_only_newly_painted_tiles_change() {
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::from_fn(512, 512, |x, y| {
                 image::Rgba([(x % 255) as u8, (y % 255) as u8, 80, 255])
@@ -430,6 +432,7 @@ mod tests {
     fn live_brush_updates_on_a_large_source_stay_interactive() {
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::from_pixel(
                 2400,

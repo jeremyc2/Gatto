@@ -128,7 +128,13 @@ impl ImagePreview {
         if self.selected_indices().len() > 1
             && let Some(frame) = self.selection_frame()
         {
-            if let Some(mode) = frame_target(frame, p, scale) {
+            if let Some(mode) = frame_target(frame, p, scale)
+                && !(matches!(mode, Mode::Rotate(_))
+                    && self
+                        .selected_indices()
+                        .iter()
+                        .any(|i| self.doc().unwrap().marks[*i].tool == Tool::Marker))
+            {
                 return self.editor.selected.map(|i| (i, mode));
             }
             if frame.bounds.contains(frame.to_local(p), 0.) {
@@ -139,6 +145,17 @@ impl ImagePreview {
         if let Some(index) = self.editor.selected
             && let Some(mark) = self.doc()?.marks.get(index)
         {
+            if mark.tool == Tool::Marker {
+                if let Some(mode @ Mode::Resize(Handle::Corner(_))) =
+                    frame_target(mark.frame(), p, scale)
+                {
+                    return Some((index, mode));
+                }
+                if mark.hit(p, tolerance) {
+                    return Some((index, Mode::Move));
+                }
+                return self.doc()?.hit(p, tolerance).map(|i| (i, Mode::Move));
+            }
             if matches!(mark.tool, Tool::Arrow | Tool::Line) {
                 if mark.is_line_dot()
                     && p.distance(mark.points[0]) < tolerance + mark.style.width / 2.
@@ -298,8 +315,9 @@ pub(super) fn resize(mark: &mut Mark, original: &Mark, handle: Handle, p: Pos, s
     let p = frame.to_local(p);
     let fixed = handle.anchor(old);
     let wrap = original.tool == Tool::Text && matches!(handle, Handle::Edge(1 | 3));
-    let aspect =
-        (original.tool == Tool::Text && !wrap) || (shift && matches!(handle, Handle::Corner(_)));
+    let aspect = (original.tool == Tool::Text && !wrap)
+        || original.tool == Tool::Marker
+        || (shift && matches!(handle, Handle::Corner(_)));
     let (mut next, flip_x, flip_y) = handle.resized(old, p, aspect);
     let minimum = original.constrain_text_bounds(next);
     if aspect && original.tool != Tool::Text {

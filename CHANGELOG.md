@@ -7,6 +7,21 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.17.4] - 2026-10-23
+
+### Added
+
+- Place up to 99 numbered walkthrough markers per image with **N**. Crisp vector
+  badges use individual palette colors and double-circle borders. A corner drag
+  resizes all markers and their numbers together; numbers stay upright. Deletion
+  closes numbering gaps, and clones/pastes receive the next numbers. Edit optional
+  descriptions in a full-width bottom overlay without moving or zooming the image.
+  Only badges are embedded; single and bulk text copying append descriptions as
+  numbered lists beneath their images without headings, including blank items
+  for markers without descriptions. The ordered-list attachment icon appears
+  whenever an image has markers. Editing supports undo/redo, Save, reopening,
+  and Discard.
+
 ## [0.17.3] - 2026-10-23
 
 ### Added

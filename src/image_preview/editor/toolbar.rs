@@ -44,10 +44,11 @@ impl ImagePreview {
             (Tool::Eraser, IconName::Eraser, "Eraser · E"),
             (Tool::Arrow, IconName::ArrowUpRight, "Arrow · A"),
             (Tool::Text, IconName::Type, "Text · T"),
+            (Tool::Marker, IconName::ListOrdered, "Numbered marker · N"),
         ];
         div()
             .absolute()
-            .bottom_2()
+            .bottom(px(8. + self.marker_notes_height()))
             .left_0()
             .right_0()
             .flex()
@@ -247,6 +248,38 @@ impl ImagePreview {
                     }),
             )
     }
+    fn color_palette(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex().gap_0p5().p_1().children((0..3).map(|row| {
+            h_flex()
+                .gap_0p5()
+                .children((0..4).map(move |column| row * 4 + column).map(|i| {
+                    let c = COLORS[i];
+                    Button::new(("annotation-color", i))
+                        .ghost()
+                        .w(px(36.))
+                        .h(px(32.))
+                        .rounded_md()
+                        .selected(self.editor.style.color == i)
+                        .when(self.editor.style.color == i, |button| {
+                            button.bg(rgb(0x333337))
+                        })
+                        .child(
+                            div()
+                                .size(px(16.))
+                                .rounded_full()
+                                .bg(rgb((u32::from(c[0]) << 16)
+                                    | (u32::from(c[1]) << 8)
+                                    | u32::from(c[2]))),
+                        )
+                        .tooltip(COLOR_NAMES[i])
+                        .accessibility_label(COLOR_NAMES[i])
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.change_style(|s| s.color = i, cx);
+                            this.refocus_text(window, cx);
+                        }))
+                }))
+        }))
+    }
     pub(in crate::image_preview) fn annotation_properties(
         &self,
         cx: &mut Context<Self>,
@@ -266,6 +299,16 @@ impl ImagePreview {
             } else if !indices.iter().all(|i| doc.marks[*i].tool == tool) {
                 tool = Tool::Pen;
             }
+        }
+        if tool == Tool::Marker {
+            return panel()
+                .absolute()
+                .right_2()
+                .top_2()
+                .w(px(PANEL_WIDTH))
+                .on_mouse_move(cx.listener(Self::editor_controls_hover))
+                .child(self.color_palette(cx))
+                .into_any_element();
         }
         let styled = tool.is_geometry() || matches!(tool, Tool::Text | Tool::Arrow | Tool::Pen);
         if tool == Tool::Redact {
@@ -342,34 +385,7 @@ impl ImagePreview {
             .right_2()
             .top_2()
             .w(px(PANEL_WIDTH))
-            .child(v_flex().gap_0p5().p_1().children((0..3).map(|row| {
-                h_flex()
-                    .gap_0p5()
-                    .children((0..4).map(move |column| row * 4 + column).map(|i| {
-                        let c = COLORS[i];
-                        Button::new(("annotation-color", i))
-                            .ghost()
-                            .w(px(36.))
-                            .h(px(32.))
-                            .rounded_md()
-                            .selected(s.color == i)
-                            .when(s.color == i, |button| button.bg(rgb(0x333337)))
-                            .child(
-                                div()
-                                    .size(px(16.))
-                                    .rounded_full()
-                                    .bg(rgb((u32::from(c[0]) << 16)
-                                        | (u32::from(c[1]) << 8)
-                                        | u32::from(c[2]))),
-                            )
-                            .tooltip(COLOR_NAMES[i])
-                            .accessibility_label(COLOR_NAMES[i])
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.change_style(|s| s.color = i, cx);
-                                this.refocus_text(window, cx);
-                            }))
-                    }))
-            })))
+            .child(self.color_palette(cx))
             .child(
                 div()
                     .mx_2()
@@ -878,6 +894,7 @@ fn tool_id(tool: Tool) -> usize {
         Tool::Select => 0,
         Tool::Pan => 1,
         Tool::Text => 2,
+        Tool::Marker => 10,
         Tool::Rectangle => 3,
         Tool::Ellipse => 4,
         Tool::Arrow => 6,

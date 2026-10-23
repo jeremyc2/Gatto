@@ -1,6 +1,7 @@
 pub mod comparison;
 pub use comparison::Comparison;
 mod geometry;
+mod marker;
 mod pixelation;
 mod preview;
 mod raster;
@@ -117,6 +118,7 @@ pub enum Tool {
     Select,
     Pan,
     Text,
+    Marker,
     Rectangle,
     Ellipse,
     Diamond,
@@ -208,6 +210,10 @@ impl Style {
 }
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Mark {
+    #[serde(default)]
+    pub number: Option<u32>,
+    #[serde(default)]
+    pub description: String,
     pub tool: Tool,
     pub points: Vec<Pos>,
     pub text: String,
@@ -239,11 +245,17 @@ impl Mark {
                     ARROW_TEXT_SIZES[tier]
                 };
         }
+        if tool == Tool::Marker {
+            // A sequence badge stays legible even after using a translucent drawing tool.
+            style.opacity = 1.;
+        }
         if tool == Tool::Line {
             style.start = Cap::None;
             style.end = Cap::None;
         }
         Self {
+            number: None,
+            description: String::new(),
             tool,
             points: vec![p, p],
             text: String::new(),
@@ -267,6 +279,15 @@ impl Mark {
                     .unwrap_or(layout.width + self.style.scale)
                     .max(16. * self.style.scale),
                 h: layout.height,
+            };
+        }
+        if self.tool == Tool::Marker {
+            let r = self.marker_radius();
+            return Rect {
+                x: self.points[0].x - r,
+                y: self.points[0].y - r,
+                w: r * 2.,
+                h: r * 2.,
             };
         }
         let mut a = self.points[0];
@@ -371,7 +392,12 @@ impl Mark {
         matches!(self.tool, Tool::Text | Tool::Pen)
     }
     pub fn resize(&mut self, old: Rect, new: Rect, wrap_only: bool) {
-        if self.tool == Tool::Text {
+        if self.tool == Tool::Marker {
+            let ratio = (new.w / old.w).max(0.05);
+            self.style = self.style.clone().with_scale(self.style.scale * ratio);
+            self.points = vec![Pos::new(new.x + new.w / 2., new.y + new.w / 2.); 2];
+            self.rotation = 0.;
+        } else if self.tool == Tool::Text {
             self.points[0] = Pos::new(new.x, new.y);
             if wrap_only {
                 self.wrap = Some(new.w.max(12. * self.style.scale));
@@ -438,6 +464,7 @@ impl Mark {
             return stroke_hit || (self.style.fill != Fill::None && inside);
         }
         match self.tool {
+            Tool::Marker => self.points[0].distance(p) <= self.marker_radius() + tolerance,
             Tool::Text => false,
             Tool::Redact => false,
             Tool::Arrow | Tool::Line => {
@@ -617,6 +644,7 @@ fn segment_distance(p: Pos, a: Pos, b: Pos) -> f32 {
 #[derive(Clone, Default)]
 pub struct Session(Arc<Mutex<Option<RetainedDocument>>>);
 pub struct RetainedDocument {
+    pub saved_next_marker: u32,
     pub saved_comparison: Option<Comparison>,
     pub document: Document,
     pub image: Arc<gpui_kit::Image>,
@@ -634,6 +662,7 @@ impl Session {
                 Ok(RetainedDocument {
                     document: Document::decode(bytes)?,
                     image,
+                    saved_next_marker: 1,
                     saved_marks: Vec::new(),
                     saved_comparison: None,
                 })
@@ -645,6 +674,7 @@ impl Session {
         *self.0.lock().unwrap_or_else(|error| error.into_inner()) = Some(RetainedDocument {
             document,
             image,
+            saved_next_marker: saved.next_marker,
             saved_marks: saved.marks,
             saved_comparison: saved.comparison,
         });
@@ -653,6 +683,7 @@ impl Session {
 
 #[derive(Clone)]
 pub struct Document {
+    pub next_marker: u32,
     pub comparison: Option<Comparison>,
     pub base: Arc<image::RgbaImage>,
     pub marks: Vec<Mark>,
@@ -664,6 +695,7 @@ pub struct Document {
 }
 #[derive(Clone)]
 pub(crate) struct EditState {
+    pub next_marker: u32,
     pub marks: Vec<Mark>,
     pub comparison: Option<Comparison>,
 }
@@ -676,6 +708,7 @@ impl Document {
             base: Arc::new(image),
             marks: Vec::new(),
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             undo: Vec::new(),
             redo: Vec::new(),
@@ -687,6 +720,7 @@ impl Document {
             base: self.base.clone(),
             marks: self.marks.clone(),
             annotation_scale: self.annotation_scale.clone(),
+            next_marker: self.next_marker,
             comparison: self.comparison.clone(),
             undo: Vec::new(),
             redo: Vec::new(),
@@ -728,6 +762,7 @@ impl Document {
     }
     #[cfg(test)]
     pub fn revert(&mut self) {
+        self.next_marker = 1;
         self.marks.clear();
         self.undo.clear();
         self.redo.clear();
@@ -740,11 +775,13 @@ impl Document {
     }
     pub(crate) fn edit_state(&self) -> EditState {
         EditState {
+            next_marker: self.next_marker,
             marks: self.marks.clone(),
             comparison: self.comparison.clone(),
         }
     }
     fn restore_state(&mut self, state: EditState) {
+        self.next_marker = state.next_marker;
         self.marks = state.marks;
         self.comparison = state.comparison;
     }
@@ -1014,6 +1051,10 @@ impl Mark {
 
     /// Paint all parts at full object opacity; callers composite the completed layer once.
     fn paint_layer(&self, layer: &mut Pixmap, transform: Transform) {
+        if self.tool == Tool::Marker {
+            self.paint_marker(layer, transform);
+            return;
+        }
         let path = self.body_path();
         let mut paint = Paint::default();
         let color = COLORS[self.style.color];
@@ -1274,6 +1315,7 @@ mod tests {
     fn document() -> Document {
         Document {
             annotation_scale: OnceLock::new(),
+            next_marker: 1,
             comparison: None,
             base: Arc::new(image::RgbaImage::from_fn(80, 60, |x, y| {
                 image::Rgba([(x * 3) as u8, (y * 4) as u8, 80, 255])
