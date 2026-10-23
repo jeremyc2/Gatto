@@ -143,7 +143,7 @@ the published signed DMG, with GitHub CLI as a dependency.
 ## Data flow
 
 ```text
-Paste, drop, or file selection
+Paste, drop, file selection, or Finder file opening
              |
              v
       Validate media and selected upload limit
@@ -217,6 +217,34 @@ replacement dialog. Switching to bulk keeps the existing attachment and appends
 the whole accepted batch in order; a multi-file input to an empty draft enables
 bulk upload directly. Cancel keeps the draft, while Replace uses the first new
 attachment.
+
+The app's `CFBundleDocumentTypes` registers PNG, JPEG, GIF, WebP, MP4, MOV, and
+WebM as alternate Viewer types for **Open With**, without replacing default apps.
+Imported WebP and WebM declarations associate their extensions and MIME types.
+`NSServices` also declares **Send to Gatto**, limited to Finder and accepting file
+items broadly so mixed selections reach the existing validator intact. macOS
+controls its visibility and context-menu placement. No Automator workflow or
+separate installer is shipped.
+
+`desktop.rs` installs the native service provider at app startup. `Desktop.m`
+reads file URLs (or legacy filename lists) from the service's supplied pasteboard,
+without reading or changing the general clipboard. It forwards the whole selection
+to GPUI's `application:openURLs:` delegate, which only enqueues events. The file
+picker, paste, drop, and Finder file opening share one background path loader and
+import-busy guard, including cancellation on close/reset. Both the
+service and Open With use the early `on_open_urls` channel until the controller is
+ready, including at cold launch. `open_request.rs` decodes local file URLs without
+changing existing `gatto://` actions. File events activate the main window and use
+the existing validation, draft choice, and compression flow. They never authorize
+upload. Busy operations and dialogs reject selections with retry feedback; an
+in-flight validation blocks reentry. Close/reset invalidate pending results.
+
+Apple documents [document types](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes)
+and [Services properties](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html).
+Bare source executables support drop/paste; Finder registration needs an app bundle.
+The local build script packages that bundle separately from release signing,
+Sparkle, and publication. See [Contributing](../CONTRIBUTING.md#local-app-bundle).
+
 The shared image formatter defaults to an HTML `<img>` element accepted in GitHub
 Markdown, with `width` and `height` from the validated pixel dimensions and
 escaped `alt` and `src` attributes. The saved `copy_images_as_markdown` preference
@@ -587,8 +615,10 @@ Save is disabled if every image matches its saved baseline. Both actions close t
 
 `image_preview/editor.rs` owns native GPUI pointer gestures; its `toolbar.rs`
 module supplies the bottom icon toolbar, contextual twelve-color palette,
-shape picker, and opacity slider. Rectangle and ellipse have dedicated toolbar
-buttons. A shared 17-item picker anchors above the bottom chevron for choosing
+shape picker, and opacity slider. Pen uses a continuous, rounded scribble glyph
+painted as native vector geometry at the other toolbar icons' size and weight;
+its label and P shortcut remain unchanged. Rectangle and ellipse have dedicated
+toolbar buttons. A shared 17-item picker anchors above the bottom chevron for choosing
 a drawing tool, or beside the properties panel for changing the selected shape.
 Ellipse is a continuous ellipse; oval is a capsule with semicircular ends.
 The editor coordinates

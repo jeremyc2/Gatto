@@ -102,6 +102,29 @@ or migrate data.
 Homebrew users can uninstall with `brew uninstall --cask jeremyc2/gatto/gatto`;
 add `--zap` to remove the cask's declared per-user settings and caches too.
 
+## Finder integration
+
+Gatto's [Finder integration](docs/SETUP.md#open-files-from-finder) ships in the app:
+**Open With → Gatto** for supported media and a **Send to Gatto** service. Install
+and open the current `Gatto.app` once. A plain `cargo run` executable does not
+register document types or services. For local testing, build a fresh bundle with
+`./scripts/build-app.sh`, then open the printed app path. Building a DMG alone
+only packages the bundle you already have.
+
+If Gatto is absent from Open With, choose **Other…** and select the intended app.
+If multiple copies are installed, quit Gatto and launch the intended bundle before
+retrying. Finder service placement and visibility are controlled by macOS;
+**Send to Gatto** may appear under **Services**. If disabled, enable it in
+**System Settings → Keyboard → Keyboard Shortcuts → Services**.
+
+If an upload, import, update, or dialog is already active, finish it and try again.
+Unsupported or unreadable files show a warning; mixed service selections retain
+supported files. Nothing uploads until you click Upload.
+
+If you installed the earlier development branch's Automator workflow, remove
+`~/Library/Services/Send to Gatto.workflow` to avoid a duplicate entry. The current
+app does not install or update that separate workflow.
+
 ## Reset and uninstall
 
 **App Preferences → Reset app** asks for confirmation, removes saved preferences
@@ -114,7 +137,8 @@ loses them.
 To uninstall, reset the app, choose **Quit** from the menu bar, and move
 `Gatto.app` to the Trash. If the app cannot open, quit it and remove the two files
 listed in [Local data and recovery](#local-data-and-recovery). Keep or remove
-Rooftops scorecards as you prefer.
+Rooftops scorecards as you prefer. If installed while testing an earlier branch,
+remove the legacy [Finder workflow](#finder-integration) separately.
 
 ## Development builds
 

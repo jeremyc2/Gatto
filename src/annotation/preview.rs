@@ -559,6 +559,48 @@ pub fn shape_icon(tool: Tool, color: gpui_kit::Hsla) -> impl gpui_kit::IntoEleme
     .flex_shrink_0()
 }
 
+/// A continuous freehand stroke, matching the toolbar's 16-pixel vector glyphs.
+pub fn scribble_icon(color: gpui_kit::Hsla) -> impl gpui_kit::IntoElement {
+    use gpui_kit::Styled as _;
+    gpui_kit::canvas(
+        move |bounds, _, _| {
+            let mut path = PathBuilder::new();
+            path.move_to(2., 15.);
+            path.cubic_to(8., 9., 15., 1., 17., 3.);
+            path.cubic_to(20., 6., 3., 18., 6., 21.);
+            path.cubic_to(8., 23., 15., 11., 17., 13.);
+            path.cubic_to(19., 15., 11., 22., 15., 22.);
+            path.cubic_to(18., 22., 20., 17., 22., 19.);
+            path.finish()
+                .and_then(|path| {
+                    path.stroke(
+                        &Stroke {
+                            width: 2.,
+                            line_join: tiny_skia::LineJoin::Round,
+                            line_cap: LineCap::Round,
+                            ..Default::default()
+                        },
+                        1.,
+                    )
+                })
+                .and_then(|path| {
+                    path.transform(
+                        Transform::from_scale(2. / 3., 2. / 3.)
+                            .post_translate(bounds.origin.x.as_f32(), bounds.origin.y.as_f32()),
+                    )
+                })
+                .and_then(|path| native_path(&path))
+        },
+        move |_, path, window, _| {
+            if let Some(path) = path {
+                window.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(16.))
+    .flex_shrink_0()
+}
+
 /// A circular, colored photo with a pixelated edge, matching the round brush.
 pub fn pixelate_icon() -> impl gpui_kit::IntoElement {
     use gpui_kit::Styled as _;

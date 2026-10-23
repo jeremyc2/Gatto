@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Package an existing Gatto.app in a branded drag-to-Applications disk image.
-# Usage: ./scripts/build-dmg.sh /path/to/Gatto.app /path/to/output.dmg
+# Usage: ./scripts/build-dmg.sh [/path/to/Gatto.app [/path/to/output.dmg]]
+# Defaults: dist/local/Gatto.app and dist/gatto-preview.dmg in this repository.
 # Release preparation: --prepare <unsigned-app> <writable-template.dmg>
 # Release completion: <signed-app> <output.dmg> <writable-template.dmg>
 # Signing and notarization belong to release.sh; this script is also a local preview tool.
@@ -13,14 +14,17 @@ if [[ "${1:-}" == --prepare ]]; then
   mode=prepare
   shift
 fi
-[[ $# -eq 2 || ( "$mode" == build && $# -eq 3 ) ]] \
-  || fail "usage: $0 [--prepare] /path/to/Gatto.app /path/to/output.dmg [template.dmg]"
+[[ ( "$mode" == prepare && $# -eq 2 ) || ( "$mode" == build && $# -le 3 ) ]] \
+  || fail "usage: $0 [app-bundle [output.dmg [template.dmg]]] or $0 --prepare app-bundle output.dmg"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-bundle="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+bundle_path="${1:-$repo_root/dist/local/Gatto.app}"
+output_path="${2:-$repo_root/dist/gatto-preview.dmg}"
+[[ -d "$bundle_path" ]] || fail "missing app bundle: $bundle_path; run scripts/build-app.sh first"
+bundle="$(cd "$(dirname "$bundle_path")" && pwd)/$(basename "$bundle_path")"
 [[ "$(basename "$bundle")" == "Gatto.app" && -f "$bundle/Contents/Info.plist" ]] \
   || fail "expected a Gatto.app bundle with Contents/Info.plist"
-mkdir -p "$(dirname "$2")"
-output="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+mkdir -p "$(dirname "$output_path")"
+output="$(cd "$(dirname "$output_path")" && pwd)/$(basename "$output_path")"
 [[ "$output" == *.dmg ]] || fail "output must end in .dmg"
 [[ ! -e "$output" ]] || fail "output already exists: $output"
 template="${3:-}"

@@ -7,6 +7,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- File imports consistently protect the current selection while files are being read.
+- The image editor's Pen tool uses a freehand scribble icon, matching its drawing
+  action. Its label and **P** shortcut are unchanged (#26).
+
+### Added
+
+- Finder integration through **Open With → Gatto** and a built-in **Send to Gatto**
+  service, with no separate action installation. Opening files stages them for
+  review, preserves batch and draft choices, and keeps supported files from mixed
+  selections. Upload still requires an explicit click.
+- `scripts/build-app.sh` compiles and packages a fresh local `dist/local/Gatto.app`
+  without publishing. `scripts/build-dmg.sh` packages that bundle by default and
+  prints the finished DMG's absolute path.
+
 ## [0.17.4] - 2026-10-23
 
 ### Added

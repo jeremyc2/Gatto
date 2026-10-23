@@ -4,6 +4,43 @@
 #import <IOKit/hidsystem/ev_keymap.h>
 #include "Platform.h"
 
+// Use the same open-document delegate as Launch Services. GPUI's callback only
+// enqueues the selection, so service dispatch cannot reenter an active view borrow.
+@interface GattoFileService : NSObject
+- (void)sendToGatto:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error;
+@end
+
+@implementation GattoFileService
+- (void)sendToGatto:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error {
+    NSArray<NSURL *> *urls = [pasteboard readObjectsForClasses:@[NSURL.class]
+        options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}];
+    if (!urls.count) {
+        // Finder and older service clients can supply the legacy filename list.
+        id paths = [pasteboard propertyListForType:NSFilenamesPboardType];
+        NSMutableArray<NSURL *> *files = [NSMutableArray array];
+        if ([paths isKindOfClass:NSArray.class]) {
+            for (id path in paths) {
+                if ([path isKindOfClass:NSString.class] && [path isAbsolutePath])
+                    [files addObject:[NSURL fileURLWithPath:path]];
+            }
+        }
+        urls = files;
+    }
+    if (!urls.count || ![NSApp.delegate respondsToSelector:@selector(application:openURLs:)]) {
+        if (error) *error = @"Select local files in Finder and try Send to Gatto again.";
+        return;
+    }
+    [NSApp.delegate application:NSApp openURLs:urls];
+}
+@end
+
+void GattoInstallFileService(void) {
+    assert(NSThread.isMainThread);
+    static GattoFileService *provider;
+    if (!provider) provider = [GattoFileService new];
+    NSApp.servicesProvider = provider;
+}
+
 // Modifier bits belong to Gatto's ABI, not NSEvent or Carbon.
 static NSEventModifierFlags eventModifiers(uint32_t modifiers) {
     return ((modifiers & 1) ? NSEventModifierFlagCommand : 0) |

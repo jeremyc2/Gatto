@@ -32,6 +32,19 @@ Homebrew. Releases with in-app updating can also use the **↑ Update** control.
 For casks with in-app updating, add `--greedy` when explicitly upgrading through
 Homebrew.
 
+### Open files from Finder
+
+Install Gatto in Applications and launch it once. For supported images and videos,
+right-click the selection and choose **Open With → Gatto**. Gatto registers as an
+alternate handler, leaving your default image and video apps unchanged.
+
+You can also choose **Send to Gatto** in Finder's context menu (macOS may place it
+under **Services**). This service ships inside the app; there is no separate
+workflow to install. macOS controls service visibility. If you previously disabled
+it, enable **Send to Gatto** in **System Settings → Keyboard → Keyboard Shortcuts →
+Services**. See the [Finder workflow](WALKTHROUGH.md#send-files-from-finder) for
+staging behavior and [Support](../SUPPORT.md#finder-integration) for troubleshooting.
+
 ### Updates
 
 Choose **Stable** or **Beta** in **App Preferences → Release channel**.

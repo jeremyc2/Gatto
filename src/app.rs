@@ -49,7 +49,7 @@ use crate::{
     menu_bar::MenuBarController,
     model::{
         AttachmentUploadState, Media, OversizedVideo, Repository, StagedAttachment,
-        UNSUPPORTED_MEDIA_MESSAGE, VideoUploadLimit, parse_owner,
+        UNSUPPORTED_MEDIA_MESSAGE, parse_owner,
     },
     settings::{AppSettings, ReleaseChannel},
     theme::{self, AppButtonStyle as _},
@@ -205,6 +205,7 @@ pub struct UploaderApp {
     upload_control: Option<github::UploadControl>,
     upload_generation: u64,
     pending_import: Option<PendingImport>,
+    loading_attachment_paths: bool,
     compression: Option<CompressionJob>,
     combining_comparison: bool,
     settings: AppSettings,
@@ -358,6 +359,7 @@ impl UploaderApp {
             upload_control: None,
             upload_generation: 0,
             pending_import: None,
+            loading_attachment_paths: false,
             compression: None,
             combining_comparison: false,
             settings,
@@ -679,6 +681,7 @@ impl UploaderApp {
             job.control.cancel();
         }
         self.pending_import = None;
+        self.loading_attachment_paths = false;
         self.combining_comparison = false;
         self.uploading = false;
         self.pending_menu_paste = false;
@@ -706,7 +709,7 @@ impl UploaderApp {
         );
     }
 
-    pub fn report_custom_url_error(
+    pub fn report_open_error(
         &mut self,
         error: impl Into<SharedString>,
         window: &mut Window,
@@ -714,7 +717,7 @@ impl UploaderApp {
     ) {
         let error = error.into();
         self.diagnostics
-            .error(format!("Could not handle a custom URL: {error}"));
+            .error(format!("Could not open the request: {error}"));
         window.push_notification(Notification::error(error), cx);
     }
 
@@ -870,27 +873,18 @@ impl UploaderApp {
         });
         let state_generation = self.state_generation;
         let staging_generation = self.upload_generation;
-        let video_limit = self.settings.video_upload_limit();
 
         cx.spawn_in(window, async move |this, window| {
             let Some(paths) = prompt.await.ok().and_then(Result::ok).flatten() else {
                 return;
             };
-            let results = window
-                .background_spawn(async move {
-                    paths
-                        .into_iter()
-                        .map(|path| StagedAttachment::from_path(path, video_limit))
-                        .collect::<Vec<_>>()
-                })
-                .await;
             let _ = this.update_in(window, |this, window, cx| {
                 if this.state_generation != state_generation
                     || this.upload_generation != staging_generation
                 {
                     return;
                 }
-                this.accept_attachment_results(results, window, cx);
+                this.load_attachment_paths(paths, window, cx);
             });
         })
         .detach();
@@ -976,15 +970,7 @@ impl UploaderApp {
             ClipboardEntry::ExternalPaths(paths) => Some(paths.paths().to_vec()),
             _ => None,
         }) {
-            Self::load_dropped_paths(
-                cx.entity().downgrade(),
-                self.state_generation,
-                self.upload_generation,
-                paths,
-                self.settings.video_upload_limit(),
-                window,
-                cx,
-            );
+            self.load_attachment_paths(paths, window, cx);
             return;
         }
 
@@ -993,37 +979,61 @@ impl UploaderApp {
         self.pending_paste_repository = None;
     }
 
-    fn load_dropped_paths(
-        view: gpui_kit::WeakEntity<Self>,
-        state_generation: u64,
-        staging_generation: u64,
+    fn load_attachment_paths(
+        &mut self,
         paths: Vec<PathBuf>,
-        video_limit: VideoUploadLimit,
         window: &mut Window,
-        cx: &mut App,
+        cx: &mut Context<Self>,
     ) {
-        if paths.is_empty() {
+        if paths.is_empty() || self.uploading || self.import_busy() {
             return;
         }
+        self.loading_attachment_paths = true;
+        let state_generation = self.state_generation;
+        let staging_generation = self.upload_generation;
+        let video_limit = self.settings.video_upload_limit();
         let task = cx.background_spawn(async move {
             paths
                 .into_iter()
                 .map(|path| StagedAttachment::from_path(path, video_limit))
                 .collect::<Vec<_>>()
         });
-        window
-            .spawn(cx, async move |window| {
-                let results = task.await;
-                let _ = view.update_in(window, |this, window, cx| {
-                    if this.state_generation != state_generation
-                        || this.upload_generation != staging_generation
-                    {
-                        return;
-                    }
-                    this.accept_attachment_results(results, window, cx);
-                });
-            })
-            .detach();
+        cx.spawn_in(window, async move |view, window| {
+            let results = task.await;
+            let _ = view.update_in(window, |this, window, cx| {
+                if this.state_generation != state_generation
+                    || this.upload_generation != staging_generation
+                {
+                    return;
+                }
+                this.loading_attachment_paths = false;
+                this.accept_attachment_results(results, window, cx);
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Finder/open-document requests stage for review even before GitHub setup.
+    pub fn stage_opened_files(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        if self.uploading
+            || self.import_busy()
+            || window.has_active_dialog(cx)
+            || self.updater.read(cx).state == UpdateState::Installing
+        {
+            self.warn("Finish the current upload, import, update, or dialog, then open the files with Gatto again. Your current draft has been kept.", window, cx);
+            return;
+        }
+        self.show_main_page(window, cx);
+        self.load_attachment_paths(paths, window, cx);
     }
 
     fn accept_attachment_result(
@@ -1036,7 +1046,10 @@ impl UploaderApp {
     }
 
     fn import_busy(&self) -> bool {
-        self.pending_import.is_some() || self.compression.is_some() || self.combining_comparison
+        self.loading_attachment_paths
+            || self.pending_import.is_some()
+            || self.compression.is_some()
+            || self.combining_comparison
     }
 
     fn accept_attachment_results(
@@ -2444,6 +2457,7 @@ impl UploaderApp {
             job.control.cancel();
         }
         self.pending_import = None;
+        self.loading_attachment_paths = false;
         self.combining_comparison = false;
         self.staged_attachments.clear();
         self.bulk_upload = false;
@@ -2868,11 +2882,7 @@ impl UploaderApp {
     }
 
     fn render_drop_zone(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let view = cx.entity().downgrade();
         let bulk_upload = self.bulk_upload;
-        let state_generation = self.state_generation;
-        let staging_generation = self.upload_generation;
-        let video_limit = self.settings.video_upload_limit();
         let uploading = self.uploading || self.import_busy();
         let has_staged_attachments = !self.staged_attachments.is_empty();
         div()
@@ -2894,17 +2904,9 @@ impl UploaderApp {
                             .bg(cx.theme().primary.opacity(0.1))
                     })
                     .can_drop(|value, _, _| value.downcast_ref::<ExternalPaths>().is_some())
-                    .on_drop(move |paths: &ExternalPaths, window, cx| {
-                        Self::load_dropped_paths(
-                            view.clone(),
-                            state_generation,
-                            staging_generation,
-                            paths.paths().to_vec(),
-                            video_limit,
-                            window,
-                            cx,
-                        );
-                    })
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                        this.load_attachment_paths(paths.paths().to_vec(), window, cx);
+                    }))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.choose_file(window, cx);
                     }))
@@ -3782,6 +3784,7 @@ pub fn init_keybindings(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    use crate::model::VideoUploadLimit;
     use gpui_kit::test::TestWindowExt as _;
     use gpui_kit::{Modifiers, TestAppContext};
 
@@ -3992,6 +3995,210 @@ mod tests {
             })
             .collect::<Vec<_>>();
         (directory, paths)
+    }
+
+    #[gpui_kit::test]
+    fn finder_selection_stages_supported_files_in_order_without_uploading(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (directory, mut paths) = four_image_paths();
+        let unsupported = directory.path().join("notes.txt");
+        std::fs::write(&unsupported, "not an image").unwrap();
+        paths.insert(1, unsupported);
+        paths.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4"));
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.stage_opened_files(paths, window, cx);
+                assert!(app.import_busy());
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.import_busy());
+                assert!(app.bulk_upload);
+                assert_eq!(
+                    app.staged_attachments
+                        .iter()
+                        .map(|item| item.name.as_str())
+                        .collect::<Vec<_>>(),
+                    [
+                        "dropped-1.png",
+                        "dropped-2.png",
+                        "dropped-3.png",
+                        "dropped-4.png",
+                        "sample.mp4"
+                    ]
+                );
+                assert!(!app.uploading);
+                assert!(app.upload_result.is_none());
+                assert!(app.diagnostics.text().contains("1 file could not be read"));
+                assert!(
+                    app.staged_attachments
+                        .iter()
+                        .all(|item| item.upload_state == AttachmentUploadState::Preview)
+                );
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn finder_selection_preserves_existing_draft_and_bulk_choice(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = vec![mixed_attachments().remove(0)];
+                app.stage_opened_files(paths, window, cx);
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                assert_eq!(app.staged_attachments.len(), 1);
+                assert_eq!(
+                    app.pending_replacement_attachments.as_ref().unwrap().len(),
+                    4
+                );
+                // A second invocation cannot replace an unanswered selection.
+                app.stage_opened_files(vec!["/tmp/another.png".into()], window, cx);
+                assert!(
+                    app.diagnostics
+                        .text()
+                        .contains("open the files with Gatto again")
+                );
+                assert_eq!(
+                    app.pending_replacement_attachments.as_ref().unwrap().len(),
+                    4
+                );
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.update(|window, cx| {
+            use gpui_kit::test::TestWindowExt as _;
+            window.click("switch-to-bulk-upload", cx);
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(app.bulk_upload);
+                assert_eq!(app.staged_attachments.len(), 5);
+                assert!(app.upload_result.is_none());
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn finder_single_file_and_unsupported_only_selection_keep_normal_staging(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        let (directory, paths) = four_image_paths();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.stage_opened_files(vec![paths[0].clone()], window, cx);
+            })
+        });
+        cx.run_until_parked();
+        let invalid = directory.path().join("unsupported.txt");
+        std::fs::write(&invalid, "unsupported").unwrap();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                assert_eq!(app.staged_attachments.len(), 1);
+                assert!(!app.bulk_upload);
+                app.stage_opened_files(vec![invalid], window, cx);
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                assert_eq!(app.staged_attachments.len(), 1);
+                assert_eq!(app.staged_attachments[0].name, "dropped-1.png");
+                assert!(app.pending_replacement_attachments.is_none());
+                assert!(!window.has_active_dialog(cx));
+                assert!(app.upload_result.is_none());
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn finder_import_blocks_reentry_and_close_invalidates_pending_work(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.stage_opened_files(paths.clone(), window, cx);
+                app.stage_opened_files(paths, window, cx);
+                app.clear_staged_attachments("Closed during Finder import", cx);
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.import_busy());
+                assert!(app.staged_attachments.is_empty());
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn pasted_files_block_a_finder_request_until_import_finishes(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|window, cx| {
+            cx.write_to_clipboard(ClipboardItem {
+                entries: vec![ClipboardEntry::ExternalPaths(ExternalPaths(
+                    vec![paths[0].clone()].into_iter().collect(),
+                ))],
+            });
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                app.on_paste(&PasteImage, window, cx);
+                app.stage_opened_files(paths[1..].to_vec(), window, cx);
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert!(!app.import_busy());
+            assert_eq!(app.staged_attachments.len(), 1);
+            assert_eq!(app.staged_attachments[0].name, "dropped-1.png");
+            assert!(
+                app.diagnostics
+                    .text()
+                    .contains("Your current draft has been kept")
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn finder_oversized_video_keeps_compression_prompt_and_other_files(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        let video = large_video();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.stage_opened_files(
+                    vec![paths[0].clone(), video.path().into(), paths[1].clone()],
+                    window,
+                    cx,
+                );
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(window.has_active_dialog(cx));
+            assert!(view.read(cx).compression.is_none());
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            view.update(cx, |app, _| {
+                assert_eq!(app.staged_attachments.len(), 2);
+                assert!(!app.import_busy());
+                assert!(app.upload_result.is_none());
+            })
+        });
     }
 
     fn drop_paths(cx: &mut gpui_kit::VisualTestContext, paths: Vec<PathBuf>) {

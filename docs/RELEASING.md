@@ -133,6 +133,8 @@ From the repository root:
 
 The script installs the `aarch64-apple-darwin` Rust target, performs a locked release
 build, and creates `dist/release/Gatto.app` with the plist, binary, and icon assets.
+The plist includes Open With document types and the native **Send to Gatto**
+service; both DMG and Homebrew installations get these through the app bundle.
 It signs with hardened runtime and a timestamp, verifies the signature, submits
 a temporary ZIP for notarization, staples and validates the ticket, and runs
 Gatekeeper assessment. The ZIP is temporary and is not distributed. It then builds
@@ -281,6 +283,18 @@ failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Verify updates and Homebrew
 
+Run `./scripts/test-platform.sh` for native menu/hotkey and service-pasteboard
+checks, plus Open With registration and cold/existing-app file delivery against a
+disposable signed app. These do not modify the installed Gatto or install services
+in the user's Library.
+Before publishing, install and launch the current bundle on a disposable macOS
+user. Verify **Open With → Gatto** and Finder's **Send to Gatto** service with a
+single image, a mixed image/video batch, and a selection containing an unsupported
+file. Check draft choices, oversized-video prompts, and that nothing uploads
+automatically. Verify default image/video apps remain unchanged. Test the minimum
+supported macOS as well as the release Mac; the harness cannot verify Finder's
+menu placement or user service-visibility preferences.
+
 Run `./scripts/test-updater.sh` for native timing, consent, and signed-feed
 verification/tamper tests, and
 `bun test scripts` for cask, version/notes, asset-verification, and release-workflow
@@ -309,15 +323,23 @@ local fixture verifies replacement and relaunch without testing notarization.
 See the [installation screenshot in Setup](SETUP.md#1-install-the-app) for the
 expected window layout.
 
-Build a local DMG from an existing app bundle without signing, notarizing, or publishing:
+Compile a fresh local app first, then package it into a preview DMG:
 
 ```sh
-./scripts/build-dmg.sh dist/release/Gatto.app dist/gatto-preview.dmg
+./scripts/build-app.sh
+./scripts/build-dmg.sh
 open dist/gatto-preview.dmg
 ```
 
-The output path must not already exist. The preview preserves the input bundle's
-signature, but the disk image itself is unsigned and is not a release artifact.
+`build-app.sh` compiles and packages `dist/local/Gatto.app` (see
+[local app builds](../CONTRIBUTING.md#local-app-bundle)). `build-dmg.sh` only packages
+an existing app; it defaults to the repository's `dist/local/Gatto.app` bundle and
+`dist/gatto-preview.dmg` output, even when run from another directory. Pass an
+app bundle path and optionally an output path to override these defaults:
+`./scripts/build-dmg.sh /path/to/Gatto.app /path/to/preview.dmg`.
+The output path must not already exist. Release preparation with `--prepare`
+still requires explicit bundle and output paths. The preview preserves the input
+bundle's signature, but the disk image itself is unsigned and is not a release artifact.
 It creates a fresh volume UUID, so it does not receive the release's automatic
 ejection pairing. Eject it in Finder when finished. The build uses a temporary
 mount point and cleans it up on exit, without depending on or ejecting any
