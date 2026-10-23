@@ -10,7 +10,7 @@ xcrun clang -fobjc-arc -fblocks -Wall -Wextra -Werror -Wno-unused-parameter \
 "$work/desktop-tests" "$PWD/packaging/menu-bar-icon.png"
 xcrun clang -c -fobjc-arc -fblocks -Wall -Wextra -Werror -Wno-unused-parameter \
   -Wno-deprecated-declarations -mmacosx-version-min=13.0 native/Desktop.m -o "$work/desktop.o"
-xcrun swiftc native/FinderActionTests.swift "$work/desktop.o" \
-  -framework AppKit -framework Carbon -framework CoreGraphics -o "$work/finder-action-tests"
-"$work/finder-action-tests" "$PWD/packaging/Info.plist"
+xcrun swiftc native/FinderIntegrationTests.swift "$work/desktop.o" \
+  -framework AppKit -framework Carbon -framework CoreGraphics -o "$work/finder-integration-tests"
+"$work/finder-integration-tests" "$PWD/packaging/Info.plist"
 cargo run --locked --features walkthrough-screenshots --bin platform-tests

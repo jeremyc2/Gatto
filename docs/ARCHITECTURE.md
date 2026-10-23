@@ -229,7 +229,9 @@ separate installer is shipped.
 `desktop.rs` installs the native service provider at app startup. `Desktop.m`
 reads file URLs (or legacy filename lists) from the service's supplied pasteboard,
 without reading or changing the general clipboard. It forwards the whole selection
-to GPUI's `application:openURLs:` delegate, which only enqueues events. Both the
+to GPUI's `application:openURLs:` delegate, which only enqueues events. The file
+picker, paste, drop, and Finder file opening share one background path loader and
+import-busy guard, including cancellation on close/reset. Both the
 service and Open With use the early `on_open_urls` channel until the controller is
 ready, including at cold launch. `open_request.rs` decodes local file URLs without
 changing existing `gatto://` actions. File events activate the main window and use

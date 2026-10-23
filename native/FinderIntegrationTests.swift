@@ -7,18 +7,22 @@ import Foundation
 @_silgen_name("GattoInstallFileService")
 func installFileService()
 
+struct Delivery: Codable {
+    let selections: [[String]]
+}
+
 final class Receiver: NSObject, NSApplicationDelegate {
     var selections = [[String]]()
     func application(_ application: NSApplication, open urls: [URL]) {
         selections.append(urls.map(\.path))
         let output = Bundle.main.object(forInfoDictionaryKey: "GattoTestOutput") as! String
-        let record: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "selections": selections]
-        try! JSONSerialization.data(withJSONObject: record).write(to: URL(fileURLWithPath: output), options: .atomic)
+        let record = Delivery(selections: selections)
+        try! JSONEncoder().encode(record).write(to: URL(fileURLWithPath: output), options: .atomic)
     }
 }
 
 func require(_ condition: Bool, _ message: String) throws {
-    if !condition { throw NSError(domain: "FinderActionTests", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
+    if !condition { throw NSError(domain: "FinderIntegrationTests", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
 }
 
 func run(_ executable: String, _ arguments: [String]) throws {
@@ -28,6 +32,32 @@ func run(_ executable: String, _ arguments: [String]) throws {
     try process.run()
     process.waitUntilExit()
     try require(process.terminationStatus == 0, "Failed: \(executable) \(arguments)")
+}
+
+func waitForSelections(_ expected: [[String]], at output: URL) throws {
+    let deadline = Date().addingTimeInterval(15)
+    var received = [[String]]()
+    while Date() < deadline {
+        if let data = try? Data(contentsOf: output),
+           let delivery = try? JSONDecoder().decode(Delivery.self, from: data) {
+            received = delivery.selections
+            if received.count >= expected.count { break }
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    try require(received == expected, "File delivery lost or split a selection: \(received)")
+}
+
+func stopReceiver(_ identifier: String, at app: URL) throws {
+    for running in NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
+        where running.bundleURL?.path == app.path {
+        running.terminate()
+        let deadline = Date().addingTimeInterval(10)
+        while !running.isTerminated && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        try require(running.isTerminated, "Disposable receiver did not quit")
+    }
 }
 
 func verify() throws {
@@ -45,13 +75,9 @@ func verify() throws {
     let serviceName = "Send to Gatto Test \(UUID().uuidString)"
     let register = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
     defer {
-        if let data = try? Data(contentsOf: output),
-           let record = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let pid = record["pid"] as? Int32,
-           let running = NSRunningApplication(processIdentifier: pid), running.bundleURL?.path == app.path {
-            running.terminate()
-        }
+        try? stopReceiver(identifier, at: app)
         try? run(register, ["-u", app.path])
+        NSUpdateDynamicServices()
         try? files.removeItem(at: root)
     }
     try files.createDirectory(at: binary.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -100,26 +126,10 @@ func verify() throws {
     let expected = [[paths[0]], Array(paths.dropFirst())]
     for (index, selection) in expected.enumerated() {
         try run("/usr/bin/open", ["-b", identifier, "--"] + selection)
-        let deadline = Date().addingTimeInterval(15)
-        var received = [[String]]()
-        while Date() < deadline {
-            if let data = try? Data(contentsOf: output),
-               let record = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let selections = record["selections"] as? [[String]] {
-                received = selections
-                if selections.count == index + 1 { break }
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        }
-        try require(received == Array(expected.prefix(index + 1)), "Cold/warm launch lost or split a selection: \(received)")
+        try waitForSelections(Array(expected.prefix(index + 1)), at: output)
     }
     // Exercise the production service through AppKit, including a fresh launch.
-    for app in NSRunningApplication.runningApplications(withBundleIdentifier: identifier) {
-        app.terminate()
-        let deadline = Date().addingTimeInterval(10)
-        while !app.isTerminated && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
-        try require(app.isTerminated, "Receiver did not quit before cold service test")
-    }
+    try stopReceiver(identifier, at: app)
     try files.removeItem(at: output)
     NSUpdateDynamicServices()
     RunLoop.current.run(until: Date().addingTimeInterval(1))
@@ -128,18 +138,7 @@ func verify() throws {
         defer { board.releaseGlobally() }
         board.writeObjects(selection.map { NSURL(fileURLWithPath: $0) })
         try require(NSPerformService(serviceName, board), "Native service dispatch failed")
-        let deadline = Date().addingTimeInterval(15)
-        var received = [[String]]()
-        while Date() < deadline {
-            if let data = try? Data(contentsOf: output),
-               let record = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let selections = record["selections"] as? [[String]] {
-                received = selections
-                if selections.count == index + 1 { break }
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        }
-        try require(received == Array(expected.prefix(index + 1)), "Service lost or split selection: \(received)")
+        try waitForSelections(Array(expected.prefix(index + 1)), at: output)
     }
     print("Open With and native service passed cold/warm delivery with intact paths and batches.")
 }

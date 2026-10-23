@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- File imports consistently protect the current selection while files are being read.
 - The image editor's Pen tool uses a freehand scribble icon, matching its drawing
   action. Its label and **P** shortcut are unchanged (#26).
 

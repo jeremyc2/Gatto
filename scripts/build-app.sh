@@ -4,9 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fail() { echo "error: $*" >&2; exit 1; }
+profile=debug
+build_flags=(--locked --bin gatto --target-dir target)
 case "${1:-}" in
-  "") profile=debug; build_flags=() ;;
-  --release) profile=release; build_flags=(--release) ;;
+  "") ;;
+  --release) profile=release; build_flags+=(--release) ;;
   -h|--help)
     echo "Usage: ./scripts/build-app.sh [--release]"
     echo "Compile a fresh local Gatto.app in dist/local (debug by default)."
@@ -16,7 +18,7 @@ esac
 [[ $# -le 1 ]] || fail "usage: $0 [--release]"
 [[ "$(uname -s)" == Darwin ]] || fail "app bundles require macOS"
 
-GIT_COMMIT_HASH="$(git rev-parse HEAD)" cargo build --locked ${build_flags[@]+"${build_flags[@]}"} --bin gatto --target-dir target
+GIT_COMMIT_HASH="$(git rev-parse HEAD)" cargo build "${build_flags[@]}"
 plutil -lint packaging/Info.plist
 mkdir -p dist/local
 work="$(mktemp -d "$PWD/dist/local/.gatto-app.XXXXXX")"
