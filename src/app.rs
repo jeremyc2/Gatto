@@ -7,6 +7,7 @@ use std::{
 };
 
 use gpui_kit::assets::IconName as AssetIconName;
+use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, StyledExt as _,
     WindowExt as _,
@@ -205,6 +206,7 @@ pub struct UploaderApp {
     upload_generation: u64,
     pending_import: Option<PendingImport>,
     compression: Option<CompressionJob>,
+    combining_comparison: bool,
     settings: AppSettings,
     settings_open: bool,
     recording_global_shortcut: bool,
@@ -357,6 +359,7 @@ impl UploaderApp {
             upload_generation: 0,
             pending_import: None,
             compression: None,
+            combining_comparison: false,
             settings,
             settings_open: false,
             recording_global_shortcut: false,
@@ -676,6 +679,7 @@ impl UploaderApp {
             job.control.cancel();
         }
         self.pending_import = None;
+        self.combining_comparison = false;
         self.uploading = false;
         self.pending_menu_paste = false;
         self.pending_paste_repository = None;
@@ -892,6 +896,47 @@ impl UploaderApp {
         .detach();
     }
 
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn walkthrough_comparison(&self) -> Option<StagedAttachment> {
+        self.staged_attachments
+            .iter()
+            .find(|image| image.name == "side-by-side.png")
+            .cloned()
+    }
+
+    pub(crate) fn begin_comparison(
+        &mut self,
+        sources: [StagedAttachment; 2],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), &'static str> {
+        if self.uploading || self.import_busy() {
+            return Err(
+                "Finish the current upload or import, then remove an image and add it again to retry.",
+            );
+        }
+        self.show_main_page(window, cx);
+        self.combining_comparison = true;
+        let generation = self.upload_generation;
+        cx.notify();
+        cx.spawn_in(window, async move |this, window| {
+            let result = window
+                .background_spawn(async move { crate::image_composer::combine(sources) })
+                .await;
+            let _ = this.update_in(window, |this, window, cx| {
+                if this.upload_generation != generation {
+                    return;
+                }
+                this.combining_comparison = false;
+                this.accept_attachment_result(result, window, cx);
+                cx.notify();
+            });
+        })
+        .detach();
+        Ok(())
+    }
+
     fn on_paste(&mut self, _: &PasteImage, window: &mut Window, cx: &mut Context<Self>) {
         if self.load_state == LoadState::NeedsSetup {
             return;
@@ -991,7 +1036,7 @@ impl UploaderApp {
     }
 
     fn import_busy(&self) -> bool {
-        self.pending_import.is_some() || self.compression.is_some()
+        self.pending_import.is_some() || self.compression.is_some() || self.combining_comparison
     }
 
     fn accept_attachment_results(
@@ -2399,6 +2444,7 @@ impl UploaderApp {
             job.control.cancel();
         }
         self.pending_import = None;
+        self.combining_comparison = false;
         self.staged_attachments.clear();
         self.bulk_upload = false;
         self.pending_paste_repository = None;
@@ -3664,6 +3710,19 @@ impl Render for UploaderApp {
                                 .when(self.compression.is_some(), |root| {
                                     root.child(self.render_compression(cx))
                                 })
+                                .when(self.combining_comparison, |root| {
+                                    root.child(
+                                        div().id("comparison-processing").test_support().child(
+                                            Attachment::new()
+                                                .large().w_full()
+                                                .status(AttachmentStatus::Processing)
+                                                .media(AttachmentMedia::new())
+                                                .content(AttachmentContent::new()
+                                                    .title(AttachmentTitle::new("Preparing comparison…"))
+                                                    .description(AttachmentDescription::new("Resizing and combining images"))),
+                                        )
+                                    )
+                                })
                                 .child(self.render_attachments(cx))
                         }),
                 );
@@ -3711,6 +3770,7 @@ pub fn init_keybindings(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    use gpui_kit::test::TestWindowExt as _;
     use gpui_kit::{Modifiers, TestAppContext};
 
     use super::*;
@@ -3718,7 +3778,11 @@ mod tests {
     fn upload_window(
         cx: &mut TestAppContext,
     ) -> (Entity<UploaderApp>, &mut gpui_kit::VisualTestContext) {
-        cx.update(gpui_kit::init);
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            // Pointer tests need resting dialog bounds under parallel test load.
+            cx.set_reduce_motion(true);
+        });
         let captured = Rc::new(std::cell::RefCell::new(None));
         let capture = captured.clone();
         let (_, window_cx) = cx.add_window_view(move |window, cx| {
@@ -3756,6 +3820,66 @@ mod tests {
             .unwrap()
         })
         .into()
+    }
+
+    #[gpui_kit::test]
+    fn automatic_comparison_shows_loading_and_preserves_existing_draft_choices(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        let original = mixed_attachments().remove(0);
+        let original_id = original.id;
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = vec![original.clone()];
+                app.uploading = true;
+                assert!(
+                    app.begin_comparison([original.clone(), original.clone()], window, cx)
+                        .is_err()
+                );
+                assert_eq!(app.staged_attachments[0].id, original_id);
+                app.uploading = false;
+                app.begin_comparison([original.clone(), original.clone()], window, cx)
+                    .unwrap();
+                assert!(app.combining_comparison && app.import_busy());
+                assert!(
+                    app.begin_comparison([original.clone(), original.clone()], window, cx)
+                        .is_err()
+                );
+            })
+        });
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("comparison-processing").is_some());
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, _| {
+                assert!(!app.combining_comparison);
+                assert_eq!(app.staged_attachments[0].id, original_id);
+                let composition = &app.pending_replacement_attachments.as_ref().unwrap()[0];
+                assert_eq!(composition.name, "side-by-side.png");
+                assert!(composition.image().is_some());
+            });
+            assert!(window.has_active_dialog(cx));
+        });
+    }
+    #[gpui_kit::test]
+    fn clearing_the_main_draft_drops_a_pending_comparison(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                let source = mixed_attachments().remove(0);
+                app.begin_comparison([source.clone(), source], window, cx)
+                    .unwrap();
+                app.clear_staged_attachments("test clearing during comparison", cx);
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            assert!(!view.read(cx).combining_comparison);
+            assert!(view.read(cx).staged_attachments.is_empty());
+        });
     }
 
     fn large_video() -> tempfile::NamedTempFile {
@@ -3801,7 +3925,10 @@ mod tests {
                 original.annotation_session.retain(
                     history.document,
                     history.image,
-                    history.saved_marks,
+                    crate::annotation::EditState {
+                        marks: history.saved_marks,
+                        comparison: history.saved_comparison,
+                    },
                 );
                 let id = attachments[0].id;
                 app.staged_attachments = attachments;

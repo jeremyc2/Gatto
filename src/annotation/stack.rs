@@ -128,6 +128,7 @@ mod tests {
         ] {
             let mut doc = Document {
                 annotation_scale: OnceLock::new(),
+                comparison: None,
                 base: Arc::new(image::RgbaImage::new(100, 100)),
                 marks: marks.clone(),
                 undo: Vec::new(),

@@ -11,6 +11,7 @@ pub enum MenuAction {
     StageFromClipboard,
     QuickCopy,
     Settings,
+    CreateComposition,
     Update,
     Quit,
 }
@@ -67,6 +68,7 @@ impl MenuBarController {
             4 => Some(MenuAction::Settings),
             id if *id == self.update_identifier() => Some(MenuAction::Update),
             6 => Some(MenuAction::Quit),
+            7 => Some(MenuAction::CreateComposition),
             _ => None,
         }
     }

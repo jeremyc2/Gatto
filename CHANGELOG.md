@@ -7,6 +7,37 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Open **Side-by-Side Comparison** from the native Advanced menu or menu bar
+  icon. A small window stacks Left image above Right image, replacing drop zones
+  with removable attachment cards as images are added. Command+V fills the first
+  empty side. Adding both images closes the picker and prepares one PNG in the
+  main window with an attachment loading spinner, ready for the regular editor.
+  Fit the complete comparison, including labels and padding, within 3840 × 2160
+  without enlarging small sources. Use high-quality resizing and reduce further
+  only when needed to fit 9 MB initially or 9.5 MB after annotations. Preserve
+  image proportions, top alignment,
+  and a gap between the photos. File selection, dropping, and clipboard paste
+  accept PNG, JPEG, and WebP images; GIFs and videos receive a warning.
+  Comparison images have editable **Before** and **After** captions below the
+  images, without a background, border, or tab shape. Captions share a baseline,
+  wrap within independent columns, and accept Shift+Return for new lines.
+  Center small images above wider caption columns without upscaling them.
+  Double-click to edit with the freeform text tool's native caret and selection,
+  keeping the caption anchor and width stable. Protect the caption row from
+  annotations and allow pan gestures across it. Stop comparison annotations at
+  the image row's lower edge when drawing, moving, resizing, or rotating; include
+  stroke thickness, arrow caps, and grouped selections. Active drags bypass
+  caption hover hitboxes so they resume immediately above the boundary.
+  Caption edits participate in
+  undo, redo, Save, and Discard, and appear in the saved PNG. Ordinary images
+  keep their normal editor. Combining does not upload or modify either original.
+
+### Changed
+
+- Rename the menu bar action to **Draft from Clipboard**, keeping its **⌘V** shortcut.
+
 ## [0.17.2] - 2026-10-22
 
 ### Changed

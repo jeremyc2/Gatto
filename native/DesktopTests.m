@@ -14,10 +14,10 @@ int main(int argc, const char **argv) {
         assert(handle);
         GattoStatusMenu *owner = (__bridge GattoStatusMenu *)handle;
         assert(owner.status.button.image.isTemplate);
-        assert(owner.menu.numberOfItems == 5);
+        assert(owner.menu.numberOfItems == 6);
         GattoMenuPasteVisible(handle,true);
-        assert(owner.menu.numberOfItems == 8);
-        assert([owner.preview.title isEqualToString:@"Stage from Clipboard"]);
+        assert(owner.menu.numberOfItems == 9);
+        assert([owner.preview.title isEqualToString:@"Draft from Clipboard"]);
         assert([owner.preview.keyEquivalent isEqualToString:@"v"]);
         GattoMenuShortcut(handle,"Command+Shift+Numpad1","1",9,true);
         assert(owner.quick.keyEquivalentModifierMask & NSEventModifierFlagNumericPad);
@@ -28,16 +28,19 @@ int main(int argc, const char **argv) {
         assert([owner.quick.title containsString:@"MediaPlayPause"]);
         GattoMenuUpdate(handle,2,261);
         assert(owner.update.tag == 261);
-        assert(!owner.update.isEnabled && owner.menu.numberOfItems == 9);
+        assert(!owner.update.isEnabled && owner.menu.numberOfItems == 10);
         GattoMenuPasteVisible(handle,false);
-        assert(owner.menu.numberOfItems == 6 && [owner.menu itemAtIndex:1] == owner.update);
+        assert(owner.menu.numberOfItems == 7 && [owner.menu itemAtIndex:2] == owner.update);
+        assert([owner.composition.title isEqualToString:@"Side-by-Side Comparison"]);
+        [owner activate:owner.composition];
+        assert(event == 7);
         [owner activate:owner.preferences];
         assert(event == 4);
         GattoMenuUpdate(handle,0,517);
         assert(owner.update.tag == 517);
         [owner activate:owner.update];
         assert(event == 517);
-        assert(owner.menu.numberOfItems == 5);
+        assert(owner.menu.numberOfItems == 6);
         GattoMenuDestroy(handle);
 
         GattoHotkey *key = [GattoHotkey new];

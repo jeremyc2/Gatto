@@ -1,4 +1,5 @@
 mod clipboard;
+mod comparison;
 mod cursor;
 mod group;
 mod selection;
@@ -28,11 +29,13 @@ pub struct AppliedAnnotation {
 impl EventEmitter<AppliedAnnotation> for ImagePreview {}
 
 pub(super) struct SaveBatch {
-    pending: Vec<(u64, Vec<Mark>)>,
+    pending: Vec<(u64, crate::annotation::EditState)>,
 }
 
 #[derive(Default)]
 pub(super) struct Editor {
+    comparison_edit: Option<comparison::CaptionEdit>,
+    comparison_subscription: Option<Subscription>,
     pub tool: Tool,
     pub locked: bool,
     pub style: Style,
@@ -119,6 +122,11 @@ impl ImagePreview {
             || self.drag.is_some()
             || self
                 .editor
+                .comparison_edit
+                .as_ref()
+                .is_some_and(|edit| edit.input.read(cx).is_selecting())
+            || self
+                .editor
                 .editing
                 .as_ref()
                 .is_some_and(|input| input.read(cx).is_selecting())
@@ -147,6 +155,21 @@ impl ImagePreview {
         self.doc().is_some()
     }
     fn refresh_annotations(&mut self, cx: &mut Context<Self>) {
+        let bottom = self.comparison_annotation_bottom();
+        if let Some(bottom) = bottom
+            && self.editor.gesture.is_none()
+            && self.editor.group_gesture.is_none()
+        {
+            let mut moved = false;
+            if let Some(doc) = self.doc_mut() {
+                for mark in &mut doc.marks {
+                    moved |= comparison::keep_above_bottom(mark, Some(bottom));
+                }
+            }
+            if moved {
+                self.editor.group_frame = None;
+            }
+        }
         if let Some(image) = self.images.get_mut(self.current_index)
             && let Some(doc) = &image.document
         {
@@ -165,16 +188,14 @@ impl ImagePreview {
         cx.notify();
     }
     fn transform(&self, window: &Window) -> (Pos, f32) {
-        let (w, h) = self
-            .current()
-            .map(|image| image.pixel_size)
-            .unwrap_or((1, 1));
+        let (w, h) = self.view_pixel_size();
         let scale = self.fit_scale(window) * self.zoom;
         let center = Self::viewport_center(window);
         (
             Pos::new(
                 center.x.as_f32() + self.offset.x.as_f32() - w as f32 * scale / 2.,
-                center.y.as_f32() + self.offset.y.as_f32() - h as f32 * scale / 2.,
+                center.y.as_f32() - self.comparison_bottom_inset() / 2. + self.offset.y.as_f32()
+                    - h as f32 * scale / 2.,
             ),
             scale,
         )
@@ -222,6 +243,7 @@ impl ImagePreview {
         }
     }
     pub(super) fn finish_text(&mut self, cx: &mut Context<Self>) {
+        self.finish_comparison_label(cx);
         if let Some(input) = self.editor.editing.take() {
             let created = std::mem::take(&mut self.editor.editing_created);
             let value = input.read(cx).value().to_string();
@@ -427,6 +449,14 @@ impl ImagePreview {
             cx.notify();
             return;
         }
+        let p = self.image_pos(event.position, window);
+        if self
+            .comparison_annotation_bottom()
+            .is_some_and(|bottom| p.y >= bottom)
+        {
+            self.finish_text(cx);
+            return;
+        }
         self.editor.shapes_open = None;
         let p = self.image_pos(event.position, window);
         let (_, scale) = self.transform(window);
@@ -486,7 +516,7 @@ impl ImagePreview {
             }
             self.editor.brush_cursor = Some(event.position);
         }
-        let mark = Mark::new(
+        let mut mark = Mark::new(
             self.editor.tool,
             p,
             style.with_scale(if self.editor.tool == Tool::Redact {
@@ -496,6 +526,7 @@ impl ImagePreview {
                 self.annotation_scale(window)
             }),
         );
+        comparison::keep_above_bottom(&mut mark, self.comparison_annotation_bottom());
         let doc = self.doc_mut().unwrap();
         // An arrow click is a no-op, including its undo/redo history. Commit
         // its checkpoint only when the completed gesture actually draws one.
@@ -528,6 +559,16 @@ impl ImagePreview {
         if !self.editor.canvas_hover {
             self.editor.canvas_hover = true;
             cx.notify();
+        }
+        if let Some(input) = self
+            .editor
+            .comparison_edit
+            .as_ref()
+            .map(|edit| edit.input.clone())
+            && input.read(cx).is_selecting()
+        {
+            input.update(cx, |input, cx| input.drag_selection(event, cx));
+            return;
         }
         if let Some(input) = self.editor.editing.clone()
             && input.read(cx).is_selecting()
@@ -587,86 +628,61 @@ impl ImagePreview {
             self.refresh_annotations(cx);
             return;
         }
-        let Some(mark) = self.doc_mut().and_then(|d| d.marks.get_mut(gesture.index)) else {
-            return;
-        };
-        match gesture.mode {
-            Mode::Draw => {
-                if event.modifiers.shift && mark.tool.is_shape() {
-                    let side = (p.x - gesture.start.x)
-                        .abs()
-                        .max((p.y - gesture.start.y).abs());
-                    p = Pos::new(
-                        gesture.start.x + if p.x < gesture.start.x { -side } else { side },
-                        gesture.start.y + if p.y < gesture.start.y { -side } else { side },
-                    );
-                }
-                if matches!(mark.tool, Tool::Pen | Tool::Redact) {
-                    if mark.points.last().unwrap().distance(p) > 1. / scale {
-                        mark.points.push(p);
-                    }
-                } else {
-                    mark.points[1] = p;
-                    if mark.tool == Tool::Text && fixed_text {
-                        mark.wrap = Some((p.x - gesture.start.x).abs().max(12. * mark.style.scale));
-                        mark.points[0] = Pos::new(
-                            p.x.min(gesture.start.x),
-                            gesture.start.y - mark.text_layout().line_height / 2.,
-                        );
-                    }
-                }
-            }
-            Mode::Move => {
-                *mark = gesture.original.clone();
-                mark.translate(p.x - gesture.start.x, p.y - gesture.start.y);
-            }
-            Mode::Resize(handle) => {
-                selection::resize(mark, &gesture.original, handle, p, event.modifiers.shift)
-            }
-            Mode::Rotate(_) => {
-                let c = gesture.original.frame().center();
-                let a = (gesture.start.y - c.y).atan2(gesture.start.x - c.x);
-                let b = (p.y - c.y).atan2(p.x - c.x);
-                let mut angle = gesture.original.rotation + b - a;
-                if event.modifiers.shift {
-                    let step = std::f32::consts::PI / 12.;
-                    angle = (angle / step).round() * step;
-                }
-                mark.rotation = (angle + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
-                    - std::f32::consts::PI;
-            }
-            Mode::Bend => {
-                *mark = gesture.original.clone();
-                let t: f32 = if gesture.original.text.is_empty() {
-                    0.5
-                } else {
-                    0.25
-                };
-                let handle = gesture.original.bend_handle();
-                let target = Pos::new(
-                    handle.x + p.x - gesture.start.x,
-                    handle.y + p.y - gesture.start.y,
-                );
-                let a = mark.points[0];
-                let b = mark.points[1];
-                let control = Pos::new(
-                    (target.x - (1. - t).powi(2) * a.x - t * t * b.x) / (2. * t * (1. - t)),
-                    (target.y - (1. - t).powi(2) * a.y - t * t * b.y) / (2. * t * (1. - t)),
-                );
-                if mark.points.len() > 2 {
-                    mark.points[2] = control;
-                } else {
-                    mark.points.push(control);
-                }
-                mark.constrain_arrow_label(None);
-            }
-            Mode::Endpoint(index) => {
-                *mark = gesture.original.clone();
-                mark.points[index] = p;
-                mark.constrain_arrow_label(Some(1 - index));
-            }
-            Mode::Erase => {}
+        let bottom = self.comparison_annotation_bottom();
+        if let Some(bottom) = bottom {
+            // Most strokes can stop directly at the edge. The geometric solver
+            // handles caps, rotation, reflow, and other extents beyond this inset.
+            let margin = if gesture.original.tool == Tool::Text {
+                0.
+            } else {
+                gesture.original.style.width / 2.
+            };
+            p.y = p.y.min(bottom - margin);
         }
+        if bottom.is_none() {
+            let Some(mark) = self
+                .doc_mut()
+                .and_then(|doc| doc.marks.get_mut(gesture.index))
+            else {
+                return;
+            };
+            apply_mark_gesture(mark, &gesture, p, event.modifiers.shift, fixed_text, scale);
+        } else {
+            let Some(current) = self
+                .doc()
+                .and_then(|doc| doc.marks.get(gesture.index))
+                .cloned()
+            else {
+                return;
+            };
+            let build = |p| {
+                projected_mark(
+                    &current,
+                    &gesture,
+                    p,
+                    event.modifiers.shift,
+                    fixed_text,
+                    scale,
+                )
+            };
+            let next = if matches!(gesture.mode, Mode::Move) {
+                let mut next = build(p);
+                comparison::keep_above_bottom(&mut next, bottom);
+                next
+            } else {
+                let start = if matches!(current.tool, Tool::Pen | Tool::Redact)
+                    && matches!(gesture.mode, Mode::Draw)
+                {
+                    *current.points.last().unwrap()
+                } else {
+                    gesture.start
+                };
+                comparison::bounded_drag(start, p, bottom, build, |mark| mark.visual_bounds())
+            };
+            let mark = &mut self.doc_mut().unwrap().marks[gesture.index];
+            *mark = next;
+        }
+        let mark = &self.doc().unwrap().marks[gesture.index];
         if mark.tool != Tool::Redact {
             self.editor.style = mark.style.clone().with_scale(1.);
         }
@@ -680,6 +696,9 @@ impl ImagePreview {
         cx: &mut Context<Self>,
     ) {
         self.drag = None;
+        if let Some(edit) = &self.editor.comparison_edit {
+            edit.input.update(cx, |input, _| input.end_drag());
+        }
         if let Some(input) = &self.editor.editing {
             input.update(cx, |input, _| input.end_drag());
         }
@@ -691,7 +710,11 @@ impl ImagePreview {
         if let Some(gesture) = self.editor.gesture.take()
             && matches!(gesture.mode, Mode::Draw)
         {
-            let p = self.image_pos(event.position, window);
+            let mut p = self.image_pos(event.position, window);
+            if let Some(bottom) = self.comparison_annotation_bottom() {
+                let margin = self.doc().unwrap().marks[gesture.index].style.width / 2.;
+                p.y = p.y.min(bottom - margin);
+            }
             let (_, scale) = self.transform(window);
             let text = self
                 .doc()
@@ -844,6 +867,9 @@ impl ImagePreview {
         }
         let key = event.keystroke.key.as_str();
         let command = event.keystroke.modifiers.platform;
+        if self.editor.comparison_edit.is_some() && !(command && key == "s") {
+            return;
+        }
         if command && key == "s" {
             self.apply_annotation(window, cx);
             cx.stop_propagation();
@@ -936,16 +962,18 @@ impl ImagePreview {
     }
     fn has_unsaved_changes(&self) -> bool {
         self.images.iter().any(|image| {
-            image
-                .document
-                .as_ref()
-                .is_some_and(|doc| doc.marks != image.saved_marks)
+            image.document.as_ref().is_some_and(|doc| {
+                doc.marks != image.saved_marks || doc.comparison != image.saved_comparison
+            })
         })
     }
     fn can_discard(&self) -> bool {
         self.images.iter().any(|image| {
             image.document.as_ref().is_some_and(|doc| {
-                doc.marks != image.saved_marks || doc.can_undo() || doc.can_redo()
+                doc.marks != image.saved_marks
+                    || doc.comparison != image.saved_comparison
+                    || doc.can_undo()
+                    || doc.can_redo()
             })
         })
     }
@@ -962,7 +990,7 @@ impl ImagePreview {
             .iter()
             .filter_map(|image| {
                 let doc = image.document.as_ref()?;
-                if doc.marks == image.saved_marks {
+                if doc.marks == image.saved_marks && doc.comparison == image.saved_comparison {
                     return None;
                 }
                 let name = std::path::Path::new(image.name.as_ref())
@@ -975,7 +1003,7 @@ impl ImagePreview {
         self.saving = Some(SaveBatch {
             pending: exports
                 .iter()
-                .map(|(id, _, doc)| (*id, doc.marks.clone()))
+                .map(|(id, _, doc)| (*id, doc.edit_state()))
                 .collect(),
         });
         self.editor.gesture = None;
@@ -1046,9 +1074,10 @@ impl ImagePreview {
             cx.notify();
             return;
         }
-        let (_, marks) = batch.pending.remove(index);
+        let (_, state) = batch.pending.remove(index);
         if let Some(image) = self.images.iter_mut().find(|image| image.id == id) {
-            image.saved_marks = marks;
+            image.saved_marks = state.marks;
+            image.saved_comparison = state.comparison;
         }
         if batch.pending.is_empty() {
             if window.has_active_dialog(cx) {
@@ -1381,6 +1410,103 @@ impl ImagePreview {
     }
 }
 
+fn projected_mark(
+    current: &Mark,
+    gesture: &Gesture,
+    p: Pos,
+    shift: bool,
+    fixed_text: bool,
+    scale: f32,
+) -> Mark {
+    let mut result = current.clone();
+    apply_mark_gesture(&mut result, gesture, p, shift, fixed_text, scale);
+    result
+}
+fn apply_mark_gesture(
+    mark: &mut Mark,
+    gesture: &Gesture,
+    mut p: Pos,
+    shift: bool,
+    fixed_text: bool,
+    scale: f32,
+) {
+    match gesture.mode {
+        Mode::Draw => {
+            if shift && mark.tool.is_shape() {
+                let side = (p.x - gesture.start.x)
+                    .abs()
+                    .max((p.y - gesture.start.y).abs());
+                p = Pos::new(
+                    gesture.start.x + if p.x < gesture.start.x { -side } else { side },
+                    gesture.start.y + if p.y < gesture.start.y { -side } else { side },
+                );
+            }
+            if matches!(mark.tool, Tool::Pen | Tool::Redact) {
+                if mark.points.last().unwrap().distance(p) > 1. / scale {
+                    mark.points.push(p);
+                }
+            } else {
+                mark.points[1] = p;
+                if mark.tool == Tool::Text && fixed_text {
+                    mark.wrap = Some((p.x - gesture.start.x).abs().max(12. * mark.style.scale));
+                    mark.points[0] = Pos::new(
+                        p.x.min(gesture.start.x),
+                        gesture.start.y - mark.text_layout().line_height / 2.,
+                    );
+                }
+            }
+        }
+        Mode::Move => {
+            *mark = gesture.original.clone();
+            mark.translate(p.x - gesture.start.x, p.y - gesture.start.y);
+        }
+        Mode::Resize(handle) => selection::resize(mark, &gesture.original, handle, p, shift),
+        Mode::Rotate(_) => {
+            let c = gesture.original.frame().center();
+            let a = (gesture.start.y - c.y).atan2(gesture.start.x - c.x);
+            let b = (p.y - c.y).atan2(p.x - c.x);
+            let mut angle = gesture.original.rotation + b - a;
+            if shift {
+                let step = std::f32::consts::PI / 12.;
+                angle = (angle / step).round() * step;
+            }
+            mark.rotation = (angle + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+        }
+        Mode::Bend => {
+            *mark = gesture.original.clone();
+            let t: f32 = if gesture.original.text.is_empty() {
+                0.5
+            } else {
+                0.25
+            };
+            let handle = gesture.original.bend_handle();
+            let target = Pos::new(
+                handle.x + p.x - gesture.start.x,
+                handle.y + p.y - gesture.start.y,
+            );
+            let a = mark.points[0];
+            let b = mark.points[1];
+            let control = Pos::new(
+                (target.x - (1. - t).powi(2) * a.x - t * t * b.x) / (2. * t * (1. - t)),
+                (target.y - (1. - t).powi(2) * a.y - t * t * b.y) / (2. * t * (1. - t)),
+            );
+            if mark.points.len() > 2 {
+                mark.points[2] = control;
+            } else {
+                mark.points.push(control);
+            }
+            mark.constrain_arrow_label(None);
+        }
+        Mode::Endpoint(index) => {
+            *mark = gesture.original.clone();
+            mark.points[index] = p;
+            mark.constrain_arrow_label(Some(1 - index));
+        }
+        Mode::Erase => {}
+    }
+}
+
 // Editing text shows its wrapping bounds, independently of selection handles.
 fn frame_outline(
     id: &'static str,
@@ -1554,6 +1680,393 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     use gpui_kit::{Modifiers, TestAppContext, VisualTestContext};
 
+    fn comparison_attachment() -> StagedAttachment {
+        crate::image_composer::combine([
+            fixture_attachment_size(400, 300),
+            fixture_attachment_size(400, 300),
+        ])
+        .unwrap()
+    }
+    #[gpui_kit::test]
+    fn comparison_annotations_stop_before_the_caption_row(cx: &mut TestAppContext) {
+        for key in ["a", "r", "p"] {
+            let (view, cx) = editor_for(cx, comparison_attachment());
+            let bottom = cx.update(|_, cx| {
+                let comparison = view.read(cx).doc().unwrap().comparison.as_ref().unwrap();
+                comparison.panels[0].y + comparison.panels[0].h
+            });
+            cx.simulate_keystrokes(key);
+            drag(
+                &view,
+                cx,
+                Pos::new(100., 100.),
+                Pos::new(230., bottom + 70.),
+            );
+            cx.update(|_, cx| {
+                let mark = &view.read(cx).doc().unwrap().marks[0];
+                let bounds = mark.visual_bounds();
+                assert!(
+                    bounds.y + bounds.h <= bottom + 0.01,
+                    "{key} went below images: {bounds:?}, bottom={bottom}"
+                );
+            });
+        }
+    }
+    #[gpui_kit::test]
+    fn comparison_caption_controls_do_not_pause_an_active_arrow_drag(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        cx.simulate_keystrokes("a");
+        let start = pointer(&view, cx, Pos::new(100., 100.));
+        cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
+        for p in [
+            Pos::new(190., 330.),
+            Pos::new(240., 350.),
+            Pos::new(270., 400.),
+            Pos::new(230., 240.),
+        ] {
+            cx.update(|window, cx| window.render_frame(cx));
+            let position = pointer(&view, cx, p);
+            cx.simulate_mouse_move(position, Some(MouseButton::Left), Modifiers::default());
+            cx.update(|_, cx| {
+                let preview = view.read(cx);
+                let mark = &preview.doc().unwrap().marks[0];
+                assert_eq!(mark.points[0], Pos::new(100., 100.));
+                if p.y > 316. {
+                    assert!(
+                        mark.points[1].y > 313.
+                            && mark.visual_bounds().y + mark.visual_bounds().h <= 316.01,
+                        "pointer paused over the caption"
+                    );
+                } else {
+                    assert!(mark.points[1].distance(p) < 0.1);
+                }
+                assert!(preview.editor.comparison_edit.is_none());
+            });
+        }
+        let end = pointer(&view, cx, Pos::new(230., 240.));
+        cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
+    }
+    #[gpui_kit::test]
+    fn comparison_shapes_stop_when_moved_or_resized_and_dragging_resumes_above_the_edge(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        cx.simulate_keystrokes("r");
+        drag(&view, cx, Pos::new(100., 100.), Pos::new(200., 200.));
+        select_at(&view, cx, Pos::new(100., 150.));
+        let bottom = 316.;
+        drag(
+            &view,
+            cx,
+            Pos::new(150., 150.),
+            Pos::new(150., bottom + 80.),
+        );
+        let moved = cx.update(|_, cx| view.read(cx).doc().unwrap().marks[0].clone());
+        assert_eq!(moved.bounds().h, 100.);
+        assert!((moved.visual_bounds().y + moved.visual_bounds().h - bottom).abs() < 0.01);
+        cx.simulate_keystrokes("cmd-z");
+        select_at(&view, cx, Pos::new(100., 150.));
+        let start = pointer(&view, cx, Pos::new(200., 200.));
+        cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
+        for p in [
+            Pos::new(270., bottom + 30.),
+            Pos::new(280., bottom + 80.),
+            Pos::new(240., 250.),
+        ] {
+            let at = pointer(&view, cx, p);
+            cx.simulate_mouse_move(at, Some(MouseButton::Left), Modifiers::default());
+            cx.update(|_, cx| {
+                let mark = &view.read(cx).doc().unwrap().marks[0];
+                assert!(mark.visual_bounds().y + mark.visual_bounds().h <= bottom + 0.01);
+                assert!(
+                    mark.points[0].distance(Pos::new(100., 100.)) < 0.1,
+                    "resize must preserve the opposite anchor"
+                );
+                if p.y == 250. {
+                    assert!(
+                        (mark.bounds().y + mark.bounds().h - 250.).abs() < 0.1,
+                        "drag must resume immediately above the edge"
+                    );
+                }
+            });
+        }
+        let end = pointer(&view, cx, Pos::new(240., 250.));
+        cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
+    }
+    #[gpui_kit::test]
+    fn comparison_group_moves_and_resizes_stop_at_the_image_bottom(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        for (a, b) in [
+            (Pos::new(100., 100.), Pos::new(180., 150.)),
+            (Pos::new(240., 170.), Pos::new(320., 240.)),
+        ] {
+            cx.simulate_keystrokes("r");
+            drag(&view, cx, a, b);
+        }
+        cx.simulate_keystrokes("cmd-a");
+        drag(&view, cx, Pos::new(200., 160.), Pos::new(200., 430.));
+        cx.update(|_, cx| {
+            let marks = &view.read(cx).doc().unwrap().marks;
+            for mark in marks {
+                let b = mark.visual_bounds();
+                assert!(b.y + b.h <= 316.01);
+            }
+            assert!(
+                (marks[1].points[0].y - marks[0].points[0].y - 70.).abs() < 0.01,
+                "group spacing must stay intact"
+            );
+        });
+        cx.simulate_keystrokes("cmd-z cmd-a");
+        drag(&view, cx, Pos::new(320., 240.), Pos::new(400., 420.));
+        cx.update(|_, cx| {
+            for mark in &view.read(cx).doc().unwrap().marks {
+                let b = mark.visual_bounds();
+                assert!(b.y + b.h <= 316.01);
+            }
+        });
+    }
+    #[gpui_kit::test]
+    fn comparison_rejects_drawing_below_images_but_ordinary_images_keep_expansion(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, window) = editor_for(cx, comparison_attachment());
+        window.simulate_keystrokes("a");
+        drag(&view, window, Pos::new(500., 420.), Pos::new(600., 460.));
+        window.update(|_, cx| assert!(view.read(cx).doc().unwrap().marks.is_empty()));
+        let (view, window) = editor_window(cx);
+        window.simulate_keystrokes("a");
+        drag(&view, window, Pos::new(100., 100.), Pos::new(230., 390.));
+        window.update(|_, cx| {
+            let b = view.read(cx).doc().unwrap().marks[0].visual_bounds();
+            assert!(b.y + b.h > 300.);
+        });
+    }
+    #[gpui_kit::test]
+    fn comparison_caption_keeps_its_width_while_typing_spaces(cx: &mut TestAppContext) {
+        let (_, cx) = editor_for(cx, comparison_attachment());
+        let id = ("comparison-caption", 0_usize);
+        cx.update(|window, cx| window.double_click(id, cx));
+        cx.simulate_input("Original interface");
+        let before = cx.update(|window, cx| {
+            window.render_frame(cx);
+            window.find(id).bounds()
+        });
+        cx.simulate_keystrokes("end");
+        cx.simulate_input(" extra words");
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            let after = window.find(id).bounds();
+            assert_eq!(
+                after.origin, before.origin,
+                "typing must keep the caption anchor fixed"
+            );
+            assert_eq!(
+                after.size.width, before.size.width,
+                "caption width must not follow the text"
+            );
+        });
+    }
+    #[gpui_kit::test]
+    fn comparison_caption_wraps_and_shift_enter_keeps_a_shared_baseline(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        cx.update(|window, cx| window.double_click(("comparison-caption", 0_usize), cx));
+        cx.simulate_input("Original interface");
+        cx.simulate_keystrokes("end shift-enter");
+        cx.simulate_input(
+            "A detailed explanation that is longer than a single line in this caption column",
+        );
+        cx.update(|_, cx| {
+            let comparison = view.read(cx).doc().unwrap().comparison.as_ref().unwrap();
+            assert!(comparison.labels[0].contains('\n'));
+            assert_eq!(comparison.caption_rect(0).y, comparison.caption_rect(1).y);
+            assert!(comparison.caption_rect(0).h > comparison.label_mark(1).bounds().h);
+            assert!(view.read(cx).editor.comparison_edit.is_some());
+        });
+        cx.simulate_keystrokes("enter");
+        cx.update(|_, cx| assert!(view.read(cx).editor.comparison_edit.is_none()));
+    }
+    #[gpui_kit::test]
+    fn space_pan_can_start_on_a_comparison_caption(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        let p = cx.update(|window, cx| {
+            window.render_frame(cx);
+            window
+                .find(("comparison-caption", 0_usize))
+                .bounds()
+                .center()
+        });
+        cx.simulate_keystrokes("space");
+        cx.simulate_mouse_down(p, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_move(
+            p + point(px(40.), px(20.)),
+            Some(MouseButton::Left),
+            Modifiers::default(),
+        );
+        cx.update(|_, cx| {
+            assert_eq!(
+                view.read(cx).offset,
+                point(px(40.), px(20.)),
+                "caption controls must let pan gestures through"
+            )
+        });
+    }
+    #[gpui_kit::test]
+    fn comparison_caption_editing_is_inline_and_part_of_undo_redo(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        let id = ("comparison-caption", 0_usize);
+        let original = cx.update(|window, cx| {
+            window.render_frame(cx);
+            window.find(id).bounds()
+        });
+        cx.update(|window, cx| window.double_click(id, cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            assert_eq!(
+                window.find(id).bounds(),
+                original,
+                "selecting the caption must not resize its column"
+            );
+            assert!(view.read(cx).editor.comparison_edit.is_some());
+        });
+        cx.simulate_input("Original interface");
+        cx.simulate_keystrokes("escape");
+        cx.update(|_, cx| {
+            let preview = view.read(cx);
+            assert_eq!(
+                preview.doc().unwrap().comparison.as_ref().unwrap().labels[0],
+                "Original interface"
+            );
+            assert!(
+                preview.doc().unwrap().marks.is_empty(),
+                "labels are separate from annotation marks"
+            );
+            assert!(preview.has_unsaved_changes());
+            assert!(preview.editor.comparison_edit.is_none());
+        });
+        cx.simulate_keystrokes("cmd-z");
+        cx.update(|_, cx| {
+            assert_eq!(
+                view.read(cx)
+                    .doc()
+                    .unwrap()
+                    .comparison
+                    .as_ref()
+                    .unwrap()
+                    .labels[0],
+                "Before"
+            )
+        });
+        cx.simulate_keystrokes("cmd-shift-z");
+        cx.update(|_, cx| {
+            assert_eq!(
+                view.read(cx)
+                    .doc()
+                    .unwrap()
+                    .comparison
+                    .as_ref()
+                    .unwrap()
+                    .labels[0],
+                "Original interface"
+            )
+        });
+    }
+    #[gpui_kit::test]
+    fn comparison_captions_block_drawing_and_arrows_can_cross_both_images(cx: &mut TestAppContext) {
+        let (view, cx) = editor_for(cx, comparison_attachment());
+        for key in ["r", "p", "a"] {
+            cx.simulate_keystrokes(key);
+            let tab = cx.update(|window, cx| {
+                window.render_frame(cx);
+                window.find(("comparison-caption", 0_usize)).bounds()
+            });
+            cx.simulate_mouse_down(tab.center(), MouseButton::Left, Modifiers::default());
+            cx.simulate_mouse_move(
+                tab.center() + point(px(120.), px(100.)),
+                Some(MouseButton::Left),
+                Modifiers::default(),
+            );
+            cx.simulate_mouse_up(
+                tab.center() + point(px(120.), px(100.)),
+                MouseButton::Left,
+                Modifiers::default(),
+            );
+            cx.update(|_, cx| {
+                assert!(
+                    view.read(cx).doc().unwrap().marks.is_empty(),
+                    "clicking a title must not draw with {key}"
+                )
+            });
+        }
+        cx.simulate_keystrokes("a");
+        drag(&view, cx, Pos::new(100., 180.), Pos::new(650., 180.));
+        cx.update(|_, cx| {
+            let doc = view.read(cx).doc().unwrap();
+            assert_eq!(doc.marks.len(), 1);
+            assert_eq!(doc.marks[0].tool, Tool::Arrow);
+            assert!(doc.marks[0].points[0].x < doc.comparison.as_ref().unwrap().panels[1].x);
+            assert!(doc.marks[0].points[1].x > doc.comparison.as_ref().unwrap().panels[1].x);
+        });
+    }
+    #[gpui_kit::test]
+    fn comparison_rename_saves_and_discard_restores_saved_captions(cx: &mut TestAppContext) {
+        let original = comparison_attachment();
+        let session = original.image().unwrap().annotation_session.clone();
+        let id = original.id;
+        let (view, cx) = editor_for(cx, original);
+        let applied = Rc::new(RefCell::new(None));
+        let capture = applied.clone();
+        let _subscription = cx.update(|_, cx| {
+            cx.subscribe(&view, move |_, event: &AppliedAnnotation, _| {
+                *capture.borrow_mut() = Some(event.attachment.clone())
+            })
+        });
+        cx.update(|window, cx| window.double_click(("comparison-caption", 1_usize), cx));
+        cx.simulate_input("Updated");
+        cx.simulate_keystrokes("enter");
+        cx.update(|window, cx| view.update(cx, |preview, cx| preview.apply_annotation(window, cx)));
+        cx.run_until_parked();
+        let mut staged = applied
+            .borrow_mut()
+            .take()
+            .expect("label edits must export through ordinary Save");
+        staged.id = id;
+        if let crate::model::Media::Image(image) = &mut staged.media {
+            image.annotation_session = session;
+        }
+        cx.update(|window, cx| {
+            view.update(cx, |preview, cx| {
+                preview.annotation_saved(id, Ok(()), window, cx);
+                assert!(preview.images.is_empty());
+                preview.show(vec![staged.clone()], id, cx);
+                assert_eq!(
+                    preview.doc().unwrap().comparison.as_ref().unwrap().labels[1],
+                    "Updated"
+                );
+                assert!(!preview.has_unsaved_changes());
+                let doc = preview.doc_mut().unwrap();
+                doc.checkpoint();
+                doc.comparison.as_mut().unwrap().labels[1] = "Unsaved title".into();
+                preview.clear(cx);
+                preview.show(vec![staged.clone()], id, cx);
+                assert_eq!(
+                    preview.doc().unwrap().comparison.as_ref().unwrap().labels[1],
+                    "Updated"
+                );
+                assert!(!preview.has_unsaved_changes());
+                assert!(!preview.doc().unwrap().can_undo());
+            })
+        });
+    }
+    #[gpui_kit::test]
+    fn ordinary_images_have_no_comparison_captions(cx: &mut TestAppContext) {
+        let (view, cx) = editor_window(cx);
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("comparison-caption", 0_usize)).is_none());
+            assert!(view.read(cx).doc().unwrap().comparison.is_none());
+        });
+    }
     fn fixture_attachment() -> StagedAttachment {
         fixture_attachment_size(400, 300)
     }

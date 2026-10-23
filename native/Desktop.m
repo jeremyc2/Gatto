@@ -19,6 +19,7 @@ static NSEventModifierFlags eventModifiers(uint32_t modifiers) {
 @property NSMenuItem *preview;
 @property NSMenuItem *quick;
 @property NSMenuItem *preferences;
+@property NSMenuItem *composition;
 @property NSMenuItem *update;
 @property NSMenuItem *quit;
 @property BOOL pasteVisible;
@@ -41,6 +42,7 @@ static NSEventModifierFlags eventModifiers(uint32_t modifiers) {
 - (void)rebuild {
     [self.menu removeAllItems];
     [self.menu addItem:self.open];
+    [self.menu addItem:self.composition];
     if (self.updateVisible) [self.menu addItem:self.update];
     if (self.pasteVisible) {
         [self.menu addItem:NSMenuItem.separatorItem];
@@ -66,9 +68,10 @@ void *GattoMenuCreate(const uint8_t *bytes, size_t length, GattoEvent callback, 
         owner.menu = [NSMenu new];
         owner.menu.autoenablesItems = NO;
         owner.open = [owner item:@"Open App" key:@"" tag:1];
-        owner.preview = [owner item:@"Stage from Clipboard" key:@"v" tag:2];
+        owner.preview = [owner item:@"Draft from Clipboard" key:@"v" tag:2];
         owner.quick = [owner item:@"Quick Copy" key:@"" tag:3];
         owner.preferences = [owner item:@"App Preferences" key:@"," tag:4];
+        owner.composition = [owner item:@"Side-by-Side Comparison" key:@"" tag:7];
         owner.update = [owner item:@"↑ Update" key:@"" tag:5];
         owner.quit = [owner item:@"Quit" key:@"q" tag:6];
         owner.status = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];

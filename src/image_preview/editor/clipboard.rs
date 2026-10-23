@@ -49,6 +49,7 @@ impl ImagePreview {
             return;
         }
         self.finish_text(cx);
+        let bottom = self.comparison_annotation_bottom();
         let Some(doc) = self.doc_mut() else {
             return;
         };
@@ -56,6 +57,16 @@ impl ImagePreview {
         let start = doc.marks.len();
         for mark in &mut marks {
             mark.translate(delta.x, delta.y);
+        }
+        if let Some(bottom) = bottom
+            && let Some(bounds) = bounds(&marks)
+        {
+            let overflow = (bounds.y + bounds.h - bottom).max(0.);
+            if overflow > 0. {
+                for mark in &mut marks {
+                    mark.translate(0., -overflow);
+                }
+            }
         }
         doc.marks.extend(marks);
         let indices = (start..doc.marks.len()).collect();
