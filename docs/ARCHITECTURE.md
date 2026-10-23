@@ -310,6 +310,96 @@ use native destruction.
 The shared image/GIF preview starts with maximized window bounds and no content
 size cap. Reusing its retained window preserves subsequent manual resizing.
 
+`image_composer.rs` owns a separate, non-maximized **Side-by-Side Comparison**
+attachment picker, opened from the native Advanced menu or status item. The main
+controller retains one picker under the existing macOS window lifecycle. It
+contains two labeled slots, using main-window-style image drop zones and the
+shared attachment component. Populated cards show a thumbnail, filename, size,
+and removal action, without a description editor. File/drop/paste imports accept
+one PNG, JPEG, or WebP per side; content validation rejects disguised GIFs.
+
+The picker stacks the left slot above the right slot. Clipboard paste targets
+the first empty slot in left-to-right image order, independently of pointer
+focus; only that slot advertises Command+V. Clicking or dropping can fill either
+slot first. Loading state gates input and generation checks ignore stale results.
+When both sources are loaded, `ComparisonRequested` transfers them to the main
+controller. Once the main window accepts the request, the picker closes under
+its normal retained-window lifecycle. Conflicting main-window imports/uploads
+leave the picker available to retry by removing and reattaching a source.
+
+`UploaderApp::begin_comparison` shows the normal main page and runs combination
+on a background worker. An attachment card with an animated thumbnail spinner
+reports resizing/combining while import/upload controls are gated. The completion
+uses the ordinary draft replacement/batch flow. Closing/clearing the main draft
+invalidates pending results through its upload generation. Combining does not
+upload or modify either original file.
+
+One common scale fits the complete result within 3840 × 2160, including the
+reserved caption area, padding, and gap. Photos keep their proportions and relative
+scale, align at the top, and pad below the shorter side. Small sources are never
+upscaled. Each source is decoded and resized with Lanczos3 directly into one
+bounded canvas. The renderer encodes a lossless PNG and inspects its actual size.
+Outputs over 9,000,000 bytes are rerendered at a smaller scale, estimated from the
+byte ratio with margin. Retried exports use the retained base rather than a
+previous PNG; there is no intermediate PNG decode or second annotation editor.
+The completed PNG is staged with known dimensions, avoiding a validation decode.
+The [sizing research](research/comparison-image-sizing.md) records tldraw's distinct
+export/display behavior and the GitHub limit behind this policy.
+
+`annotation/comparison.rs` owns column geometry and two caption strings,
+separate from normal drawing marks. Columns have a minimum width of 400 source
+pixels so captions can be wider than small images. Each original is centered
+horizontally in its column without upscaling. Both columns share the same top
+and height, anchoring captions below the image row on a common baseline.
+The attachment session retains an unlabeled base and comparison metadata; the
+staged PNG already contains **Before**/**After**. Ordinary images have no
+comparison metadata or caption controls.
+
+Captions use 32–64-pixel text scaled with the comparison dimensions, with fixed
+column widths, automatic wrapping, explicit line breaks, and a fixed left/top
+anchor. They have no field background, border, or tab shape. Expanded caption
+heights extend document export bounds downward without moving or covering the
+source images. PNG export and native preview reserve the shared caption band
+above all annotation paint; drawing cannot start in that band. The preview
+covers saved caption pixels before painting current glyphs. The editor's fitted
+comparison leaves 96 screen pixels below it for floating controls and room to
+edit additional lines. The fitted extent stays frozen during caption typing;
+finishing editing refits the complete footer without stretching the raster.
+Floating drawing and zoom controls hide while a caption has keyboard focus.
+
+Double-clicking a caption creates the same `TextInput` used for freeform
+annotations. It supplies caret, selection, IME, clipboard, and text undo, while
+the canonical annotation text renderer remains the only glyph painter. This
+avoids the previous combination of a resizing toolkit input and independently
+measured annotation glyphs. Shift+Return inserts a line break; Return, Escape,
+or blur finishes editing. Text stays metadata rather than becoming a draggable
+or resizable annotation. Caption pointer handlers allow Space, pan-tool, and
+middle-button panning. During annotation drags they also remove their occluding
+hit region and text cursor, so the canvas owns pointer tracking across the row.
+
+For comparisons only, the shared image row's lower edge is a hard geometry
+boundary. New gestures cannot start below it. Live single-object and group
+transforms are projected before committing: moves clamp their vertical offset,
+while drawing, resizing, bending, and rotation find the nearest valid gesture
+position when their full visual bounds would cross the edge. The bounds include
+stroke thickness, arrow caps, and labels. Most plain strokes stop directly at a
+stroke-width inset; the boundary solver handles rotated or expanded geometry.
+Publishing only one constrained result avoids repeated cache updates during the
+search. Pen release, click-created defaults, text/style changes, and pasted
+objects obey the same bottom boundary; pasted groups retain relative spacing.
+Ordinary image gestures retain their existing unbounded behavior.
+
+Document checkpoints include both marks and comparison metadata. Saved session
+state also records both, so caption-only edits enable Save and survive save/reopen,
+while Discard restores saved captions along with saved annotations. Comparison
+PNG exports fit expanded annotation bounds within 3840 × 2160 and recheck a
+9,500,000-byte budget, independently of editor pan, zoom, or window size. The
+initial 9 MB target leaves headroom; the final check handles annotation growth.
+Metadata is retained within the attachment session;
+reimporting an exported PNG starts an ordinary raster document. Historical
+measurements of the superseded split-editor design and the current reproduction
+command live in [the composition profile](research/side-by-side-composition-profile.md).
+
 The rationale, trade-offs, and conditions for removing this workaround are recorded
 in [ADR 0001](adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md).
 

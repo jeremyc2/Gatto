@@ -8,7 +8,8 @@ actions!(
         Quit,
         InstallUpdate,
         CheckForUpdates,
-        OpenPreferences
+        OpenPreferences,
+        CreateComposition
     ]
 );
 
@@ -32,6 +33,10 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Quit Gatto", Quit),
         ]),
         Menu::new("File").items([MenuItem::action("Close Window", CloseWindow)]),
+        Menu::new("Advanced").items([MenuItem::action(
+            crate::image_composer::TITLE,
+            CreateComposition,
+        )]),
     ]);
 }
 
@@ -52,6 +57,14 @@ fn close_focused_window(dismiss: bool, cx: &mut App) {
             let _ = handle.update(cx, |_, window, cx| {
                 if let Some(root) = window.root::<gpui_kit::base::Root>().flatten() {
                     let content = root.read(cx).view().clone();
+                    if dismiss
+                        && let Ok(composer) = content
+                            .clone()
+                            .downcast::<crate::image_composer::ImageComposer>()
+                    {
+                        composer.update(cx, |composer, cx| composer.dismiss(window, cx));
+                        return;
+                    }
                     if let Ok(preview) = content.downcast::<crate::image_preview::ImagePreview>() {
                         // Preview Escape never reaches the app-wide close fallback, even when blurred.
                         preview.update(cx, |preview, cx| {

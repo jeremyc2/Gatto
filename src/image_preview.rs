@@ -75,6 +75,7 @@ struct PreviewImage {
     pixel_size: (u32, u32),
     document: Option<Document>,
     saved_marks: Vec<crate::annotation::Mark>,
+    saved_comparison: Option<crate::annotation::Comparison>,
     session: Session,
     annotations: Rc<RefCell<PreviewCache>>,
 }
@@ -90,9 +91,14 @@ impl PreviewImage {
                 .open(&image.bytes, image.preview.clone())
                 .ok()
         };
-        let (document, source, saved_marks) = retained
-            .map_or((None, image.preview.clone(), Vec::new()), |session| {
-                (Some(session.document), session.image, session.saved_marks)
+        let (document, source, saved_marks, saved_comparison) =
+            retained.map_or((None, image.preview.clone(), Vec::new(), None), |session| {
+                (
+                    Some(session.document),
+                    session.image,
+                    session.saved_marks,
+                    session.saved_comparison,
+                )
             });
         let pixel_size = document
             .as_ref()
@@ -108,6 +114,7 @@ impl PreviewImage {
             pixel_size,
             document,
             saved_marks,
+            saved_comparison,
             session: image.annotation_session.clone(),
             annotations: Rc::new(RefCell::new(annotations)),
         })
@@ -120,7 +127,10 @@ impl Drop for PreviewImage {
             self.session.retain(
                 document,
                 self.image.clone(),
-                std::mem::take(&mut self.saved_marks),
+                crate::annotation::EditState {
+                    marks: std::mem::take(&mut self.saved_marks),
+                    comparison: self.saved_comparison.take(),
+                },
             );
         }
     }
@@ -260,6 +270,7 @@ impl ImagePreview {
                 if let Some(document) = &mut image.document {
                     *document = document.snapshot();
                     document.marks.clone_from(&image.saved_marks);
+                    document.comparison.clone_from(&image.saved_comparison);
                 }
             }
             let textures = image.annotations.borrow_mut().retired_images(true);
@@ -339,14 +350,49 @@ impl ImagePreview {
         );
     }
 
+    /// Grow only the comparison's footer, keeping its raster source unchanged.
+    /// Freeze the fitted extent while typing so wrapping cannot move the caret.
+    fn view_pixel_size(&self) -> (u32, u32) {
+        if let Some(size) = self.comparison_edit_view_size() {
+            return size;
+        }
+        let Some(image) = self.current() else {
+            return (1, 1);
+        };
+        let mut size = image.pixel_size;
+        if let Some(comparison) = image
+            .document
+            .as_ref()
+            .and_then(|doc| doc.comparison.as_ref())
+        {
+            let band = comparison.caption_band();
+            size.1 = size.1.max((band.y + band.h + 16.).ceil() as u32);
+        }
+        size
+    }
+
+    fn comparison_bottom_inset(&self) -> f32 {
+        if self.current().is_some_and(|image| {
+            image
+                .document
+                .as_ref()
+                .is_some_and(|doc| doc.comparison.is_some())
+        }) {
+            96.
+        } else {
+            0.
+        }
+    }
+
     fn fit_scale(&self, window: &Window) -> f32 {
         let viewport = window.viewport_size();
-        let (w, h) = self
-            .current()
-            .map(|image| image.pixel_size)
-            .unwrap_or((1, 1));
+        let (w, h) = self.view_pixel_size();
         (viewport.width.as_f32() / w.max(1) as f32)
-            .min((viewport.height.as_f32() - TOOLBAR_HEIGHT).max(1.) / h.max(1) as f32)
+            .min(
+                (viewport.height.as_f32() - TOOLBAR_HEIGHT - self.comparison_bottom_inset())
+                    .max(1.)
+                    / h.max(1) as f32,
+            )
             .min(1.)
     }
 
@@ -417,6 +463,8 @@ impl ImagePreview {
         });
         let zoom = self.zoom;
         let offset = self.offset;
+        let bottom_inset = self.comparison_bottom_inset();
+        let view_size = self.view_pixel_size();
         let animation = self.animation.clone();
 
         canvas(
@@ -438,16 +486,23 @@ impl ImagePreview {
                 };
                 let natural_width = natural_width.max(1) as f32;
                 let natural_height = natural_height.max(1) as f32;
-                let fit = (bounds.size.width.as_f32() / natural_width)
-                    .min(bounds.size.height.as_f32() / natural_height)
+                let fit = (bounds.size.width.as_f32() / view_size.0 as f32)
+                    .min((bounds.size.height.as_f32() - bottom_inset).max(1.) / view_size.1 as f32)
                     .min(1.);
                 let image_size = size(
                     px(natural_width * fit * zoom),
                     px(natural_height * fit * zoom),
                 );
                 let original_origin = point(
-                    bounds.origin.x + (bounds.size.width - image_size.width) / 2. + offset.x,
-                    bounds.origin.y + (bounds.size.height - image_size.height) / 2. + offset.y,
+                    bounds.origin.x
+                        + (bounds.size.width - px(view_size.0 as f32 * fit * zoom)) / 2.
+                        + offset.x,
+                    bounds.origin.y
+                        + (bounds.size.height
+                            - px(bottom_inset)
+                            - px(view_size.1 as f32 * fit * zoom))
+                            / 2.
+                        + offset.y,
                 );
                 let image_bounds = Bounds::new(original_origin, image_size);
                 let playing = render_image.frame_count() > 1
@@ -699,12 +754,18 @@ impl Render for ImagePreview {
                     .on_mouse_up(MouseButton::Middle, cx.listener(Self::editor_mouse_up))
                     .on_mouse_up_out(MouseButton::Middle, cx.listener(Self::editor_mouse_up))
                     .child(self.render_image(window))
-                    .child(self.zoom_controls(window, cx))
+                    .when(self.comparison_edit_view_size().is_none(), |surface| {
+                        surface.child(self.zoom_controls(window, cx))
+                    })
                     .when(editable, |surface| {
                         surface
                             .child(self.annotation_overlays(window, cx))
-                            .child(self.annotation_toolbar(cx))
-                            .child(self.annotation_properties(cx))
+                            .child(self.comparison_captions(window, cx))
+                            .when(self.comparison_edit_view_size().is_none(), |surface| {
+                                surface
+                                    .child(self.annotation_toolbar(cx))
+                                    .child(self.annotation_properties(cx))
+                            })
                             .child(self.preview_cursor_layer(cursor, window, cx))
                     })
                     .when(self.saving.is_some(), |surface| {

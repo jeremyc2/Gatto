@@ -7,6 +7,7 @@ mod desktop;
 mod diagnostics;
 mod github;
 mod global_shortcut;
+mod image_composer;
 mod image_preview;
 #[cfg(target_os = "macos")]
 mod installer_cleanup;
@@ -154,6 +155,11 @@ fn main() {
             cx.defer(move |cx| perform_action(MenuAction::Settings, &main, cx));
         });
         controller.start(login_launch, cx);
+        let composition_main = controller.clone();
+        cx.on_action(move |_: &application_menu::CreateComposition, cx| {
+            let main = composition_main.clone();
+            cx.defer(move |cx| main.show_composer(cx));
+        });
         *main_window.borrow_mut() = Some(controller.clone());
         let custom_url_main = controller.clone();
         cx.spawn(async move |cx| {
@@ -247,6 +253,7 @@ struct MainWindow(Rc<RefCell<MainWindowState>>);
 
 struct MainWindowState {
     current: Option<(AnyWindowHandle, Entity<UploaderApp>)>,
+    composer: Option<(AnyWindowHandle, Entity<image_composer::ImageComposer>)>,
     diagnostics: Diagnostics,
     menu_bar: MenuBarController,
     shortcut: GlobalShortcutController,
@@ -261,6 +268,7 @@ impl MainWindow {
     ) -> Self {
         Self(Rc::new(RefCell::new(MainWindowState {
             current: None,
+            composer: None,
             quick_copy: quick_copy::QuickCopy::new(diagnostics.clone()),
             diagnostics,
             menu_bar,
@@ -272,6 +280,90 @@ impl MainWindow {
         if !login_launch {
             self.show(cx);
         }
+    }
+
+    fn show_composer(&self, cx: &mut App) {
+        set_dock_visible(true);
+        cx.activate(true);
+        let existing = self.0.borrow().composer.clone();
+        if let Some((handle, view)) = existing
+            && handle
+                .update(cx, |_, window, cx| {
+                    if !window_limits::is_presented(window) {
+                        window.focus(&view.read(cx).focus_handle(cx), cx);
+                    }
+                    window.activate_window();
+                })
+                .is_ok()
+        {
+            return;
+        }
+        let controller = self.clone();
+        let result = gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(gpui_kit::Bounds::centered(
+                    None,
+                    size(
+                        px(image_composer::WINDOW_WIDTH),
+                        px(image_composer::WINDOW_HEIGHT),
+                    ),
+                    cx,
+                ))),
+                window_min_size: Some(size(
+                    px(image_composer::WINDOW_WIDTH),
+                    px(image_composer::WINDOW_HEIGHT),
+                )),
+                ..Default::default()
+            },
+            cx,
+            move |window, cx| {
+                window.set_window_title(&format!("{} — Gatto", image_composer::TITLE));
+                let view = cx.new(|cx| image_composer::ImageComposer::new(window, cx));
+                let close_view = view.downgrade();
+                window.on_window_should_close(cx, move |window, cx| {
+                    if close_view
+                        .update(cx, |view, cx| view.should_close(window, cx))
+                        .is_ok_and(|approved| !approved)
+                    {
+                        return false;
+                    }
+                    let closed = window_limits::close(window, cx);
+                    if closed {
+                        controller.0.borrow_mut().composer = None;
+                    }
+                    closed
+                });
+                window.focus(&view.read(cx).focus_handle(cx), cx);
+                view
+            },
+        );
+        let Ok((handle, view)) = result else {
+            return;
+        };
+        let controller = self.clone();
+        cx.subscribe(
+            &view,
+            move |view, event: &image_composer::ComparisonRequested, cx| {
+                let (main_handle, main_view) = controller.show(cx);
+                let result = main_handle
+                    .update(cx, |_, window, cx| {
+                        main_view.update(cx, |main, cx| {
+                            main.begin_comparison(event.0.clone(), window, cx)
+                        })
+                    })
+                    .unwrap_or(Err(
+                        "Could not open the main window. Remove an image and add it again to retry.",
+                    ));
+                let _ = handle.update(cx, |_, window, cx| {
+                    view.update(cx, |view, cx| view.requested(result, window, cx));
+                    if result.is_err() {
+                        window.activate_window();
+                    }
+                });
+            },
+        )
+        .detach();
+        self.0.borrow_mut().composer = Some((handle, view));
     }
 
     fn ensure(&self, cx: &mut App) -> (AnyWindowHandle, Entity<UploaderApp>) {
@@ -377,6 +469,7 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
             let (_, view) = main.show(cx);
             view.update(cx, |this, cx| this.show_settings(cx));
         }
+        MenuAction::CreateComposition => main.show_composer(cx),
         MenuAction::Update => {
             let (handle, view) = main.show(cx);
             let quick_copy_busy = main.0.borrow().quick_copy.is_busy();

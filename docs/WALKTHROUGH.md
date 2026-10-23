@@ -278,7 +278,7 @@ for some viewers.
 
 With at least one repository pinned, these actions appear in Gatto’s menu bar menu:
 
-- **Stage from Clipboard** adds the image or copied Finder media file to the main window, ready for you to review and upload.
+- **Draft from Clipboard** adds the image or copied Finder media file to the main window, ready for you to review and upload.
 - **Quick Copy** uploads it immediately, copies its Markdown, and notifies you when it finishes.
 
 To use Quick Copy from another app, enable its global shortcut in App Preferences.

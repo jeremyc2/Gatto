@@ -198,91 +198,39 @@ impl ImagePreview {
             self.doc_mut().unwrap().checkpoint();
             self.editor.group_gesture.as_mut().unwrap().checkpointed = true;
         }
-        let mut frame = gesture.frame;
-        let mut ratio = 1.;
-        let mut angle = 0.;
-        let (mut flip_x, mut flip_y) = (false, false);
-        match gesture.mode {
-            Mode::Move => {
-                frame.bounds.x += p.x - gesture.start.x;
-                frame.bounds.y += p.y - gesture.start.y;
-            }
-            Mode::Rotate(_) => {
-                let c = frame.center();
-                angle = (p.y - c.y).atan2(p.x - c.x)
-                    - (gesture.start.y - c.y).atan2(gesture.start.x - c.x);
-                if event.modifiers.shift {
-                    let step = std::f32::consts::PI / 12.;
-                    angle = ((frame.rotation + angle) / step).round() * step - frame.rotation;
-                }
-                frame.rotation += angle;
-            }
-            Mode::Resize(handle) => {
-                let b = frame.bounds;
-                let to = frame.to_local(p);
-                let (next, x, y) = handle.resized(b, to, true);
-                flip_x = x;
-                flip_y = y;
-                ratio = next.w / b.w;
-                frame.bounds = next;
-                let center = frame.center();
-                let world = gesture.frame.to_world(center);
-                frame.bounds.x += world.x - center.x;
-                frame.bounds.y += world.y - center.y;
-            }
-            _ => return true,
-        }
-        let map = |p: Pos| {
-            let q = gesture.frame.to_local(p);
-            let c = gesture.frame.center();
-            let delta = Pos::new(
-                (q.x - c.x) * ratio * if flip_x { -1. } else { 1. },
-                (q.y - c.y) * ratio * if flip_y { -1. } else { 1. },
-            )
-            .rotate(Pos::default(), frame.rotation);
-            Pos::new(frame.center().x + delta.x, frame.center().y + delta.y)
+        let bottom = self.comparison_annotation_bottom();
+        let build = |p| projected_group(&gesture, p, event.modifiers.shift);
+        let bounds = |result: &(Vec<(usize, Mark)>, Option<Frame>)| {
+            result
+                .0
+                .iter()
+                .map(|(_, mark)| mark.visual_bounds())
+                .reduce(Rect::union)
+                .unwrap()
         };
-        let doc = self.doc_mut().unwrap();
-        let mut expanded_label = false;
-        for (i, original) in gesture.originals.iter() {
-            let mark = &mut doc.marks[*i];
-            *mark = original.clone();
-            if matches!(gesture.mode, Mode::Resize(_)) && mark.tool != Tool::Text {
-                mark.style = mark.style.clone().with_scale(mark.style.scale * ratio);
-            }
-            if matches!(mark.tool, Tool::Arrow | Tool::Line) {
-                for p in &mut mark.points {
-                    *p = map(*p);
+        let mut next = if matches!(gesture.mode, Mode::Move) {
+            build(p)
+        } else {
+            comparison::bounded_drag(gesture.start, p, bottom, build, bounds)
+        };
+        if let Some(bottom) = bottom {
+            let b = bounds(&next);
+            let overflow = (b.y + b.h - bottom).max(0.);
+            if overflow > 0. {
+                for (_, mark) in &mut next.0 {
+                    mark.translate(0., -overflow);
                 }
-                if !mark.text.trim().is_empty() {
-                    let before = mark.points.clone();
-                    mark.constrain_arrow_label(None);
-                    expanded_label |= mark.points != before;
+                if let Some(frame) = &mut next.1 {
+                    frame.bounds.y -= overflow;
                 }
-            } else {
-                let old = original.bounds();
-                mark.resize(
-                    old,
-                    Rect {
-                        x: old.x,
-                        y: old.y,
-                        w: old.w * ratio,
-                        h: old.h * ratio,
-                    },
-                    false,
-                );
-                mark.flip_geometry(flip_x, flip_y);
-                let center = mark.bounds().center();
-                let target = map(old.center());
-                mark.translate(target.x - center.x, target.y - center.y);
-                mark.rotation = if flip_x != flip_y {
-                    2. * gesture.frame.rotation - original.rotation + angle
-                } else {
-                    original.rotation + angle
-                };
             }
         }
-        self.editor.group_frame = (!expanded_label).then_some(frame);
+        let doc = self.doc_mut().unwrap();
+        for (i, mark) in next.0 {
+            doc.marks[i] = mark;
+        }
+        self.editor.group_frame = next.1;
+
         self.editor.style = self.doc().unwrap().marks[self.editor.selected.unwrap()]
             .style
             .clone()
@@ -290,4 +238,97 @@ impl ImagePreview {
         self.refresh_annotations(cx);
         true
     }
+}
+
+fn projected_group(
+    gesture: &GroupGesture,
+    p: Pos,
+    shift: bool,
+) -> (Vec<(usize, Mark)>, Option<Frame>) {
+    let mut frame = gesture.frame;
+    let mut ratio = 1.;
+    let mut angle = 0.;
+    let (mut flip_x, mut flip_y) = (false, false);
+    match gesture.mode {
+        Mode::Move => {
+            frame.bounds.x += p.x - gesture.start.x;
+            frame.bounds.y += p.y - gesture.start.y;
+        }
+        Mode::Rotate(_) => {
+            let c = frame.center();
+            angle =
+                (p.y - c.y).atan2(p.x - c.x) - (gesture.start.y - c.y).atan2(gesture.start.x - c.x);
+            if shift {
+                let step = std::f32::consts::PI / 12.;
+                angle = ((frame.rotation + angle) / step).round() * step - frame.rotation;
+            }
+            frame.rotation += angle;
+        }
+        Mode::Resize(handle) => {
+            let b = frame.bounds;
+            let to = frame.to_local(p);
+            let (next, x, y) = handle.resized(b, to, true);
+            flip_x = x;
+            flip_y = y;
+            ratio = next.w / b.w;
+            frame.bounds = next;
+            let center = frame.center();
+            let world = gesture.frame.to_world(center);
+            frame.bounds.x += world.x - center.x;
+            frame.bounds.y += world.y - center.y;
+        }
+        _ => {}
+    }
+    let map = |p: Pos| {
+        let q = gesture.frame.to_local(p);
+        let c = gesture.frame.center();
+        let delta = Pos::new(
+            (q.x - c.x) * ratio * if flip_x { -1. } else { 1. },
+            (q.y - c.y) * ratio * if flip_y { -1. } else { 1. },
+        )
+        .rotate(Pos::default(), frame.rotation);
+        Pos::new(frame.center().x + delta.x, frame.center().y + delta.y)
+    };
+    let mut expanded_label = false;
+    let mut marks = Vec::with_capacity(gesture.originals.len());
+    for (i, original) in gesture.originals.iter() {
+        let mut next = original.clone();
+        let mark = &mut next;
+        if matches!(gesture.mode, Mode::Resize(_)) && mark.tool != Tool::Text {
+            mark.style = mark.style.clone().with_scale(mark.style.scale * ratio);
+        }
+        if matches!(mark.tool, Tool::Arrow | Tool::Line) {
+            for p in &mut mark.points {
+                *p = map(*p);
+            }
+            if !mark.text.trim().is_empty() {
+                let before = mark.points.clone();
+                mark.constrain_arrow_label(None);
+                expanded_label |= mark.points != before;
+            }
+        } else {
+            let old = original.bounds();
+            mark.resize(
+                old,
+                Rect {
+                    x: old.x,
+                    y: old.y,
+                    w: old.w * ratio,
+                    h: old.h * ratio,
+                },
+                false,
+            );
+            mark.flip_geometry(flip_x, flip_y);
+            let center = mark.bounds().center();
+            let target = map(old.center());
+            mark.translate(target.x - center.x, target.y - center.y);
+            mark.rotation = if flip_x != flip_y {
+                2. * gesture.frame.rotation - original.rotation + angle
+            } else {
+                original.rotation + angle
+            };
+        }
+        marks.push((*i, next));
+    }
+    (marks, (!expanded_label).then_some(frame))
 }

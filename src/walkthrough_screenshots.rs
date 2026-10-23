@@ -8,6 +8,7 @@ mod desktop;
 mod diagnostics;
 mod github;
 mod global_shortcut;
+mod image_composer;
 mod image_preview;
 mod log_viewer;
 mod menu_bar;
@@ -62,6 +63,10 @@ fn generate() -> Result<()> {
         )
     })?;
 
+    // Advanced comparison diagnostics are opt-in, outside the walkthrough.
+    if std::env::args().any(|arg| arg == "--comparison-only") {
+        return render_comparison(&output_directory);
+    }
     if std::env::args().any(|arg| arg == "--check-pixelation-edges") {
         return check_pixelation_edges(&output_directory);
     }
@@ -97,6 +102,283 @@ fn generate() -> Result<()> {
     let output = output_directory.join("rooftops-score.png");
     std::fs::write(&output, rooftops_score::png_bytes(score)?)?;
     println!("Wrote {}", output.display());
+    Ok(())
+}
+
+/// Exercise the complete picker-to-single-editor path with the native renderer.
+#[cfg(target_os = "macos")]
+fn render_comparison(output: &std::path::Path) -> Result<()> {
+    use gpui_kit::{
+        Focusable as _, InputEvent as _, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
+        MouseMoveEvent, MouseUpEvent,
+    };
+    let platform = gpui_kit::platform::current_platform(true);
+    let mut cx = HeadlessAppContext::with_platform(
+        platform.text_system(),
+        Arc::new(gpui_kit::assets::AllAssets),
+        gpui_kit::platform::current_headless_renderer,
+    );
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        theme::apply_dark_theme(cx);
+        image_preview::init_keybindings(cx);
+        cx.set_reduce_motion(true);
+    });
+    let (picker, view) = cx.update(|cx| {
+        gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                    Default::default(),
+                    size(
+                        px(image_composer::WINDOW_WIDTH),
+                        px(image_composer::WINDOW_HEIGHT),
+                    ),
+                ))),
+                show: false,
+                focus: false,
+                ..Default::default()
+            },
+            cx,
+            |window, cx| cx.new(|cx| image_composer::ImageComposer::new(window, cx)),
+        )
+    })?;
+    let mut heading_bounds = None;
+    for populated in [false, true] {
+        if populated {
+            cx.update_window(picker, |_, window, cx| {
+                view.update(cx, |view, cx| view.load_walkthrough(0, window, cx))
+            })?;
+        }
+        cx.run_until_parked();
+        cx.update_window(picker, |_, window, cx| {
+            window.render_frame(cx);
+            let bounds = window.find("comparison-heading").bounds();
+            if let Some(previous) = heading_bounds {
+                assert_eq!(bounds, previous);
+            }
+            heading_bounds = Some(bounds);
+        })?;
+        cx.capture_screenshot(picker)?
+            .save(output.join(if populated {
+                "comparison-picker.png"
+            } else {
+                "comparison-empty.png"
+            }))?;
+    }
+    let (main, main_view) = cx.update(|cx| {
+        gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                    Default::default(),
+                    size(px(620.), px(780.)),
+                ))),
+                show: false,
+                focus: false,
+                ..Default::default()
+            },
+            cx,
+            |window, cx| {
+                cx.new(|cx| {
+                    UploaderApp::for_walkthrough(WalkthroughScenario::Preferences, window, cx)
+                })
+            },
+        )
+    })?;
+    let main_capture = main_view.clone();
+    cx.update(|cx| {
+        cx.subscribe(
+            &view,
+            move |_, event: &image_composer::ComparisonRequested, cx| {
+                main.update(cx, |_, window, cx| {
+                    main_capture.update(cx, |app, cx| {
+                        app.begin_comparison(event.0.clone(), window, cx).unwrap();
+                    })
+                })
+                .unwrap();
+            },
+        )
+        .detach()
+    });
+    let start = std::time::Instant::now();
+    cx.update_window(picker, |_, window, cx| {
+        view.update(cx, |view, cx| view.load_walkthrough(1, window, cx))
+    })?;
+    cx.run_until_parked();
+    cx.update_window(main, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(main)?
+        .save(output.join("comparison-main.png"))?;
+    let attachment = cx
+        .update(|cx| main_view.read(cx).walkthrough_comparison())
+        .context("Automatic comparison did not stage an attachment")?;
+    println!(
+        "Combine two walkthrough images: {:.1} ms; {:?}; {} bytes",
+        start.elapsed().as_secs_f64() * 1000.,
+        attachment.image().unwrap().pixel_size,
+        attachment.len()
+    );
+    std::fs::write(
+        output.join("comparison-output.png"),
+        &attachment.image().unwrap().bytes,
+    )?;
+    let id = attachment.id;
+    let (editor, preview) = cx.update(|cx| {
+        gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                    Default::default(),
+                    size(px(1060.), px(740.)),
+                ))),
+                show: false,
+                focus: false,
+                ..Default::default()
+            },
+            cx,
+            |window, cx| {
+                let preview =
+                    cx.new(|cx| image_preview::ImagePreview::new(vec![attachment], id, cx));
+                window.focus(&preview.read(cx).focus_handle(cx), cx);
+                preview
+            },
+        )
+    })?;
+    cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| {
+        window.dispatch_event(
+            KeyDownEvent {
+                keystroke: Keystroke::parse("a").unwrap(),
+                is_held: false,
+                prefer_character_input: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        let start = gpui_kit::point(px(310.), px(380.));
+        let end = gpui_kit::point(px(740.), px(380.));
+        window.dispatch_event(
+            MouseDownEvent {
+                position: start,
+                button: MouseButton::Left,
+                modifiers: Default::default(),
+                click_count: 1,
+                first_mouse: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.dispatch_event(
+            MouseMoveEvent {
+                position: end,
+                pressed_button: Some(MouseButton::Left),
+                modifiers: Default::default(),
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.dispatch_event(
+            MouseUpEvent {
+                position: end,
+                button: MouseButton::Left,
+                modifiers: Default::default(),
+                click_count: 1,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(editor)?
+        .save(output.join("comparison-editor.png"))?;
+    let idle = cx.update_window(editor, |_, window, _| {
+        window.find(("comparison-caption", 0_usize)).bounds()
+    })?;
+    cx.update_window(editor, |_, window, cx| {
+        window.activate_window();
+        window.double_click(("comparison-caption", 0_usize), cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| {
+        window.render_frame(cx);
+        anyhow::ensure!(
+            window.find(("comparison-caption", 0_usize)).bounds() == idle,
+            "editing must preserve caption bounds"
+        );
+        Ok::<_, anyhow::Error>(())
+    })??;
+    cx.capture_screenshot(editor)?
+        .save(output.join("comparison-caption-selected.png"))?;
+    cx.update_window(editor, |_, window, cx| {
+        window.input("Original interface", cx);
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(editor)?
+        .save(output.join("comparison-renamed.png"))?;
+    cx.update_window(editor, |_, window, cx| {
+        window.double_click(("comparison-caption", 0_usize), cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| {
+        window.input("Original interface", cx);
+        window.press("end", cx);
+        window.press("shift-enter", cx);
+        window.input(
+            "A caption that wraps naturally without covering either image.",
+            cx,
+        );
+        window.render_frame(cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(editor)?
+        .save(output.join("comparison-caption-multiline.png"))?;
+    cx.update_window(editor, |_, window, cx| {
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(editor)?
+        .save(output.join("comparison-caption-wrapped.png"))?;
+    let source = |name: &str| {
+        model::StagedAttachment::from_path(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("packaging")
+                .join(name),
+            Default::default(),
+        )
+    };
+    let small = image_composer::combine([
+        source("menu-bar-icon.png")?,
+        source("rocket-cat-transparent.png")?,
+    ])?;
+    let id = small.id;
+    cx.update_window(editor, |_, window, cx| {
+        preview.update(cx, |preview, cx| preview.show(vec![small], id, cx));
+        window.render_frame(cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| {
+        window.double_click(("comparison-caption", 0_usize), cx)
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| {
+        window.input(
+            "A longer caption beneath a much smaller image, independent of its original size.",
+            cx,
+        );
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })?;
+    cx.run_until_parked();
+    cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(editor)?
+        .save(output.join("comparison-small-images.png"))?;
+    drop(preview);
     Ok(())
 }
 

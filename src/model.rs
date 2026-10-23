@@ -273,8 +273,32 @@ impl StagedAttachment {
         }
 
         let pixel_size = validate_image_bytes(&bytes, format)?;
+        Ok(Self::from_validated_image(name, bytes, format, pixel_size))
+    }
+
+    /// Only for PNG bytes and dimensions returned by our own renderer.
+    pub(crate) fn from_rendered_png(
+        name: String,
+        bytes: Vec<u8>,
+        pixel_size: (u32, u32),
+    ) -> Result<Self> {
+        validate_size(bytes.len() as u64, MAX_ATTACHMENT_BYTES)?;
+        Ok(Self::from_validated_image(
+            name,
+            bytes,
+            ImageFormat::Png,
+            pixel_size,
+        ))
+    }
+
+    fn from_validated_image(
+        name: String,
+        bytes: Vec<u8>,
+        format: ImageFormat,
+        pixel_size: (u32, u32),
+    ) -> Self {
         let bytes: Arc<[u8]> = bytes.into();
-        Ok(Self {
+        Self {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             description: name.clone(),
             name,
@@ -286,7 +310,7 @@ impl StagedAttachment {
                 bytes,
                 pixel_size,
             }),
-        })
+        }
     }
 
     pub fn formatted_size(&self) -> String {

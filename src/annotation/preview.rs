@@ -5,6 +5,8 @@ use gpui_kit::{Bounds, Pixels, Window, point, px, rgba, size};
 #[derive(Default, Clone)]
 pub struct PreviewCache {
     marks: Vec<CachedMark>,
+    comparison: Option<Comparison>,
+    comparison_start: usize,
     hover: Option<super::pixelation::HoverPreview>,
     pixelation: super::pixelation::PixelationPreview,
     retired: Vec<Arc<gpui_kit::RenderImage>>,
@@ -42,7 +44,15 @@ impl PreviewCache {
             self.hover = Some(super::pixelation::HoverPreview::new(doc));
         }
         self.pixelation.update(doc);
-        for (i, mark) in doc.marks.iter().enumerate() {
+        self.comparison = doc.comparison.clone();
+        self.comparison_start = doc.marks.len();
+        let labels = doc
+            .comparison
+            .as_ref()
+            .map_or_else(Vec::new, Comparison::label_marks);
+        let marks = doc.marks.iter().chain(&labels);
+        let count = doc.marks.len() + labels.len();
+        for (i, mark) in marks.enumerate() {
             if let Some(old) = self.marks.get_mut(i) {
                 if old.mark == *mark {
                     continue;
@@ -103,10 +113,10 @@ impl PreviewCache {
                 self.marks.push(cached);
             }
         }
-        if self.marks.len() > doc.marks.len() {
+        if self.marks.len() > count {
             self.retired.extend(
                 self.marks
-                    .drain(doc.marks.len()..)
+                    .drain(count..)
                     .filter_map(|mark| mark.raster)
                     .map(|raster| raster.texture),
             );
@@ -121,11 +131,17 @@ impl PreviewCache {
         {
             hover.paint(center, diameter * scale / 2., origin, scale, window);
         }
-        for cached in self
+        for (index, cached) in self
             .marks
             .iter()
-            .filter(|cached| cached.mark.tool != Tool::Redact)
+            .enumerate()
+            .filter(|(_, cached)| cached.mark.tool != Tool::Redact)
         {
+            if index == self.comparison_start
+                && let Some(comparison) = &self.comparison
+            {
+                comparison.paint_caption_region(origin, scale, window);
+            }
             if let Some(raster) = &cached.raster {
                 raster.paint(origin, scale, window);
                 continue;
@@ -712,6 +728,7 @@ mod tests {
         mark.points[1] = Pos::new(240., 160.);
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            comparison: None,
             base: Arc::new(image::RgbaImage::new(300, 200)),
             marks: vec![mark],
             undo: Vec::new(),
@@ -763,6 +780,7 @@ mod tests {
         let mesh = paths(&mark);
         let doc = Document {
             annotation_scale: OnceLock::new(),
+            comparison: None,
             base: Arc::new(image::RgbaImage::from_pixel(
                 480,
                 540,
@@ -817,6 +835,7 @@ mod tests {
             }));
             let doc = Document {
                 annotation_scale: OnceLock::new(),
+                comparison: None,
                 base: base.clone(),
                 marks: vec![mark.clone()],
                 undo: Vec::new(),
@@ -882,6 +901,7 @@ mod tests {
                 let mesh = paths(&mark);
                 let doc = Document {
                     annotation_scale: OnceLock::new(),
+                    comparison: None,
                     base: Arc::new(image::RgbaImage::new(200, 200)),
                     marks: vec![mark.clone()],
                     undo: Vec::new(),
@@ -931,6 +951,7 @@ mod tests {
                         let stroke = COLORS[color];
                         let doc = Document {
                             annotation_scale: OnceLock::new(),
+                            comparison: None,
                             base: Arc::new(image::RgbaImage::new(280, 280)),
                             marks: vec![mark],
                             undo: Vec::new(),
@@ -1023,6 +1044,7 @@ mod tests {
                     mark.rotation = rotation;
                     let doc = Document {
                         annotation_scale: OnceLock::new(),
+                        comparison: None,
                         base: Arc::new(image::RgbaImage::new(280, 280)),
                         marks: vec![mark.clone()],
                         undo: Vec::new(),
@@ -1080,6 +1102,7 @@ mod tests {
             let mesh = paths(&mark);
             let doc = Document {
                 annotation_scale: OnceLock::new(),
+                comparison: None,
                 base: Arc::new(image::RgbaImage::new(320, 240)),
                 marks: vec![mark],
                 undo: Vec::new(),
@@ -1134,6 +1157,7 @@ mod tests {
             mark.translate(120. - center.x, 120. - center.y);
             let mut doc = Document {
                 annotation_scale: OnceLock::new(),
+                comparison: None,
                 base: Arc::new(image::RgbaImage::new(240, 240)),
                 marks: vec![mark],
                 undo: Vec::new(),
@@ -1230,6 +1254,7 @@ mod tests {
                 let mesh = paths(&mark);
                 let doc = Document {
                     annotation_scale: OnceLock::new(),
+                    comparison: None,
                     base: Arc::new(image::RgbaImage::new(600, 400)),
                     marks: vec![mark],
                     undo: Vec::new(),
@@ -1322,6 +1347,7 @@ mod tests {
         use gpui_kit::test::TestWindowExt as _;
         let mut doc = Document {
             annotation_scale: OnceLock::new(),
+            comparison: None,
             base: Arc::new(image::RgbaImage::from_fn(2400, 1600, |x, y| {
                 image::Rgba([(x % 255) as u8, (y % 255) as u8, 100, 255])
             })),

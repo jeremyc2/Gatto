@@ -192,6 +192,21 @@ bundled builds for window lifecycle or custom URL changes; `cargo run` does not
 register the packaged URL scheme. Reset and login-item checks modify your local
 preferences, so use a disposable macOS user if those settings need to be preserved.
 
+### Comparison diagnostics
+
+The advanced comparison feature is omitted from the walkthrough and its default
+screenshot generation. Its opt-in diagnostics cover the picker, staged result,
+combined PNG, caption editing, wrapping, and unequal image sizes. Generate these
+captures in a temporary directory:
+
+```sh
+cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- /tmp/gatto-comparison --comparison-only
+```
+
+The command uses in-memory fixtures and does not upload or change preferences.
+It reports second-attachment-to-staging time, final dimensions, and PNG bytes.
+See [historical profiling notes](docs/research/side-by-side-composition-profile.md).
+
 ### Automation status
 
 The CI and dependency-security workflow definitions currently live in

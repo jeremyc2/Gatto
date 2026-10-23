@@ -1,3 +1,5 @@
+pub mod comparison;
+pub use comparison::Comparison;
 mod geometry;
 mod pixelation;
 mod preview;
@@ -615,6 +617,7 @@ fn segment_distance(p: Pos, a: Pos, b: Pos) -> f32 {
 #[derive(Clone, Default)]
 pub struct Session(Arc<Mutex<Option<RetainedDocument>>>);
 pub struct RetainedDocument {
+    pub saved_comparison: Option<Comparison>,
     pub document: Document,
     pub image: Arc<gpui_kit::Image>,
     pub saved_marks: Vec<Mark>,
@@ -632,46 +635,59 @@ impl Session {
                     document: Document::decode(bytes)?,
                     image,
                     saved_marks: Vec::new(),
+                    saved_comparison: None,
                 })
             },
             Ok,
         )
     }
-    pub fn retain(&self, document: Document, image: Arc<gpui_kit::Image>, saved_marks: Vec<Mark>) {
+    pub(crate) fn retain(&self, document: Document, image: Arc<gpui_kit::Image>, saved: EditState) {
         *self.0.lock().unwrap_or_else(|error| error.into_inner()) = Some(RetainedDocument {
             document,
             image,
-            saved_marks,
+            saved_marks: saved.marks,
+            saved_comparison: saved.comparison,
         });
     }
 }
 
 #[derive(Clone)]
 pub struct Document {
+    pub comparison: Option<Comparison>,
     pub base: Arc<image::RgbaImage>,
     pub marks: Vec<Mark>,
     /// Preset unit established from the first fitted view, retained across saves.
     pub annotation_scale: OnceLock<f32>,
-    undo: Vec<Vec<Mark>>,
-    redo: Vec<Vec<Mark>>,
+    undo: Vec<EditState>,
+    redo: Vec<EditState>,
     mosaic: Arc<OnceLock<Vec<[u8; 3]>>>,
+}
+#[derive(Clone)]
+pub(crate) struct EditState {
+    pub marks: Vec<Mark>,
+    pub comparison: Option<Comparison>,
 }
 impl Document {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        Ok(Self {
-            base: Arc::new(image::load_from_memory(bytes)?.to_rgba8()),
+        Ok(Self::from_image(image::load_from_memory(bytes)?.to_rgba8()))
+    }
+    pub(crate) fn from_image(image: image::RgbaImage) -> Self {
+        Self {
+            base: Arc::new(image),
             marks: Vec::new(),
             annotation_scale: OnceLock::new(),
+            comparison: None,
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
-        })
+        }
     }
     pub fn snapshot(&self) -> Self {
         Self {
             base: self.base.clone(),
             marks: self.marks.clone(),
             annotation_scale: self.annotation_scale.clone(),
+            comparison: self.comparison.clone(),
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: self.mosaic.clone(),
@@ -707,7 +723,7 @@ impl Document {
         })
     }
     pub fn checkpoint(&mut self) {
-        self.undo.push(self.marks.clone());
+        self.undo.push(self.edit_state());
         self.redo.clear();
     }
     #[cfg(test)]
@@ -722,14 +738,26 @@ impl Document {
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
+    pub(crate) fn edit_state(&self) -> EditState {
+        EditState {
+            marks: self.marks.clone(),
+            comparison: self.comparison.clone(),
+        }
+    }
+    fn restore_state(&mut self, state: EditState) {
+        self.marks = state.marks;
+        self.comparison = state.comparison;
+    }
     pub fn undo(&mut self) {
-        if let Some(marks) = self.undo.pop() {
-            self.redo.push(std::mem::replace(&mut self.marks, marks));
+        if let Some(state) = self.undo.pop() {
+            self.redo.push(self.edit_state());
+            self.restore_state(state);
         }
     }
     pub fn redo(&mut self) {
-        if let Some(marks) = self.redo.pop() {
-            self.undo.push(std::mem::replace(&mut self.marks, marks));
+        if let Some(state) = self.redo.pop() {
+            self.undo.push(self.edit_state());
+            self.restore_state(state);
         }
     }
     pub fn hit(&self, p: Pos, tolerance: f32) -> Option<usize> {
@@ -778,6 +806,11 @@ impl Document {
         let mut y = 0f32;
         let mut right = self.base.width() as f32;
         let mut bottom = self.base.height() as f32;
+        if let Some(comparison) = &self.comparison {
+            let band = comparison.caption_band();
+            right = right.max(band.x + band.w);
+            bottom = bottom.max(band.y + band.h + 16.);
+        }
         for mark in &self.marks {
             if mark.tool == Tool::Redact {
                 continue;
@@ -806,25 +839,114 @@ impl Document {
         }
     }
     pub fn png(&self, max_edge: Option<f32>) -> Result<(Vec<u8>, Rect)> {
+        if self.comparison.is_some() && max_edge.is_none() {
+            let (bytes, _, bounds) = self.comparison_png(comparison::SAVE_PNG_BUDGET)?;
+            return Ok((bytes, bounds));
+        }
+        let (pixels, bounds) = self.render(max_edge)?;
+        Ok((pixels.encode_png()?, bounds))
+    }
+
+    /// Render from the retained original on every attempt. Compressible screenshots
+    /// keep 4K detail; noisy photos shrink only when their actual PNG requires it.
+    pub(crate) fn comparison_png(&self, budget: usize) -> Result<(Vec<u8>, (u32, u32), Rect)> {
+        use image::ImageEncoder as _;
+        let mut limit = (comparison::MAX_WIDTH, comparison::MAX_HEIGHT);
+        for _ in 0..12 {
+            let (mut pixels, bounds) = self.render_within(limit.0, limit.1)?;
+            let size = (pixels.width(), pixels.height());
+            // Transfer the renderer buffer without cloning it; PNG stores straight
+            // alpha, whereas the rasterizer uses premultiplied channels.
+            for pixel in pixels.data_mut().as_chunks_mut::<4>().0 {
+                if pixel[3] != 255 {
+                    let color = tiny_skia::PremultipliedColorU8::from_rgba(
+                        pixel[0], pixel[1], pixel[2], pixel[3],
+                    )
+                    .context("Invalid comparison pixels")?
+                    .demultiply();
+                    pixel.copy_from_slice(&[
+                        color.red(),
+                        color.green(),
+                        color.blue(),
+                        color.alpha(),
+                    ]);
+                }
+            }
+            let mut bytes = Vec::new();
+            image::codecs::png::PngEncoder::new_with_quality(
+                &mut bytes,
+                image::codecs::png::CompressionType::Default,
+                image::codecs::png::FilterType::Adaptive,
+            )
+            .write_image(
+                &pixels.take(),
+                size.0,
+                size.1,
+                image::ExtendedColorType::Rgba8,
+            )?;
+            if bytes.len() <= budget {
+                return Ok((bytes, size, bounds));
+            }
+            // Pixel count is proportional to scale squared. Margin avoids repeated
+            // near-limit encodes when filtering changes the compression ratio.
+            let factor = ((budget as f64 / bytes.len() as f64).sqrt() * 0.95).min(0.9);
+            limit = (
+                ((size.0 as f64 * factor).floor() as u32).max(1),
+                ((size.1 as f64 * factor).floor() as u32).max(1),
+            );
+        }
+        bail!("Could not fit the comparison within its PNG size budget.")
+    }
+
+    /// Canonical export pixels, including pixelation and expanded annotation bounds.
+    fn render(&self, max_edge: Option<f32>) -> Result<(Pixmap, Rect)> {
         let bounds = self.bounds();
         let scale = max_edge.map_or(1., |max| (max / bounds.w.max(bounds.h)).min(1.));
         let w = (bounds.w * scale).ceil() as u32;
         let h = (bounds.h * scale).ceil() as u32;
+        self.render_at_scale(bounds, scale, (w, h))
+    }
+
+    /// Fit the entire edited document inside a rectangle without upscaling.
+    /// Render at the target size rather than allocating a full-resolution export.
+    fn render_within(&self, max_width: u32, max_height: u32) -> Result<(Pixmap, Rect)> {
+        let bounds = self.bounds();
+        let scale = (f64::from(max_width) / f64::from(bounds.w))
+            .min(f64::from(max_height) / f64::from(bounds.h))
+            .min(1.);
+        let w = (f64::from(bounds.w) * scale)
+            .ceil()
+            .min(f64::from(max_width)) as u32;
+        let h = (f64::from(bounds.h) * scale)
+            .ceil()
+            .min(f64::from(max_height)) as u32;
+        self.render_at_scale(bounds, scale as f32, (w, h))
+    }
+
+    fn render_at_scale(
+        &self,
+        bounds: Rect,
+        scale: f32,
+        (w, h): (u32, u32),
+    ) -> Result<(Pixmap, Rect)> {
         if w == 0 || h == 0 || w > 16384 || h > 16384 || u64::from(w) * u64::from(h) > 64_000_000 {
             bail!(
                 "The annotated image is too large to save (maximum 64 megapixels and 16,384 pixels per side)."
             );
         }
-        let mut pixmap = Pixmap::new(w, h).context("Could not allocate annotated image")?;
         let source = if scale < 1. {
-            image::imageops::resize(
+            std::borrow::Cow::Owned(image::imageops::resize(
                 self.base.as_ref(),
                 (self.base.width() as f32 * scale).ceil().max(1.) as u32,
                 (self.base.height() as f32 * scale).ceil().max(1.) as u32,
-                image::imageops::FilterType::Triangle,
-            )
+                if self.comparison.is_some() {
+                    image::imageops::FilterType::Lanczos3
+                } else {
+                    image::imageops::FilterType::Triangle
+                },
+            ))
         } else {
-            self.base.as_ref().clone()
+            std::borrow::Cow::Borrowed(self.base.as_ref())
         };
         let mut base =
             Pixmap::new(source.width(), source.height()).context("Could not allocate image")?;
@@ -841,37 +963,55 @@ impl Document {
             }
             target[3] = pixel[3];
         }
-        pixmap.draw_pixmap(
-            (-bounds.x * scale).round() as i32,
-            (-bounds.y * scale).round() as i32,
-            base.as_ref(),
-            &tiny_skia::PixmapPaint::default(),
-            Transform::identity(),
-            None,
-        );
+        // Reuse the premultiplied source allocation when the content fits it.
+        let mut pixmap =
+            if bounds.x == 0. && bounds.y == 0. && w == base.width() && h == base.height() {
+                base
+            } else {
+                let mut pixels = Pixmap::new(w, h).context("Could not allocate annotated image")?;
+                pixels.draw_pixmap(
+                    (-bounds.x * scale).round() as i32,
+                    (-bounds.y * scale).round() as i32,
+                    base.as_ref(),
+                    &tiny_skia::PixmapPaint::default(),
+                    Transform::identity(),
+                    None,
+                );
+                pixels
+            };
         let transform =
             Transform::from_row(scale, 0., 0., scale, -bounds.x * scale, -bounds.y * scale);
         pixelation::export(self, &mut pixmap, bounds, scale);
         for mark in self.marks.iter().filter(|mark| mark.tool != Tool::Redact) {
             let transform = mark.frame().transform().post_concat(transform);
-            let mut layer = Pixmap::new(w, h).context("Could not allocate annotation")?;
-            mark.paint_layer(&mut layer, transform);
-            pixmap.draw_pixmap(
-                0,
-                0,
-                layer.as_ref(),
-                &tiny_skia::PixmapPaint {
-                    opacity: mark.style.opacity,
-                    ..Default::default()
-                },
-                Transform::identity(),
-                None,
-            );
+            mark.paint_onto(&mut pixmap, transform)?;
         }
-        Ok((pixmap.encode_png()?, bounds))
+        if let Some(comparison) = &self.comparison {
+            comparison.paint(&mut pixmap, transform)?;
+        }
+        Ok((pixmap, bounds))
     }
 }
 impl Mark {
+    /// Composite object opacity once, on a surface bounded by the caller.
+    pub(crate) fn paint_onto(&self, target: &mut Pixmap, transform: Transform) -> Result<()> {
+        let mut layer = Pixmap::new(target.width(), target.height())
+            .context("Could not allocate annotation")?;
+        self.paint_layer(&mut layer, transform);
+        target.draw_pixmap(
+            0,
+            0,
+            layer.as_ref(),
+            &tiny_skia::PixmapPaint {
+                opacity: self.style.opacity,
+                ..Default::default()
+            },
+            Transform::identity(),
+            None,
+        );
+        Ok(())
+    }
+
     /// Paint all parts at full object opacity; callers composite the completed layer once.
     fn paint_layer(&self, layer: &mut Pixmap, transform: Transform) {
         let path = self.body_path();
@@ -1058,6 +1198,53 @@ fn draw_cap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reused_source_raster_matches_compositing_over_transparent_for_every_alpha() {
+        let pixels = image::RgbaImage::from_fn(256, 2, |x, y| {
+            image::Rgba([x as u8, (255 - x) as u8, (y * 91) as u8, x as u8])
+        });
+        let document = Document::from_image(pixels);
+        for max_edge in [None, Some(128.)] {
+            let (actual, _) = document.render(max_edge).unwrap();
+            let source = if max_edge.is_some() {
+                image::imageops::resize(
+                    &*document.base,
+                    128,
+                    1,
+                    image::imageops::FilterType::Triangle,
+                )
+            } else {
+                (*document.base).clone()
+            };
+            let mut base = Pixmap::new(source.width(), source.height()).unwrap();
+            for (target, pixel) in base
+                .data_mut()
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(source.pixels())
+            {
+                for channel in 0..3 {
+                    target[channel] = (u16::from(pixel[channel]) * u16::from(pixel[3]) / 255) as u8;
+                }
+                target[3] = pixel[3];
+            }
+            let mut expected = Pixmap::new(source.width(), source.height()).unwrap();
+            expected.draw_pixmap(
+                0,
+                0,
+                base.as_ref(),
+                &tiny_skia::PixmapPaint::default(),
+                Transform::identity(),
+                None,
+            );
+            assert!(
+                actual == expected,
+                "reusing the source changed alpha compositing"
+            );
+        }
+    }
     #[cfg(target_os = "macos")]
     #[test]
     fn bitmap_emoji_remain_visible_selectable_and_exported() {
@@ -1087,6 +1274,7 @@ mod tests {
     fn document() -> Document {
         Document {
             annotation_scale: OnceLock::new(),
+            comparison: None,
             base: Arc::new(image::RgbaImage::from_fn(80, 60, |x, y| {
                 image::Rgba([(x * 3) as u8, (y * 4) as u8, 80, 255])
             })),
