@@ -41,23 +41,6 @@ impl OpenRequest {
     }
 }
 
-pub fn quick_action_path() -> Option<PathBuf> {
-    let bundled = std::env::current_exe()
-        .ok()?
-        .parent()?
-        .parent()?
-        .join("Resources/Send to Gatto.workflow");
-    if bundled.is_dir() {
-        return Some(bundled);
-    }
-    if cfg!(debug_assertions) {
-        let source =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packaging/Send to Gatto.workflow");
-        return source.is_dir().then_some(source);
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

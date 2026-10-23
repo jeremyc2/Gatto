@@ -9,7 +9,6 @@ actions!(
         InstallUpdate,
         CheckForUpdates,
         OpenPreferences,
-        InstallFinderQuickAction,
         CreateComposition
     ]
 );
@@ -30,7 +29,6 @@ pub fn init(cx: &mut App) {
             MenuItem::action("App Preferences", OpenPreferences),
             MenuItem::separator(),
             MenuItem::action("Check for Updates…", CheckForUpdates),
-            MenuItem::action("Install Finder Quick Action…", InstallFinderQuickAction),
             MenuItem::separator(),
             MenuItem::action("Quit Gatto", Quit),
         ]),

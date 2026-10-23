@@ -4,10 +4,43 @@
 #include <assert.h>
 
 static void received(void *context, uint32_t event) { *(uint32_t *)context = event; }
+@interface FileReceiver : NSObject <NSApplicationDelegate>
+@property NSArray<NSURL *> *selection;
+@end
+@implementation FileReceiver
+- (void)application:(NSApplication *)application openURLs:(NSArray<NSURL *> *)urls {
+    self.selection = urls;
+}
+@end
+
 int main(int argc, const char **argv) {
     @autoreleasepool {
         assert(argc == 2);
         [NSApplication sharedApplication];
+        FileReceiver *receiver = [FileReceiver new];
+        NSApp.delegate = receiver;
+        GattoInstallFileService();
+        GattoFileService *service = NSApp.servicesProvider;
+        NSPasteboard *board = [NSPasteboard pasteboardWithUniqueName];
+        NSArray<NSURL *> *selection = @[[NSURL fileURLWithPath:@"/tmp/猫 #?%\n$(touch nope).png"],
+                                      [NSURL fileURLWithPath:@"/tmp/video clip.mov"]];
+        [board writeObjects:selection];
+        NSString *error = nil;
+        [service sendToGatto:board userData:nil error:&error];
+        assert(!error && [receiver.selection isEqualToArray:selection]);
+        [board clearContents];
+        [board setPropertyList:[selection valueForKey:@"path"] forType:NSFilenamesPboardType];
+        receiver.selection = nil;
+        [service sendToGatto:board userData:nil error:&error];
+        assert(!error && [receiver.selection isEqualToArray:selection]);
+        [board clearContents];
+        [board writeObjects:@[[NSURL URLWithString:@"https://example.com/a.png"]]];
+        receiver.selection = nil;
+        [service sendToGatto:board userData:nil error:&error];
+        assert(error && !receiver.selection);
+        [board releaseGlobally];
+        NSApp.servicesProvider = nil;
+        NSApp.delegate = nil;
         NSData *png = [NSData dataWithContentsOfFile:[NSString stringWithUTF8String:argv[1]]];
         uint32_t event = 0;
         void *handle = GattoMenuCreate(png.bytes,png.length,received,&event);
@@ -56,6 +89,6 @@ int main(int argc, const char **argv) {
         assert(event == 42);
         ReleaseEvent(native);
         assert(mediaEvent(NULL,kCGEventTapDisabledByUserInput,NULL,(__bridge void *)key) == NULL);
-        puts("Native menu lifecycle, shortcuts and event dispatch passed.");
+        puts("Native file service, menu lifecycle, shortcuts and event dispatch passed.");
     }
 }

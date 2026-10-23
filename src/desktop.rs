@@ -9,6 +9,7 @@ use std::{
 };
 
 unsafe extern "C" {
+    fn GattoInstallFileService();
     fn GattoMenuCreate(
         bytes: *const u8,
         length: usize,
@@ -35,6 +36,13 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn GattoHotkeyDestroy(handle: *mut c_void) -> i32;
     fn GattoHotkeyDetach(handle: *mut c_void);
+}
+
+/// Called once on GPUI's application thread after its open-URL handler is ready.
+pub fn install_file_service() {
+    // SAFETY: AppKit owns the provider for the process lifetime. It forwards only
+    // file URLs to GPUI's existing delegate and retains no Rust pointers.
+    unsafe { GattoInstallFileService() }
 }
 
 extern "C" fn send_event(context: *mut c_void, identifier: u32) {

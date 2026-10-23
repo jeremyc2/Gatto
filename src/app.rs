@@ -1044,7 +1044,7 @@ impl UploaderApp {
             || window.has_active_dialog(cx)
             || self.updater.read(cx).state == UpdateState::Installing
         {
-            self.warn("Finish the current upload, import, update, or dialog, then choose Send to Gatto again. Your current draft has been kept.", window, cx);
+            self.warn("Finish the current upload, import, update, or dialog, then open the files with Gatto again. Your current draft has been kept.", window, cx);
             return;
         }
         self.show_main_page(window, cx);
@@ -4113,7 +4113,7 @@ mod tests {
                 assert!(
                     app.diagnostics
                         .text()
-                        .contains("choose Send to Gatto again")
+                        .contains("open the files with Gatto again")
                 );
                 assert_eq!(
                     app.pending_replacement_attachments.as_ref().unwrap().len(),

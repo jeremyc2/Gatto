@@ -30,8 +30,6 @@ async function workflow(mode: string, resume = false) {
     await Bun.write(join(root, "packaging/Info.plist"), "test plist");
     await Bun.write(join(root, "packaging/AppIcon.icns"), "icon");
     await Bun.write(join(root, "packaging/Assets.car"), "assets");
-    await mkdir(join(root, "packaging/Send to Gatto.workflow/Contents"), { recursive: true });
-    await Bun.write(join(root, "packaging/Send to Gatto.workflow/Contents/Info.plist"), "quick action");
     await Bun.write(join(root, "README.md"), "old figures");
     await Bun.write(join(root, "Casks/gatto.rb"), "old cask");
     await Bun.write(join(root, "docs/images/walkthrough/image-editor.png"), "stale screenshot");
@@ -185,7 +183,6 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
       screenshot: await Bun.file(join(root, "docs/images/walkthrough/image-editor.png")).text(),
       output: (await stdout) + (await stderr),
       exposure: (await exposure.exists()) ? await exposure.text() : "",
-      quickActionBundled: await Bun.file(join(root, "dist/release/Gatto.app/Contents/Resources/Send to Gatto.workflow/Contents/Info.plist")).exists(),
     };
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -198,10 +195,6 @@ test("release checks precede commits; uploads are verified as a draft before pub
   const result = await workflow("release");
   expect(result.exit, result.output).toBe(0);
   expect(result.exposure).toBe("");
-  expect(result.quickActionBundled).toBe(true);
-  const bundleQuickAction = find(result.calls, "ditto", "packaging/Send to Gatto.workflow");
-  expect(bundleQuickAction).toBeGreaterThan(-1);
-  expect(bundleQuickAction).toBeLessThan(find(result.calls, "codesign"));
   expect(find(result.calls, "bun", "typecheck:scripts")).toBeLessThan(
     find(result.calls, "git", "commit"),
   );

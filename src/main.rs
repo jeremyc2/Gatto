@@ -69,6 +69,7 @@ fn main() {
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
         application_menu::init(cx);
+        desktop::install_file_service();
         set_dock_visible(!login_launch);
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
@@ -152,21 +153,6 @@ fn main() {
             // Keyboard dispatch can still borrow the focused window.
             let main = preferences_main.clone();
             cx.defer(move |cx| perform_action(MenuAction::Settings, &main, cx));
-        });
-        let install_main = controller.clone();
-        cx.on_action(move |_: &application_menu::InstallFinderQuickAction, cx| {
-            let main = install_main.clone();
-            cx.defer(move |cx| {
-                if let Some(path) = open_request::quick_action_path()
-                    && let Ok(url) = url::Url::from_file_path(path)
-                {
-                    cx.open_url(url.as_str());
-                } else {
-                    handle_open_request(open_request::OpenRequest::Invalid(
-                        "The Finder Quick Action is missing. Reinstall a packaged release of Gatto.".into()
-                    ), &main, cx);
-                }
-            });
         });
         controller.start(login_launch, cx);
         let composition_main = controller.clone();

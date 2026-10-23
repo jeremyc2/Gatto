@@ -57,6 +57,37 @@ including formatter and linter components. Follow the
 before trying uploads. To create an optimized binary, run `cargo build --release`.
 A source build can run on Intel macOS; published bundles currently target Apple Silicon.
 
+## Local app bundle
+
+To test Finder integration, URL handling, or installation without publishing:
+
+```sh
+./scripts/build-app.sh
+open dist/local/Gatto.app
+```
+
+This compiles the current source in debug mode for your Mac and packages a fresh
+app at the absolute path printed on completion. Use `--release` for an optimized
+build. The script works from any directory, replaces only `dist/local/Gatto.app`
+after a successful build and ad-hoc signature check, and does not install over
+Applications. Quit an already running Gatto before opening this bundle. Launch it
+once to let macOS register its Open With types and **Send to Gatto** service.
+Local bundles omit Sparkle and release credentials; automatic updating is unavailable.
+For normal installation testing, copy the bundle to Applications before launching.
+
+To package that local bundle into a DMG:
+
+```sh
+./scripts/build-dmg.sh
+open dist/gatto-preview.dmg
+```
+
+`build-dmg.sh` packages an existing app; it does not compile. Its default input is
+`dist/local/Gatto.app`; its output is `dist/gatto-preview.dmg` and must not already
+exist. Both paths can be overridden. See [DMG previews](docs/RELEASING.md#preview-the-installation-window).
+`release.sh` owns production signing, notarization, updating, and publication in
+`dist/release`; local app builds and DMG previews use no publishing workflow.
+
 ## Project layout
 
 | Path | Contents |

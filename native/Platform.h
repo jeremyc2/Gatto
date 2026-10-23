@@ -22,6 +22,7 @@ void GattoUpload(const char *url, const char *token, const char *mime,
 void GattoUploadResultFree(GattoUploadResult *result);
 
 typedef void (*GattoEvent)(void *, uint32_t);
+void GattoInstallFileService(void);
 void *GattoMenuCreate(const uint8_t *, size_t, GattoEvent, void *);
 void GattoMenuDestroy(void *);
 void GattoMenuPasteVisible(void *, bool);

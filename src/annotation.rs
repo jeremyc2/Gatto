@@ -9,7 +9,7 @@ mod shapes;
 mod stack;
 mod text;
 pub use geometry::Frame;
-pub use preview::{PreviewCache, fill_icon, pixelate_icon, shape_icon};
+pub use preview::{PreviewCache, fill_icon, pixelate_icon, scribble_icon, shape_icon};
 pub use shapes::SHAPES;
 #[cfg(test)]
 pub use text::line_height;

@@ -7,14 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- The image editor's Pen tool uses a freehand scribble icon, matching its drawing
+  action. Its label and **P** shortcut are unchanged (#26).
+
 ### Added
 
-- Local DMG previews default to `dist/release/Gatto.app` and
-  `dist/gatto-preview.dmg` when `scripts/build-dmg.sh` runs without arguments.
-- Optional **Send to Gatto** Finder Quick Action. Install it from the Gatto menu,
-  then send one or more Finder files to the existing staging flow. Gatto launches
-  or activates for review, preserves batch and draft choices, and reports invalid
-  files while keeping supported media. Upload still requires an explicit click.
+- Finder integration through **Open With → Gatto** and a built-in **Send to Gatto**
+  service, with no separate action installation. Opening files stages them for
+  review, preserves batch and draft choices, and keeps supported files from mixed
+  selections. Upload still requires an explicit click.
+- `scripts/build-app.sh` compiles and packages a fresh local `dist/local/Gatto.app`
+  without publishing. `scripts/build-dmg.sh` packages that bundle by default and
+  prints the finished DMG's absolute path.
 
 ## [0.17.4] - 2026-10-23
 

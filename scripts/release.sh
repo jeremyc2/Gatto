@@ -193,7 +193,6 @@ dist="dist/release"
 bundle="$dist/$APP_NAME"
 rm -rf "$dist"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
-ditto "packaging/Send to Gatto.workflow" "$bundle/Contents/Resources/Send to Gatto.workflow"
 plutil -lint packaging/Info.plist
 cp packaging/Info.plist "$bundle/Contents/Info.plist"
 plutil -insert SUPublicEDKey -string "$sparkle_key" "$bundle/Contents/Info.plist"

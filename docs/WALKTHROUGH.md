@@ -36,9 +36,9 @@ it to preview it.
 
 ### Send files from Finder
 
-[Install the optional Quick Action](SETUP.md#install-the-finder-quick-action-optional)
-once. Select one or more files in Finder, then choose **Quick Actions → Send to
-Gatto** from the right-click menu. Gatto launches if needed, or brings its main
+Select one or more supported files in Finder, then choose **Open With → Gatto**
+from the right-click menu, or use **Send to Gatto** (possibly under **Services**).
+Both are included in the [installed app](SETUP.md#open-files-from-finder). Gatto launches if needed, or brings its main
 window forward, and stages your selection for review. Click **Upload** yourself
 when ready.
 

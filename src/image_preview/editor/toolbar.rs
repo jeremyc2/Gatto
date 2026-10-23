@@ -1,7 +1,7 @@
 use super::*;
 use crate::annotation::{
     ARROW_TEXT_SIZES, Align, COLORS, Cap, Dash, Fill, LABEL_SIZES, SHAPES, STROKE_WIDTHS,
-    TEXT_SIZES, fill_icon, pixelate_icon, shape_icon,
+    TEXT_SIZES, fill_icon, pixelate_icon, scribble_icon, shape_icon,
 };
 use gpui_kit::assets::IconName as TextIcon;
 use gpui_kit::component::{Selectable as _, v_flex};
@@ -38,13 +38,17 @@ impl ImagePreview {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let tools = [
-            (Tool::Select, IconName::MousePointer2, "Select · V"),
-            (Tool::Pan, IconName::Hand, "Hand · H / hold Space"),
-            (Tool::Pen, IconName::PenLine, "Pen · P"),
-            (Tool::Eraser, IconName::Eraser, "Eraser · E"),
-            (Tool::Arrow, IconName::ArrowUpRight, "Arrow · A"),
-            (Tool::Text, IconName::Type, "Text · T"),
-            (Tool::Marker, IconName::ListOrdered, "Numbered marker · N"),
+            (Tool::Select, Some(IconName::MousePointer2), "Select · V"),
+            (Tool::Pan, Some(IconName::Hand), "Hand · H / hold Space"),
+            (Tool::Pen, None, "Pen · P"),
+            (Tool::Eraser, Some(IconName::Eraser), "Eraser · E"),
+            (Tool::Arrow, Some(IconName::ArrowUpRight), "Arrow · A"),
+            (Tool::Text, Some(IconName::Type), "Text · T"),
+            (
+                Tool::Marker,
+                Some(IconName::ListOrdered),
+                "Numbered marker · N",
+            ),
         ];
         div()
             .absolute()
@@ -166,7 +170,14 @@ impl ImagePreview {
                                     .w(px(36.))
                                     .h(px(36.))
                                     .rounded_md()
-                                    .icon(icon)
+                                    .when_some(icon, |button, icon| button.icon(icon))
+                                    .when(tool == Tool::Pen, |button| {
+                                        button.child(scribble_icon(if self.editor.tool == tool {
+                                            rgb(0xffffff).into()
+                                        } else {
+                                            cx.theme().foreground
+                                        }))
+                                    })
                                     .selected(self.editor.tool == tool)
                                     .when(self.editor.tool == tool, |button| {
                                         button.bg(rgb(0x4387f5)).text_color(rgb(0xffffff))

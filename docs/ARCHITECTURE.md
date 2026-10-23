@@ -143,7 +143,7 @@ the published signed DMG, with GitHub CLI as a dependency.
 ## Data flow
 
 ```text
-Paste, drop, file selection, or Finder Quick Action
+Paste, drop, file selection, or Finder file opening
              |
              v
       Validate media and selected upload limit
@@ -218,29 +218,30 @@ the whole accepted batch in order; a multi-file input to an empty draft enables
 bulk upload directly. Cancel keeps the draft, while Replace uses the first new
 attachment.
 
-The optional **Send to Gatto** Automator Quick Action is bundled under
-`Contents/Resources` before signing. The app menu opens macOS's workflow installer;
-installation and removal are per-user and explicit. Both DMG and Homebrew ship
-the same bundle. The workflow accepts Finder filesystem selections broadly so a
-mixed selection can reach Gatto's validator intact. A single Run Shell Script
-action passes the entire argument list to `/usr/bin/open -b
-com.jeremy-chandler.gatto -- "$@"`; paths are never interpolated as shell code or
-filtered by extension. Launch Services launches or reuses Gatto and GPUI delivers
-the file URLs through `on_open_urls`. The early channel retains whole events
-until the app controller is ready, including at cold launch. `open_request.rs`
-decodes local file URLs without changing existing `gatto://` actions. File events
-activate the main window and use the existing attachment validation, draft choice,
-and compression flow, with the current video policy. They never authorize upload.
-Busy operations and active dialogs reject a new selection with retry feedback;
-an in-flight Finder validation blocks a second request. Close/reset invalidate
-pending results through the existing generation guards.
+The app's `CFBundleDocumentTypes` registers PNG, JPEG, GIF, WebP, MP4, MOV, and
+WebM as alternate Viewer types for **Open With**, without replacing default apps.
+Imported WebP and WebM declarations associate their extensions and MIME types.
+`NSServices` also declares **Send to Gatto**, limited to Finder and accepting file
+items broadly so mixed selections reach the existing validator intact. macOS
+controls its visibility and context-menu placement. No Automator workflow or
+separate installer is shipped.
 
-An Automator workflow uses the system-provided runtime without adding an app
-extension, another executable, or an automatic per-user installer. Apple documents
-its Finder integration in
-[Create a workflow](https://support.apple.com/guide/automator/create-a-workflow-aut7cac58839/mac).
-Bare source executables remain usable through drop/paste; Finder's bundle-ID
-launch requires an installed app. See [Setup](SETUP.md#install-the-finder-quick-action-optional).
+`desktop.rs` installs the native service provider at app startup. `Desktop.m`
+reads file URLs (or legacy filename lists) from the service's supplied pasteboard,
+without reading or changing the general clipboard. It forwards the whole selection
+to GPUI's `application:openURLs:` delegate, which only enqueues events. Both the
+service and Open With use the early `on_open_urls` channel until the controller is
+ready, including at cold launch. `open_request.rs` decodes local file URLs without
+changing existing `gatto://` actions. File events activate the main window and use
+the existing validation, draft choice, and compression flow. They never authorize
+upload. Busy operations and dialogs reject selections with retry feedback; an
+in-flight validation blocks reentry. Close/reset invalidate pending results.
+
+Apple documents [document types](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes)
+and [Services properties](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html).
+Bare source executables support drop/paste; Finder registration needs an app bundle.
+The local build script packages that bundle separately from release signing,
+Sparkle, and publication. See [Contributing](../CONTRIBUTING.md#local-app-bundle).
 
 The shared image formatter defaults to an HTML `<img>` element accepted in GitHub
 Markdown, with `width` and `height` from the validated pixel dimensions and
@@ -612,8 +613,10 @@ Save is disabled if every image matches its saved baseline. Both actions close t
 
 `image_preview/editor.rs` owns native GPUI pointer gestures; its `toolbar.rs`
 module supplies the bottom icon toolbar, contextual twelve-color palette,
-shape picker, and opacity slider. Rectangle and ellipse have dedicated toolbar
-buttons. A shared 17-item picker anchors above the bottom chevron for choosing
+shape picker, and opacity slider. Pen uses a continuous, rounded scribble glyph
+painted as native vector geometry at the other toolbar icons' size and weight;
+its label and P shortcut remain unchanged. Rectangle and ellipse have dedicated
+toolbar buttons. A shared 17-item picker anchors above the bottom chevron for choosing
 a drawing tool, or beside the properties panel for changing the selected shape.
 Ellipse is a continuous ellipse; oval is a capsule with semicircular ends.
 The editor coordinates

@@ -32,25 +32,18 @@ Homebrew. Releases with in-app updating can also use the **↑ Update** control.
 For casks with in-app updating, add `--greedy` when explicitly upgrading through
 Homebrew.
 
-### Install the Finder Quick Action (optional)
+### Open files from Finder
 
-After installing and opening Gatto, choose **Gatto → Install Finder Quick Action…**
-from the macOS menu bar. macOS opens the bundled **Send to Gatto** workflow;
-choose **Install** in its installer. This installs the action for your user in
-`~/Library/Services/Send to Gatto.workflow`. The same steps work for the DMG and
-Homebrew installations, including apps installed in your own Applications folder.
+Install Gatto in Applications and launch it once. For supported images and videos,
+right-click the selection and choose **Open With → Gatto**. Gatto registers as an
+alternate handler, leaving your default image and video apps unchanged.
 
-In Finder, select files, then right-click and choose **Quick Actions → Send to
-Gatto**. If it is hidden, choose **Quick Actions → Customize…** and enable it in
-the Finder extensions settings. Depending on macOS, it may also appear under
-**Services**; look for **Send to Gatto** in **System Settings → Keyboard → Keyboard
-Shortcuts → Services** if it is disabled there. See the
-[Finder workflow](WALKTHROUGH.md#send-files-from-finder) for staging behavior and
-[Support](../SUPPORT.md#finder-quick-action) for removal and troubleshooting.
-
-Updates replace the bundled workflow, while your installed copy stays in
-`~/Library/Services`. Choose the installation command again and confirm replacement
-to update that copy when a release changes the action.
+You can also choose **Send to Gatto** in Finder's context menu (macOS may place it
+under **Services**). This service ships inside the app; there is no separate
+workflow to install. macOS controls service visibility. If you previously disabled
+it, enable **Send to Gatto** in **System Settings → Keyboard → Keyboard Shortcuts →
+Services**. See the [Finder workflow](WALKTHROUGH.md#send-files-from-finder) for
+staging behavior and [Support](../SUPPORT.md#finder-integration) for troubleshooting.
 
 ### Updates
 

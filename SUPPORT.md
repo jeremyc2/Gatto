@@ -102,29 +102,28 @@ or migrate data.
 Homebrew users can uninstall with `brew uninstall --cask jeremyc2/gatto/gatto`;
 add `--zap` to remove the cask's declared per-user settings and caches too.
 
-## Finder Quick Action
+## Finder integration
 
-Install and enable **Send to Gatto** using the
-[setup instructions](docs/SETUP.md#install-the-finder-quick-action-optional).
-Keep Gatto installed and launch it once before using the action. If macOS cannot
-find Gatto, open the installed app and try again. A plain `cargo run` executable
-is not a registered app bundle; the Finder action needs an installed `Gatto.app`.
-If multiple copies of Gatto are installed, macOS chooses the registered copy for
-its bundle identifier; keep the intended version in Applications and remove
-unneeded copies.
+Gatto's [Finder integration](docs/SETUP.md#open-files-from-finder) ships in the app:
+**Open With → Gatto** for supported media and a **Send to Gatto** service. Install
+and open the current `Gatto.app` once. A plain `cargo run` executable does not
+register document types or services. For local testing, build a fresh bundle with
+`./scripts/build-app.sh`, then open the printed app path. Building a DMG alone
+only packages the bundle you already have.
 
-If an upload, import, update, or dialog is already active, finish it and choose
-**Send to Gatto** again. An unsupported or unreadable selection shows a warning;
-mixed selections retain their supported files. For unexpectedly missing or old
-action behavior, choose **Gatto → Install Finder Quick Action…** again to replace
-the per-user workflow with the version bundled in the app.
+If Gatto is absent from Open With, choose **Other…** and select the intended app.
+If multiple copies are installed, quit Gatto and launch the intended bundle before
+retrying. Finder service placement and visibility are controlled by macOS;
+**Send to Gatto** may appear under **Services**. If disabled, enable it in
+**System Settings → Keyboard → Keyboard Shortcuts → Services**.
 
-To remove the action, use Finder's **Go → Go to Folder…**, enter
-`~/Library/Services`, and move **Send to Gatto.workflow** to the Trash. You can
-disable it through Finder's **Quick Actions → Customize…** instead. Removing or
-resetting Gatto does not delete this separately installed workflow; remove it
-when uninstalling, including after a Homebrew uninstall. Removal leaves drafts
-and original media files unchanged.
+If an upload, import, update, or dialog is already active, finish it and try again.
+Unsupported or unreadable files show a warning; mixed service selections retain
+supported files. Nothing uploads until you click Upload.
+
+If you installed the earlier development branch's Automator workflow, remove
+`~/Library/Services/Send to Gatto.workflow` to avoid a duplicate entry. The current
+app does not install or update that separate workflow.
 
 ## Reset and uninstall
 
@@ -138,8 +137,8 @@ loses them.
 To uninstall, reset the app, choose **Quit** from the menu bar, and move
 `Gatto.app` to the Trash. If the app cannot open, quit it and remove the two files
 listed in [Local data and recovery](#local-data-and-recovery). Keep or remove
-Rooftops scorecards as you prefer. Remove the optional
-[Finder Quick Action](#finder-quick-action) separately if installed.
+Rooftops scorecards as you prefer. If installed while testing an earlier branch,
+remove the legacy [Finder workflow](#finder-integration) separately.
 
 ## Development builds
 
