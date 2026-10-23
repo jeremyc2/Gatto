@@ -701,7 +701,9 @@ pub(crate) struct EditState {
 }
 impl Document {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        Ok(Self::from_image(image::load_from_memory(bytes)?.to_rgba8()))
+        Ok(Self::from_image(
+            image::load_from_memory(bytes)?.into_rgba8(),
+        ))
     }
     pub(crate) fn from_image(image: image::RgbaImage) -> Self {
         Self {
@@ -881,7 +883,7 @@ impl Document {
             return Ok((bytes, bounds));
         }
         let (pixels, bounds) = self.render(max_edge)?;
-        Ok((pixels.encode_png()?, bounds))
+        Ok((encode_png(pixels)?, bounds))
     }
 
     /// Render from the retained original on every attempt. Compressible screenshots
@@ -1019,26 +1021,72 @@ impl Document {
         let transform =
             Transform::from_row(scale, 0., 0., scale, -bounds.x * scale, -bounds.y * scale);
         pixelation::export(self, &mut pixmap, bounds, scale);
+        let mut layer = None;
         for mark in self.marks.iter().filter(|mark| mark.tool != Tool::Redact) {
             let transform = mark.frame().transform().post_concat(transform);
-            mark.paint_onto(&mut pixmap, transform)?;
+            mark.paint_onto(&mut pixmap, transform, &mut layer)?;
         }
         if let Some(comparison) = &self.comparison {
-            comparison.paint(&mut pixmap, transform)?;
+            comparison.paint(&mut pixmap, transform, &mut layer)?;
         }
         Ok((pixmap, bounds))
     }
 }
+
+/// Consume a finished raster so straight-alpha conversion needs no image copy.
+/// Match tiny-skia's PNG settings and alpha rounding exactly.
+fn encode_png(pixels: Pixmap) -> Result<Vec<u8>> {
+    use image::ImageEncoder as _;
+    let (width, height) = (pixels.width(), pixels.height());
+    let pixels = pixels.take_demultiplied();
+    let mut bytes = Vec::new();
+    image::codecs::png::PngEncoder::new_with_quality(
+        &mut bytes,
+        image::codecs::png::CompressionType::Default,
+        image::codecs::png::FilterType::Adaptive,
+    )
+    .write_image(&pixels, width, height, image::ExtendedColorType::Rgba8)?;
+    Ok(bytes)
+}
+
 impl Mark {
-    /// Composite object opacity once, on a surface bounded by the caller.
-    pub(crate) fn paint_onto(&self, target: &mut Pixmap, transform: Transform) -> Result<()> {
-        let mut layer = Pixmap::new(target.width(), target.height())
-            .context("Could not allocate annotation")?;
-        self.paint_layer(&mut layer, transform);
+    /// Reuse one transparent layer, preserving the painter's full-canvas coordinates.
+    /// Composite and clear only occupied rows, with whole-object opacity applied once.
+    pub(crate) fn paint_onto(
+        &self,
+        target: &mut Pixmap,
+        transform: Transform,
+        scratch: &mut Option<Pixmap>,
+    ) -> Result<()> {
+        if scratch.as_ref().is_none_or(|layer| {
+            layer.width() != target.width() || layer.height() != target.height()
+        }) {
+            *scratch = Some(
+                Pixmap::new(target.width(), target.height())
+                    .context("Could not allocate annotation")?,
+            );
+        }
+        let layer = scratch.as_mut().unwrap();
+        self.paint_layer(layer, transform);
+        let stride = layer.width() as usize * 4;
+        let mut rows = layer.data().chunks_exact(stride);
+        let Some(first) = rows.position(row_has_ink) else {
+            return Ok(());
+        };
+        let end = rows
+            .rposition(row_has_ink)
+            .map_or(first + 1, |last| first + last + 2);
+        let occupied = first * stride..end * stride;
+        let pixels = tiny_skia::PixmapRef::from_bytes(
+            &layer.data()[occupied.clone()],
+            layer.width(),
+            (end - first) as u32,
+        )
+        .context("Invalid annotation layer")?;
         target.draw_pixmap(
             0,
-            0,
-            layer.as_ref(),
+            first as i32,
+            pixels,
             &tiny_skia::PixmapPaint {
                 opacity: self.style.opacity,
                 ..Default::default()
@@ -1046,6 +1094,7 @@ impl Mark {
             Transform::identity(),
             None,
         );
+        layer.data_mut()[occupied].fill(0);
         Ok(())
     }
 
@@ -1175,6 +1224,11 @@ impl Mark {
     }
 }
 
+fn row_has_ink(row: &[u8]) -> bool {
+    let (blocks, tail) = row.as_chunks::<32>();
+    blocks.iter().any(|block| *block != [0; 32]) || tail.iter().any(|byte| *byte != 0)
+}
+
 fn cap_path(tip: Pos, toward: Pos, cap: Cap, width: f32) -> Option<Path> {
     if cap == Cap::None {
         return None;
@@ -1239,6 +1293,124 @@ fn draw_cap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn png_export_matches_reference_bytes_for_all_alpha_values() {
+        let mut doc = Document::from_image(image::RgbaImage::from_fn(256, 64, |x, y| {
+            image::Rgba([x as u8, (255 - x) as u8, (y * 3) as u8, x as u8])
+        }));
+        let mut mark = Mark::new(
+            Tool::Ellipse,
+            Pos::new(-12., 10.),
+            Style {
+                opacity: 0.6,
+                fill: Fill::Soft,
+                ..Default::default()
+            },
+        );
+        mark.points[1] = Pos::new(140., 60.);
+        doc.marks.push(mark);
+        for max_edge in [None, Some(128.)] {
+            let expected = doc.render(max_edge).unwrap().0.encode_png().unwrap();
+            assert_eq!(doc.png(max_edge).unwrap().0, expected);
+        }
+    }
+
+    #[test]
+    fn annotation_layers_match_full_canvas_reference() {
+        let mut scratch = None;
+        for tool in SHAPES
+            .into_iter()
+            .chain([Tool::Arrow, Tool::Pen, Tool::Text, Tool::Marker])
+        {
+            for (scale, rotation, opacity) in [(1., 0., 1.), (0.73, 0.37, 0.6), (1.4, -0.8, 0.3)] {
+                let mut mark = Mark::new(
+                    tool,
+                    Pos::new(210.25, 170.5),
+                    Style {
+                        width: 10.,
+                        opacity,
+                        fill: Fill::Hatch,
+                        ..Default::default()
+                    },
+                );
+                mark.points[1] = Pos::new(430.75, 320.25);
+                mark.rotation = rotation;
+                if tool == Tool::Arrow || tool == Tool::Pen {
+                    mark.points.push(Pos::new(240., 290.));
+                }
+                if tool != Tool::Marker && tool != Tool::Pen {
+                    mark.set_text("Hello 😀\nWorld".into());
+                }
+                let transform = mark
+                    .frame()
+                    .transform()
+                    .post_concat(Transform::from_row(scale, 0., 0., scale, -37.25, 11.5));
+                let mut expected = Pixmap::new(800, 620).unwrap();
+                expected.fill(tiny_skia::Color::from_rgba8(30, 50, 70, 180));
+                let mut actual = expected.clone();
+                let mut layer = Pixmap::new(800, 620).unwrap();
+                mark.paint_layer(&mut layer, transform);
+                expected.draw_pixmap(
+                    0,
+                    0,
+                    layer.as_ref(),
+                    &tiny_skia::PixmapPaint {
+                        opacity: mark.style.opacity,
+                        ..Default::default()
+                    },
+                    Transform::identity(),
+                    None,
+                );
+                mark.paint_onto(&mut actual, transform, &mut scratch)
+                    .unwrap();
+                let changed = actual
+                    .data()
+                    .iter()
+                    .zip(expected.data())
+                    .filter(|(a, b)| a != b)
+                    .count();
+                assert_eq!(changed, 0, "{tool:?}, scale={scale}, rotation={rotation}");
+            }
+        }
+    }
+
+    #[test]
+    fn reused_annotation_layer_handles_clipping_empty_marks_and_odd_widths() {
+        let mut scratch = None;
+        for (width, height) in [(61, 47), (65, 49)] {
+            for y in [-100., -2., 0., height as f32 - 1., height as f32 + 100.] {
+                let mut mark = Mark::new(
+                    Tool::Line,
+                    Pos::new(-10., y),
+                    Style {
+                        width: 1.,
+                        opacity: 0.6,
+                        ..Default::default()
+                    },
+                );
+                mark.points[1] = Pos::new(width as f32 + 10., y);
+                let mut actual = Pixmap::new(width, height).unwrap();
+                let mut expected = actual.clone();
+                let mut full = actual.clone();
+                mark.paint_layer(&mut full, Transform::identity());
+                expected.draw_pixmap(
+                    0,
+                    0,
+                    full.as_ref(),
+                    &tiny_skia::PixmapPaint {
+                        opacity: mark.style.opacity,
+                        ..Default::default()
+                    },
+                    Transform::identity(),
+                    None,
+                );
+                mark.paint_onto(&mut actual, Transform::identity(), &mut scratch)
+                    .unwrap();
+                assert_eq!(actual.data(), expected.data());
+            }
+        }
+    }
 
     #[test]
     fn reused_source_raster_matches_compositing_over_transparent_for_every_alpha() {

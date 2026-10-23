@@ -39,6 +39,7 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | A normal upload fails | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Keep the window open; closing clears drafts. |
 | Quick Copy fails | Configure an account or organization and pin an accessible repository. Copy the image or Finder file again and invoke Quick Copy again; this action clears its failed draft. |
 | Global shortcut will not register | Use at least two modifiers and a supported key. If another app owns the chord, record a different shortcut. No Accessibility permission is required. |
+| Shortcut recorder keeps waiting or retains the previous shortcut | Quit any other Gatto copies, including source builds and local bundles, then retry with one copy running. A second copy can intercept the chord before the recorder receives it; each copy also retains its own preferences in memory. |
 | A window still opens at login after upgrading | Open the updated app once to refresh its existing login item, or toggle Start at Login off and on. |
 | Start at Login stopped working after moving the app | Put the app in its final location, then toggle Start at Login off and on. |
 | `gatto://` URLs do not open | Install and open `Gatto.app`; a standalone development executable does not register the URL scheme. |

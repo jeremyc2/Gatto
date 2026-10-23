@@ -1,5 +1,6 @@
 //! CoreText owns both line breaking and glyph placement, including kerning.
 use super::*;
+mod bitmap;
 use core_foundation::{
     attributed_string::CFAttributedStringRef,
     base::{CFIndex, CFTypeRef},
@@ -169,12 +170,7 @@ pub(super) fn shape_line(text: &str, size: f32, line_height: f32) -> Line {
 /// Color/bitmap fonts have no CGPath. Rasterize only those glyphs, retaining
 /// CoreText's chosen fallback font, baseline, color, and advance positions.
 fn bitmap_glyph(face: &core_text::font::CTFont, glyph: u16) -> Option<BitmapGlyph> {
-    use core_graphics::{
-        base::{kCGBitmapByteOrder32Big, kCGImageAlphaPremultipliedLast},
-        color_space::CGColorSpace,
-        context::CGContext,
-        geometry::CGPoint,
-    };
+    use core_graphics::geometry::CGPoint;
     let b = face.get_bounding_rects_for_glyphs(
         core_text::font_descriptor::kCTFontOrientationDefault,
         &[glyph],
@@ -189,19 +185,13 @@ fn bitmap_glyph(face: &core_text::font::CTFont, glyph: u16) -> Option<BitmapGlyp
     let scale = 2f64.min(512. / width.max(height));
     let w = (width * scale).ceil() as u32;
     let h = (height * scale).ceil() as u32;
-    let mut image = Pixmap::new(w, h)?;
-    let context = CGContext::create_bitmap_context(
-        Some(image.data_mut().as_mut_ptr().cast()),
-        w as usize,
-        h as usize,
-        8,
-        w as usize * 4,
-        &CGColorSpace::create_device_rgb(),
-        kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast,
-    );
+    // Core Graphics owns its drawing buffer. Never let a native context retain
+    // a raw pointer into a Rust allocation whose borrow it cannot express.
+    let mut context = bitmap::rgba(w, h)?;
     context.scale(scale, scale);
     context.translate(-x, -y);
-    face.draw_glyphs(&[glyph], &[CGPoint::new(0., 0.)], context);
+    face.draw_glyphs(&[glyph], &[CGPoint::new(0., 0.)], context.clone());
+    let image = Pixmap::from_vec(context.data().to_vec(), tiny_skia::IntSize::from_wh(w, h)?)?;
     // CoreText's bitmap glyph drawing already supplies top-to-bottom image rows.
     Some(BitmapGlyph {
         image: Arc::new(image),

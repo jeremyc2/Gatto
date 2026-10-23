@@ -4,21 +4,8 @@ import AppKit
 import CoreServices
 import Foundation
 
-@_silgen_name("GattoInstallFileService")
-func installFileService()
-
 struct Delivery: Codable {
     let selections: [[String]]
-}
-
-final class Receiver: NSObject, NSApplicationDelegate {
-    var selections = [[String]]()
-    func application(_ application: NSApplication, open urls: [URL]) {
-        selections.append(urls.map(\.path))
-        let output = Bundle.main.object(forInfoDictionaryKey: "GattoTestOutput") as! String
-        let record = Delivery(selections: selections)
-        try! JSONEncoder().encode(record).write(to: URL(fileURLWithPath: output), options: .atomic)
-    }
 }
 
 func require(_ condition: Bool, _ message: String) throws {
@@ -81,7 +68,7 @@ func verify() throws {
         try? files.removeItem(at: root)
     }
     try files.createDirectory(at: binary.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try files.copyItem(at: URL(fileURLWithPath: CommandLine.arguments[0]), to: binary)
+    try files.copyItem(at: URL(fileURLWithPath: CommandLine.arguments[2]), to: binary)
     var info = try PropertyListSerialization.propertyList(from: Data(contentsOf: source), options: [], format: nil) as! [String: Any]
     let declarations = info["CFBundleDocumentTypes"] as! [[String: Any]]
     let supported = ["public.png", "public.jpeg", "com.compuserve.gif", "org.webmproject.webp",
@@ -143,15 +130,5 @@ func verify() throws {
     print("Open With and native service passed cold/warm delivery with intact paths and batches.")
 }
 
-if Bundle.main.bundleURL.pathExtension == "app" {
-    let application = NSApplication.shared
-    let receiver = Receiver()
-    application.delegate = receiver
-    application.setActivationPolicy(.accessory)
-    installFileService()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 45) { application.terminate(nil) }
-    withExtendedLifetime(receiver) { application.run() }
-} else {
-    do { try verify() }
-    catch { fputs("\(error)\n", stderr); exit(1) }
-}
+do { try verify() }
+catch { fputs("\(error)\n", stderr); exit(1) }

@@ -4736,6 +4736,33 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn shortcut_recorder_receives_command_shift_g(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            init_keybindings(cx);
+            crate::application_menu::init(cx);
+        });
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            window.activate_window();
+            view.update(cx, |app, cx| {
+                app.show_settings(cx);
+                app.settings.global_quick_copy_shortcut = "Command+Shift+U".into();
+                app.settings.global_quick_copy_shortcut_enabled = true;
+                // No native service is installed in a GPUI test. Receiving the
+                // key ends recording at registration failure, before saving.
+                app.recording_global_shortcut = true;
+                app.focus_handle.focus(window, cx);
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("cmd-shift-g");
+        cx.update(|_, cx| {
+            assert!(!view.read(cx).recording_global_shortcut);
+        });
+    }
+
+    #[gpui_kit::test]
     fn escape_leaves_preferences_from_inputs_and_cancels_recording_first(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);

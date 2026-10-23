@@ -99,7 +99,7 @@ pub(crate) fn combine(sources: [StagedAttachment; 2]) -> Result<StagedAttachment
                 sizes[index].1,
                 image::imageops::FilterType::Lanczos3,
             )
-            .to_rgba8();
+            .into_rgba8();
         image::imageops::overlay(
             &mut canvas,
             &pixels,

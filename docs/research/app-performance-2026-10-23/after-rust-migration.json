@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "case": "import",
+      "samples": 7,
+      "wall_ms": 30.131625,
+      "fingerprint": 0,
+      "process_cpu_ms": 310.0,
+      "process_peak_rss_bytes": 46972928
+    },
+    {
+      "case": "open_editor",
+      "samples": 7,
+      "wall_ms": 30.034917,
+      "fingerprint": 0,
+      "process_cpu_ms": 290.0,
+      "process_peak_rss_bytes": 47005696
+    },
+    {
+      "case": "reopen_editor",
+      "samples": 7,
+      "wall_ms": 0.003583,
+      "fingerprint": 0,
+      "process_cpu_ms": 80.0,
+      "process_peak_rss_bytes": 46989312
+    },
+    {
+      "case": "export",
+      "samples": 7,
+      "wall_ms": 158.00720900000002,
+      "fingerprint": 7179087487929262514,
+      "process_cpu_ms": 1830.0,
+      "process_peak_rss_bytes": 119668736
+    },
+    {
+      "case": "pixelation",
+      "samples": 7,
+      "wall_ms": 7.387833,
+      "fingerprint": 0,
+      "process_cpu_ms": 120.0,
+      "process_peak_rss_bytes": 58753024
+    },
+    {
+      "case": "preview",
+      "samples": 7,
+      "wall_ms": 9.860958,
+      "fingerprint": 0,
+      "process_cpu_ms": 140.0,
+      "process_peak_rss_bytes": 64094208
+    },
+    {
+      "case": "comparison",
+      "samples": 7,
+      "wall_ms": 195.126291,
+      "fingerprint": 3025692317843924600,
+      "process_cpu_ms": 1880.0000000000002,
+      "process_peak_rss_bytes": 180043776
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Bounded video snapshots and container checks. Playback/codec validation belongs
 //! to the macOS video application; container validation never transcodes media.
 use std::{

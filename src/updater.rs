@@ -166,12 +166,43 @@ impl Updater {
 mod native {
     use anyhow::{Context as _, Result};
     use block2::RcBlock;
-    use objc2::{
-        msg_send,
-        rc::Retained,
-        runtime::{AnyClass, AnyObject},
-    };
-    use objc2_foundation::NSString;
+    use objc2::{MainThreadMarker, extern_class, extern_methods, rc::Retained, runtime::AnyClass};
+    use objc2_foundation::{NSObject, NSString};
+
+    extern_class!(
+        /// Implemented by the bundled Swift class in native/Updater.swift.
+        /// Its @MainActor methods are available only through a main-thread owner.
+        #[unsafe(super(NSObject))]
+        #[thread_kind = objc2::MainThreadOnly]
+        #[name = "GattoUpdaterBridge"]
+        struct NativeUpdater;
+    );
+
+    // SAFETY: The selectors and argument/return types match Updater.swift. Swift
+    // copies the escaping block and strings; NSString callback arguments are
+    // nonnull and borrowed only during that invocation. MainThreadOnly enforces
+    // the Swift class's actor requirement on all Rust callers.
+    impl NativeUpdater {
+        extern_methods!(
+            #[unsafe(method(new))]
+            fn new(mtm: MainThreadMarker) -> Retained<Self>;
+
+            #[unsafe(method(configureChannel:generation:))]
+            fn configure(&self, channel: &NSString, generation: isize);
+
+            #[unsafe(method(startWithHandler:))]
+            fn start(
+                &self,
+                handler: &block2::Block<dyn Fn(isize, isize, std::ptr::NonNull<NSString>)>,
+            );
+
+            #[unsafe(method(install))]
+            fn install(&self);
+
+            #[unsafe(method(checkForUpdates))]
+            fn check_for_updates(&self);
+        );
+    }
 
     unsafe extern "C" {
         fn dlopen(path: *const std::ffi::c_char, mode: std::ffi::c_int) -> *mut std::ffi::c_void;
@@ -179,7 +210,7 @@ mod native {
     }
 
     pub struct Bridge {
-        object: Retained<AnyObject>,
+        object: Retained<NativeUpdater>,
     }
 
     impl Bridge {
@@ -195,6 +226,8 @@ mod native {
                 return Ok(None);
             }
             let library = contents.join("Frameworks/libGattoUpdater.dylib");
+            let main_thread = MainThreadMarker::new()
+                .context("The updater must be started on the application main thread")?;
             // SAFETY: Only load the bridge inside our signed app bundle. Hardened
             // runtime library validation checks its signing team at runtime.
             use std::os::unix::ffi::OsStrExt as _;
@@ -212,44 +245,32 @@ mod native {
                 };
                 anyhow::bail!("Could not load the signed updater bridge: {detail}");
             }
-            let class =
-                AnyClass::get(c"GattoUpdaterBridge").context("Missing updater bridge class")?;
-            // SAFETY: These selectors and the block ABI match native/Updater.swift.
-            // All calls and Sparkle callbacks run on the application main thread.
-            let object: Retained<AnyObject> = unsafe { msg_send![class, new] };
+            AnyClass::get(c"GattoUpdaterBridge").context("Missing updater bridge class")?;
+            let object = NativeUpdater::new(main_thread);
             let handler = RcBlock::new(
-                move |generation: isize, code: isize, message: *mut NSString| {
-                    // SAFETY: Swift supplies a nonnull NSString alive for this call.
-                    let message = unsafe { &*message }.to_string();
+                move |generation: isize, code: isize, message: std::ptr::NonNull<NSString>| {
+                    // SAFETY: The typed Swift callback supplies a nonnull string
+                    // borrowed for this invocation; copy it before returning.
+                    let message = unsafe { message.as_ref() }.to_string();
                     let _ = events.try_send((generation, code, message));
                 },
             );
-            unsafe {
-                let _: () = msg_send![&object, configureChannel: &*NSString::from_str(channel.key()), generation: 0isize];
-                let _: () = msg_send![&object, startWithHandler: &*handler];
-            }
+            object.configure(&NSString::from_str(channel.key()), 0);
+            object.start(&handler);
             Ok(Some(Self { object }))
         }
 
         pub fn set_channel(&self, channel: crate::settings::ReleaseChannel, generation: isize) {
-            // SAFETY: The Swift bridge copies the string on the main thread.
-            unsafe {
-                let _: () = msg_send![&self.object, configureChannel: &*NSString::from_str(channel.key()), generation: generation];
-            }
+            self.object
+                .configure(&NSString::from_str(channel.key()), generation);
         }
 
         pub fn install(&self) {
-            // SAFETY: The bridge implements this main-thread selector.
-            unsafe {
-                let _: () = msg_send![&self.object, install];
-            }
+            self.object.install();
         }
 
         pub fn check_for_updates(&self) {
-            // SAFETY: The bridge implements this main-thread selector.
-            unsafe {
-                let _: () = msg_send![&self.object, checkForUpdates];
-            }
+            self.object.check_for_updates();
         }
     }
 }

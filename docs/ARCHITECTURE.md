@@ -72,7 +72,8 @@ make the primary action obvious, with quieter treatments for supporting actions.
 `updater.rs` owns a process-lifetime GPUI entity observed by the uploader view.
 It loads `Contents/Frameworks/libGattoUpdater.dylib` only in bundled builds and
 retains the library for the process lifetime. The native updater reports status
-changes back to Rust through a callback and channel; all native updater operations
+changes back to Rust through a typed block and channel. A concrete
+`MainThreadOnly` Rust bridge declaration matches the Swift selectors; all native updater operations
 run on the main thread. No network work depends on a window being
 visible. No updater is loaded in an ordinary source build.
 
@@ -184,7 +185,7 @@ active GitHub CLI account to avoid using a previously loaded session. Quick Copy
 reads the current CLI token for each background job.
 
 Media validation and CLI calls run on background tasks. Each HTTP upload uses
-Foundation URLSession through `github/native.rs` and `native/Upload.m` on a
+Foundation URLSession through the typed Rust implementation in `github/native.rs` on a
 background worker. A stock 64 KiB bound stream connects the existing Rust
 attachment reader to the OS transport without buffering a whole video. A serial
 delegate queue reports actual bytes sent, rejects redirects and request-body
@@ -193,14 +194,20 @@ cookie, credential and cache storage; only default server-trust handling is
 permitted. Monotonic watchdogs enforce the 300-second total and 90-second
 inactivity deadlines. These are transport deadlines rather than a separate
 15-second TCP/TLS connect timer. Cancellation cancels the native task; the worker
-waits for delegate invalidation before releasing Rust callback state. A completed
+waits for delegate invalidation before releasing callback state, including on Rust
+unwinding. Delegates own an `Arc` of synchronized Rust state and a response `Vec`;
+there are no borrowed worker-stack callback pointers or C response allocations.
+The sole explicit `Send` exception transfers an unopened input stream exactly once
+to Foundation; it does not make streams generally thread-safe. A completed
 response wins a simultaneous cancellation. A batch uploads sequentially; each
 attachment transitions from preview or failed to queued, then uploading with
 byte progress, then uploaded or failed. Retrying skips uploaded attachments. The
 copy result is rebuilt from successful attachments in their current order.
 
-`desktop.rs` is a main-thread-only ownership boundary for `native/Desktop.m`.
-It owns AppKit's status item/menu and Carbon hotkey registrations; callbacks
+`desktop.rs` checks and retains `MainThreadMarker` for desktop owners.
+`desktop/menu.rs` owns typed retained AppKit objects and a Rust target with an
+owned event sender; teardown clears unretained targets before releasing it.
+`native/Hotkey.m` contains only Carbon registrations and media-key event taps; callbacks
 enqueue integer action IDs without reentering GPUI. Menu shortcuts are cleared
 directly, and keypad equivalents retain their numeric-pad modifier. Shortcut
 replacement registers the candidate before releasing the previous key; failed
@@ -209,8 +216,10 @@ IDs reject queued events from earlier registrations. Ordinary keys use Carbon
 without a new permission prompt. The optional media-key event tap is created
 only for a selected media shortcut and preserves existing permission and
 suppression behavior. Failed native cleanup detaches callbacks before Rust frees
-their context. `build.rs` compiles both adapters with Apple's clang/libtool into
-the app binary; the Sparkle Swift bridge remains separately bundled and signed.
+their context. `build.rs` compiles only this small hotkey adapter with Apple's
+clang/libtool into the app binary; the Sparkle Swift bridge remains separately
+bundled and signed. The [Rust migration record](research/safe-rust-migration-2026-10-23.md)
+explains the remaining platform exceptions and their verification.
 Image and video variants share staging, retry, upload, and copy interfaces.
 File drops and Finder pastes preserve all input paths through validation and the
 replacement dialog. Switching to bulk keeps the existing attachment and appends
@@ -226,8 +235,8 @@ items broadly so mixed selections reach the existing validator intact. macOS
 controls its visibility and context-menu placement. No Automator workflow or
 separate installer is shipped.
 
-`desktop.rs` installs the native service provider at app startup. `Desktop.m`
-reads file URLs (or legacy filename lists) from the service's supplied pasteboard,
+`desktop.rs` installs the Rust-defined AppKit service provider at app startup.
+`desktop/file_service.rs` reads file URLs (or legacy filename lists) from the service's supplied pasteboard,
 without reading or changing the general clipboard. Foundation's
 [`filePathURL`](https://developer.apple.com/documentation/foundation/nsurl/filepathurl)
 resolves Finder file references before GPUI serializes them; an unresolvable
@@ -303,7 +312,12 @@ A separate cancellation flag and generation guard prevent stale native jobs
 from restoring discarded imports. Uploads and updates are disabled during import.
 
 `compression.rs` owns the offline AVURLAsset → AVAssetReader → AVAssetWriter
-pipeline through narrowly enabled `objc2` framework bindings. It uses native
+pipeline through narrowly enabled `objc2` framework bindings.
+`compression/native.rs` denies unsafe code in orchestration, budgeting, progress,
+deadlines and errors. Its private `bindings.rs` owns reader/writer/sample operations,
+while `settings.rs` holds the documented native dictionary schemas. Session ownership
+prevents thread transfer; reader/writer Drop cancels partially completed operations.
+It uses native
 hardware-required H.264, original decoded pixel dimensions, the source transform,
 a maximum input rate of about 30 fps, a 300-frame / ten-second GOP, and mono
 48 kHz AAC at 64 kbps when audio exists. Audio and video retain their shared
@@ -459,7 +473,9 @@ an opaque cover over the source image. Labels contribute to hit and export bound
 `annotation/text/layout.rs` supplies shared line boxes, wrapping, caret positions,
 and glyph paths with whole-pixel line heights and preserved blank lines.
 CoreText handles contextual line breaking and shapes Arial with native kerning,
-ligatures, and system glyph fallback. Its outlines feed the same native geometry
+ligatures, and system glyph fallback. Color glyphs draw into a fallibly allocated,
+Core Graphics-owned, explicitly cleared bitmap before a bounded copy into Rust
+pixels. No native context retains a pointer into a Rust pixel allocation. Its outlines feed the same native geometry
 and PNG export. Glyphs without outlines, including color emoji, retain CoreText's
 fallback font and positions and are drawn into bounded RGBA bitmaps. The shared
 layout carries those bitmaps through scaling, hit testing, preview, and export.
@@ -560,6 +576,13 @@ transitively; Gatto does not depend on it directly.
 
 PNG export runs from a background snapshot, composites opacity once per whole
 mark, expands to include off-image marks, and enforces dimension/allocation limits.
+An export reuses one transparent annotation layer. It paints in the original
+full-canvas coordinates, then composites and clears only rows containing pixels;
+it does not estimate bounds or clip glyphs to a new rectangle. PNG encoding consumes
+the completed raster for straight-alpha conversion, retaining the existing
+compression settings and rounding. Editor decoding and comparison resizing also
+consume their RGBA results rather than cloning them. Preview textures convert
+their completed bitmap in place before handing its buffer to GPUI.
 Pixelation replaces the covered area with opaque mosaic tiles sampled from the
 source, using the same cached colors for 16-pixel blocks in preview and export.
 `annotation/pixelation.rs` rasterizes round-ended brush segments at source pixel

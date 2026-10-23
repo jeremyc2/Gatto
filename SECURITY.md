@@ -97,9 +97,19 @@ The repository's own `build.rs` reads an optional hexadecimal
 `git rev-parse --short=12 HEAD` to embed non-sensitive build metadata. It rejects
 non-hexadecimal values, does not access the network, and does not modify the
 working tree. On macOS it also invokes Apple's installed clang/libtool to compile
-the tracked `native/Upload.m` and `native/Desktop.m` into a static archive in
+the tracked `native/Hotkey.m` into a static archive in
 Cargo's build output directory. It downloads no compiler or native library.
-These adapters link system Foundation, AppKit, Carbon and CoreGraphics.
+This adapter links system Foundation, AppKit, Carbon and CoreGraphics. Upload,
+status-menu and Finder-service ownership now use the existing typed Rust bindings.
+
+The [native-code and unsafe Rust audit](docs/research/native-safety-audit-2026-10-23.md)
+records first-party exceptions, ownership/callback contracts, tested paths and
+recommended reductions. It distinguishes memory-safety and maintenance risks from
+confirmed vulnerabilities, and does not claim that dependency-count reduction
+alone improves memory safety. The [implementation follow-up](docs/research/safe-rust-migration-2026-10-23.md)
+records the applied conversions, current unsafe contracts and remaining native
+exceptions. Model, media-validation and diagnostics modules forbid unsafe Rust;
+media orchestration denies it except in its explicit private binding/schema modules.
 
 JavaScript installs explicitly disable the default trusted-package script list;
 release installs additionally use `--ignore-scripts`. Package executables use

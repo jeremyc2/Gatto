@@ -77,7 +77,12 @@ impl Comparison {
             h: band.h + 16.,
         }
     }
-    pub(super) fn paint(&self, target: &mut Pixmap, transform: Transform) -> Result<()> {
+    pub(super) fn paint(
+        &self,
+        target: &mut Pixmap,
+        transform: Transform,
+        layer: &mut Option<Pixmap>,
+    ) -> Result<()> {
         let band = self.footer_background();
         let mut fill = Paint::default();
         fill.set_color_rgba8(BACKGROUND[0], BACKGROUND[1], BACKGROUND[2], BACKGROUND[3]);
@@ -88,7 +93,7 @@ impl Comparison {
             None,
         );
         for mark in self.label_marks() {
-            mark.paint_onto(target, transform)?;
+            mark.paint_onto(target, transform, layer)?;
         }
         Ok(())
     }

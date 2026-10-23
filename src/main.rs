@@ -1,3 +1,4 @@
+#![deny(unsafe_op_in_unsafe_fn)]
 mod annotation;
 mod app;
 mod application_menu;
@@ -15,6 +16,8 @@ mod log_viewer;
 mod menu_bar;
 mod model;
 mod open_request;
+#[cfg(all(test, target_os = "macos"))]
+mod performance;
 mod quick_copy;
 mod rooftops;
 mod rooftops_score;
@@ -69,7 +72,7 @@ fn main() {
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
         application_menu::init(cx);
-        desktop::install_file_service();
+        let file_service = desktop::install_file_service();
         set_dock_visible(!login_launch);
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
@@ -78,6 +81,9 @@ fn main() {
         })
         .detach();
         let diagnostics = Diagnostics::new();
+        if let Err(error) = file_service {
+            diagnostics.error(format!("Could not install the Finder service: {error:#}"));
+        }
         diagnostics.info(if login_launch {
             "Started in the background at login."
         } else {

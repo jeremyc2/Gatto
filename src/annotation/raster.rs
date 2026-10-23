@@ -41,16 +41,21 @@ impl RasterPreview {
                 1. - bounds.y * scale,
             )),
         );
-        let mut pixels = image::RgbaImage::new(w, h);
-        for (target, source) in pixels.pixels_mut().zip(image.pixels()) {
-            let c = source.demultiply();
-            *target = image::Rgba([
+        // Convert the completed layer in place before handing it to GPUI.
+        // No second RGBA buffer is needed for channel order or straight alpha.
+        for source in image.data_mut().as_chunks_mut::<4>().0 {
+            let c = tiny_skia::PremultipliedColorU8::from_rgba(
+                source[0], source[1], source[2], source[3],
+            )?
+            .demultiply();
+            *source = [
                 c.blue(),
                 c.green(),
                 c.red(),
                 (f32::from(c.alpha()) * mark.style.opacity).round() as u8,
-            ]);
+            ];
         }
+        let pixels = image::RgbaImage::from_raw(w, h, image.take())?;
         Some(Self {
             texture: Arc::new(RenderImage::new(vec![image::Frame::new(pixels)])),
             bounds: Rect {

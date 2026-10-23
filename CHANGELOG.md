@@ -7,6 +7,32 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-23
+
+### Added
+
+- Opt-in Rust app benchmarks for image import, editor sessions, annotation
+  previews/exports, pixelation, and comparisons, with CPU/memory regression checks.
+  See the [measurement record](docs/research/app-performance-2026-10-23.md).
+
+### Changed
+
+- Move upload transport, status-menu ownership and the Finder service to typed
+  Rust bindings without changing dependencies or workflows. Enforce desktop and
+  updater thread requirements, narrow media codec unsafe operations, and give
+  native glyph bitmaps explicit ownership and fallible allocation.
+- Annotation exports reuse their compositing layer and skip empty rows, reducing
+  CPU work while preserving rendered pixels. Image decoding, comparison creation,
+  and preview textures avoid unnecessary pixel-buffer copies.
+- Release builds generate the app's code together to reduce executable size,
+  retaining existing dependencies and panic handling.
+
+### Fixed
+
+- Reopening a saved image no longer enables Discard or warns about losing
+  history when there are no unsaved changes. Saved marks and undo/redo remain
+  available for further editing.
+
 ## [0.17.7] - 2026-10-23
 
 ### Changed

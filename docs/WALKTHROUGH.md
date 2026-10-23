@@ -275,8 +275,12 @@ Edited images upload as PNGs; recipients cannot edit the marks separately.
 Keep saved images under 10 MB. If an edit is too large to save, reduce the image
 size or remove marks that extend far beyond its edges.
 
-**Discard** asks for confirmation, then closes the editor without your unsaved
-changes. Your last saved version stays staged and its marks remain editable.
+**Discard** is active only when there are unsaved changes. Reopening a saved
+image or undoing back to its saved version leaves it inactive, even if undo/redo
+history is available. Close the editor normally to keep that history.
+When active, **Discard** asks for confirmation, then closes the editor without
+your unsaved changes. Your last saved version stays staged and its marks remain
+editable.
 Discard also clears undo/redo history for all images in that editor session.
 
 Closing the window with unsaved changes gives you a choice: **Save**,

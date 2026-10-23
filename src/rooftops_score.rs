@@ -326,7 +326,14 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
     }.context("Could not allocate the score image")?;
     let context = NSGraphicsContext::graphicsContextWithBitmapImageRep(&bitmap)
         .context("Could not draw the score image")?;
+    struct SavedGraphicsState;
+    impl Drop for SavedGraphicsState {
+        fn drop(&mut self) {
+            NSGraphicsContext::restoreGraphicsState_class();
+        }
+    }
     NSGraphicsContext::saveGraphicsState_class();
+    let saved_state = SavedGraphicsState;
     context.setShouldAntialias(true);
     NSGraphicsContext::setCurrentContext(Some(&context));
     for shape in poster_shapes() {
@@ -342,7 +349,7 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
             item.bold,
         );
     }
-    NSGraphicsContext::restoreGraphicsState_class();
+    drop(saved_state);
     // PNG accepts an empty properties dictionary for lossless default encoding.
     let png = unsafe {
         bitmap.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())

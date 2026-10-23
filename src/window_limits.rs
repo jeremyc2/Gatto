@@ -1,22 +1,27 @@
 use gpui_kit::{App, Window};
 
+/// This is the single conversion from GPUI's borrowed native handle. Retaining
+/// the window lets deferred main-thread work outlive the borrowed content view.
+#[cfg(target_os = "macos")]
+fn native_window(window: &Window) -> Option<objc2::rc::Retained<objc2_app_kit::NSWindow>> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let _main_thread = objc2::MainThreadMarker::new()?;
+    let handle = HasWindowHandle::window_handle(window).ok()?;
+    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
+        return None;
+    };
+    // SAFETY: HasWindowHandle guarantees a live NSView for this Window borrow.
+    // AppKit access is on the checked main thread, and window() retains its result.
+    let view = unsafe { &*handle.ns_view.cast::<objc2_app_kit::NSView>().as_ptr() };
+    view.window()
+}
+
 /// Counts minimized and occluded windows as open. GPUI visibility tracks
 /// occlusion and can
 /// lag behind AppKit, so it is not the right signal for Dock reopening.
 #[cfg(target_os = "macos")]
 pub fn is_presented(window: &Window) -> bool {
-    use objc2_app_kit::NSView;
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let Ok(handle) = HasWindowHandle::window_handle(window) else {
-        return false;
-    };
-    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
-        return false;
-    };
-    // The native content view remains valid while the GPUI window is alive.
-    let view = unsafe { &*(handle.ns_view.cast::<NSView>().as_ptr()) };
-    view.window()
-        .is_some_and(|window| window.isVisible() || window.isMiniaturized())
+    native_window(window).is_some_and(|window| window.isVisible() || window.isMiniaturized())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -31,17 +36,8 @@ pub fn is_presented(window: &Window) -> bool {
 /// Callers retain one handle per window type and reset transient state on close.
 #[cfg(target_os = "macos")]
 pub fn close(window: &Window, cx: &mut App) -> bool {
-    use objc2_app_kit::NSView;
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-
-    if let Ok(handle) = HasWindowHandle::window_handle(window)
-        && let RawWindowHandle::AppKit(handle) = handle.as_raw()
-    {
-        // The view and its window are valid throughout this close callback.
-        let view = unsafe { &*(handle.ns_view.cast::<NSView>().as_ptr()) };
-        if let Some(native_window) = view.window() {
-            native_window.orderOut(None);
-        }
+    if let Some(native_window) = native_window(window) {
+        native_window.orderOut(None);
     }
     // Query other windows after the close callback releases GPUI's current
     // window borrow. Hidden retained windows must not keep the Dock visible.
@@ -68,19 +64,7 @@ pub fn close(_: &Window, _: &mut App) -> bool {
 /// would re-borrow the application and panic.
 #[cfg(target_os = "macos")]
 pub fn request_close(window: &Window, cx: &App) {
-    use objc2_app_kit::NSView;
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-
-    let Ok(handle) = HasWindowHandle::window_handle(window) else {
-        return;
-    };
-    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
-        return;
-    };
-
-    // GPUI's AppKit handle is a valid NSView for as long as the GPUI window is alive.
-    let view = unsafe { &*(handle.ns_view.cast::<NSView>().as_ptr()) };
-    if let Some(native_window) = view.window() {
+    if let Some(native_window) = native_window(window) {
         cx.foreground_executor()
             .spawn(async move {
                 native_window.performClose(None);
@@ -98,21 +82,8 @@ pub fn request_close(window: &mut Window, _: &App) {
 /// through the underlying NSWindow until GPUI exposes the matching option.
 #[cfg(target_os = "macos")]
 pub fn set_maximum_content_size(window: &Window, width: f64, height: f64) {
-    use objc2_app_kit::NSView;
-    use objc2_foundation::NSSize;
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-
-    let Ok(handle) = HasWindowHandle::window_handle(window) else {
-        return;
-    };
-    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
-        return;
-    };
-
-    // GPUI's AppKit handle is a valid NSView for as long as the GPUI window is alive.
-    let view = unsafe { &*(handle.ns_view.cast::<NSView>().as_ptr()) };
-    if let Some(native_window) = view.window() {
-        native_window.setContentMaxSize(NSSize::new(width, height));
+    if let Some(native_window) = native_window(window) {
+        native_window.setContentMaxSize(objc2_foundation::NSSize::new(width, height));
     }
 }
 

@@ -1048,14 +1048,7 @@ impl ImagePreview {
         })
     }
     fn can_discard(&self) -> bool {
-        self.images.iter().any(|image| {
-            image.document.as_ref().is_some_and(|doc| {
-                doc.marks != image.saved_marks
-                    || doc.comparison != image.saved_comparison
-                    || doc.can_undo()
-                    || doc.can_redo()
-            })
-        })
+        self.has_unsaved_changes()
     }
     fn apply_annotation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.saving.is_some() {
@@ -5217,6 +5210,10 @@ mod tests {
                 assert!(preview.should_close(window, cx));
                 preview.show(vec![staged.clone()], id, cx);
                 assert!(!preview.has_unsaved_changes());
+                assert!(
+                    !preview.can_discard(),
+                    "Reopening saved artwork must not enable Discard just for retained history"
+                );
                 assert!(preview.doc().unwrap().can_undo());
                 assert_eq!(preview.doc().unwrap().marks.len(), 1);
                 assert_eq!(preview.images[0].pixel_size, (400, 300));
@@ -5225,6 +5222,13 @@ mod tests {
                     "An open session must draw the original, not the already-flattened replacement"
                 );
             })
+        });
+        cx.update(|window, cx| {
+            window.click("annotation-revert", cx);
+            assert!(!window.has_active_dialog(cx));
+            let preview = view.read(cx);
+            assert_eq!(preview.images.len(), 1);
+            assert!(preview.doc().unwrap().can_undo());
         });
         cx.update(|window, cx| window.click("annotation-undo", cx));
         cx.update(|_, cx| {

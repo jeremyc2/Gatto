@@ -25,39 +25,36 @@ fn build_native_platform() {
         _ => panic!("Unsupported macOS architecture"),
     };
     println!("cargo:rerun-if-changed=native/Platform.h");
-    let mut objects = Vec::new();
-    for source in ["Upload", "Desktop"] {
-        let path = format!("native/{source}.m");
-        println!("cargo:rerun-if-changed={path}");
-        let object = output.join(format!("{source}.o"));
-        let status = Command::new("/usr/bin/xcrun")
-            .args([
-                "clang",
-                "-c",
-                "-fobjc-arc",
-                "-fblocks",
-                "-O2",
-                "-Wall",
-                "-Wextra",
-                "-Werror",
-                "-Wno-unused-parameter",
-                "-Wno-deprecated-declarations",
-                "-mmacosx-version-min=13.0",
-                "-arch",
-                arch,
-            ])
-            .arg(&path)
-            .arg("-o")
-            .arg(&object)
-            .status()
-            .expect("Apple clang is required");
-        assert!(status.success(), "Could not compile {path}");
-        objects.push(object);
-    }
+    let source = "Hotkey";
+    let path = format!("native/{source}.m");
+    println!("cargo:rerun-if-changed={path}");
+    let object = output.join(format!("{source}.o"));
+    let status = Command::new("/usr/bin/xcrun")
+        .args([
+            "clang",
+            "-c",
+            "-fobjc-arc",
+            "-fblocks",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-Wno-deprecated-declarations",
+            "-mmacosx-version-min=13.0",
+            "-arch",
+            arch,
+        ])
+        .arg(&path)
+        .arg("-o")
+        .arg(&object)
+        .status()
+        .expect("Apple clang is required");
+    assert!(status.success(), "Could not compile {path}");
     let status = Command::new("/usr/bin/xcrun")
         .args(["libtool", "-static", "-o"])
         .arg(output.join("libgatto_platform.a"))
-        .args(objects)
+        .arg(object)
         .status()
         .expect("Apple libtool is required");
     assert!(

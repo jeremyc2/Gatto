@@ -41,6 +41,10 @@ cargo --version
 rustup --version
 ```
 
+Quit any running Gatto copy before starting a source build. The installed app and
+a development executable can run together, but their global shortcuts compete
+and their in-memory preferences can differ.
+
 Clone and run the project:
 
 ```sh
@@ -238,6 +242,28 @@ The command uses in-memory fixtures and does not upload or change preferences.
 It reports second-attachment-to-staging time, final dimensions, and PNG bytes.
 See [historical profiling notes](docs/research/side-by-side-composition-profile.md).
 
+### App performance
+
+Run the opt-in macOS benchmarks in an optimized build:
+
+```sh
+GATTO_PERF_OUTPUT=target/performance.json cargo test --release --locked --bin gatto performance::measure_workflows -- --ignored --exact --nocapture
+```
+
+These exercise production image import, editor decoding and session reopening,
+annotation preview/export, pixelation, and comparison creation with generated 4K
+images. Each scenario runs in its own process. Reports contain median operation
+time, total process CPU time, peak resident memory, and export pixel fingerprints.
+They do not upload, use the clipboard, open windows, or change preferences.
+
+Save a report before a change, then set `GATTO_PERF_BASELINE` to that report's path
+on subsequent runs. The comparison fails on changed export pixels or a regression
+over 25% in time, CPU, or memory (operation timings below 1 ms have a 1 ms floor).
+Use the same machine, toolchain, fixtures, and otherwise idle conditions. Process
+CPU/memory include fixture preparation and verification; these are not measurements
+of GPU memory, idle app usage, network speed, or complete button-to-frame latency.
+See the [measurement record](docs/research/app-performance-2026-10-23.md).
+
 ### Automation status
 
 The CI and dependency-security workflow definitions currently live in
@@ -269,11 +295,14 @@ or opening a player.
 
 Media uploads use a bounded Foundation URLSession stream inside background
 workers; `tempfile` provides automatically removed, privately permissioned video
-snapshots. Apple's installed clang/libtool compile the tracked native upload,
-menu and shortcut adapters during Cargo builds, without another downloaded
-compiler or binding package. `test-platform.sh` checks real AppKit menu behavior
-and runs the shortcut controller on macOS's main thread. Ordinary Rust/GPUI test
-workers cannot substitute for that AppKit thread. Bun's built-in `check` handles
+snapshots. Uploads, status menus and the Finder service use the existing typed
+Rust framework bindings. Apple's installed clang/libtool compile only the small
+Carbon/media-key shortcut adapter during Cargo builds. No additional compiler or
+binding package is downloaded. `test-platform.sh` checks real Rust-defined AppKit
+menu/service behavior, cold/warm Finder delivery and native cleanup failures;
+it runs the shortcut controller on macOS's main thread. Ordinary Rust/GPUI test
+workers cannot substitute for that AppKit thread. The [migration record](docs/research/safe-rust-migration-2026-10-23.md)
+documents the unsafe contracts and sanitizer commands. Bun's built-in `check` handles
 both TypeScript projects; package executables may not auto-install missing tools.
 Native updater checks include channel isolation, cached/in-flight offers and
 Stable/Beta feed signing. The disposable installation test exercises a beta
