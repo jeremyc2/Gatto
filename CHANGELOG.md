@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Replace the walkthrough’s mascot examples with real application captures and
+  focused annotations, including a local-path pixelation example.
 - Refresh the website's brief feature copy for videos, annotations, and
   side-by-side comparison; remove the file-format footnote.
 - Replace the website headline with “GitHub, illustrated.” and trim repeated

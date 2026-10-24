@@ -29,7 +29,7 @@ enabling this. Images and GIFs stay limited to 10 MB. For larger videos, choose
 
 <img src="images/walkthrough/06-video-staged.png" alt="A video ready to upload" width="620">
 
-<img src="images/walkthrough/03-image-staged.png" alt="Gatto with its rocket cat artwork staged and ready to upload" width="620">
+<img src="images/walkthrough/03-image-staged.png" alt="Gatto with a screenshot staged and ready to upload" width="620">
 
 Before uploading, you can edit an attachment's description, remove it, or click
 it to preview it.
@@ -104,14 +104,14 @@ Paste the Markdown into an issue, pull request, comment, discussion, or Markdown
 file. By default, images copy in this form:
 
 ```md
-<img width="640" height="480" alt="Gatto rocket cat" src="https://github.com/user-attachments/assets/…" />
+<img width="1408" height="784" alt="Interface review" src="https://github.com/user-attachments/assets/…" />
 ```
 
 To use Markdown image syntax instead, enable **Copy images as Markdown** in
 [App Preferences](SETUP.md#4-set-your-preferences). The same image then copies as:
 
 ```md
-![Gatto rocket cat](https://github.com/user-attachments/assets/…)
+![Interface review](https://github.com/user-attachments/assets/…)
 ```
 
 Both formats use your description as alt text. The preference also applies to
@@ -184,7 +184,7 @@ Press **Command+,** while Gatto is focused to open App Preferences, or choose
 Click a staged image to open it in the editor. Add a note, point out a detail,
 or pixelate an area before uploading. Your original file stays unchanged.
 
-<img src="images/walkthrough/image-editor.png" alt="Gatto image editor with text, an arrow, and shapes added to the rocket cat" width="820">
+<img src="images/walkthrough/image-editor.png" alt="Gatto image editor with a note and an arrow on a screenshot" width="820">
 
 Choose a drawing tool, then adjust its color, size, or fill in the tool options.
 Hover over a tool to see its name and keyboard shortcut.
@@ -205,7 +205,7 @@ Choose the text tool and click where you want to write. For a longer note, drag
 out a text box first so the words wrap. Double-click existing text to change it.
 Click away when you're finished, or press **Escape** to finish typing.
 
-<img src="images/walkthrough/image-editor-text-editing.png" alt="A shape label being edited directly on the image, with text options beside it" width="820">
+<img src="images/walkthrough/image-editor-text-editing.png" alt="A note being edited directly on a screenshot, with text options beside it" width="820">
 
 Use an arrow to point to a detail, a shape to highlight an area, or the pen to
 draw freely. Drag to draw an arrow or set a shape's size. You can also click to
@@ -231,7 +231,7 @@ area at the bottom. Drag a corner to resize all markers together.
 Only the numbers appear on the image. When you copy it after uploading, the
 steps and descriptions appear as a numbered list underneath.
 
-<img src="images/walkthrough/image-editor-markers.png" alt="Numbered steps with a description being edited below the image" width="820">
+<img src="images/walkthrough/image-editor-markers.png" alt="Two numbered markers with a description being edited below the image" width="820">
 
 ### Adjust what you've added
 
@@ -244,7 +244,7 @@ To work on several marks at once, drag a selection box from an empty area.
 You can move, resize, rotate, or restyle them together. Click an empty area to
 clear the selection.
 
-<img src="images/walkthrough/image-editor-group.png" alt="Several annotations selected together inside a shared blue resize box" width="820">
+<img src="images/walkthrough/image-editor-group.png" alt="A note and its arrow selected together inside a shared blue resize box" width="820">
 
 Use **Undo** or **Redo** to revisit a change, delete to remove selected marks,
 or **Clone** to duplicate them. You can also copy and paste marks
@@ -257,7 +257,7 @@ Choose the pixelation brush at the right end of the toolbar. Move over the image
 to preview the effect, then click or drag to apply it. Use the size slider to
 cover a smaller or larger area. Text, arrows, and shapes stay visible above it.
 
-<img src="images/walkthrough/image-editor-brush.png" alt="The pixelation brush previews a mosaic inside its blue circle, with a brush-size slider at the upper right" width="820">
+<img src="images/walkthrough/image-editor-brush.png" alt="The pixelation brush hides a local file path, with its size slider at the upper right" width="820">
 
 Pixelation stays where you paint it; it cannot be moved or erased with the
 eraser. Use **Undo** to remove a stroke. Check the result before sharing.

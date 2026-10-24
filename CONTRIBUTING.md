@@ -188,13 +188,16 @@ Run `./scripts/update-walkthrough-screenshots.sh` on macOS and inspect the PNGs.
 The all-in-one release script also runs this before its commit review, so the
 release includes screenshots of the current app.
 The script renders the production GPUI interface through its off-screen Metal
-renderer with fixed in-memory examples. It does not contact GitHub, read or
-modify saved preferences, use UI automation, or require Screen Recording
+renderer with fixed in-memory examples and committed source captures. It does not
+contact GitHub, read or modify saved preferences, use UI automation, or require Screen Recording
 permission. It overwrites `docs/images/walkthrough/`, including the Rooftops game,
 results, and exported scorecard images. Editor captures include the overview,
 text editing, shape choices, grouped selections, pixelation brush, and save/close
-dialogs. Use these alongside the matching tasks in the walkthrough. Game captures show an early coin jump,
-a mid-level owl encounter, and the results screen in `rooftops-1.png` through
+dialogs. Each editor capture starts with a fresh scene and at most two feedback
+items; the pixelation example covers a local path. Source crops, framing, and
+attribution are recorded in [walkthrough captures](docs/design/walkthrough-captures.md).
+Use these alongside the matching tasks in the walkthrough. Game captures show an
+early coin jump, a mid-level owl encounter, and the results screen in `rooftops-1.png` through
 `rooftops-3.png`; the scorecard is `rooftops-score.png`.
 
 Check pixelation edges with the same native renderer:

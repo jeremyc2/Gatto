@@ -706,114 +706,27 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
         vec!["markers"]
     } else {
         vec![
-            "marquee",
-            "group",
-            "shapes",
-            "shape-properties",
-            "x-box",
-            "checkbox",
-            "brush",
-            "revert",
-            "zoom",
-            "exit",
-            "saving",
             "text-editing",
-            "text-finished",
+            "shapes",
             "markers",
+            "group",
+            "brush",
+            "exit",
         ]
     };
     for variant in variants {
         cx.update_window(handle, |_, window, cx| {
-            use gpui_kit::InputEvent as _;
+            preview.update(cx, |preview, cx| {
+                preview.walkthrough_scene(variant, window, cx)
+            });
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
             match variant {
-                "marquee" => {
-                    window.dispatch_event(
-                        gpui_kit::MouseDownEvent {
-                            position: gpui_kit::point(px(100.), px(160.)),
-                            button: gpui_kit::MouseButton::Left,
-                            modifiers: Default::default(),
-                            click_count: 1,
-                            first_mouse: false,
-                        }
-                        .to_platform_input(),
-                        cx,
-                    );
-                    window.dispatch_event(
-                        gpui_kit::MouseMoveEvent {
-                            position: gpui_kit::point(px(780.), px(610.)),
-                            pressed_button: Some(gpui_kit::MouseButton::Left),
-                            modifiers: Default::default(),
-                        }
-                        .to_platform_input(),
-                        cx,
-                    );
-                }
-                "group" => {
-                    window.dispatch_event(
-                        gpui_kit::MouseUpEvent {
-                            position: gpui_kit::point(px(780.), px(610.)),
-                            button: gpui_kit::MouseButton::Left,
-                            modifiers: Default::default(),
-                            click_count: 1,
-                        }
-                        .to_platform_input(),
-                        cx,
-                    );
-                    preview.update(cx, |preview, cx| preview.select_walkthrough_group(true, cx));
-                }
-                "shapes" => {
-                    preview.update(cx, |preview, cx| {
-                        preview.select_walkthrough_group(false, cx)
-                    });
-                    window.click("annotation-shapes-overflow", cx);
-                }
-                "shape-properties" => window.click("annotation-shape-picker", cx),
-                "x-box" => {
-                    window.click("annotation-shapes-overflow", cx);
-                    window.click("annotation-shape-picker", cx);
-                    window.click(("annotation-shape", 10usize), cx);
-                    window.click(("annotation-fill", 2usize), cx);
-                }
-                "checkbox" => {
-                    window.click("annotation-shape-picker", cx);
-                    window.click(("annotation-shape", 11usize), cx);
-                }
-                "brush" => {
-                    window.click("annotation-shapes-overflow", cx);
-                    window.click(("annotation-tool", 8usize), cx);
-                    window.click("pixelate-size", cx);
-                    window.dispatch_event(
-                        gpui_kit::MouseMoveEvent {
-                            position: gpui_kit::point(px(560.), px(470.)),
-                            pressed_button: None,
-                            modifiers: Default::default(),
-                        }
-                        .to_platform_input(),
-                        cx,
-                    );
-                }
-                "revert" => window.click("annotation-revert", cx),
-                "zoom" => {
-                    window.click("cancel", cx);
-                    window.click("preview-fit", cx);
-                }
-                "exit" => {
-                    window.within("popup-menu").click(3usize, cx);
-                    preview.update(cx, |preview, cx| preview.confirm_exit(window, cx));
-                }
-                "saving" => {
-                    window.click("cancel", cx);
-                    window.click("annotation-apply", cx);
-                }
-                "markers" => {
-                    preview.update(cx, |preview, cx| preview.walkthrough_markers(window, cx))
-                }
-                "text-editing" | "text-finished" => {
-                    preview.update(cx, |preview, cx| {
-                        preview.walkthrough_text_edit(variant == "text-finished", window, cx)
-                    });
-                }
-                _ => unreachable!(),
+                "shapes" => window.click("annotation-shapes-overflow", cx),
+                "exit" => preview.update(cx, |preview, cx| preview.confirm_exit(window, cx)),
+                _ => {}
             }
             window.render_frame(cx);
         })?;

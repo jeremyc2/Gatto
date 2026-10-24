@@ -1629,170 +1629,134 @@ fn frame_outline(
 #[cfg(feature = "walkthrough-screenshots")]
 impl ImagePreview {
     #[allow(dead_code)]
-    pub fn walkthrough_markers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.finish_text(cx);
-        self.session_generation += 1;
-        self.saving = None;
-        self.editor = Editor::default();
-        self.zoom = 1.;
-        self.offset = point(px(0.), px(0.));
-        let doc = self.doc_mut().unwrap();
-        doc.marks.clear();
-        doc.next_marker = 1;
-        for (position, description) in [
-            (Pos::new(130., 90.), "Check the launch destination."),
-            (
-                Pos::new(390., 230.),
-                "Choose a repository, then upload the screenshot.\nWait for the upload to finish.",
-            ),
-            (Pos::new(205., 380.), "Ready for takeoff."),
-        ] {
-            let mut mark = Mark::new(
-                Tool::Marker,
-                position,
-                Style {
-                    color: [4, 7, 9][doc.next_marker as usize - 1],
-                    ..Style::default()
-                },
-            );
-            doc.number_marker(&mut mark);
-            mark.description = description.into();
-            doc.marks.push(mark);
-        }
-        self.editor.tool = Tool::Marker;
-        self.set_selection(vec![1]);
-        self.editor.style = self.doc().unwrap().marks[1].style.clone().with_scale(1.);
-        self.sync_marker_notes(window, cx);
-        self.refresh_annotations(cx);
+    pub fn for_walkthrough(cx: &mut Context<Self>) -> Self {
+        Self::walkthrough_source("canvas", cx)
     }
 
-    #[allow(dead_code)]
-    pub fn walkthrough_text_edit(
-        &mut self,
-        finished: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if finished {
-            self.finish_text(cx);
-            self.clear_selection();
-        } else {
-            self.session_generation += 1;
-            self.saving = None;
-            self.editor = Editor::default();
-            let doc = self.doc_mut().unwrap();
-            doc.marks[1].style.font_size = 44.;
-            doc.marks[1].set_text("Hello".into());
-            doc.marks[3].set_text("One layout,\neven while editing.".into());
-            self.editor.style = self.doc().unwrap().marks[3].style.clone().with_scale(1.);
-            self.edit_text(3, window, cx);
-        }
-        self.refresh_annotations(cx);
-    }
-    #[allow(dead_code)]
-    pub fn select_walkthrough_group(&mut self, multiple: bool, cx: &mut Context<Self>) {
-        self.set_selection(if multiple { vec![1, 2, 3, 4] } else { vec![3] });
-        self.editor.tool = Tool::Select;
-        self.editor.style = self.doc().unwrap().marks[self.editor.selected.unwrap()]
-            .style
-            .clone()
-            .with_scale(1.);
-        self.refresh_annotations(cx);
-    }
-    #[allow(dead_code)] // Shared with the screenshot binary when the feature is enabled.
-    pub fn for_walkthrough(cx: &mut Context<Self>) -> Self {
-        use crate::annotation::{Dash, Fill};
-        let attachment = StagedAttachment::from_bytes(
-            "rocket-cat.png".into(),
-            include_bytes!("../../packaging/rocket-cat-transparent.png").to_vec(),
-            None,
-        )
-        .unwrap();
+    fn walkthrough_source(scene: &str, cx: &mut Context<Self>) -> Self {
+        let bytes = match scene {
+            "timeline" => {
+                include_bytes!("../../docs/images/walkthrough/source/timeline.png").as_slice()
+            }
+            "detail" => {
+                include_bytes!("../../docs/images/walkthrough/source/detail.png").as_slice()
+            }
+            "path" => include_bytes!("../../docs/images/walkthrough/source/path.png").as_slice(),
+            _ => include_bytes!("../../docs/images/walkthrough/source/canvas.png").as_slice(),
+        };
+        let attachment =
+            StagedAttachment::from_bytes("interface-review.png".into(), bytes.to_vec(), None)
+                .expect("valid captured walkthrough source");
         let id = attachment.id;
         let mut preview = Self::new(vec![attachment], id, cx);
-        let mut title = Mark::new(
-            Tool::Text,
-            Pos::new(-40., -32.),
-            Style {
-                font_size: 30.,
-                color: 0,
-                ..Default::default()
-            },
-        );
-        title.text = "Ready for takeoff".into();
-        let mut arrow = Mark::new(
-            Tool::Arrow,
-            Pos::new(-15., 300.),
-            Style {
-                color: 5,
-                width: crate::annotation::STROKE_WIDTHS[0],
-                start: crate::annotation::Cap::Triangle,
-                ..Default::default()
-            },
-        );
+        // One feedback item, expressed by a note and its pointer.
+        let style = Style {
+            color: 6,
+            width: 3.5,
+            font_size: 30.,
+            ..Default::default()
+        };
+        let mut arrow = Mark::new(Tool::Arrow, Pos::new(410., 180.), style.clone());
         arrow.points = vec![
-            Pos::new(-15., 300.),
-            Pos::new(250., 230.),
-            Pos::new(155., 350.),
+            Pos::new(410., 180.),
+            Pos::new(65., 135.),
+            Pos::new(230., 190.),
         ];
-        let mut star = Mark::new(
-            Tool::Star,
-            Pos::new(2., 24.),
-            Style {
-                color: 6,
-                fill: Fill::Hatch,
-                width: crate::annotation::STROKE_WIDTHS[0],
-                ..Default::default()
-            },
-        );
-        star.points[1] = Pos::new(105., 120.);
-        let mut rectangle = Mark::new(
-            Tool::Rectangle,
-            Pos::new(310., 72.),
-            Style {
-                color: 5,
-                width: crate::annotation::STROKE_WIDTHS[0],
-                dash: Dash::Dashed,
-                fill: Fill::Soft,
-                font_size: 18.,
-                ..Default::default()
-            },
-        );
-        rectangle.points[1] = Pos::new(463., 225.);
-        rectangle.rotation = -0.16;
-        rectangle.text = "A larger shape label".into();
-        let mut note = Mark::new(
-            Tool::Text,
-            Pos::new(-60., 342.),
-            Style {
-                font_size: 22.,
-                color: 5,
-                ..Default::default()
-            },
-        );
-        note.text = "A little boost.".into();
-        note.wrap = Some(140.);
-        let mut pixelation = Mark::new(
-            Tool::Redact,
-            Pos::new(190., 150.),
-            Style {
-                width: 96.,
-                ..Default::default()
-            },
-        );
-        pixelation.points = vec![
-            Pos::new(190., 150.),
-            Pos::new(260., 200.),
-            Pos::new(380., 190.),
-        ];
-        let doc = preview.doc_mut().unwrap();
-        doc.marks = vec![title, arrow, star, rectangle, note, pixelation];
-        let style = doc.marks[3].style.clone().with_scale(1.);
-        preview.editor.selected = Some(3);
-        preview.editor.style = style;
-        preview.zoom = 0.8;
+        let mut note = Mark::new(Tool::Text, Pos::new(410., 90.), style);
+        note.set_text("Stronger outline for\nthe active color".into());
+        preview.doc_mut().unwrap().marks = vec![arrow, note];
+        preview.zoom = 0.94;
         preview.refresh_annotations(cx);
         preview
+    }
+
+    /// Reset each capture so examples never accumulate unrelated marks or tools.
+    #[allow(dead_code)]
+    pub fn walkthrough_scene(&mut self, scene: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let source = match scene {
+            "markers" => "timeline",
+            "text-editing" => "detail",
+            "brush" => "path",
+            _ => "canvas",
+        };
+        *self = Self::walkthrough_source(source, cx);
+        window.focus(&self.focus_handle, cx);
+        match scene {
+            "text-editing" => {
+                self.editor.style = self.doc().unwrap().marks[1].style.clone();
+                self.edit_text(1, window, cx);
+            }
+            "group" => {
+                self.set_selection(vec![0, 1]);
+                self.editor.style = self.doc().unwrap().marks[1].style.clone();
+            }
+            "shapes" => {
+                let mut outline = Mark::new(
+                    Tool::Rectangle,
+                    Pos::new(14., 90.),
+                    Style {
+                        color: 6,
+                        width: 3.5,
+                        ..Default::default()
+                    },
+                );
+                outline.points[1] = Pos::new(80., 156.);
+                self.doc_mut().unwrap().marks[0] = outline;
+                self.set_selection(vec![0]);
+                self.editor.style = self.doc().unwrap().marks[0].style.clone();
+            }
+            "markers" => {
+                let doc = self.doc_mut().unwrap();
+                doc.marks.clear();
+                for (position, description) in [
+                    (
+                        Pos::new(90., 125.),
+                        "Give the active color a stronger outline.",
+                    ),
+                    (
+                        Pos::new(848., 544.),
+                        "Make the selected frame easier to distinguish.",
+                    ),
+                ] {
+                    let mut mark = Mark::new(
+                        Tool::Marker,
+                        position,
+                        Style {
+                            color: 6,
+                            ..Default::default()
+                        },
+                    );
+                    doc.number_marker(&mut mark);
+                    mark.description = description.into();
+                    doc.marks.push(mark);
+                }
+                self.editor.tool = Tool::Marker;
+                self.set_selection(vec![1]);
+                self.editor.style = self.doc().unwrap().marks[1].style.clone();
+                self.sync_marker_notes(window, cx);
+            }
+            "brush" => {
+                let mut stroke = Mark::new(
+                    Tool::Redact,
+                    Pos::new(540., 812.),
+                    Style {
+                        width: 56.,
+                        ..Default::default()
+                    },
+                );
+                stroke.points[1] = Pos::new(812., 812.);
+                self.doc_mut().unwrap().marks = vec![stroke];
+                self.editor.tool = Tool::Redact;
+                self.editor.pixelate_diameter = Some(56.);
+                let (origin, scale) = self.transform(window);
+                self.editor.brush_cursor = Some(point(
+                    px(origin.x + 780. * scale),
+                    px(origin.y + 812. * scale),
+                ));
+            }
+            _ => {}
+        }
+        self.refresh_annotations(cx);
     }
 }
 #[cfg(test)]

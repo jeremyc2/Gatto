@@ -404,9 +404,9 @@ impl UploaderApp {
     ) -> Self {
         let mut settings = AppSettings::default();
         if !matches!(scenario, WalkthroughScenario::FirstRun) {
-            settings.owner = Some("acme-labs".into());
-            settings.pinned_repositories.insert("gatto".into());
-            settings.last_repository = Some("gatto".into());
+            settings.owner = Some("field-notes".into());
+            settings.pinned_repositories.insert("pixel-tools".into());
+            settings.last_repository = Some("pixel-tools".into());
             settings.last_repository_id = Some(1001);
         }
 
@@ -427,11 +427,11 @@ impl UploaderApp {
         for repository in [
             Repository {
                 id: 1001,
-                name: "gatto".into(),
+                name: "pixel-tools".into(),
             },
             Repository {
                 id: 1002,
-                name: "developer-portal".into(),
+                name: "game-client".into(),
             },
             Repository {
                 id: 1003,
@@ -441,7 +441,7 @@ impl UploaderApp {
             this.repositories
                 .insert(repository.name.clone(), repository);
         }
-        this.selected_repository = this.repositories.get("gatto").cloned();
+        this.selected_repository = this.repositories.get("pixel-tools").cloned();
         this.load_state = LoadState::Ready;
         this.settings_open = matches!(scenario, WalkthroughScenario::Preferences);
 
@@ -452,11 +452,11 @@ impl UploaderApp {
                 | WalkthroughScenario::MixedUploadProgress
         ) {
             let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("packaging/rocket-cat-transparent.png");
+                .join("docs/images/walkthrough/source/canvas.png");
             let mut image = StagedAttachment::from_path(path, Default::default())
                 .expect("the walkthrough fixture image should always be valid");
-            image.name = "rocket-cat.png".into();
-            image.description = "Gatto rocket cat".into();
+            image.name = "interface-review.png".into();
+            image.description = "Interface review".into();
 
             if matches!(
                 scenario,
