@@ -61,6 +61,12 @@ including formatter and linter components. Follow the
 before trying uploads. To create an optimized binary, run `cargo build --release`.
 A source build can run on Intel macOS; published bundles currently target Apple Silicon.
 
+## Pixel art tooling
+
+For pixel art and sprite animation, follow [Aseprite MCP setup](docs/agents/aseprite.md)
+to install the optional local server and verify it. The repository includes an
+Aseprite agent skill with the upstream drawing and animation guidance.
+
 ## Local app bundle
 
 To test Finder integration, URL handling, or installation without publishing:
@@ -173,8 +179,12 @@ changes. Website checks do not replace the Rust checks for app changes.
 
 With the beta `cf` CLI installed and signed in (`cf auth login`), `bun deploy:web`
 builds and updates the existing `gatto` Worker. Set `CLOUDFLARE_ACCOUNT_ID` in your
-environment or the ignored root `.env` file. Use `bun deploy:web --dry-run` to
-validate without uploading.
+environment or the ignored root `.env.cloudflare` file. Put any Cloudflare API
+token there too. The deploy script reads this file explicitly and passes
+Cloudflare settings only to `cf`; build subprocesses run without them. Keep
+credentials out of root `.env` so ordinary Bun commands do not load them.
+Aseprite uses its own ignored `.env.aseprite` file. Use `bun deploy:web --dry-run`
+to validate without uploading.
 
 ## Documentation and manual verification
 

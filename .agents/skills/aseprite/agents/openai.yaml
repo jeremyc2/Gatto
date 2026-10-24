@@ -1,0 +1,3 @@
+interface:
+  display_name: "Aseprite"
+  short_description: "Draw and animate pixel art with Aseprite MCP"

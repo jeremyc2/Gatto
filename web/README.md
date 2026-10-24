@@ -26,6 +26,12 @@ bun size:web
 ```
 
 The deployable static site is `web/dist/client/`.
+
+For deployment, put `CLOUDFLARE_ACCOUNT_ID` and any API token in the ignored root
+`.env.cloudflare`, then run `bun deploy:web`. Deployment reads that file explicitly
+and supplies Cloudflare settings only to `cf`, after building. Keep credentials
+out of root `.env` so regular Bun commands do not automatically load them.
+
 Bun's built-in checker runs both TypeScript projects; a separate TypeScript
 compiler package is not required. Package commands require the locked local
 installation and never fetch a missing executable automatically. Dependency

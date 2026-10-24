@@ -1,12 +1,25 @@
 import { $ } from "bun";
-
-const accountId = Bun.env.CLOUDFLARE_ACCOUNT_ID?.trim();
-if (!accountId) {
-  throw new Error("Set CLOUDFLARE_ACCOUNT_ID in your environment or root .env before deploying.");
-}
+import { parseEnv } from "node:util";
 
 const root = new URL("../../", import.meta.url);
-const run = $.cwd(root.pathname);
+const localEnv = Bun.file(new URL(".env.cloudflare", root));
+const localValues = (await localEnv.exists()) ? parseEnv(await localEnv.text()) : {};
+const isCloudflare = (name: string) => name.startsWith("CLOUDFLARE_") || name.startsWith("CF_");
+const deployEnv = {
+  ...Object.fromEntries(Object.entries(localValues).filter(([name]) => isCloudflare(name))),
+  ...process.env,
+};
+const accountId = deployEnv.CLOUDFLARE_ACCOUNT_ID?.trim();
+if (!accountId) {
+  throw new Error(
+    "Set CLOUDFLARE_ACCOUNT_ID in your environment or root .env.cloudflare before deploying.",
+  );
+}
+
+const buildEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => !isCloudflare(name)),
+);
+const run = $.cwd(root.pathname).env(buildEnv);
 const output = new URL(".cloudflare/output/v0/", root);
 
 await run`bun run build:web`;
@@ -30,4 +43,4 @@ await Bun.write(
     assets: {},
   }),
 );
-await run`cf deploy --prebuilt ${Bun.argv.slice(2)}`;
+await run.env(deployEnv)`cf deploy --prebuilt ${Bun.argv.slice(2)}`;

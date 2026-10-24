@@ -25,6 +25,11 @@ Use the default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-
 
 This is a single-context repo with root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
+### Pixel art
+
+For pixel art and sprite animation, use [the Aseprite skill](.agents/skills/aseprite/SKILL.md).
+For server setup or connection problems, see [Aseprite MCP](docs/agents/aseprite.md).
+
 ### Documentation
 
 When changing app behavior, assets, dependencies, packaging, or releases, read
