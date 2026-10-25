@@ -21,6 +21,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Replace the apple in walkthrough screenshots with an original, saturated
+  pixel-art cat carrying a shovel, with editable Aseprite artwork in the
+  repository (#29).
+
 - Autoplay the muted website story video on page load and remove its scroll
   seeking code, keeping chapter copy, paw trails and the finale scroll-driven.
 
