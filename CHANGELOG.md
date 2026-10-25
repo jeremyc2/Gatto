@@ -9,6 +9,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Keep the website video visible during loading and explicitly start muted
+  playback after hydration so hidden-media policy does not stall autoplay.
+
 - Serve website video byte ranges through a small Cloudflare Worker so cold-load
   scroll seeking works when the static asset host returns only full files.
 - Let the website story video seek while its first frame is still buffering,
@@ -17,6 +20,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   transitions between copy blocks of different heights.
 
 ### Changed
+
+- Autoplay the muted website story video on page load and remove its scroll
+  seeking code, keeping chapter copy, paw trails and the finale scroll-driven.
 
 - Replace Oxfmt with Bun 1.4.4's built-in formatter, extend formatting and typed
   lint checks to developer scripts, and type-check tests before execution (#28).

@@ -9,7 +9,7 @@ import bringImage from "../assets/images/story-bring.webp";
 import uploadImage from "../assets/images/story-upload.webp";
 import copyImage from "../assets/images/story-copy.webp";
 import journeyVideo from "../assets/video/story-journey.mp4";
-import { createStoryScrubber, storyVideo } from "./story-video";
+import { storyVideo } from "./story-video";
 import "./story-transitions.css";
 import { DownloadBadge } from "./DownloadBadge";
 import {
@@ -49,16 +49,25 @@ export function Story() {
   const [enhanced, setEnhanced] = createSignal(false);
   const [status, setStatus] = createSignal("");
   const [atEnd, setAtEnd] = createSignal(false);
-  const [motion, setMotion] = createSignal(false);
   const [videoReady, setVideoReady] = createSignal(false);
-  const [videoFailed, setVideoFailed] = createSignal(false);
   const [copyHeight, setCopyHeight] = createSignal(0);
   const copyElements: HTMLDivElement[] = [];
   let video: HTMLVideoElement | undefined;
-  let scrubber: ReturnType<typeof createStoryScrubber> | undefined;
   let story: HTMLElement | undefined;
   let stage: HTMLDivElement | undefined;
   let controlSelection = false;
+
+  createEffect(
+    () => undefined,
+    () => {
+      if (!video) return;
+      // Hydration may happen after loadeddata, so also inspect the current state.
+      if (video.readyState >= 2) setVideoReady(true);
+      // Set the live property before play(), including for client-created elements.
+      video.muted = true;
+      void video.play().catch(() => setVideoReady(false));
+    },
+  );
 
   function dimensions() {
     if (!story || !stage) return undefined;
@@ -90,25 +99,12 @@ export function Story() {
       let lastTime = performance.now();
       let disposed = false;
       let initialized = false;
-      let mediaEnabled = false;
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-      if (video)
-        scrubber = createStoryScrubber(video, () => {
-          if (motion() && !videoFailed()) setVideoReady(true);
-        });
 
       function update() {
         frame = 0;
         const pinned = window.matchMedia("(height > 500px)").matches;
         setEnhanced(pinned);
-        setMotion(pinned && !reducedMotion.matches && !videoFailed());
-        if (motion() !== mediaEnabled) {
-          mediaEnabled = motion();
-          // Source media queries are evaluated at selection, not on subsequent resizes.
-          // Keep an already loading source on hydration; retry a previously excluded source.
-          if (video && !videoFailed() && (!mediaEnabled || video.networkState === 3)) video.load();
-        }
-        if (!motion()) setVideoReady(false);
         if (!pinned) {
           transition?.skipTransition();
           initialized = false;
@@ -124,7 +120,6 @@ export function Story() {
         );
         const next = chapterAtProgress(nextProgress);
         setCopyHeight(copyElements[next]?.offsetHeight ?? 0);
-        if (motion()) scrubber?.request(nextProgress);
         setAtEnd(nextProgress === 1);
         const now = performance.now();
         const speed = Math.abs(window.scrollY - lastY) / Math.max(1, now - lastTime);
@@ -195,7 +190,6 @@ export function Story() {
       return () => {
         disposed = true;
         transition?.skipTransition();
-        scrubber?.dispose();
         window.cancelAnimationFrame(frame);
         window.removeEventListener("scroll", schedule);
         window.removeEventListener("resize", schedule);
@@ -304,25 +298,16 @@ export function Story() {
                   poster={bringImage}
                   width={storyVideo.width}
                   height={storyVideo.height}
+                  autoplay
                   muted
                   playsinline
                   preload="auto"
                   aria-hidden="true"
-                  onLoadedMetadata={() => scrubber?.settled()}
-                  onLoadedData={() => scrubber?.settled()}
-                  onCanPlay={() => scrubber?.settled()}
-                  onSeeked={() => scrubber?.settled()}
-                  onError={() => {
-                    setVideoFailed(true);
-                    setMotion(false);
-                    setVideoReady(false);
-                  }}
+                  onLoadedData={() => setVideoReady(true)}
+                  onCanPlay={() => setVideoReady(true)}
+                  onError={() => setVideoReady(false)}
                 >
-                  <source
-                    src={journeyVideo}
-                    type="video/mp4"
-                    media="(height > 500px) and (prefers-reduced-motion: no-preference)"
-                  />
+                  <source src={journeyVideo} type="video/mp4" />
                 </video>
                 <span {...stylex.attrs(styles.sceneEdge)} aria-hidden="true" />
               </div>
@@ -628,6 +613,8 @@ const styles = stylex.create({
 
   // Share the article's exact grid and spacing so loading never moves the scene.
   videoStage: {
+    // Hidden media can be ineligible for autoplay; the poster covers loading.
+    visibility: { default: null, [storyMedia.pinned]: "visible" },
     display: { default: "none", [storyMedia.pinned]: "grid" },
     pointerEvents: "none",
     zIndex: 1,

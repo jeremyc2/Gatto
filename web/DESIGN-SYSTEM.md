@@ -242,21 +242,21 @@ tail poses and prop references. Edit the visible cels directly and keep the
 reference library hidden for export. The [artwork record](../docs/design/explorations/art/scroll-story/journey.md)
 owns the reference inventory, staging, repair lessons and export workflow.
 
-`Story.tsx` owns one paused video shared across chapters. `story-video.ts` maps
-clamped scroll progress to the 12 fps frame clock, aligning Send/Share markers
-at 31%/69% with native frames 46/101. It serializes seeks and retains the latest
-request during reversal. The final scroll position and fallback still use frame 131. A reversible delivery camera pushes from 100% to 120% toward the lower-right
-during frames 47–110 using nearest-neighbor sampling; the master stays uncropped.
+`Story.tsx` owns one muted, inline video shared across chapters. It autoplays
+once on page load, independently of scrolling, and remains on its final frame
+when playback ends. Chapter copy, paw trails and the finale remain scroll-driven.
+`story-video.ts` retains only the export dimensions and frame clock; playback
+has no scroll mapping, queued seeks or scroll-triggered loading.
 
-Static HTML declares a typed MP4 source with a media query for the pinned,
-motion-enabled story. Together with `preload="auto"`, this starts eligible media
-downloads before hydration without a second fetch or a full-file buffering gate.
+Static HTML declares a typed MP4 source, `autoplay`, `muted`, `playsinline`
+and `preload="auto"` so loading and playback can begin before hydration.
+The video stage is visible from the start, with its poster covering loading;
+hiding it while awaiting decoded data can prevent WebKit autoplay. Hydration
+sets the live muted property and requests playback, and checks existing readiness
+in case the initial loaded-data event already fired. Loaded-data and can-play
+events reveal the video over the chapter still.
 Video does not support `fetchpriority`; avoid unsupported video preloads or a
-separate high-priority fetch that duplicates range requests. Source media queries
-are reevaluated with `load()` when screen height or motion preferences change.
-The scrubber can seek as soon as metadata arrives, retaining the latest scroll
-position while buffering; metadata, loaded data, canplay and seek completion all
-retry it. It reveals the video only when data for the requested frame is available.
+separate high-priority fetch that duplicates range requests.
 
 The Cloudflare deployment routes only `/assets/*.mp4` through
 `cloudflare/worker.ts`, using the static asset binding for the source bytes.
@@ -281,10 +281,11 @@ with the exact requested bytes. Chrome's cache-bypassing Command-Shift-R restore
 the video to the current scroll position, and forward and reverse scrolling
 continued to select frames.
 
-Reduced motion, short-screen flow, video failures and disabled JavaScript retain the
-three lossless chapter stills. The video is muted, inline and never autoplayed,
-with no playback controls or tab stop. Without JavaScript, eligible browsers may
-preload the paused video while the still illustrations remain visible.
+Short-screen flow, video failures and disabled JavaScript retain the three
+lossless chapter stills. The video has no playback controls or tab stop.
+Autoplay is requested on page load, including with reduced motion; browser
+autoplay policies may still prevent playback. Reduced motion continues to disable
+chapter transitions and the other preference-aware decorative motion.
 Accessible status changes only at major markers. Each cat, including its tail,
 stays in one scene depth layer.
 
@@ -302,7 +303,7 @@ treatment; the comparison picker, alternative strengths and keyboard shortcuts
 are removed.
 
 Only the active copy receives the `story-copy` View Transition name. The video
-stays outside the snapshot so chapter changes cannot freeze its scroll progress.
+stays outside the snapshot so chapter changes cannot freeze its playback.
 The old and new snapshots both fill the animated group's height so their vertical
 slides travel the same distance, even when the chapter copy heights differ.
 Top-left positioning and `object-fit: none` preserve the text's size while the
@@ -319,7 +320,7 @@ automatically removed. The build ships no Aseprite sources or reference sheets.
 The October 25 export measures 7,340,120 bytes for CRF 24 H.264 with one-second
 keyframes and a front-loaded index, within the 8 MiB video budget. Its WebP stills
 measure 385,756, 402,070 and 303,774 bytes. Build tests enforce the transfer budget
-and index order; runtime tests cover frame mapping and queued/reversed seeks.
+and index order; the obsolete scroll-seeking runtime tests have been removed.
 `bun size:web` measures the stylesheet budget.
 
 ## References
