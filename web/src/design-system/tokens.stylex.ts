@@ -65,7 +65,12 @@ export const space = stylex.defineConsts({
   xxl: "32px",
   section: "64px",
 });
-export const radius = stylex.defineConsts({ image: "3px", control: "5px", round: "50%" });
+export const radius = stylex.defineConsts({
+  image: "3px",
+  control: "5px",
+  media: "20px",
+  round: "50%",
+});
 export const media = stylex.defineConsts({
   phone: "@media (width <= 760px)",
   tablet: "@media (760px < width <= 1050px)",

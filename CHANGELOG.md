@@ -14,6 +14,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Give the website story video and fallback stills symmetric rounded corners
+  matching the download badge, with a subtle inset blend into the page canvas.
 - Replace the website's three static story paintings with a detailed courtyard
   animation scrubbed by scrolling, retaining the chapter copy and still-image
   fallbacks. Distinct cat materials, expressive poses and consistent anatomy

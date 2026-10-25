@@ -55,7 +55,7 @@ test("prerenders all scenes, concise copy and the two README download badges", a
 test("ships one extracted stylesheet within the CSS budget, with themes and reduced motion", async () => {
   const size = await cssSize();
   expect(size.files).toHaveLength(1);
-  expect(size.bytes).toBeLessThan(23 * 1024);
+  expect(size.bytes).toBeLessThan(24 * 1024);
   expect(size.gzip).toBeLessThan(7 * 1024);
   const path = size.files[0]?.path;
   if (!path) throw new Error("The extracted stylesheet is missing.");

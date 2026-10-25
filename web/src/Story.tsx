@@ -268,14 +268,17 @@ export function Story() {
                 )}
               </div>
               <figure {...stylex.attrs(styles.scene, videoReady() && styles.coveredStill)}>
-                <img
-                  {...stylex.attrs(styles.sceneImage)}
-                  src={chapter.image}
-                  width={storyVideo.width}
-                  height={storyVideo.height}
-                  fetchpriority={index === 0 ? "high" : "auto"}
-                  alt={chapter.alt}
-                />
+                <div {...stylex.attrs(styles.sceneFrame)}>
+                  <img
+                    {...stylex.attrs(styles.sceneImage)}
+                    src={chapter.image}
+                    width={storyVideo.width}
+                    height={storyVideo.height}
+                    fetchpriority={index === 0 ? "high" : "auto"}
+                    alt={chapter.alt}
+                  />
+                  <span {...stylex.attrs(styles.sceneEdge)} aria-hidden="true" />
+                </div>
               </figure>
             </article>
           ))}
@@ -285,27 +288,30 @@ export function Story() {
           >
             <div {...stylex.attrs(styles.copy, styles.videoPlaceholder(copyHeight()))} />
             <figure {...stylex.attrs(styles.scene)} role="img" aria-label={chapters[active()].alt}>
-              <video
-                {...stylex.attrs(styles.sceneImage)}
-                ref={(element) => {
-                  video = element;
-                }}
-                src={motion() ? journeyVideo : undefined}
-                poster={bringImage}
-                width={storyVideo.width}
-                height={storyVideo.height}
-                muted
-                playsinline
-                preload="auto"
-                aria-hidden="true"
-                onLoadedData={() => scrubber?.settled()}
-                onSeeked={() => scrubber?.settled()}
-                onError={() => {
-                  setVideoFailed(true);
-                  setMotion(false);
-                  setVideoReady(false);
-                }}
-              />
+              <div {...stylex.attrs(styles.sceneFrame)}>
+                <video
+                  {...stylex.attrs(styles.sceneImage)}
+                  ref={(element) => {
+                    video = element;
+                  }}
+                  src={motion() ? journeyVideo : undefined}
+                  poster={bringImage}
+                  width={storyVideo.width}
+                  height={storyVideo.height}
+                  muted
+                  playsinline
+                  preload="auto"
+                  aria-hidden="true"
+                  onLoadedData={() => scrubber?.settled()}
+                  onSeeked={() => scrubber?.settled()}
+                  onError={() => {
+                    setVideoFailed(true);
+                    setMotion(false);
+                    setVideoReady(false);
+                  }}
+                />
+                <span {...stylex.attrs(styles.sceneEdge)} aria-hidden="true" />
+              </div>
             </figure>
           </div>
         </div>
@@ -573,12 +579,31 @@ const styles = stylex.create({
     },
   },
 
+  sceneFrame: {
+    position: "relative",
+    width: "100%",
+    marginInline: "auto",
+    borderRadius: radius.media,
+    overflow: "clip",
+    // Keep the frame fitted to the artwork on height-constrained screens.
+    maxWidth: {
+      default: "100%",
+      [storyMedia.shortFlow]: 585,
+      [storyMedia.pinned]: `calc(${storyLayout.imageMaximum} * 1.5)`,
+    },
+  },
+  sceneEdge: {
+    position: "absolute",
+    inset: 0,
+    borderRadius: "inherit",
+    pointerEvents: "none",
+    boxShadow: `inset 0 0 0 1px ${colors.canvas}, inset 0 0 12px 2px ${colors.canvas}`,
+  },
   sceneImage: {
     imageRendering: "pixelated",
     width: "100%",
     height: "auto",
     display: "block",
-    borderRadius: radius.image,
     maxHeight: {
       default: null,
       [storyMedia.shortFlow]: 390,

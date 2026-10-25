@@ -151,7 +151,7 @@ desktop and phone widths.
 
 Run `bun build:web` and `bun size:web` to measure the actual stylesheet links in
 `web/dist/client/index.html`. Bun reports raw bytes and gzip bytes. The build test
-limits the combined CSS to **23 KiB raw and 7 KiB gzip**, leaving room above the
+limits the combined CSS to **24 KiB raw and 7 KiB gzip**, leaving room above the
 current page while catching large regressions. Raise a budget only with a measured
 reason. Font and image payloads are separate from this CSS budget.
 
@@ -184,6 +184,7 @@ unused styles: 23,135 raw bytes and 6,910 gzip bytes, measured the same day.
 | Keep chapter controls until the tracker runs out of space           |        23,326 |      6,971 |
 | Continuous story video and measured copy slot (2026-10-24)          |        23,274 |      6,956 |
 | Equal-height chapter snapshots without text overlap (2026-10-25)    |        23,476 |      6,986 |
+| Rounded story frame and inset canvas blend (2026-10-25)             |        23,781 |      7,050 |
 
 The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
 correction. The independent cat approach and feathered void add 324 raw bytes
@@ -206,6 +207,9 @@ Sizing the compact switch from the tracker container adds 118 raw bytes and
 21 gzip bytes, within the same budgets.
 Equal-height copy snapshots add 202 raw bytes and 30 gzip bytes over the
 continuous-video build, remaining within the same budgets.
+The rounded story frame, inset canvas blend and aspect-ratio constraints add
+305 raw bytes and 64 gzip bytes. Raise the raw budget to 24 KiB for this addition;
+the gzip budget remains 7 KiB.
 
 The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change
@@ -247,6 +251,19 @@ motion, short-screen flow, video failures and disabled JavaScript retain the
 three lossless chapter stills. The video is muted, inline and never autoplayed,
 with no playback controls or tab stop. Accessible status changes only at major
 markers. Each cat, including its tail, stays in one scene depth layer.
+
+The video and all three fallback stills share a symmetric rounded frame.
+The `radius.media` token is 20px, matching the download badge's source corner
+radius. A clipped wrapper fits the actual 3:2 artwork, capped at 1.5 times its
+height limit on short, wide screens. A noninteractive overlay paints a thin
+canvas-colored rim and a narrow inset shadow over the artwork's edges. This
+blends the perimeter into either page appearance while preserving crisp detail
+inside and the full courtyard composition. All frame styling lives in StyleX.
+
+The chosen edge treatment is preview setting 4 (100%): a 1px inner rim with a
+12px blur and 2px inset spread. Development and production use the same fixed
+treatment; the comparison picker, alternative strengths and keyboard shortcuts
+are removed.
 
 Only the active copy receives the `story-copy` View Transition name. The video
 stays outside the snapshot so chapter changes cannot freeze its scroll progress.
