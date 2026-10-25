@@ -1659,7 +1659,7 @@ impl ImagePreview {
         let mut arrow = Mark::new(Tool::Arrow, Pos::new(410., 180.), style.clone());
         arrow.points = vec![
             Pos::new(410., 180.),
-            Pos::new(65., 135.),
+            Pos::new(90., 125.),
             Pos::new(230., 190.),
         ];
         let mut note = Mark::new(Tool::Text, Pos::new(410., 90.), style);
@@ -1693,14 +1693,14 @@ impl ImagePreview {
             "shapes" => {
                 let mut outline = Mark::new(
                     Tool::Rectangle,
-                    Pos::new(14., 90.),
+                    Pos::new(64., 90.),
                     Style {
                         color: 6,
                         width: 3.5,
                         ..Default::default()
                     },
                 );
-                outline.points[1] = Pos::new(80., 156.);
+                outline.points[1] = Pos::new(124., 156.);
                 self.doc_mut().unwrap().marks[0] = outline;
                 self.set_selection(vec![0]);
                 self.editor.style = self.doc().unwrap().marks[0].style.clone();
@@ -1714,7 +1714,7 @@ impl ImagePreview {
                         "Give the active color a stronger outline.",
                     ),
                     (
-                        Pos::new(848., 544.),
+                        Pos::new(1278., 642.),
                         "Make the selected frame easier to distinguish.",
                     ),
                 ] {
@@ -1736,22 +1736,25 @@ impl ImagePreview {
                 self.sync_marker_notes(window, cx);
             }
             "brush" => {
+                // Keep the status-bar example above the floating annotation toolbar.
+                self.zoom = 0.80;
+                self.offset.y = px(-28.);
                 let mut stroke = Mark::new(
                     Tool::Redact,
-                    Pos::new(540., 812.),
+                    Pos::new(444., 1084.),
                     Style {
                         width: 56.,
                         ..Default::default()
                     },
                 );
-                stroke.points[1] = Pos::new(812., 812.);
+                stroke.points[1] = Pos::new(824., 1084.);
                 self.doc_mut().unwrap().marks = vec![stroke];
                 self.editor.tool = Tool::Redact;
                 self.editor.pixelate_diameter = Some(56.);
                 let (origin, scale) = self.transform(window);
                 self.editor.brush_cursor = Some(point(
-                    px(origin.x + 780. * scale),
-                    px(origin.y + 812. * scale),
+                    px(origin.x + 800. * scale),
+                    px(origin.y + 1084. * scale),
                 ));
             }
             _ => {}
