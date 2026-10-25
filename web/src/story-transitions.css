@@ -5,15 +5,15 @@
 ::view-transition {
   pointer-events: none;
 }
-::view-transition-group(story-scene) {
+::view-transition-group(story-copy) {
   animation-duration: 260ms;
   overflow: clip;
 }
-::view-transition-old(story-scene) {
+::view-transition-old(story-copy) {
   animation: story-leave 260ms ease both;
   mix-blend-mode: normal;
 }
-::view-transition-new(story-scene) {
+::view-transition-new(story-copy) {
   animation: story-enter 260ms ease both;
   mix-blend-mode: normal;
 }
@@ -27,10 +27,10 @@
     transform: translateY(100%);
   }
 }
-:root[data-story-direction="backward"]::view-transition-old(story-scene) {
+:root[data-story-direction="backward"]::view-transition-old(story-copy) {
   animation-name: story-leave-backward;
 }
-:root[data-story-direction="backward"]::view-transition-new(story-scene) {
+:root[data-story-direction="backward"]::view-transition-new(story-copy) {
   animation-name: story-enter-backward;
 }
 @keyframes story-leave-backward {
@@ -44,9 +44,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(story-scene),
-  ::view-transition-old(story-scene),
-  ::view-transition-new(story-scene) {
+  ::view-transition-group(story-copy),
+  ::view-transition-old(story-copy),
+  ::view-transition-new(story-copy) {
     animation: none;
   }
 }

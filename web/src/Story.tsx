@@ -8,6 +8,8 @@ import { createEffect, createSignal, flush } from "solid-js";
 import bringImage from "../assets/images/story-bring.webp";
 import uploadImage from "../assets/images/story-upload.webp";
 import copyImage from "../assets/images/story-copy.webp";
+import journeyVideo from "../assets/video/story-journey.mp4";
+import { createStoryScrubber, storyVideo } from "./story-video";
 import "./story-transitions.css";
 import { DownloadBadge } from "./DownloadBadge";
 import {
@@ -23,21 +25,21 @@ const chapters = [
     id: "bring",
     label: "Find",
     image: bringImage,
-    alt: "Three black cats discover a watercolor flower picture. The small kitten's nose and paw meet the paper on the floor.",
+    alt: "Three cats explore a sunlit courtyard: a watercolor kitten finds a pansy picture, a tall folded-paper cat approaches it, and a softly lit round cat investigates a shallow GitHub tray.",
     status: "Find: bring an image or video.",
   },
   {
     id: "upload",
     label: "Send",
     image: uploadImage,
-    alt: "The long paper cat and small watercolor kitten both hold the picture, lowering its bottom edge into a box with GitHub painted on its front.",
+    alt: "The paper cat carries the pansy picture gently in its mouth toward the GitHub tray. The watercolor kitten leads along the foreground path while the round cat watches.",
     status: "Send: upload it to GitHub.",
   },
   {
     id: "copy",
     label: "Share",
     image: copyImage,
-    alt: "The flower picture lies flat inside the box, behind its raised rim. The three cats look at it together.",
+    alt: "The pansy picture lies flat inside the GitHub tray, with the three pixel-art cats gathered around it.",
     status: "Share: copy the Markdown.",
   },
 ] as const;
@@ -47,6 +49,13 @@ export function Story() {
   const [enhanced, setEnhanced] = createSignal(false);
   const [status, setStatus] = createSignal("");
   const [atEnd, setAtEnd] = createSignal(false);
+  const [motion, setMotion] = createSignal(false);
+  const [videoReady, setVideoReady] = createSignal(false);
+  const [videoFailed, setVideoFailed] = createSignal(false);
+  const [copyHeight, setCopyHeight] = createSignal(0);
+  const copyElements: HTMLDivElement[] = [];
+  let video: HTMLVideoElement | undefined;
+  let scrubber: ReturnType<typeof createStoryScrubber> | undefined;
   let story: HTMLElement | undefined;
   let stage: HTMLDivElement | undefined;
   let controlSelection = false;
@@ -81,11 +90,18 @@ export function Story() {
       let lastTime = performance.now();
       let disposed = false;
       let initialized = false;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      if (video)
+        scrubber = createStoryScrubber(video, () => {
+          if (motion() && !videoFailed()) setVideoReady(true);
+        });
 
       function update() {
         frame = 0;
         const pinned = window.matchMedia("(height > 500px)").matches;
         setEnhanced(pinned);
+        setMotion(pinned && !reducedMotion.matches && !videoFailed());
+        if (!motion()) setVideoReady(false);
         if (!pinned) {
           transition?.skipTransition();
           initialized = false;
@@ -100,6 +116,8 @@ export function Story() {
           geometry.stageHeight,
         );
         const next = chapterAtProgress(nextProgress);
+        setCopyHeight(copyElements[next]?.offsetHeight ?? 0);
+        if (motion()) scrubber?.request(nextProgress);
         setAtEnd(nextProgress === 1);
         const now = performance.now();
         const speed = Math.abs(window.scrollY - lastY) / Math.max(1, now - lastTime);
@@ -136,7 +154,7 @@ export function Story() {
             !skipped &&
             !outside &&
             !fast &&
-            !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+            !reducedMotion.matches &&
             document.startViewTransition
           ) {
             document.documentElement.dataset.storyDirection =
@@ -162,14 +180,21 @@ export function Story() {
       window.addEventListener("scroll", schedule, { passive: true });
       window.addEventListener("resize", schedule);
       window.addEventListener("pageshow", schedule);
+      reducedMotion.addEventListener("change", schedule);
+      // Font loading and copy wrapping also change the two-row phone composition.
+      const copyObserver = new ResizeObserver(schedule);
+      for (const element of copyElements) copyObserver.observe(element);
 
       return () => {
         disposed = true;
         transition?.skipTransition();
+        scrubber?.dispose();
         window.cancelAnimationFrame(frame);
         window.removeEventListener("scroll", schedule);
         window.removeEventListener("resize", schedule);
         window.removeEventListener("pageshow", schedule);
+        reducedMotion.removeEventListener("change", schedule);
+        copyObserver.disconnect();
       };
     },
   );
@@ -199,7 +224,12 @@ export function Story() {
               inert={enhanced() && active() !== index}
               tabindex={-1}
             >
-              <div {...stylex.attrs(styles.copy)}>
+              <div
+                {...stylex.attrs(styles.copy, active() === index && styles.transitionCopy)}
+                ref={(element) => {
+                  copyElements[index] = element;
+                }}
+              >
                 {chapter.id === "bring" ? (
                   <>
                     <Heading as="h1" size="display" xstyle={styles.title} id="bring-heading">
@@ -237,18 +267,47 @@ export function Story() {
                   </>
                 )}
               </div>
-              <figure {...stylex.attrs(styles.scene)}>
+              <figure {...stylex.attrs(styles.scene, videoReady() && styles.coveredStill)}>
                 <img
                   {...stylex.attrs(styles.sceneImage)}
                   src={chapter.image}
-                  width="1536"
-                  height="1024"
+                  width={storyVideo.width}
+                  height={storyVideo.height}
                   fetchpriority={index === 0 ? "high" : "auto"}
                   alt={chapter.alt}
                 />
               </figure>
             </article>
           ))}
+          <div
+            {...stylex.attrs(styles.step, styles.videoStage, videoReady() && styles.videoReady)}
+            aria-hidden={videoReady() ? "false" : "true"}
+          >
+            <div {...stylex.attrs(styles.copy, styles.videoPlaceholder(copyHeight()))} />
+            <figure {...stylex.attrs(styles.scene)} role="img" aria-label={chapters[active()].alt}>
+              <video
+                {...stylex.attrs(styles.sceneImage)}
+                ref={(element) => {
+                  video = element;
+                }}
+                src={motion() ? journeyVideo : undefined}
+                poster={bringImage}
+                width={storyVideo.width}
+                height={storyVideo.height}
+                muted
+                playsinline
+                preload="auto"
+                aria-hidden="true"
+                onLoadedData={() => scrubber?.settled()}
+                onSeeked={() => scrubber?.settled()}
+                onError={() => {
+                  setVideoFailed(true);
+                  setMotion(false);
+                  setVideoReady(false);
+                }}
+              />
+            </figure>
+          </div>
         </div>
         <div {...stylex.attrs(styles.storyBottom)}>
           <nav {...stylex.attrs(styles.chapterNav)} aria-label="Story chapters">
@@ -410,10 +469,6 @@ const styles = stylex.create({
         [media.phone]: "calc(100% - 62px)",
       },
     },
-    viewTransitionName: {
-      default: null,
-      [storyMedia.pinned]: "story-scene",
-    },
     maxHeight: {
       default: null,
       [storyMedia.pinned]: storyLayout.stepsMaximum,
@@ -484,6 +539,10 @@ const styles = stylex.create({
     },
   },
 
+  transitionCopy: {
+    viewTransitionName: { default: null, [storyMedia.pinned]: "story-copy" },
+  },
+
   title: {
     marginBlockStart: { default: 18, [media.phone]: 12, [media.compact]: 8 },
     marginBlockEnd: { default: 25, [media.phone]: 14, [media.compact]: 10 },
@@ -515,6 +574,7 @@ const styles = stylex.create({
   },
 
   sceneImage: {
+    imageRendering: "pixelated",
     width: "100%",
     height: "auto",
     display: "block",
@@ -525,6 +585,20 @@ const styles = stylex.create({
       [storyMedia.pinned]: storyLayout.imageMaximum,
     },
     objectFit: "contain",
+  },
+
+  // Share the article's exact grid and spacing so loading never moves the scene.
+  videoStage: {
+    display: { default: "none", [storyMedia.pinned]: "grid" },
+    pointerEvents: "none",
+    zIndex: 1,
+  },
+  videoReady: {
+    visibility: { default: null, [storyMedia.pinned]: "visible" },
+  },
+  videoPlaceholder: (height: number) => ({ height }),
+  coveredStill: {
+    visibility: { default: null, [storyMedia.pinned]: "hidden" },
   },
 
   storyBottom: {

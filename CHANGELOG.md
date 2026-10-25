@@ -9,6 +9,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Replace the website's three static story paintings with a detailed courtyard
+  animation scrubbed by scrolling, retaining the chapter copy and still-image
+  fallbacks. Distinct cat materials, expressive poses and consistent anatomy
+  carry the pansy picture into a grounded GitHub box. End just after the final
+  blink. Keep editable artwork and model references in one Aseprite master,
+  with a direct export workflow that removes its temporary frames.
 - Replace the walkthrough’s mascot examples with real application captures and
   focused annotations, including a local-path pixelation example.
 - Refresh the website's brief feature copy for videos, annotations, and

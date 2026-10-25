@@ -104,7 +104,7 @@ then stays centered so wider screens do not add trail length or prints.
 Each gap fits up to twelve prints, with
 exclusive container ranges keeping the visible count and fade timing aligned.
 This replaces the release-at-Share behavior recorded on 2026-10-17 in ADR 0002.
-Chapter changes use native View Transitions with directional
+Chapter text changes use native View Transitions with directional
 transforms; reduced motion and unsupported
 browsers update immediately. `src/story-transitions.css` owns the document-level
 snapshot pseudo-elements and keyframes that cannot be scoped to component
@@ -182,6 +182,7 @@ unused styles: 23,135 raw bytes and 6,910 gzip bytes, measured the same day.
 | Complementary tear masks with a continuous paper setting            |        22,322 |      6,704 |
 | Final rainbow paw marker and compact continuous trails (2026-10-18) |        23,208 |      6,950 |
 | Keep chapter controls until the tracker runs out of space           |        23,326 |      6,971 |
+| Continuous story video and measured copy slot (2026-10-24)          |        23,274 |      6,956 |
 
 The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
 correction. The independent cat approach and feathered void add 324 raw bytes
@@ -207,6 +208,58 @@ The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change
 reflects both the source refactor and production minification. Refresh this dated
 measurement after intentional design-system or build changes.
+
+## Scroll-story artwork
+
+The story is a 1152 × 768, 131-frame pixel-art courtyard animation at 12 fps.
+Watercolor pigment, folded matte cardstock and dense charcoal fur distinguish
+its three cats. All share one warm upper-left light, with no pillow shading,
+underside glow or changing coat colors. Preserve body proportions, connected
+ears and tail roots, consistent tail length/girth, and the distinct materials.
+
+The kitten discovers the pansy picture, clears the carrier’s head, then holds
+planted paws when it stops. The paper cat picks up the rigid picture in its mouth,
+carries it in front of its body, and lowers it into a grounded sage GitHub box.
+A small lip overlaps its straight top edge; the rim occludes its landing. Paws
+stay outside the box. The picture settles into floor perspective without
+shrinking. The round cat listens, turns, moves its tail and blinks once.
+The scene ends immediately after that blink, with reopened eyes, at 10.916667
+seconds. Tail shapes and expressions have separate rhythms.
+
+One [Aseprite master](../docs/design/explorations/art/scroll-story/journey.aseprite)
+contains the nine visible scene layers and a hidden library of current models,
+tail poses and prop references. Edit the visible cels directly and keep the
+reference library hidden for export. The [artwork record](../docs/design/explorations/art/scroll-story/journey.md)
+owns the reference inventory, staging, repair lessons and export workflow.
+
+`Story.tsx` owns one paused video shared across chapters. `story-video.ts` maps
+clamped scroll progress to the 12 fps frame clock, aligning Send/Share markers
+at 31%/69% with native frames 46/101. It serializes seeks and retains the latest
+request during reversal. The final scroll position and fallback still use frame 131. A reversible delivery camera pushes from 100% to 120% toward the lower-right
+during frames 47–110 using nearest-neighbor sampling; the master stays uncropped.
+
+Static HTML has no video source. Hydration attaches it only for the pinned,
+motion-enabled story, and reveals it after the requested frame decodes. Reduced
+motion, short-screen flow, video failures and disabled JavaScript retain the
+three lossless chapter stills. The video is muted, inline and never autoplayed,
+with no playback controls or tab stop. Accessible status changes only at major
+markers. Each cat, including its tail, stays in one scene depth layer.
+
+Only the active copy receives the `story-copy` View Transition name. The video
+stays outside the snapshot so chapter changes cannot freeze its scroll progress.
+Its overlay shares the article grid, padding, fit and responsive ordering. A
+ResizeObserver measures copy height, including font loading and line wrapping,
+to keep the illustration above the text on phones. All three flow articles and
+meaningful image descriptions remain available without JavaScript.
+
+`bun export:story` reads the saved master, validates its frame clock and hidden
+references, and produces H.264/MP4 plus the three WebPs. Temporary frame PNGs are
+automatically removed. The build ships no Aseprite sources or reference sheets.
+The October 25 export measures 7,340,120 bytes for CRF 24 H.264 with one-second
+keyframes and a front-loaded index, within the 8 MiB video budget. Its WebP stills
+measure 385,756, 402,070 and 303,774 bytes. Build tests enforce the transfer budget
+and index order; runtime tests cover frame mapping and queued/reversed seeks.
+`bun size:web` measures the stylesheet budget.
 
 ## References
 
