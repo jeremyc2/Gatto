@@ -2,6 +2,39 @@ import { describe, expect, test } from "bun:test";
 import { createStoryScrubber, storyVideoTime } from "../src/story-video";
 
 describe("the scroll video", () => {
+  test("seeks a restored scroll position when only metadata has loaded", () => {
+    let ready = 0;
+    const video = { readyState: 1, seeking: false, currentTime: 0 };
+    const scrubber = createStoryScrubber(video, () => ready++);
+    scrubber.request(0.69);
+    expect(video.currentTime).toBe(storyVideoTime(0.69));
+    expect(ready).toBe(0);
+    video.readyState = 2;
+    scrubber.settled();
+    expect(ready).toBe(1);
+  });
+
+  test("does not reveal an undecoded initial frame or forget requests while buffering", () => {
+    let ready = 0;
+    const video = { readyState: 0, seeking: false, currentTime: 0 };
+    const scrubber = createStoryScrubber(video, () => ready++);
+    scrubber.request(0);
+    video.readyState = 1;
+    scrubber.settled();
+    expect(ready).toBe(0);
+    scrubber.request(0.8);
+    video.seeking = true;
+    scrubber.request(0.12);
+    expect(video.currentTime).toBe(storyVideoTime(0.8));
+    video.seeking = false;
+    scrubber.settled();
+    expect(video.currentTime).toBe(storyVideoTime(0.12));
+    expect(ready).toBe(0);
+    video.readyState = 3; // A later canplay can recover even without a loadeddata callback.
+    scrubber.settled();
+    expect(ready).toBe(1);
+  });
+
   test("selects distinct frames within chapters, clamps endpoints and reverses", () => {
     expect(storyVideoTime(-1)).toBe(0);
     expect(storyVideoTime(2)).toBe(storyVideoTime(1));

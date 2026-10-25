@@ -27,10 +27,11 @@ export function createStoryScrubber(video: SeekableVideo, onReady: () => void) {
   let target = 0;
   let disposed = false;
   function seek() {
-    if (disposed || video.readyState < 2 || video.seeking) return;
+    // Metadata is enough to seek, even if the browser has not buffered the current frame.
+    if (disposed || video.readyState < 1 || video.seeking) return;
     if (Math.abs(video.currentTime - target) > 0.5 / storyVideo.fps) {
       video.currentTime = target;
-    } else onReady();
+    } else if (video.readyState >= 2) onReady();
   }
   return {
     request(progress: number) {

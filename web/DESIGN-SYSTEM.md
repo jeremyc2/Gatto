@@ -248,12 +248,21 @@ at 31%/69% with native frames 46/101. It serializes seeks and retains the latest
 request during reversal. The final scroll position and fallback still use frame 131. A reversible delivery camera pushes from 100% to 120% toward the lower-right
 during frames 47–110 using nearest-neighbor sampling; the master stays uncropped.
 
-Static HTML has no video source. Hydration attaches it only for the pinned,
-motion-enabled story, and reveals it after the requested frame decodes. Reduced
-motion, short-screen flow, video failures and disabled JavaScript retain the
+Static HTML declares a typed MP4 source with a media query for the pinned,
+motion-enabled story. Together with `preload="auto"`, this starts eligible media
+downloads before hydration without a second fetch or a full-file buffering gate.
+Video does not support `fetchpriority`; avoid unsupported video preloads or a
+separate high-priority fetch that duplicates range requests. Source media queries
+are reevaluated with `load()` when screen height or motion preferences change.
+The scrubber can seek as soon as metadata arrives, retaining the latest scroll
+position while buffering; metadata, loaded data, canplay and seek completion all
+retry it. It reveals the video only when data for the requested frame is available.
+Reduced motion, short-screen flow, video failures and disabled JavaScript retain the
 three lossless chapter stills. The video is muted, inline and never autoplayed,
-with no playback controls or tab stop. Accessible status changes only at major
-markers. Each cat, including its tail, stays in one scene depth layer.
+with no playback controls or tab stop. Without JavaScript, eligible browsers may
+preload the paused video while the still illustrations remain visible.
+Accessible status changes only at major markers. Each cat, including its tail,
+stays in one scene depth layer.
 
 The video and all three fallback stills share a symmetric rounded frame.
 The `radius.media` token is 20px, matching the download badge's source corner

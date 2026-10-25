@@ -90,6 +90,7 @@ export function Story() {
       let lastTime = performance.now();
       let disposed = false;
       let initialized = false;
+      let mediaEnabled = false;
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       if (video)
         scrubber = createStoryScrubber(video, () => {
@@ -101,6 +102,12 @@ export function Story() {
         const pinned = window.matchMedia("(height > 500px)").matches;
         setEnhanced(pinned);
         setMotion(pinned && !reducedMotion.matches && !videoFailed());
+        if (motion() !== mediaEnabled) {
+          mediaEnabled = motion();
+          // Source media queries are evaluated at selection, not on subsequent resizes.
+          // Keep an already loading source on hydration; retry a previously excluded source.
+          if (video && !videoFailed() && (!mediaEnabled || video.networkState === 3)) video.load();
+        }
         if (!motion()) setVideoReady(false);
         if (!pinned) {
           transition?.skipTransition();
@@ -294,7 +301,6 @@ export function Story() {
                   ref={(element) => {
                     video = element;
                   }}
-                  src={motion() ? journeyVideo : undefined}
                   poster={bringImage}
                   width={storyVideo.width}
                   height={storyVideo.height}
@@ -302,14 +308,22 @@ export function Story() {
                   playsinline
                   preload="auto"
                   aria-hidden="true"
+                  onLoadedMetadata={() => scrubber?.settled()}
                   onLoadedData={() => scrubber?.settled()}
+                  onCanPlay={() => scrubber?.settled()}
                   onSeeked={() => scrubber?.settled()}
                   onError={() => {
                     setVideoFailed(true);
                     setMotion(false);
                     setVideoReady(false);
                   }}
-                />
+                >
+                  <source
+                    src={journeyVideo}
+                    type="video/mp4"
+                    media="(height > 500px) and (prefers-reduced-motion: no-preference)"
+                  />
+                </video>
                 <span {...stylex.attrs(styles.sceneEdge)} aria-hidden="true" />
               </div>
             </figure>

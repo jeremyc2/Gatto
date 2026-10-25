@@ -66,13 +66,21 @@ test("ships one extracted stylesheet within the CSS budget, with themes and redu
   expect(css).not.toContain("data:font");
 });
 
-test("ships one seekable video within its transfer budget, without fetching it before hydration", async () => {
+test("discovers the seekable video before hydration only for motion-enabled pinned screens", async () => {
   const html = await Bun.file(new URL("index.html", staticDirectory)).text();
   const videos = html.match(/<video\b[^>]*>/g) ?? [];
   expect(videos).toHaveLength(1);
   expect(videos[0]).not.toMatch(/\ssrc=|\sautoplay/);
+  expect(videos[0]).toContain('preload="auto"');
+  const sources = [...html.matchAll(/<source\b(?:[^>"']|"[^"]*"|'[^']*')*>/g)];
+  expect(sources).toHaveLength(1);
+  expect(sources[0]?.[0]).toContain('type="video/mp4"');
+  expect(sources[0]?.[0]).toContain(
+    'media="(height > 500px) and (prefers-reduced-motion: no-preference)"',
+  );
   const paths = Array.from(new Bun.Glob("assets/*.mp4").scanSync(staticDirectory.pathname));
   expect(paths).toHaveLength(1);
+  expect(sources[0]?.[0]).toContain(`src="/${paths[0]}"`);
   const bytes = await Bun.file(new URL(paths[0]!, staticDirectory)).bytes();
   expect(bytes.length).toBeLessThan(8 * 1024 * 1024);
   const buffer = Buffer.from(bytes);
