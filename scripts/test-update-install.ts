@@ -277,7 +277,7 @@ try {
   }
 } finally {
   child?.kill();
-  server.stop();
+  await server.stop();
   await Bun.$`defaults delete ${id}`.quiet().nothrow();
   await Bun.$`rm -rf ${work} ${join(homedir(), "Library/Caches", id)}`;
 }

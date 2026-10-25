@@ -4,7 +4,7 @@ Solid 2.0.0-rc.15 and StyleX 0.19.1. Vite 8.3.4 provides development HMR and
 production builds. Bun runs Vite, installs packages, runs scripts and tests, and
 prerenders the production page. Tests use Bun; Vitest is not used.
 
-From the repository root, with Bun 1.4.3 or later:
+From the repository root, with Bun 1.4.4 or later:
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
@@ -32,8 +32,11 @@ For deployment, put `CLOUDFLARE_ACCOUNT_ID` and any API token in the ignored roo
 and supplies Cloudflare settings only to `cf`, after building. Keep credentials
 out of root `.env` so regular Bun commands do not automatically load them.
 
-Bun's built-in checker runs both TypeScript projects; a separate TypeScript
-compiler package is not required. Package commands require the locked local
+Bun's built-in formatter uses the root `bunfig.toml`; a separate formatter package
+is not required. Its built-in checker runs both TypeScript projects and checks
+tests before execution. Oxlint retains typed and StyleX-specific lint rules;
+Bun's native linter is not available in the pinned stable release.
+Package commands require the locked local
 installation and never fetch a missing executable automatically. Dependency
 installation scripts are disabled explicitly. Run `bun audit:dependencies` for
 the complete JavaScript dependency audit and any visible temporary exceptions.

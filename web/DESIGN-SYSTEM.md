@@ -69,6 +69,9 @@ and explicit border width/style/color. The default StyleX resolution makes a
 longhand more specific than its shorthand. Avoid overlapping shorthand overrides
 that depend on application order. StyleX validation runs inside Oxlint, including
 `valid-styles`, `valid-shorthands` and `no-unused`.
+Bun 1.4.4's native formatter owns formatting through the root `bunfig.toml`,
+with a 100-column width and exclusions for generated output and artwork.
+Oxlint keeps semantic and StyleX checks because stable Bun has no native linter.
 
 Viewport conditions that select different values for one responsive token use
 exclusive ranges where practical. This prevents a long chain of overlapping

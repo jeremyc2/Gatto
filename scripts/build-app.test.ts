@@ -8,13 +8,18 @@ async function build(failure: string, args: string[] = []) {
   try {
     for (const path of ["scripts", "tools", "packaging", "dist/local/Gatto.app"])
       await mkdir(join(root, path), { recursive: true });
-    await Bun.write(join(root, "scripts/build-app.sh"), await Bun.file(new URL("./build-app.sh", import.meta.url)).text());
+    await Bun.write(
+      join(root, "scripts/build-app.sh"),
+      await Bun.file(new URL("./build-app.sh", import.meta.url)).text(),
+    );
     for (const name of ["Info.plist", "AppIcon.icns", "Assets.car"])
       await Bun.write(join(root, "packaging", name), name);
     await Bun.write(join(root, "dist/local/Gatto.app/previous"), "previous build");
     for (const tool of ["cargo", "codesign", "plutil", "git", "uname"]) {
       const path = join(root, "tools", tool);
-      await Bun.write(path, `#!/bin/bash
+      await Bun.write(
+        path,
+        `#!/bin/bash
 set -eu
 echo '${tool}' "$@" >> "$GATTO_BUILD_TEST_ROOT/calls"
 [[ "$GATTO_BUILD_TEST_FAILURE" != '${tool}' ]] || exit 1
@@ -28,18 +33,33 @@ case '${tool}' in
     echo "$profile binary" > "target/$profile/gatto"
     ;;
 esac
-`);
+`,
+      );
       await chmod(path, 0o755);
     }
     const process = Bun.spawn(["/bin/bash", join(root, "scripts/build-app.sh"), ...args], {
       cwd: tmpdir(),
-      env: { ...Bun.env, PATH: `${join(root, "tools")}:${Bun.env.PATH}`, GATTO_BUILD_TEST_ROOT: root, GATTO_BUILD_TEST_FAILURE: failure },
-      stdout: "pipe", stderr: "pipe",
+      env: {
+        ...Bun.env,
+        PATH: `${join(root, "tools")}:${Bun.env.PATH}`,
+        GATTO_BUILD_TEST_ROOT: root,
+        GATTO_BUILD_TEST_FAILURE: failure,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
     });
-    const [exit, stdout, stderr] = await Promise.all([process.exited, new Response(process.stdout).text(), new Response(process.stderr).text()]);
+    const [exit, stdout, stderr] = await Promise.all([
+      process.exited,
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+    ]);
     return {
-      exit, output: stdout + stderr, root,
-      binary: await Bun.file(join(root, "dist/local/Gatto.app/Contents/MacOS/gatto")).text().catch(() => ""),
+      exit,
+      output: stdout + stderr,
+      root,
+      binary: await Bun.file(join(root, "dist/local/Gatto.app/Contents/MacOS/gatto"))
+        .text()
+        .catch(() => ""),
       previous: await Bun.file(join(root, "dist/local/Gatto.app/previous")).exists(),
       calls: await Bun.file(join(root, "calls")).text(),
     };

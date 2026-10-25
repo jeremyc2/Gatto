@@ -1,0 +1,6 @@
+[fmt]
+printWidth = 100
+tabWidth = 2
+semi = true
+trailingComma = "all"
+ignorePatterns = ["web/dist/**", "web/.cache/**", "web/assets/**"]

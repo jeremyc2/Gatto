@@ -145,7 +145,8 @@ build cargo clippy --locked --all-targets --all-features -- -D warnings
 build cargo test --locked --all-targets
 build cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
 build bun --no-env-file typecheck:scripts
-build bun --no-env-file test scripts
+build bun --no-env-file lint:scripts
+build bun --no-env-file test:scripts
 build ./scripts/test-updater.sh
 build ./scripts/test-platform.sh
 build bun --no-env-file scripts/test-update-install.ts

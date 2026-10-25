@@ -14,6 +14,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Replace Oxfmt with Bun 1.4.4's built-in formatter, extend formatting and typed
+  lint checks to developer scripts, and type-check tests before execution (#28).
 - Give the website story video and fallback stills symmetric rounded corners
   matching the download badge, with a subtle inset blend into the page canvas.
 - Replace the website's three static story paintings with a detailed courtyard

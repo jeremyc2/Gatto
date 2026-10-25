@@ -297,8 +297,10 @@ menu placement or user service-visibility preferences.
 
 Run `./scripts/test-updater.sh` for native timing, consent, and signed-feed
 verification/tamper tests, and
-`bun test scripts` for cask, version/notes, asset-verification, and release-workflow
-tests. The workflow tests use isolated stand-ins for signing, builds, GitHub, and
+`bun lint:scripts` and `bun test:scripts` for formatting, typed lint rules,
+type-checked cask, version/notes, asset-verification, and release-workflow tests.
+The release command runs both checks before its commit review.
+The workflow tests use isolated stand-ins for signing, builds, GitHub, and
 Git; they never publish or push to a real repository.
 On a logged-in macOS desktop, run `bun scripts/test-update-install.ts` to test
 actual replacement and relaunch using disposable ad-hoc signed app bundles and a

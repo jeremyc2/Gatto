@@ -63,12 +63,25 @@ function bundleBytes(directory: string): number {
 function measure(dmg: string, mount: string, tag: string): number {
   try {
     run(
-      "diskutil", "image", "attach", "--readOnly", "--mountPoint", mount,
-      "--mountOptions", "nobrowse", "--plist", dmg,
+      "diskutil",
+      "image",
+      "attach",
+      "--readOnly",
+      "--mountPoint",
+      mount,
+      "--mountOptions",
+      "nobrowse",
+      "--plist",
+      dmg,
     );
     const app = join(mount, "Gatto.app");
     const version = run(
-      "plutil", "-extract", "CFBundleShortVersionString", "raw", "-o", "-",
+      "plutil",
+      "-extract",
+      "CFBundleShortVersionString",
+      "raw",
+      "-o",
+      "-",
       join(app, "Contents/Info.plist"),
     ).trim();
     if (version !== tag.slice(1)) {
@@ -117,10 +130,18 @@ Usage: bun scripts/update-readme-size.ts [options]
   const endIndex = original.indexOf(END);
   if (endIndex < startIndex) throw new Error("README release-size markers are out of order");
 
-  const release: GitHubRelease = JSON.parse(run(
-    "gh", "release", "view", ...(args.tag ? [args.tag] : []), "--repo", REPO,
-    "--json", "tagName,assets,url,isDraft,isPrerelease",
-  ));
+  const release: GitHubRelease = JSON.parse(
+    run(
+      "gh",
+      "release",
+      "view",
+      ...(args.tag ? [args.tag] : []),
+      "--repo",
+      REPO,
+      "--json",
+      "tagName,assets,url,isDraft,isPrerelease",
+    ),
+  );
   if (release.isDraft || release.isPrerelease) {
     throw new Error("README figures require a published stable release");
   }
@@ -139,8 +160,17 @@ Usage: bun scripts/update-readme-size.ts [options]
   let installedBytes: number;
   try {
     run(
-      "gh", "release", "download", tag, "--repo", REPO, "--dir", directory,
-      "--pattern", "SHA256SUMS", ...(args.dmg ? [] : ["--pattern", name]),
+      "gh",
+      "release",
+      "download",
+      tag,
+      "--repo",
+      REPO,
+      "--dir",
+      directory,
+      "--pattern",
+      "SHA256SUMS",
+      ...(args.dmg ? [] : ["--pattern", name]),
     );
     const dmg = args.dmg
       ? resolve(args.dmg.startsWith("~/") ? join(homedir(), args.dmg.slice(2)) : args.dmg)
@@ -177,15 +207,19 @@ Usage: bun scripts/update-readme-size.ts [options]
     }
   }
 
-  const paragraph = `<a href="${release.url}">\n`
-    + `  <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">\n`
-    + `</a>\n\n`
-    + `**Gatto ${tag}** — `
-    + `${(downloadBytes / 1_000_000).toFixed(1)} MB download · `
-    + `${(installedBytes / 1_000_000).toFixed(1)} MB installed app.`;
-  const updated = original.slice(0, startIndex) + "\n" + paragraph + "\n" + original.slice(endIndex);
-  console.log(`${tag}: ${downloadBytes.toLocaleString("en-US")} download bytes; `
-    + `${installedBytes.toLocaleString("en-US")} bundle bytes`);
+  const paragraph =
+    `<a href="${release.url}">\n` +
+    `  <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">\n` +
+    `</a>\n\n` +
+    `**Gatto ${tag}** — ` +
+    `${(downloadBytes / 1_000_000).toFixed(1)} MB download · ` +
+    `${(installedBytes / 1_000_000).toFixed(1)} MB installed app.`;
+  const updated =
+    original.slice(0, startIndex) + "\n" + paragraph + "\n" + original.slice(endIndex);
+  console.log(
+    `${tag}: ${downloadBytes.toLocaleString("en-US")} download bytes; ` +
+      `${installedBytes.toLocaleString("en-US")} bundle bytes`,
+  );
   if (args.check) {
     if (updated !== original) {
       console.error("README size figures are stale; run without --check.");

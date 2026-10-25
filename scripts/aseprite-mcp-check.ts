@@ -52,7 +52,9 @@ export async function checkAseprite(env: Record<string, string | undefined>): Pr
 
   async function request(method: string, params: object = {}): Promise<Result> {
     const requestId = ++id;
-    server.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: requestId, method, params }) + "\n");
+    await server.stdin.write(
+      JSON.stringify({ jsonrpc: "2.0", id: requestId, method, params }) + "\n",
+    );
     await server.stdin.flush();
     while (true) {
       const newline = buffer.indexOf("\n");
@@ -94,7 +96,7 @@ export async function checkAseprite(env: Record<string, string | undefined>): Pr
     });
     assert.equal(initialized.protocolVersion, "2024-11-05");
     assert(initialized.instructions, "Server omitted its pixel-art instructions");
-    server.stdin.write(
+    await server.stdin.write(
       JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n",
     );
     await server.stdin.flush();
@@ -170,10 +172,10 @@ export async function checkAseprite(env: Record<string, string | undefined>): Pr
     );
   } finally {
     clearTimeout(timeout);
-    server.stdin.end();
     const terminate = setTimeout(() => server.kill("SIGTERM"), 1_000);
     const kill = setTimeout(() => server.kill("SIGKILL"), 3_000);
     try {
+      await server.stdin.end();
       await server.exited;
       await reader.cancel();
     } finally {

@@ -140,7 +140,8 @@ cargo test --all-targets
 ./scripts/test-platform.sh
 bun audit:dependencies
 bun typecheck:scripts
-bun test scripts
+bun lint:scripts
+bun test:scripts
 cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
 ```
 
@@ -160,6 +161,10 @@ commit code. See [Releasing](docs/RELEASING.md#release-with-one-command).
 
 Root release scripts and their tests use the root `tsconfig.json`, which loads
 Bun's types for editor diagnostics and `bun typecheck:scripts`.
+Use Bun 1.4.4 or later. `bun test:scripts` type-checks before running tests;
+`bun lint:scripts` also checks typed lint rules and formatting. Apply script
+formatting with `bun format:scripts`. Bun's native formatter reads the root
+`bunfig.toml`; no formatter package is installed.
 
 ### Website
 

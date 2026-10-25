@@ -13,7 +13,13 @@ async function workflow(mode: string, resume = false) {
     await chmod(name, 0o755);
   };
   try {
-    for (const path of [bin, join(root, "scripts"), join(root, "packaging"), join(root, "Casks"), join(root, "docs/images/walkthrough")])
+    for (const path of [
+      bin,
+      join(root, "scripts"),
+      join(root, "packaging"),
+      join(root, "Casks"),
+      join(root, "docs/images/walkthrough"),
+    ])
       await mkdir(path, { recursive: true });
     await Bun.write(
       join(root, "scripts/release.sh"),
@@ -42,7 +48,7 @@ const args = process.argv.slice(2);
 if (tool === 'bun' && args[0] === '--no-env-file') args.shift();
 appendFileSync(join(root, 'calls'), JSON.stringify([tool, ...args]) + '\\n');
 const dirty = join(root, 'dirty');
-if ((tool === 'cargo' && ['check','clippy','test','build','run'].includes(args[0]!)) || (tool === 'bun' && ['install','audit:dependencies','typecheck:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
+if ((tool === 'cargo' && ['check','clippy','test','build','run'].includes(args[0]!)) || (tool === 'bun' && ['install','audit:dependencies','typecheck:scripts','lint:scripts','test:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
  if (process.env.GH_TOKEN || process.env.CLOUDFLARE_API_TOKEN || process.env.APPLE_PASSWORD) appendFileSync(join(root,'build-exposures'), tool+' '+args.join(' ')+'\\n');
 }
 const draft = join(root, 'draft');
@@ -75,6 +81,8 @@ if (tool === 'git') {
  if (args[0] === 'scripts/prepare-release.ts' && args.includes('--print-notes')) console.log('### Added\\n\\n- Test release.');
  if (args[0] === 'scripts/verify-release.ts' && mode === 'verify-failure') process.exit(1);
  if (args[0] === 'typecheck:scripts' && mode === 'check-failure') process.exit(1);
+ if (args[0] === 'lint:scripts' && mode === 'script-lint-failure') process.exit(1);
+ if (args[0] === 'test:scripts' && mode === 'script-test-failure') process.exit(1);
  if (args[0] === 'audit:dependencies' && mode === 'audit-failure') process.exit(1);
  if (args[0] === 'scripts/update-homebrew-cask.ts' && mode === 'metadata-failure') process.exit(1);
  if (['scripts/update-readme-size.ts','scripts/update-homebrew-cask.ts'].includes(args[0]) && !args.includes('--check')) writeFileSync(dirty, 'metadata');
@@ -195,6 +203,11 @@ test("release checks precede commits; uploads are verified as a draft before pub
   const result = await workflow("release");
   expect(result.exit, result.output).toBe(0);
   expect(result.exposure).toBe("");
+  for (const command of ["lint:scripts", "test:scripts"]) {
+    const check = find(result.calls, "bun", command);
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(find(result.calls, "git", "commit"));
+  }
   expect(find(result.calls, "bun", "typecheck:scripts")).toBeLessThan(
     find(result.calls, "git", "commit"),
   );
@@ -225,6 +238,16 @@ test("failed checks prevent committing and publishing", async () => {
   expect(find(result.calls, "git", "commit")).toBe(-1);
   expect(find(result.calls, "gh", "release", "create")).toBe(-1);
 });
+test.each(["script-lint-failure", "script-test-failure"])(
+  "%s prevents committing, signing and publishing",
+  async (mode) => {
+    const result = await workflow(mode);
+    expect(result.exit).not.toBe(0);
+    expect(find(result.calls, "git", "commit")).toBe(-1);
+    expect(find(result.calls, "codesign")).toBe(-1);
+    expect(find(result.calls, "gh", "release", "create")).toBe(-1);
+  },
+);
 test("a failed dependency audit prevents committing, signing and publishing", async () => {
   const result = await workflow("audit-failure");
   expect(result.exit).not.toBe(0);

@@ -114,12 +114,15 @@ media orchestration denies it except in its explicit private binding/schema modu
 JavaScript installs explicitly disable the default trusted-package script list;
 release installs additionally use `--ignore-scripts`. Package executables use
 `bunx --no-install --bun`, and Bun's built-in checker replaces the separate
-TypeScript compiler package. Existing installed package code still executes
+TypeScript compiler package. Bun 1.4.4's built-in formatter also replaces the
+Oxfmt package. Oxlint and its typed-rule backend remain installed because the
+stable Bun release does not include a linter; StyleX's custom rules remain active.
+Existing installed package code still executes
 during builds and linting; disabling installation scripts is not a sandbox.
 
 Release build/check subprocesses clear inherited GitHub, Cloudflare and common
 Apple signing-token variables. Bun runtime/check/test commands disable automatic
-dotenv loading. The installed Bun 1.4.3 package-manager commands still read dotenv
+dotenv loading. A Bun 1.4.3 check found that package-manager commands read dotenv
 files despite `--no-env-file`; install scripts are disabled, and the audit runs
 only Bun's built-in registry client. Those commands are not a credential boundary.
 Signing/notarization credential preflight runs after the final unsigned build.

@@ -12,23 +12,28 @@
     "audit:dependencies": "bun --no-env-file scripts/audit-dependencies.ts",
     "build:web": "bun --no-env-file web/scripts/build-portal-seam.ts && bunx --no-env-file --no-install --bun vite build --config web/vite.config.ts && bun --no-env-file web/scripts/prerender.ts",
     "dev:web": "bunx --no-env-file --no-install --bun vite --config web/vite.config.ts",
-    "lint:web": "bunx --no-env-file --no-install --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bunx --no-env-file --no-install --bun oxfmt --check web package.json",
-    "format:web": "bunx --no-env-file --no-install --bun oxfmt --write web package.json",
+    "lint:web": "bunx --no-env-file --no-install --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bun --no-env-file fmt --check web package.json",
+    "lint:scripts": "bunx --no-env-file --no-install --bun oxlint --type-aware --type-check -c .oxlintrc.json scripts && bun --no-env-file fmt --check scripts package.json tsconfig.json bunfig.toml .oxlintrc.json",
+    "format:web": "bun --no-env-file fmt web package.json",
+    "format:scripts": "bun --no-env-file fmt scripts package.json tsconfig.json bunfig.toml .oxlintrc.json",
     "typecheck:web": "bun --no-env-file check -p web/tsconfig.json",
     "typecheck:scripts": "bun --no-env-file check -p tsconfig.json",
-    "test:web": "bun --no-env-file test web/tests",
+    "test:web": "bun --no-env-file test --check web/tests",
+    "test:scripts": "bun --no-env-file test --check scripts",
     "preview:web": "bunx --no-env-file --no-install --bun vite preview --config web/vite.config.ts",
     "size:web": "bun --no-env-file web/scripts/css-size.ts",
     "export:story": "bun --no-env-file web/scripts/export-story.ts",
     "deploy:web": "bun --no-env-file web/scripts/deploy.ts"
   },
   "devDependencies": {
-    "@types/bun": "1.4.3",
-    "oxfmt": "0.73.0",
+    "@types/bun": "1.4.4",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "vite": "8.3.4"
   },
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
+  "engines": {
+    "bun": ">=1.4.4"
+  },
   "trustedDependencies": []
 }
