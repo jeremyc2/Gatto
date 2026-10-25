@@ -9,6 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Fixed
 
+- Serve website video byte ranges through a small Cloudflare Worker so cold-load
+  scroll seeking works when the static asset host returns only full files.
 - Let the website story video seek while its first frame is still buffering,
   recover on later readiness events, and start eligible downloads before hydration.
 - Prevent website chapter text from briefly overlapping during directional

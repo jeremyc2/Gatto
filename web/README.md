@@ -25,12 +25,18 @@ bun format:web
 bun size:web
 ```
 
-The deployable static site is `web/dist/client/`.
+The static site is `web/dist/client/`. Deployment also bundles a small Worker
+that serves MP4 byte ranges; other files use direct static asset serving.
 
 For deployment, put `CLOUDFLARE_ACCOUNT_ID` and any API token in the ignored root
 `.env.cloudflare`, then run `bun deploy:web`. Deployment reads that file explicitly
 and supplies Cloudflare settings only to `cf`, after building. Keep credentials
 out of root `.env` so regular Bun commands do not automatically load them.
+
+Validate deployment without uploading with `bun deploy:web --dry-run`. After a
+deployment, run `bun --no-env-file web/scripts/check-story-video.ts <website-url>`
+to check video ranges against the real host. A local Vite preview already
+supports ranges and cannot catch missing production range support.
 
 Bun's built-in formatter uses the root `bunfig.toml`; a separate formatter package
 is not required. Its built-in checker runs both TypeScript projects and checks

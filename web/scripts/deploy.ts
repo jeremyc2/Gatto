@@ -24,8 +24,17 @@ const output = new URL(".cloudflare/output/v0/", root);
 
 await run`bun run build:web`;
 await run`rm -rf .cloudflare/output/v0`;
-await run`mkdir -p .cloudflare/output/v0/workers/default`;
+await run`mkdir -p .cloudflare/output/v0/workers/default/bundle`;
 await run`cp -R web/dist/client .cloudflare/output/v0/workers/default/assets`;
+const worker = await Bun.build({
+  entrypoints: [new URL("../cloudflare/worker.ts", import.meta.url).pathname],
+  target: "browser",
+  format: "esm",
+  minify: true,
+});
+if (!worker.success || !worker.outputs[0])
+  throw new AggregateError(worker.logs, "Video Worker build failed.");
+await Bun.write(new URL("workers/default/bundle/index.js", output), worker.outputs[0]);
 await Bun.write(
   new URL("config.json", output),
   JSON.stringify({
@@ -37,10 +46,17 @@ await Bun.write(
   new URL("workers/default/worker.config.json", output),
   JSON.stringify({
     name: "gatto",
-    compatibilityDate: "2026-10-17",
+    compatibilityDate: "2026-10-25",
     workersDev: true,
     previewUrls: false,
-    assets: {},
+    env: { ASSETS: { type: "assets" } },
+    assets: { runWorkerFirst: ["/assets/*.mp4"] },
+    observability: { enabled: true, traces: { enabled: true } },
+    manifest: {
+      type: "complete",
+      mainModule: "index.js",
+      modules: { "index.js": { type: "esm" } },
+    },
   }),
 );
 await run.env(deployEnv)`cf deploy --prebuilt ${Bun.argv.slice(2)}`;

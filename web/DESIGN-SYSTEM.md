@@ -257,6 +257,30 @@ are reevaluated with `load()` when screen height or motion preferences change.
 The scrubber can seek as soon as metadata arrives, retaining the latest scroll
 position while buffering; metadata, loaded data, canplay and seek completion all
 retry it. It reveals the video only when data for the requested frame is available.
+
+The Cloudflare deployment routes only `/assets/*.mp4` through
+`cloudflare/worker.ts`, using the static asset binding for the source bytes.
+It supplies `206 Partial Content` with exact `Content-Range` and `Content-Length`
+headers, including open-ended and suffix requests. Unsatisfiable ranges return
+416; nonmatching `If-Range` validators receive the full file. Other assets keep
+direct static serving. Partial requests buffer the bundled video at the edge,
+bounded by the build's 8 MiB video budget, then return only the requested bytes
+to the browser. This invokes Worker code for MP4 requests and uses the account's
+Worker request allowance. Worker logs and traces are enabled.
+
+On 2026-10-25, the deployed asset host returned 200 and all 7,340,120 bytes for
+`Range: bytes=0-1`. The browser stayed at frame zero after scrolling. Replaying
+that response through the range handler moved the video to the requested
+3.834333-second Send frame; direct serving stayed at zero. The deployment probe
+in `scripts/check-story-video.ts` checks exact byte ranges at the start, middle
+and end of the actual hosted file. Use it after deployments, together with a
+cold-load browser scroll check; the Vite preview's built-in ranges concealed this
+production failure during the earlier loading-state investigation.
+After deployment on the same day, all three hosted range checks returned 206
+with the exact requested bytes. Chrome's cache-bypassing Command-Shift-R restored
+the video to the current scroll position, and forward and reverse scrolling
+continued to select frames.
+
 Reduced motion, short-screen flow, video failures and disabled JavaScript retain the
 three lossless chapter stills. The video is muted, inline and never autoplayed,
 with no playback controls or tab stop. Without JavaScript, eligible browsers may
