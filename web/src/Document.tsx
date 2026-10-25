@@ -17,19 +17,30 @@ export default function Document(props: { children: JSX.Element }) {
         />
         <meta name="color-scheme" content="light dark" />
         <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://gatto.jeremyc2.workers.dev/" />
         <meta property="og:title" content="Gatto — GitHub, illustrated." />
         <meta
           property="og:description"
           content="A small Mac app for adding images and videos to GitHub pull requests, issues, and comments."
         />
-        <meta property="og:image" content="/apple-touch-icon.png" />
+        <meta
+          property="og:image"
+          content="https://gatto.jeremyc2.workers.dev/social-image.png"
+        />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="Gatto cat icon on warm paper." />
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="Gatto — GitHub, illustrated." />
         <meta
           name="twitter:description"
           content="A small Mac app for adding images and videos to GitHub pull requests, issues, and comments."
         />
-        <meta name="twitter:image" content="/apple-touch-icon.png" />
+        <meta
+          name="twitter:image"
+          content="https://gatto.jeremyc2.workers.dev/social-image.png"
+        />
         <title>Gatto — GitHub, illustrated.</title>
         <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
         <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
