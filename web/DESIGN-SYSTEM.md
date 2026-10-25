@@ -183,6 +183,7 @@ unused styles: 23,135 raw bytes and 6,910 gzip bytes, measured the same day.
 | Final rainbow paw marker and compact continuous trails (2026-10-18) |        23,208 |      6,950 |
 | Keep chapter controls until the tracker runs out of space           |        23,326 |      6,971 |
 | Continuous story video and measured copy slot (2026-10-24)          |        23,274 |      6,956 |
+| Equal-height chapter snapshots without text overlap (2026-10-25)    |        23,476 |      6,986 |
 
 The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
 correction. The independent cat approach and feathered void add 324 raw bytes
@@ -203,6 +204,8 @@ The final paw marker, expanded print density and centered compact tracker add
 the gzip budget remains 7 KiB.
 Sizing the compact switch from the tracker container adds 118 raw bytes and
 21 gzip bytes, within the same budgets.
+Equal-height copy snapshots add 202 raw bytes and 30 gzip bytes over the
+continuous-video build, remaining within the same budgets.
 
 The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change
@@ -247,6 +250,11 @@ markers. Each cat, including its tail, stays in one scene depth layer.
 
 Only the active copy receives the `story-copy` View Transition name. The video
 stays outside the snapshot so chapter changes cannot freeze its scroll progress.
+The old and new snapshots both fill the animated group's height so their vertical
+slides travel the same distance, even when the chapter copy heights differ.
+Top-left positioning and `object-fit: none` preserve the text's size while the
+group and each snapshot clip their contents, preventing outgoing and incoming
+copy from overlapping.
 Its overlay shares the article grid, padding, fit and responsive ordering. A
 ResizeObserver measures copy height, including font loading and line wrapping,
 to keep the illustration above the text on phones. All three flow articles and

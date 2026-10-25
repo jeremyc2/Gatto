@@ -9,6 +9,14 @@
   animation-duration: 260ms;
   overflow: clip;
 }
+::view-transition-old(story-copy),
+::view-transition-new(story-copy) {
+  /* Both slides travel the same distance, even when chapter copy heights differ. */
+  height: 100%;
+  object-fit: none;
+  object-position: top left;
+  overflow: clip;
+}
 ::view-transition-old(story-copy) {
   animation: story-leave 260ms ease both;
   mix-blend-mode: normal;

@@ -7,6 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevent website chapter text from briefly overlapping during directional
+  transitions between copy blocks of different heights.
+
 ### Changed
 
 - Replace the website's three static story paintings with a detailed courtyard
