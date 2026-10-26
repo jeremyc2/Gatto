@@ -7,17 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-### Fixed
-
-- Keep the website video visible during loading and explicitly start muted
-  playback after hydration so hidden-media policy does not stall autoplay.
-
-- Serve website video byte ranges through a small Cloudflare Worker so cold-load
-  scroll seeking works when the static asset host returns only full files.
-- Let the website story video seek while its first frame is still buffering,
-  recover on later readiness events, and start eligible downloads before hydration.
-- Prevent website chapter text from briefly overlapping during directional
-  transitions between copy blocks of different heights.
+## [0.19.0] - 2026-10-26
 
 ### Changed
 
@@ -66,6 +56,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   side-by-side comparison; remove the file-format footnote.
 - Replace the website headline with “GitHub, illustrated.” and trim repeated
   explanations through the story, feature row, and footer.
+
+### Fixed
+
+- Keep the website video visible during loading and explicitly start muted
+  playback after hydration so hidden-media policy does not stall autoplay.
+
+- Serve website video byte ranges through a small Cloudflare Worker so cold-load
+  scroll seeking works when the static asset host returns only full files.
+- Let the website story video seek while its first frame is still buffering,
+  recover on later readiness events, and start eligible downloads before hydration.
+- Prevent website chapter text from briefly overlapping during directional
+  transitions between copy blocks of different heights.
 
 ## [0.18.0] - 2026-10-23
 

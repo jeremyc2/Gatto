@@ -66,18 +66,19 @@ test("ships one extracted stylesheet within the CSS budget, with themes and redu
   expect(css).not.toContain("data:font");
 });
 
-test("discovers the seekable video before hydration only for motion-enabled pinned screens", async () => {
+test("discovers the muted inline video before hydration for page-load autoplay", async () => {
   const html = await Bun.file(new URL("index.html", staticDirectory)).text();
   const videos = html.match(/<video\b[^>]*>/g) ?? [];
   expect(videos).toHaveLength(1);
-  expect(videos[0]).not.toMatch(/\ssrc=|\sautoplay/);
+  expect(videos[0]).not.toMatch(/\ssrc=/);
+  expect(videos[0]).toMatch(/\sautoplay[\s=>]/);
+  expect(videos[0]).toMatch(/\smuted[\s=>]/);
+  expect(videos[0]).toMatch(/\splaysinline[\s=>]/);
   expect(videos[0]).toContain('preload="auto"');
   const sources = [...html.matchAll(/<source\b(?:[^>"']|"[^"]*"|'[^']*')*>/g)];
   expect(sources).toHaveLength(1);
   expect(sources[0]?.[0]).toContain('type="video/mp4"');
-  expect(sources[0]?.[0]).toContain(
-    'media="(height > 500px) and (prefers-reduced-motion: no-preference)"',
-  );
+  expect(sources[0]?.[0]).not.toMatch(/\smedia=/);
   const paths = Array.from(new Bun.Glob("assets/*.mp4").scanSync(staticDirectory.pathname));
   expect(paths).toHaveLength(1);
   expect(sources[0]?.[0]).toContain(`src="/${paths[0]}"`);
