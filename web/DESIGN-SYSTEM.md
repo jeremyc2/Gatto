@@ -219,6 +219,68 @@ this is a comparison of generated styling, not total page transfer. The change
 reflects both the source refactor and production minification. Refresh this dated
 measurement after intentional design-system or build changes.
 
+## Download badge
+
+The website and README share `docs/images/download-macos.svg`, a 380 × 64
+vector badge. The label is “Download for macOS”, following
+[Apple's spelling](https://support.apple.com/en-us/102662). Keep the existing pale
+blue fill, black outline and rounded corners. This badge uses smooth vector art.
+
+The Apple mark is 24 px high, with a 12 px gap before the label. The visible
+logo-plus-label group is centered at x=190; both visible shapes center at y=32.
+The system semibold 22 px label is outlined, so font fallback and SVG baseline
+interpretation cannot shift its alignment between the website and GitHub's
+README renderer. Preserve the accessible SVG title and image alt text. Copy
+changes must update both the title and outlined lettering. Check the actual
+visible bounds rather than the old independently positioned text and icon boxes.
+
+## README identity and favicon artwork
+
+The README uses a seated charcoal kitten with cyan and violet eyes, lavender
+inner ears, rounded paws and a curled tail. The favicon uses the same face on
+warm paper, redrawn separately at 16 and 32 pixels. The README cat's two neutral
+gray whiskers per cheek fan from beside the muzzle, below and clear of the eyes.
+The favicon omits whiskers: even shorter muzzle-rooted trials looked like stray
+dashes at native tab sizes. Keep that simplification in its larger raster exports.
+Light falls from the upper left, shading the right cheek and the body beneath
+the chin while picking out the forehead, left cheek and upper paw planes.
+These identity assets contain
+no portal or jetpack. The [artwork record](../docs/design/explorations/art/brand-cat/artwork.md)
+owns their editable Aseprite sources and export instructions. This direction
+supersedes the SVG treatment in ADR 0003 at the user's request on 2026-10-25.
+
+`Document.tsx` declares the native 16 px and 32 px PNGs, a 96 px PNG, and an ICO
+with 16, 32 and 64 px entries. The Apple touch icon places a 160 px integer-scale
+portrait in an opaque 180 px warm-paper canvas. Keep these exports in sync;
+the smallest portrait is an optical redraw rather than a downsample.
+
+The website's flying visitor is separate artwork. Its
+[256 px Aseprite master](../docs/design/explorations/art/portal-cat/portal-cat.aseprite)
+separates exhaust, tail, body and hind legs, each rocket, forelegs and paws, head
+and ears, mounting hardware, and expression. The three-quarter flying pose turns
+toward the upper right, with the same charcoal coat and cyan/violet eyes as the
+README cat. Two long silver-lavender rocket barrels mount behind the shoulders;
+cyan bands, segmented collars and dark exhaust openings make them recognizable.
+Flames trail backward, clear of the hind legs, with a white/yellow core inside
+orange, violet and cyan clusters. The exhaust has its own editable layer; the
+portal remains separate. `PortalCat.tsx`
+uses the 512 px lossless WebP with `image-rendering: pixelated`. The
+[pixel portal master](../docs/design/explorations/art/pixel-portal/portal.aseprite)
+is a separate 384 px still adapted from the original ring, with ember-glow,
+luminous-strand and spark layers, exported
+at 2× to `download-portal-pixel.png` and lossless WebP. Both its aperture and
+exterior remain transparent. The SVG image also uses `image-rendering: pixelated`;
+the existing dark radial center, reveal masks and independent rotation remain.
+Its fine strands, translucent spaces, dense embers and stepped glow preserve
+the original portal's fiery look and meet the center without a pale gap. Avoid
+a uniformly filled orange band. The ring exports at 768 × 768 with a limited
+warm palette and four nonzero alpha levels.
+The earlier painted portal PNG/WebP have been removed. The
+[ring artwork record](../docs/design/explorations/art/pixel-portal/artwork.md)
+owns the palette, geometry, exports and spark inspection guidance. The
+[visitor artwork record](../docs/design/explorations/art/portal-cat/artwork.md)
+owns exports and anatomy guidance.
+
 ## Scroll-story artwork
 
 The story is a 1152 × 768, 131-frame pixel-art courtyard animation at 12 fps.

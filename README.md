@@ -1,7 +1,7 @@
 # Gatto
 
 <p align="center">
-  <img src="packaging/rocket-cat-transparent.png" alt="Gatto, a cat with rocket boosters" width="220">
+  <img src="docs/images/readme-cat.png" alt="Gatto, a seated black pixel-art kitten with cyan and violet eyes" width="256">
 </p>
 
 A macOS app for adding images and videos to GitHub pull requests, issues, comments,
@@ -85,5 +85,5 @@ Built with **[Rust](https://rust-lang.org/), [GPUI](https://gpui.rs/), and
 | Website | [Development and build](web/README.md) |
 | Game development research | [Current bitECS guide](docs/research/game-development/bitecs-current-guide.md), [latest Phaser TypeScript guide](docs/research/game-development/phaser-latest-typescript-guide.md), [controlling scope and shipping a playable game](docs/research/game-development/game-scope-and-shipping.md), [AI for complex NPCs](docs/research/game-development/ai-for-complex-npcs.md), [writing indie game endings and story beats](docs/research/game-development/indie-game-endings-and-story-beats.md) |
 | Website exploration | [website notes](docs/design/explorations/website-notes.md), [organic scene prompts](docs/design/explorations/art/organic-integration.md), [website artwork revision](docs/design/explorations/art/website-cat-materials.md), [Study shelf](docs/design/explorations/index.html), [scrolling story](docs/design/explorations/story-sequence.html), [study guide](docs/design/explorations/README.md), [shared-discovery feedback](docs/design/explorations/feedback/shared-discovery.md), [postcard feedback](docs/design/explorations/feedback/identity-postcards.md), [mood board](docs/design/explorations/moodboard.html), [design-system study](docs/design/explorations/design-system.html), [storyboard](docs/design/explorations/storyboard.md), [artwork notes](docs/design/explorations/art/README.md), [redraw notes](docs/design/explorations/art/redraw-notes.md), [redraw prompts](docs/design/explorations/art/redraw-prompts.md), [reference notes](docs/research/moodboard-reference-notes.md), [mixed-media research](docs/research/mixed-media-character-worlds.md) |
-| Artwork | [Walkthrough captures](docs/design/walkthrough-captures.md), [Installer](packaging/dmg-artwork.md), [kitten coin](packaging/kitten-coin.md) |
+| Artwork | [README cat and favicon](docs/design/explorations/art/brand-cat/artwork.md), [app header cat](docs/design/explorations/art/app-cat/artwork.md), [website visitor](docs/design/explorations/art/portal-cat/artwork.md), [pixel portal](docs/design/explorations/art/pixel-portal/artwork.md), [Walkthrough captures](docs/design/walkthrough-captures.md), [Installer](packaging/dmg-artwork.md), [kitten coin](packaging/kitten-coin.md) |
 | Agent guidance | [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [documentation upkeep](docs/agents/documentation.md), [issue tracker](docs/agents/issue-tracker.md), [triage labels](docs/agents/triage-labels.md), [domain docs](docs/agents/domain.md), [Aseprite MCP setup](docs/agents/aseprite.md), [Aseprite research](docs/research/aseprite-mcp-2026-10-24.md) |

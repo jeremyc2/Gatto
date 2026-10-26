@@ -1,18 +1,28 @@
 # Download portal artwork
 
-Created October 17, 2026 for the website download section. The cat's identity is
+Originally created October 17, 2026 for the website download section; the ring
+was redrawn as [Aseprite pixel art](pixel-portal/artwork.md) on October 26. The cat's identity is
 based on [the existing logo artwork](../../../../packaging/rocket-cat-transparent.png).
-The portal was generated with the built-in image-generation tool as a separate
-transparent layer. Both its aperture and exterior are transparent, allowing the
+The original portal was generated with the built-in image-generation tool as a
+separate transparent layer. The current ring is drawn in Aseprite. Both its
+aperture and exterior are transparent, allowing the
 website background to show through in the source. The website now places a black
 circular aperture behind the ring at the user's request. No film still or third-party character art
 was supplied.
 
 ## Files and motion
 
-Current masters: `web/assets/images/download-portal.png` (1254 × 1254) and
-`web/assets/images/download-rocket-cat-front.png` (1254 × 1254). Matching lossless WebP
-exports are served lazily. Portal source: generated output
+The portal master is now [pixel-portal/portal.aseprite](pixel-portal/portal.aseprite)
+(384 × 384). Its 2× PNG and lossless WebP exports are
+`web/assets/images/download-portal-pixel.png` and `.webp` (768 × 768). The earlier
+painted portal PNG/WebP were removed; the original prompt remains below as history.
+On October 25, 2026 the cat was replaced by a separate
+[pixel-art visitor](portal-cat/artwork.md), drawn in Aseprite and exported as
+`web/assets/images/download-rocket-cat-pixel.png` and lossless WebP (512 × 512).
+The superseded side-view and forward-facing cat PNG/WebP exports were removed
+during the October 26 asset cleanup. The prompts and generated-output IDs below
+record the earlier illustrations. The portal and cat are
+separate assets. WebP exports are served lazily. Original generated portal source:
 `exec-4c768f84-d109-493c-9f82-790ac6ddffce.png`.
 
 The portal rotates once every 240 seconds; the separate cat moves just one CSS
@@ -82,7 +92,7 @@ The initial head-on pose was `exec-a040eeff-fb4a-47b8-ab20-26731a48cec7.png`;
 the intermediate cutout `exec-30c3e789-e119-4fc0-95f4-331cf2a71f73.png` reverses
 the thrusters. The final cutout `exec-ecd988a0-2a79-4652-a039-8d831b7825f9.png`
 removes the visible flames while preserving the jetpack. The earlier side-view
-`download-rocket-cat.png` and its WebP remain available as prior artwork.
+and forward-facing raster exports are superseded by the current Aseprite master.
 
 ### Head-on pose
 
@@ -120,8 +130,6 @@ reserves its own space around the artwork.
 From the repository root with libwebp installed:
 
 ```sh
-cwebp -quiet -lossless -z 9 web/assets/images/download-portal.png -o web/assets/images/download-portal.webp
-cwebp -quiet -lossless -z 9 web/assets/images/download-rocket-cat.png -o web/assets/images/download-rocket-cat.webp
-cwebp -quiet -lossless -z 9 web/assets/images/download-rocket-cat-front.png -o web/assets/images/download-rocket-cat-front.webp
+cwebp -quiet -lossless -z 9 web/assets/images/download-portal-pixel.png -o web/assets/images/download-portal-pixel.webp
 cwebp -quiet -q 90 -m 6 -resize 1024 1024 web/assets/images/portal-watercolor-paper.png -o web/assets/images/portal-watercolor-paper.webp
 ```

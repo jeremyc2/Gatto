@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { colors, media } from "../design-system/tokens.stylex";
-import cat from "../../assets/images/download-rocket-cat-front.webp";
-import portal from "../../assets/images/download-portal.webp";
+import cat from "../../assets/images/download-rocket-cat-pixel.webp";
+import portal from "../../assets/images/download-portal-pixel.webp";
 import paper from "../../assets/images/portal-watercolor-paper.webp";
 import { SiteFooter } from "./SiteFooter";
 import "./portal-entry.css";
@@ -92,8 +92,8 @@ export function PortalCat(props: { onActivate: () => void }) {
             <img
               {...stylex.attrs(styles.cat)}
               src={cat}
-              width="1254"
-              height="1254"
+              width="512"
+              height="512"
               alt=""
               loading="lazy"
             />
@@ -151,6 +151,7 @@ const styles = stylex.create({
     height: "100%",
   },
   ring: {
+    imageRendering: "pixelated",
     transformOrigin: "center",
     transformBox: "view-box",
     animationName: { default: spin, [media.reducedMotion]: "none" },
@@ -160,6 +161,7 @@ const styles = stylex.create({
   },
   cat: {
     position: "absolute",
+    imageRendering: "pixelated",
     width: "42%",
     height: "42%",
     insetInlineStart: "29%",

@@ -46,6 +46,12 @@ with the app’s existing dependencies.
 
 ## App buttons
 
+The main-page header embeds `packaging/app-cat-pixel.png` at 72 points. Its
+separate [Aseprite source and artwork record](design/explorations/art/app-cat/artwork.md)
+retain the website rocket cat's pose with a rich purple coat and lavender highlights
+for the dark app background. The Dock/menu-bar assets and original rocket-cat
+reference remain separate from this header image.
+
 `theme.rs` owns `AppButtonStyle` and the shared confirmation footer. Ordinary
 text actions use 32-point buttons with the same type size, corner radius, and
 horizontal padding. Primary actions use the app's purple fill. Secondary actions

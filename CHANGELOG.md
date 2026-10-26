@@ -21,6 +21,21 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
+- Replace the app's main-page cat with a separate purple-highlighted pixel-art
+  version of the website rocket cat, preserving the header's size and layout.
+  Use deep purple fur with muted lavender highlights for the dark interface.
+  Adapt the website's original wispy portal ring as detailed Aseprite pixel art,
+  keeping the dark center and cat independent. Remove the old ring PNG/WebP.
+- Center the Apple logo and outlined “Download for macOS” label together in the
+  shared website/README badge, with consistent alignment across renderers.
+
+- Replace the website favicon and README illustration with a matching seated
+  pixel-art kitten with upper-left lighting, muzzle-rooted README whiskers and
+  clean, whisker-free 16 px and 32 px portraits. Remove obsolete cat exports and
+  the temporary review board.
+  Redraw the website's flying jetpack cat as a separate layered Aseprite asset,
+  with back-mounted rocket barrels and visible colored exhaust with hot cores.
+
 - Replace the apple in walkthrough screenshots with an original, saturated
   pixel-art cat carrying a shovel, with editable Aseprite artwork in the
   repository (#29).

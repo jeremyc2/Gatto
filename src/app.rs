@@ -377,7 +377,7 @@ impl UploaderApp {
             _update_subscription: update_subscription,
             header_mark: Arc::new(Image::from_bytes(
                 ImageFormat::Png,
-                include_bytes!("../packaging/rocket-cat-transparent.png").to_vec(),
+                include_bytes!("../packaging/app-cat-pixel.png").to_vec(),
             )),
             rooftops_window: None,
             focus_handle: cx.focus_handle(),
