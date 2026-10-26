@@ -24,6 +24,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Replace the apple in walkthrough screenshots with an original, saturated
   pixel-art cat carrying a shovel, with editable Aseprite artwork in the
   repository (#29).
+- Brighten the round courtyard cat’s violet eye and slim its tail, with smooth
+  bends, a blended hip attachment and pose-dependent lighting. Let the tail
+  curl around its haunch, sweep toward and away from the viewer and swing high,
+  with foreshortening, depth-aware overlaps and moving shadows. Choreograph
+  fewer, slower gestures around the cat’s body and head movements, with quiet
+  holds and brief follow-through. Smooth the terminal bend and tuck resting
+  wraps closely around its haunch and paw.
 
 - Autoplay the muted website story video on page load and remove its scroll
   seeking code, keeping chapter copy, paw trails and the finale scroll-driven.

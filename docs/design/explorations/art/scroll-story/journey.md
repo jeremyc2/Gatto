@@ -1,6 +1,6 @@
 # Courtyard animation
 
-October 25, 2026. One scroll-controlled pixel-art story replaced the website’s
+October 25, 2026. One pixel-art courtyard story replaced the website’s
 three static cat paintings. Image generation supplied drawing studies; Aseprite
 was used to register, recolor, repair and animate them. The approved animation
 and reusable drawing references now live in one file, without old versions or
@@ -48,6 +48,48 @@ highlights follow the lit planes; folds and overhangs receive occlusion. Avoid
 pillow shading, a dark border around every edge, lower rim lights and floor glow.
 Cream kitten markings are pigment, not a second light.
 
+The round cat’s violet iris has the blue iris’s saturated, luminous treatment,
+with its dark pupil and small warm catchlights preserved. Its tail is tapered
+from a 36-pixel native root through a roughly 30-pixel midshaft to a rounded
+14-pixel tip, before the final tip taper and 0.95× scene scale. Both round-cat
+tail banks and all 131 scene cels use this slimmer anatomy. The 230-pixel native
+centerline bends continuously along its length; changing depth and asymmetric
+gestures let it extend, rise and draw back without tracing a circular orbit.
+The final bend flows into a smoothly tapered, rounded end. Keep the raised
+tip aligned with that arc, without a sideways hook or a pinched terminal bend.
+Broad depth sweeps curl it around the lower haunch, swing it toward the viewer,
+recede behind the rump and lift it beside the back. Foreshortening and modest
+perspective follow that travel. The returning arc can cross in front of the
+haunch, with a small cast shadow on the fur; the higher rear arc stays behind
+the body. Keep these turns broad in the projected drawing, including views
+along the tail, so depth changes never produce a sharp folded silhouette.
+The root follows the saved pelvic anchor for each body pose, with the rump
+covering and blending into the attachment. Fur uses the body’s charcoal ramp.
+Highlights and underside shade follow the local surface orientation under the
+fixed light; the rump occludes the root, and lower arcs cast a faint floor
+shadow that softens and weakens as the tail rises.
+Its floor projection follows depth as well as height, moving across the paving
+as the tail sweeps closer or farther away.
+In the wrapped pose, the tail follows the lower haunch and paw line closely,
+with its end tucked near the paw. Preserve length through the depth wrap;
+leave no open loop beside the body. Keep its contact shadow close to the fur
+and floor so the resting tail sits against the cat.
+
+The round cat leads the choreography. Keep the tail quiet between body cues,
+with one restrained lift instead of a succession of independent flourishes.
+Bending begins near the root 1–2 frames after each cue; the tip follows up to
+3 frames later. The pelvic attachment stays fixed to the body. Ease into and
+out of each gesture without overshooting. The small
+walking-stop sway and final tip response finish once, without repeating.
+
+| Body cue | Tail response |
+| --- | --- |
+| Sniff begins at 23 | Small counterbalance, 24–37, then hold. |
+| Sit at 46 | Draw into the close curl, 47–62, then hold. |
+| Look forward at 72 | One moderate lift, 74–93, then hold. |
+| Look left at 95 | Slowly relax back into the curl, 97–123. |
+| Look forward at 117 | Small tip response, 119–126; hold through the blink. |
+
 The box sits flat, with taller sage sides, botanical lining and large GitHub
 lettering. The flower picture is a rigid 180 × 120 rectangle while carried. Its
 straight top edge meets a small lip at the mouth; it stays in front of the carrier.
@@ -62,9 +104,10 @@ It settles into floor perspective behind the rim without changing physical size.
 | 102–117 | Withdraw and back away. |
 | 118–131 | Gather and rest; kitten’s tongue appears at 119–123. |
 
-The kitten’s paws stay planted once it stops. Ears, heads and tails have distinct
-rhythms. The round cat blinks at 128–130; frame 131 reopens its eyes and is the
-approved endpoint. Find/Send/Share tags are 1–45, 46–100 and 101–131. Website copy
+The kitten’s paws stay planted once it stops. Each cat has a distinct rhythm;
+the round cat’s tail follows its body and head cues. It blinks at 128–130;
+frame 131 reopens its eyes and is the approved endpoint.
+Find/Send/Share tags are 1–45, 46–100 and 101–131. Website copy
 changes at 31% and 69% scroll progress, aligned to frames 46 and 101. Delivery
 adds a reversible 100%–120% camera push toward the lower-right during 47–110;
 the master keeps the complete uncropped scene.
@@ -84,7 +127,7 @@ the master keeps the complete uncropped scene.
   inside the pelvis. Vary bends along the whole shaft, rather than swinging a
   rigid tail or repeatedly hinging at its midpoint. Preserve length and taper:
   reference centerlines are 190 native pixels for paper, 160 for watercolor and
-  230 for round; approximate midshaft widths are 29, 36 and 55 before scene scale.
+  230 for round; approximate midshaft widths are 29, 36 and 30 before scene scale.
   The paper tail follows the slimmer wrapped-tail reference. A small internal
   contact blend joins the materials without a dark seam or sliding connector.
 - **Keep the material continuous.** Different paint sources on the two halves
@@ -116,14 +159,15 @@ camera with nearest-neighbor sampling, and writes one MP4 plus three WebP stills
 Intermediate PNGs use an automatically removed system temporary directory.
 
 H.264 uses CRF 24, the veryslow preset, YUV 4:2:0, no audio/B frames, one-second
-keyframes and a front-loaded index. The current MP4 is **7,340,120 bytes**;
-stills are **385,756 / 402,070 / 303,774 bytes**. Reproduce with the export command.
+keyframes and a front-loaded index. The current MP4 is **7,317,894 bytes**;
+stills are **385,804 / 402,374 / 305,400 bytes**. Reproduce with the export command.
 The page loads the video only for the enhanced motion-enabled story. Reduced
 motion, normal flow, unavailable video and disabled JavaScript use the stills.
-The video stays paused and seeks by scroll position.
+The muted video autoplays once on page load and holds its final frame;
+chapter copy, paw trails and the finale remain scroll-driven.
 
 Run `bun build:web`, `bun test:web`, `bun lint:web` and `bun typecheck:web` after
 changes. Build tests retain the 8 MiB video budget and fast-seeking index check;
-runtime tests cover frame mapping and queued/reversed seeks. Update
+runtime tests cover chapter progress and video byte ranges. Update
 `web/src/story-video.ts` if the native dimensions, frame clock or chapter timing
 change. Source timing is 83 ms per cel; delivery assigns exactly 12 fps.

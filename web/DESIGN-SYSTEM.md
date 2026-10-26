@@ -234,7 +234,31 @@ A small lip overlaps its straight top edge; the rim occludes its landing. Paws
 stay outside the box. The picture settles into floor perspective without
 shrinking. The round cat listens, turns, moves its tail and blinks once.
 The scene ends immediately after that blink, with reopened eyes, at 10.916667
-seconds. Tail shapes and expressions have separate rhythms.
+seconds. Each cat has a distinct motion rhythm.
+
+The round cat’s violet eye matches the blue eye’s bright, saturated iris while
+retaining its pupil and catchlights. Its tail has a roughly 30-pixel native
+midshaft, tapering from a 36-pixel root, at the existing 0.95× scene scale.
+Continuous bends and changing depth produce extension, lift and retreat with
+smooth transitions. It curls around the lower haunch, reaches toward the viewer,
+recedes behind the body and swings high beside the back. Foreshortening,
+perspective and correct front/behind overlaps make the depth visible. Keep
+projected turns broad even when looking along the tail. Each pose keeps its
+pelvic attachment covered by the rump.
+The charcoal fur ramp stays consistent with the body; the fixed upper-left light
+shades each local surface as it turns, with a darker underside and root contact.
+Its faint floor shadow softens and fades with height and moves with depth;
+front arcs can cast a small shadow on the haunch.
+The last bend flows into a smooth, rounded taper without a hooked tip. Resting
+wraps hug the lower haunch and paw line, with a tucked end and close contact
+shadow; avoid an open loop beside the body.
+The round cat's body and head lead its tail: small sniff counterbalance, a curl
+after sitting, one moderate lift after looking forward, then a slow return to
+the curl after looking left. Bending begins near the root 1–2 frames after the
+body cue and the tip follows up to 3 frames later, with the attachment fixed to
+the pelvis. Hold between gestures; keep the final tip
+response small and finish it before the blink. Avoid continuous waves or extra
+flourishes while the body holds a pose. The artwork record owns the exact cues.
 
 One [Aseprite master](../docs/design/explorations/art/scroll-story/journey.aseprite)
 contains the nine visible scene layers and a hidden library of current models,
