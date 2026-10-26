@@ -30,15 +30,15 @@ alone would not produce a working preview. Sources: [model](../../src/model.rs),
 
 ## Limits and playback
 
-| Concern | Established behavior |
-| --- | --- |
-| Containers | GitHub accepts `.mp4`, `.mov`, and `.webm`. |
-| Free repositories | Videos up to 10 MB when the repository owner is on a free plan. |
-| Paid repositories | Videos up to 100 MB when the repository owner is on a paid plan. For uploads above 10 MB, the uploader must also be an organization member, outside collaborator, or on a paid plan. |
-| Images | 10 MB per image/GIF. |
-| Codec | Browser dependent; GitHub recommends H.264 for greatest compatibility. A `.mov` extension alone does not guarantee playback. |
+| Concern                          | Established behavior                                                                                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Containers                       | GitHub accepts `.mp4`, `.mov`, and `.webm`.                                                                                                                                                      |
+| Free repositories                | Videos up to 10 MB when the repository owner is on a free plan.                                                                                                                                  |
+| Paid repositories                | Videos up to 100 MB when the repository owner is on a paid plan. For uploads above 10 MB, the uploader must also be an organization member, outside collaborator, or on a paid plan.             |
+| Images                           | 10 MB per image/GIF.                                                                                                                                                                             |
+| Codec                            | Browser dependent; GitHub recommends H.264 for greatest compatibility. A `.mov` extension alone does not guarantee playback.                                                                     |
 | Duration, resolution, frame rate | The cited GitHub attachment documentation publishes no separate bounds. No fixed time limit was established; this is not a guarantee of unlimited duration. File size remains a practical limit. |
-| Access | Public-repository uploads can be viewed without authentication. Private/internal uploads require access to the associated repository. |
+| Access                           | Public-repository uploads can be viewed without authentication. Private/internal uploads require access to the associated repository.                                                            |
 
 Source for the table: [GitHub attachment documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files).
 The CLI implementation uses binary byte bounds of `10 * 1024 * 1024` for images
@@ -77,7 +77,13 @@ and the existing PR above. Do not wrap video URLs in `![alt](...)`.
 An explicit HTML video is a possible way to request dimensions:
 
 ```html
-<video src="https://github.com/user-attachments/assets/RETURNED-ASSET-ID" width="640" height="360" controls muted></video>
+<video
+  src="https://github.com/user-attachments/assets/RETURNED-ASSET-ID"
+  width="640"
+  height="360"
+  controls
+  muted
+></video>
 ```
 
 A read-only probe of GitHub's [Markdown rendering API](https://docs.github.com/en/rest/markdown/markdown)
@@ -96,7 +102,12 @@ GitHub's own Skills lesson teaches `<img>` with `width` and/or `height` in pixel
 because ordinary Markdown image syntax cannot specify size. Gatto can emit:
 
 ```html
-<img width="640" height="360" alt="Description" src="https://github.com/user-attachments/assets/RETURNED-ASSET-ID" />
+<img
+  width="640"
+  height="360"
+  alt="Description"
+  src="https://github.com/user-attachments/assets/RETURNED-ASSET-ID"
+/>
 ```
 
 Escape user-provided description and URL attribute values. A rendering probe

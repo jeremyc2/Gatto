@@ -28,17 +28,17 @@ After seeing the corrected sequence, the user said they love it and want all thr
 
 All generated files originated in the current conversation's generated-image folder. Originals are preserved.
 
-| Project file | Generated source / role |
-| --- | --- |
-| [cast-v2.png](cast-v2.png) | `exec-a04648d9-bf5d-498a-bb06-dd85b9a8560d.png`; cast reference refined from `exec-88e4015e-4829-4252-81ab-184cd545f2f7.png`. |
-| [story-bring-plate-v2.png](story-bring-plate-v2.png) | `exec-69e66c5d-7a9d-4e24-83e4-a181679a0460.png`; clean discovery scene. |
-| [story-upload-plate-v2.png](story-upload-plate-v2.png) | `exec-f61565b6-f8dd-48a7-ba85-8a91fa7b346e.png`; clean upload scene before lettering. |
-| [story-upload-github-plate-v2.png](story-upload-github-plate-v2.png) | `exec-f9c9baef-3555-4e2e-a66a-5f018ebe4944.png`; localized GitHub lettering edit, active upload plate. |
-| [story-copy-plate-v2.png](story-copy-plate-v2.png) | `exec-15873442-9aad-4fc5-a8d8-67455e8acf1a.png`; clean result scene. |
-| [flower-picture-v2.png](flower-picture-v2.png) | `exec-6886ec95-9d07-4b59-be1d-b1fbb4a5228d.png`; canonical picture prop. |
-| [story-bring-v2.svg](story-bring-v2.svg) | Clean discovery plate and canonical prop. |
-| [story-upload-v2.svg](story-upload-v2.svg) | GitHub-lettered upload plate and canonical prop. |
-| [story-copy-v2.svg](story-copy-v2.svg) | Clean result plate and canonical prop. |
+| Project file                                                         | Generated source / role                                                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| [cast-v2.png](cast-v2.png)                                           | `exec-a04648d9-bf5d-498a-bb06-dd85b9a8560d.png`; cast reference refined from `exec-88e4015e-4829-4252-81ab-184cd545f2f7.png`. |
+| [story-bring-plate-v2.png](story-bring-plate-v2.png)                 | `exec-69e66c5d-7a9d-4e24-83e4-a181679a0460.png`; clean discovery scene.                                                       |
+| [story-upload-plate-v2.png](story-upload-plate-v2.png)               | `exec-f61565b6-f8dd-48a7-ba85-8a91fa7b346e.png`; clean upload scene before lettering.                                         |
+| [story-upload-github-plate-v2.png](story-upload-github-plate-v2.png) | `exec-f9c9baef-3555-4e2e-a66a-5f018ebe4944.png`; localized GitHub lettering edit, active upload plate.                        |
+| [story-copy-plate-v2.png](story-copy-plate-v2.png)                   | `exec-15873442-9aad-4fc5-a8d8-67455e8acf1a.png`; clean result scene.                                                          |
+| [flower-picture-v2.png](flower-picture-v2.png)                       | `exec-6886ec95-9d07-4b59-be1d-b1fbb4a5228d.png`; canonical picture prop.                                                      |
+| [story-bring-v2.svg](story-bring-v2.svg)                             | Clean discovery plate and canonical prop.                                                                                     |
+| [story-upload-v2.svg](story-upload-v2.svg)                           | GitHub-lettered upload plate and canonical prop.                                                                              |
+| [story-copy-v2.svg](story-copy-v2.svg)                               | Clean result plate and canonical prop.                                                                                        |
 
 The [exact prompt record](redraw-prompts.md) includes intermediate attempts and refinements. The earlier [artwork notes](README.md) retain the favorite sheets and first encounters.
 

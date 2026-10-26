@@ -294,13 +294,13 @@ Gatto window, which clears the draft.
 
 A few useful shortcuts:
 
-| Shortcut | Action |
-| --- | --- |
-| **Command+S** | Save changed images and close the editor. |
-| **Command+Z** / **Shift+Command+Z** | Undo / redo. |
-| **Delete** | Remove selected marks. |
-| **Escape** | Finish typing or clear the selection; keep the editor open. |
-| **Command+W** | Close the editor, asking about unsaved changes. |
+| Shortcut                            | Action                                                      |
+| ----------------------------------- | ----------------------------------------------------------- |
+| **Command+S**                       | Save changed images and close the editor.                   |
+| **Command+Z** / **Shift+Command+Z** | Undo / redo.                                                |
+| **Delete**                          | Remove selected marks.                                      |
+| **Escape**                          | Finish typing or clear the selection; keep the editor open. |
+| **Command+W**                       | Close the editor, asking about unsaved changes.             |
 
 ### Preview a video
 

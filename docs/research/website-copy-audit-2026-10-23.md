@@ -24,17 +24,17 @@ editorial warnings; they are not documented Sol-specific findings.
 
 ### General LLM prose research
 
-[Kobak et al., *Delving into LLM-assisted writing in biomedical publications through
-excess vocabulary*](https://arxiv.org/html/2406.07016v5) (2025) examined 15.1 million
+[Kobak et al., _Delving into LLM-assisted writing in biomedical publications through
+excess vocabulary_](https://arxiv.org/html/2406.07016v5) (2025) examined 15.1 million
 English PubMed abstracts from 2010–2024. After ChatGPT's release, excess vocabulary
 was predominantly stylistic verbs and adjectives, unlike earlier topic-driven
-changes. Examples include forms of *delve*, *underscore*, and *showcase*. The
+changes. Examples include forms of _delve_, _underscore_, and _showcase_. The
 authors explicitly say corpus-level evidence cannot identify individual
 AI-assisted abstracts or distinguish which models influenced them. This supports
 checking unnecessary flourishes, not treating ordinary words as proof of AI use.
 
-[Zamaraeva et al., *Comparing LLM-generated and human-authored news text using
-formal syntactic theory*](https://aclanthology.org/2025.acl-long.443.pdf) (ACL 2025)
+[Zamaraeva et al., _Comparing LLM-generated and human-authored news text using
+formal syntactic theory_](https://aclanthology.org/2025.acl-long.443.pdf) (ACL 2025)
 compared English NYT-style writing from six LLMs with human writing. Their
 grammatical analyses found greater similarity among model outputs and greater
 diversity in human writing. The study did **not** confirm every proposed style
@@ -51,13 +51,13 @@ The source text lives in [Story.tsx](../../web/src/Story.tsx),
 [SiteFooter.tsx](../../web/src/components/SiteFooter.tsx), and
 [Document.tsx](../../web/src/Document.tsx).
 
-| Repetition | Editorial consequence |
-| --- | --- |
-| Sharing appears in the hero slogan, lead, final chapter label, annotation description, and metadata. | Several lines restate the same purpose. Keep the product explanation where it first clarifies the app, then let later copy describe the next action. |
+| Repetition                                                                                                               | Editorial consequence                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sharing appears in the hero slogan, lead, final chapter label, annotation description, and metadata.                     | Several lines restate the same purpose. Keep the product explanation where it first clarifies the app, then let later copy describe the next action.                |
 | Images recur across the hero, upload explanation, batch description, annotation description, and comparison description. | Later sentences can often omit the object when the heading and context already establish it. Do not replace it with vague words such as “content” just for variety. |
-| The final story heading and body both name copying. | Let the heading carry the action and the body give the destination or result. |
-| Open source appears as a heading and again in the footer, beside an MIT license link. | The footer can be shorter without losing the license destination. |
-| Several small feature headings use the same short, punctuated beat. | Individual fragments suit the page; uniform cadence across every tile can feel manufactured. Evaluate the sequence aloud. |
+| The final story heading and body both name copying.                                                                      | Let the heading carry the action and the body give the destination or result.                                                                                       |
+| Open source appears as a heading and again in the footer, beside an MIT license link.                                    | The footer can be shorter without losing the license destination.                                                                                                   |
+| Several small feature headings use the same short, punctuated beat.                                                      | Individual fragments suit the page; uniform cadence across every tile can feel manufactured. Evaluate the sequence aloud.                                           |
 
 Accessibility status text and descriptive artwork alternatives serve different
 purposes from visible promotional copy. Do not sacrifice their clarity to improve
@@ -68,8 +68,8 @@ a whole-file keyword count. Navigation and download labels may reasonably repeat
 These rules reflect the owner's requested voice and this audit's judgment; the
 research above does not establish them as universal writing laws.
 
-- Delete a duplicated thought before reaching for a synonym. Replacing *share*
-  with *deliver*, *distribute*, or *publish* can distort what the app actually does.
+- Delete a duplicated thought before reaching for a synonym. Replacing _share_
+  with _deliver_, _distribute_, or _publish_ can distort what the app actually does.
 - Give each line a job. A heading and its following sentence should contribute
   different information.
 - Use concrete verbs. Avoid generic promises about elevating workflows,
@@ -99,13 +99,13 @@ essential control labels retain their separate accessibility purposes.
 Counting the visible copy across all three story chapters, chapter navigation,
 features, download section, and footer, with inflected forms grouped:
 
-| Word family | Before | After |
-| --- | ---: | ---: |
-| share / sharing | 4 | 2 |
-| image / images | 5 | 2 |
-| video / videos | 3 | 1 |
-| copy | 2 | 1 |
-| open source | 2 | 1 |
+| Word family     | Before | After |
+| --------------- | -----: | ----: |
+| share / sharing |      4 |     2 |
+| image / images  |      5 |     2 |
+| video / videos  |      3 |     1 |
+| copy            |      2 |     1 |
+| open source     |      2 |     1 |
 
 These counts exclude metadata, image alternatives, hidden headings, and live
 status announcements. They document this edit, not a target or automated test.

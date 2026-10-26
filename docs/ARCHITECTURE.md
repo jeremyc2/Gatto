@@ -769,6 +769,12 @@ Command+Q bindings for every app window. The cat icon's menu also shows the
 preferences, quit and clipboard staging shortcuts. Successful global Quick Copy
 registrations notify the menu controller, which refreshes its shortcut hint;
 disabling or temporarily unregistering during recording clears that hint.
+The menu bar uses the favicon's front-facing kitten as a monochrome AppKit
+template, displayed at 18 × 18 points from a 36 × 36 pixel PNG. Its editable
+source and export instructions live in the [brand artwork record](design/explorations/art/brand-cat/artwork.md#macos-menu-bar).
+The Dock, Finder and Applications icon uses the same portrait in color on a
+cream-to-lavender Icon Composer background. Bundles ship the compiled asset
+catalog and ICNS; source runs embed that same ICNS via `window_limits`.
 Close captures the
 focused window, defers access until keyboard dispatch releases its borrow, then
 uses the existing native close request and per-window cleanup callbacks.

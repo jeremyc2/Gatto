@@ -26,13 +26,13 @@ In ChatGPT, attach the approved image when requesting an edit or using visual gu
 
 These different controls address different problems:
 
-| Control | Supported purpose | Production implication — our synthesis |
-| --- | --- | --- |
-| Reference images / image conditioning | IP-Adapter combines image prompts with text and can work alongside structural controls. | Useful for appearance; separately inspect identity landmarks and pose. |
-| Pose, edge, depth, or segmentation conditioning | ControlNet's original work demonstrates spatial conditioning of diffusion models using these signals. | Supply designed geometry rather than expecting text to specify all joints and contacts. |
-| Character/style training | Scenario documents character models and recommends trying references before training. | Consider training after a repeated need is demonstrated, using an approved dataset; measure drift rather than believing a promise of consistency. |
-| Multi-view generation | Zero123++ targets consistent views from a single image. | Useful as a reconstruction/reference experiment; not proof of correct unseen anatomy or a finished animated rig. |
-| Sprite-specific research | Sprite Sheet Diffusion investigates generating character animation sheets. | Relevant experimental lead, not evidence that a shipping pipeline can omit cleanup, metadata, or engine tests. |
+| Control                                         | Supported purpose                                                                                     | Production implication — our synthesis                                                                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reference images / image conditioning           | IP-Adapter combines image prompts with text and can work alongside structural controls.               | Useful for appearance; separately inspect identity landmarks and pose.                                                                            |
+| Pose, edge, depth, or segmentation conditioning | ControlNet's original work demonstrates spatial conditioning of diffusion models using these signals. | Supply designed geometry rather than expecting text to specify all joints and contacts.                                                           |
+| Character/style training                        | Scenario documents character models and recommends trying references before training.                 | Consider training after a repeated need is demonstrated, using an approved dataset; measure drift rather than believing a promise of consistency. |
+| Multi-view generation                           | Zero123++ targets consistent views from a single image.                                               | Useful as a reconstruction/reference experiment; not proof of correct unseen anatomy or a finished animated rig.                                  |
+| Sprite-specific research                        | Sprite Sheet Diffusion investigates generating character animation sheets.                            | Relevant experimental lead, not evidence that a shipping pipeline can omit cleanup, metadata, or engine tests.                                    |
 
 Sources: [IP-Adapter paper](https://arxiv.org/abs/2308.06721), [ControlNet paper](https://arxiv.org/abs/2302.05543), [Scenario character-model guide](https://help.scenario.com/articles/4280773511-train-a-consistent-character-model), [Zero123++ paper](https://arxiv.org/abs/2310.15110), [Sprite Sheet Diffusion paper](https://arxiv.org/abs/2412.03685).
 
@@ -52,15 +52,15 @@ These are evidence for those projects' processes. They do not imply their scale,
 
 The following is a decision framework, not a measured price or quality comparison.
 
-| Visual direction and camera | Suggested starting process | Useful AI work | Principal risk to test |
-| --- | --- | --- | --- |
-| Low-resolution pixel art; side view | Aseprite master sprites and hand-corrected key poses | Silhouettes, palette ideas, rough props, pose suggestions | Uneven pixel clusters, drifting pixel scale, noisy shading, time spent repainting |
-| Drawn/cel style; side view | Designed key poses; frame animation or a hybrid with selected rigged parts | Character exploration and rough pose variations | Generic shapes, rubbery rig motion, altered line weight and proportions |
-| Paper/collage; side or limited quarter view | Layered pieces, explicit overlaps, pivots and material samples | Source textures, shape studies, alternative construction | Texture swimming, impossible joints, incoherent cast shadows |
-| Painterly/watercolor; exploration game | Designed silhouettes, stable value groups, layered room paintings and a restrained character set | Color keys, architecture studies, material exploration, background paintovers | Brush texture changing between frames; beauty at full resolution but poor game-scale legibility |
-| Four-direction top-down | Corrected cardinal views, then a small action library per view | Directional proposals based on approved front/side/back references | Front/back contradictions, unseen limbs, excessive cleanup |
-| Eight/sixteen-direction isometric | Compare 3D-to-2D against hand-drawn directional sets | Model/texture concepts, reference cleanup, supporting props | Rigging cost versus cumulative per-frame/per-angle repair |
-| Freely rotating camera; many equipment variants | Rigged 3D with controlled rendering, possibly runtime 3D in an otherwise 2D presentation | Concepts and texture drafts | A sprite-angle inventory becoming too large; preserving a deliberate illustrated finish |
+| Visual direction and camera                     | Suggested starting process                                                                       | Useful AI work                                                                | Principal risk to test                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Low-resolution pixel art; side view             | Aseprite master sprites and hand-corrected key poses                                             | Silhouettes, palette ideas, rough props, pose suggestions                     | Uneven pixel clusters, drifting pixel scale, noisy shading, time spent repainting               |
+| Drawn/cel style; side view                      | Designed key poses; frame animation or a hybrid with selected rigged parts                       | Character exploration and rough pose variations                               | Generic shapes, rubbery rig motion, altered line weight and proportions                         |
+| Paper/collage; side or limited quarter view     | Layered pieces, explicit overlaps, pivots and material samples                                   | Source textures, shape studies, alternative construction                      | Texture swimming, impossible joints, incoherent cast shadows                                    |
+| Painterly/watercolor; exploration game          | Designed silhouettes, stable value groups, layered room paintings and a restrained character set | Color keys, architecture studies, material exploration, background paintovers | Brush texture changing between frames; beauty at full resolution but poor game-scale legibility |
+| Four-direction top-down                         | Corrected cardinal views, then a small action library per view                                   | Directional proposals based on approved front/side/back references            | Front/back contradictions, unseen limbs, excessive cleanup                                      |
+| Eight/sixteen-direction isometric               | Compare 3D-to-2D against hand-drawn directional sets                                             | Model/texture concepts, reference cleanup, supporting props                   | Rigging cost versus cumulative per-frame/per-angle repair                                       |
+| Freely rotating camera; many equipment variants | Rigged 3D with controlled rendering, possibly runtime 3D in an otherwise 2D presentation         | Concepts and texture drafts                                                   | A sprite-angle inventory becoming too large; preserving a deliberate illustrated finish         |
 
 Aseprite supports tagged frame selection and sprite-sheet export; Spine supports mesh deformation and image/data export; neither automatically establishes a character's hidden geometry. [Aseprite sprite sheets](https://www.aseprite.org/docs/sprite-sheet/), [Spine mesh attachments](https://esotericsoftware.com/spine-meshes), [Spine export](https://esotericsoftware.com/spine-export)
 
@@ -70,14 +70,14 @@ Aseprite supports tagged frame selection and sprite-sheet export; Spine supports
 
 Use these working definitions so an agent cannot accidentally substitute one for another:
 
-| Deliverable | What it answers | Acceptance criterion |
-| --- | --- | --- |
-| Concept sheet | Which shapes, costume, personality, and materials are worth pursuing? | A direction is chosen; alternatives may disagree. |
-| Canonical model/turnaround sheet | What is the same character from each required view? | Proportions and asymmetric features agree; camera is specified. |
-| Pose and expression library | How does the character act? | Readable gestures and emotional range without redesigning the body. |
-| Animation source | How does a particular action unfold? | Stable identity, authored contacts and timing, editable frames or rig. |
-| Runtime sprite sheet / texture atlas | How does the engine locate and play approved imagery? | Valid pixels plus frame rectangles, order, durations, offsets and other required metadata. |
-| World kit | How do places combine into navigable spaces? | Repeatable modules, transitions, layers, landmarks, and tested gameplay readability. |
+| Deliverable                          | What it answers                                                       | Acceptance criterion                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Concept sheet                        | Which shapes, costume, personality, and materials are worth pursuing? | A direction is chosen; alternatives may disagree.                                          |
+| Canonical model/turnaround sheet     | What is the same character from each required view?                   | Proportions and asymmetric features agree; camera is specified.                            |
+| Pose and expression library          | How does the character act?                                           | Readable gestures and emotional range without redesigning the body.                        |
+| Animation source                     | How does a particular action unfold?                                  | Stable identity, authored contacts and timing, editable frames or rig.                     |
+| Runtime sprite sheet / texture atlas | How does the engine locate and play approved imagery?                 | Valid pixels plus frame rectangles, order, durations, offsets and other required metadata. |
+| World kit                            | How do places combine into navigable spaces?                          | Repeatable modules, transitions, layers, landmarks, and tested gameplay readability.       |
 
 Aseprite distinguishes sprite sheets and texture atlases, and Godot demonstrates importing either separate frames or a sheet into an animation resource. The exact format depends on the chosen engine, so validate one import early. [Aseprite documentation](https://www.aseprite.org/docs/sprite-sheet/), [Godot 2D sprite animation](https://docs.godotengine.org/en/stable/tutorials/2d/2d_sprite_animation.html)
 
@@ -197,15 +197,15 @@ Generate world **ideas** more freely than production geometry. For an exploratio
 
 A suggested kit for one small biome:
 
-| Family | Examples | Contract to preserve |
-| --- | --- | --- |
-| Structural | Ground, walls, edges, corners, bridges, steps | Traversal size, repeat edges, perspective and collision surface |
-| Reusable props | Doors, lamps, furniture, plants, signs | Scale, grounding, pivots, interaction state |
-| Landmarks | Distinctive tree, ruin, machine, gathering place | Story role, silhouette and orientation cues |
-| Dressing | Debris, moss, cracks, paper, small stones | Controlled variation; avoid masking paths and cues |
-| Depth | Distant silhouettes, middle ground, foreground occluders | Parallax, layer boundaries and player readability |
-| Animated pieces | Water, foliage, curtains, ambient creatures | Loop timing, stable material and attachment |
-| Effects | Light shafts, fog, particles, weather | Contrast budget, performance and occlusion |
+| Family          | Examples                                                 | Contract to preserve                                            |
+| --------------- | -------------------------------------------------------- | --------------------------------------------------------------- |
+| Structural      | Ground, walls, edges, corners, bridges, steps            | Traversal size, repeat edges, perspective and collision surface |
+| Reusable props  | Doors, lamps, furniture, plants, signs                   | Scale, grounding, pivots, interaction state                     |
+| Landmarks       | Distinctive tree, ruin, machine, gathering place         | Story role, silhouette and orientation cues                     |
+| Dressing        | Debris, moss, cracks, paper, small stones                | Controlled variation; avoid masking paths and cues              |
+| Depth           | Distant silhouettes, middle ground, foreground occluders | Parallax, layer boundaries and player readability               |
+| Animated pieces | Water, foliage, curtains, ambient creatures              | Loop timing, stable material and attachment                     |
+| Effects         | Light shafts, fog, particles, weather                    | Contrast budget, performance and occlusion                      |
 
 For tile-based spaces, author transition coverage explicitly. Tiled's terrain sets distinguish corner-, edge-, and mixed matching; Godot's TileSet documentation covers terrain transitions, collisions, metadata and sorting origins. A seamless texture alone does not supply that information. [Tiled terrains](https://doc.mapeditor.org/en/stable/manual/terrain/), [Godot TileSets](https://docs.godotengine.org/en/stable/tutorials/2d/using_tilesets.html)
 
@@ -307,16 +307,16 @@ Use one asymmetric hero, one interactable prop, and one room kit. The asymmetry 
 
 Log the following for each route, including failed attempts:
 
-| Measure | Why it matters |
-| --- | --- |
+| Measure                                               | Why it matters                                          |
+| ----------------------------------------------------- | ------------------------------------------------------- |
 | Setup, generation, review, cleanup and import minutes | Total accepted-asset cost, rather than generation speed |
-| Attempts and tool cost per accepted action/view | Failure rate and predictability |
-| Frames with identity or anatomical errors | Whether approval scales to the planned inventory |
-| Unintended root jitter, foot sliding, scale change | Whether motion survives real playback |
-| Direction coverage and mirror exceptions | Hidden workload for asymmetric characters |
-| Revision minutes across the whole character | Whether the pipeline supports game iteration |
-| Atlas/metadata failures and memory footprint | Whether the images fit runtime requirements |
-| Blind visual preference at game scale | Whether process efficiency preserves the intended art |
+| Attempts and tool cost per accepted action/view       | Failure rate and predictability                         |
+| Frames with identity or anatomical errors             | Whether approval scales to the planned inventory        |
+| Unintended root jitter, foot sliding, scale change    | Whether motion survives real playback                   |
+| Direction coverage and mirror exceptions              | Hidden workload for asymmetric characters               |
+| Revision minutes across the whole character           | Whether the pipeline supports game iteration            |
+| Atlas/metadata failures and memory footprint          | Whether the images fit runtime requirements             |
+| Blind visual preference at game scale                 | Whether process efficiency preserves the intended art   |
 
 Define thresholds before evaluating. Example: no missing states, no accidental costume-side swaps, no unintended scale changes, every contact readable, and a declared cleanup budget per accepted action. Numerical pixel tolerances must follow the actual resolution and intended motion; there is no universal correct value. Do not punish intentional squash/stretch or airborne motion as jitter.
 

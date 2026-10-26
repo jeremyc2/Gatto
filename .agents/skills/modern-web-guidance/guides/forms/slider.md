@@ -5,8 +5,7 @@
 Use a labeled `<input type="range">` rather than recreating a slider with `<div>` elements or custom pointer handlers. The native control preserves keyboard and pointer interaction, touch behavior, and accessibility support. Configure `min`, `max`, `step`, and `value` for the use case.
 
 ```html
-<label for="range-slider">Volume</label>
-<input type="range" id="range-slider" value="70"/>
+<label for="range-slider">Volume</label> <input type="range" id="range-slider" value="70" />
 ```
 
 If the value requires a formatted label or unit, expose it in ordinary DOM content and update `aria-valuetext` when changed. Do not use `::before` or `::after` on slider pseudo-elements, as generated content on form controls is not interoperable. If a tooltip that follows the thumb is required, use the `slider-tooltip` (via `npx -y modern-web-guidance@latest retrieve "slider-tooltip"`) guide.
@@ -47,9 +46,7 @@ input[type="range"] {
   --attr-min: attr(min type(<number>), 0);
   --attr-max: attr(max type(<number>), 100);
   --control-value: attr(value type(<number>), 50);
-  --slider-progress: calc(
-    progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%
-  );
+  --slider-progress: calc(progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%);
 
   appearance: none;
   inline-size: 100%;
@@ -79,9 +76,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   inline-size: var(--slider-thumb-size);
   block-size: var(--slider-thumb-size);
-  margin-block-start: calc(
-    (var(--slider-track-size) - var(--slider-thumb-size)) / 2
-  );
+  margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
   border: 0;
   border-radius: var(--slider-thumb-radius);
   background: var(--slider-thumb-color);
@@ -124,14 +119,14 @@ input[type="range"]:focus-visible {
 When the filled portion of the track is styled differently from the unfilled track, Firefox exposes it via `::-moz-range-progress`. WebKit/Blink do not provide an equivalent pseudo-element, so sync the live input value to `--control-value` on `input` events:
 
 ```js
-const slider = document.querySelector('#range-slider');
+const slider = document.querySelector("#range-slider");
 
 function syncSliderValue() {
-  slider.style.setProperty('--control-value', slider.value);
+  slider.style.setProperty("--control-value", slider.value);
 }
 
 syncSliderValue();
-slider.addEventListener('input', syncSliderValue);
+slider.addEventListener("input", syncSliderValue);
 ```
 
 ## Limitations
@@ -159,8 +154,7 @@ When `progress()` is unsupported, compute `--slider-progress` with `calc()`:
 @supports not (opacity: progress(1, 0, 100)) {
   input[type="range"] {
     --slider-progress: calc(
-      (var(--control-value) - var(--attr-min)) /
-      (var(--attr-max) - var(--attr-min)) * 100%
+      (var(--control-value) - var(--attr-min)) / (var(--attr-max) - var(--attr-min)) * 100%
     );
   }
 }
@@ -174,9 +168,8 @@ When typed `attr()` is unsupported, sync `--attr-min` and `--attr-max` from the 
 
 ```js
 function syncSliderValue() {
-  slider.style.setProperty('--attr-min', slider.min || 0);
-  slider.style.setProperty('--attr-max', slider.max || 100);
-  slider.style.setProperty('--control-value', slider.value);
+  slider.style.setProperty("--attr-min", slider.min || 0);
+  slider.style.setProperty("--attr-max", slider.max || 100);
+  slider.style.setProperty("--control-value", slider.value);
 }
 ```
-

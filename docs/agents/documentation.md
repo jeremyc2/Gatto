@@ -5,19 +5,19 @@
 Keep each instruction in its owning guide; other pages link to it. Use direct,
 concrete language and measured claims in the README. Keep the header illustration.
 
-| Document | Owns |
-| --- | --- |
-| [README](../../README.md) | macOS product introduction, download, measured release sizes, key capabilities, URL action table, links to project Markdown documents. |
-| [Setup](../SETUP.md) | Installation, checksum verification, GitHub CLI login, organization and pins, initial preferences. |
-| [Walkthrough](../WALKTHROUGH.md) | Upload/copy workflows, batches and retries, preview controls, shortcuts, automation requirements, window behavior. |
-| [Support](../../SUPPORT.md) | Troubleshooting, diagnostics, local file paths, reset, uninstall, recovery. |
-| [Contributing](../../CONTRIBUTING.md) | Developer tools, source builds, checks, dependency compatibility, screenshot regeneration. |
-| [Website](../../web/README.md) | Website setup and essential development commands. |
-| [Website design](../../web/DESIGN-SYSTEM.md) | Website appearance, interaction, animation, asset implementation and visual verification. |
-| [Architecture](../ARCHITECTURE.md) | Modules, state, data flow, integration and security boundaries. |
-| [Releasing](../RELEASING.md) | Signing setup, packaging, publication, verification, size measurement method. |
-| [Security](../../SECURITY.md) | Authentication and data handling policy, dependency audits, vulnerability reporting. |
-| [Rooftops](../EASTER_EGG.md) | Game controls and scorecards. |
+| Document                                     | Owns                                                                                                                                   |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| [README](../../README.md)                    | macOS product introduction, download, measured release sizes, key capabilities, URL action table, links to project Markdown documents. |
+| [Setup](../SETUP.md)                         | Installation, checksum verification, GitHub CLI login, organization and pins, initial preferences.                                     |
+| [Walkthrough](../WALKTHROUGH.md)             | Upload/copy workflows, batches and retries, preview controls, shortcuts, automation requirements, window behavior.                     |
+| [Support](../../SUPPORT.md)                  | Troubleshooting, diagnostics, local file paths, reset, uninstall, recovery.                                                            |
+| [Contributing](../../CONTRIBUTING.md)        | Developer tools, source builds, checks, dependency compatibility, screenshot regeneration.                                             |
+| [Website](../../web/README.md)               | Website setup and essential development commands.                                                                                      |
+| [Website design](../../web/DESIGN-SYSTEM.md) | Website appearance, interaction, animation, asset implementation and visual verification.                                              |
+| [Architecture](../ARCHITECTURE.md)           | Modules, state, data flow, integration and security boundaries.                                                                        |
+| [Releasing](../RELEASING.md)                 | Signing setup, packaging, publication, verification, size measurement method.                                                          |
+| [Security](../../SECURITY.md)                | Authentication and data handling policy, dependency audits, vulnerability reporting.                                                   |
+| [Rooftops](../EASTER_EGG.md)                 | Game controls and scorecards.                                                                                                          |
 
 Changelogs, ADRs, research notes, and artwork prompts record dated history or
 rationale. Preserve their evidence and dates; link to current instructions when

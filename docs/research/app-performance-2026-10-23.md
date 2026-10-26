@@ -46,15 +46,15 @@ Times are milliseconds; memory is decimal MB. Raw values are preserved in
 [baseline.json](app-performance-2026-10-23/baseline.json) and
 [final.json](app-performance-2026-10-23/final.json).
 
-| Scenario | Baseline operation | Final operation | Baseline process CPU | Final process CPU | Baseline peak RSS | Final peak RSS |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Import | 32.53 | 30.24 | 330 | 310 | 47.01 | 46.86 |
-| Open editor | 33.03 | 30.20 | 320 | 290 | 80.23 | 46.87 |
-| Reopen session × 100 | 0.0044 | 0.0035 | 90 | 80 | 80.20 | 46.89 |
-| Export 24 annotations | 904.26 | 158.49 | 7,810 | 1,830 | 120.68 | 119.62 |
-| Pixelation × 100 updates | 7.36 | 7.35 | 120 | 120 | 59.08 | 58.80 |
-| Prepare annotation preview | 10.79 | 9.84 | 150 | 140 | 65.11 | 64.11 |
-| Create comparison | 234.06 | 195.38 | 2,210 | 1,890 | 187.76 | 179.54 |
+| Scenario                   | Baseline operation | Final operation | Baseline process CPU | Final process CPU | Baseline peak RSS | Final peak RSS |
+| -------------------------- | -----------------: | --------------: | -------------------: | ----------------: | ----------------: | -------------: |
+| Import                     |              32.53 |           30.24 |                  330 |               310 |             47.01 |          46.86 |
+| Open editor                |              33.03 |           30.20 |                  320 |               290 |             80.23 |          46.87 |
+| Reopen session × 100       |             0.0044 |          0.0035 |                   90 |                80 |             80.20 |          46.89 |
+| Export 24 annotations      |             904.26 |          158.49 |                7,810 |             1,830 |            120.68 |         119.62 |
+| Pixelation × 100 updates   |               7.36 |            7.35 |                  120 |               120 |             59.08 |          58.80 |
+| Prepare annotation preview |              10.79 |            9.84 |                  150 |               140 |             65.11 |          64.11 |
+| Create comparison          |             234.06 |          195.38 |                2,210 |             1,890 |            187.76 |         179.54 |
 
 The substantial changes are about 82% lower export latency, 77% less CPU time
 in its repeated process scenario, and 42% less peak memory in initial editor
@@ -97,9 +97,9 @@ describes code generation units, symbol stripping, and optimization tradeoffs.
 
 `cargo build --release --locked --bin gatto` on the same machine/toolchain:
 
-| Artifact | File bytes |
-| --- | ---: |
-| Baseline arm64 executable | 28,444,256 |
+| Artifact                   | File bytes |
+| -------------------------- | ---------: |
+| Baseline arm64 executable  | 28,444,256 |
 | Optimized arm64 executable | 26,947,888 |
 
 Reduction: 1,496,368 bytes, about 5.3%. These are local stripped executables,

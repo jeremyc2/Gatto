@@ -10,7 +10,7 @@ MANDATORY: To help prevent a "flash of un-themed content" (FOUC), place a `<meta
 
 ```html
 <!-- MANDATORY: Declare support for both light and dark themes -->
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light dark" />
 ```
 
 ### 2. Apply page-wide color scheme to CSS :root or html
@@ -62,7 +62,6 @@ Even when overriding the system default, it can be useful to use the `prefers-co
 
 For example, use a slightly dimmer light theme when the system setting is `dark`, or a more contrasting dark theme when the system setting is `light`, so the page is not visually overpowered by the surrounding UI.
 
-
 ## Fine-grained browser UI customization
 
 Setting `color-scheme` already adapts browser UI to the used color scheme, but this will use OS defaults and/or system colors that may not perfectly align with the website design.
@@ -106,6 +105,7 @@ You can use `scrollbar-color` together with `light-dark()` to set custom scrollb
 ### Further customization
 
 Most browser UI exposes pseudo-elements to fully customize its appearance, such as:
+
 - `::placeholder`
 - `::spelling-error`
 - `::grammar-error`
@@ -182,7 +182,7 @@ To adapt to the user's preferences in older browsers, use `prefers-color-scheme`
 }
 
 button.primary {
-	background-color: var(--color-brand);
+  background-color: var(--color-brand);
 }
 ```
 
@@ -217,7 +217,8 @@ For browsers that support `color-scheme` but not yet `light-dark()`, light and d
   accent-color: var(--accent-color);
 }
 
-pre, code {
+pre,
+code {
   color-scheme: dark;
 
   /* **Mandatory**: any inherited color properties must be set again, even if to the same design tokens */
@@ -249,7 +250,10 @@ Define the switch once on `:root`. Every use site then only needs both images in
 }
 
 .hero {
-  background-image: image-set(url(hero-light.png) var(--light-type), url(hero-dark.png) var(--dark-type));
+  background-image: image-set(
+    url(hero-light.png) var(--light-type),
+    url(hero-dark.png) var(--dark-type)
+  );
 
   @supports (background-image: light-dark(url("a"), url("b"))) {
     background-image: light-dark(url(hero-light.png), url(hero-dark.png));

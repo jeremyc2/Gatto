@@ -6,12 +6,12 @@ Received October 16, 2026, from the user's Identity postcards export, version 0.
 
 Visual settings: practical message; artwork hidden.
 
-| Question | Choice | Confidence | Reason |
-| --- | --- | --- | --- |
-| P1 — Which world would you want to spend more time with? | A shared discovery | Medium — leaning this way | “This font just feels more cute.” |
-| P2 — Which promise feels most like the app you want to present? | Practical promise | Medium — leaning this way | Not recorded. |
-| P3 — Where does the cuteness land? | Too babyish | Not recorded | Not recorded. |
-| P4 — Which ingredient should change first? | Character design | Not recorded | Not recorded. |
+| Question                                                        | Choice             | Confidence                | Reason                            |
+| --------------------------------------------------------------- | ------------------ | ------------------------- | --------------------------------- |
+| P1 — Which world would you want to spend more time with?        | A shared discovery | Medium — leaning this way | “This font just feels more cute.” |
+| P2 — Which promise feels most like the app you want to present? | Practical promise  | Medium — leaning this way | Not recorded.                     |
+| P3 — Where does the cuteness land?                              | Too babyish        | Not recorded              | Not recorded.                     |
+| P4 — Which ingredient should change first?                      | Character design   | Not recorded              | Not recorded.                     |
 
 Additional note: “The \"by the way\" font is very hard to read.”
 

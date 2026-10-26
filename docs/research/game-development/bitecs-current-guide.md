@@ -49,55 +49,50 @@ Do not assume archetype-style storage compaction. Queries maintain dense lists o
 Install in a new application with `bun add bitecs@0.4.0`. Keep the lockfile. The package supplies TypeScript declarations and separate core and serialization entry points. The following complete, headless TypeScript example uses world-local stores and can run under Bun. [Installation](https://bitecs.dev/docs/installation), [package exports](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/package.json).
 
 ```ts
-import {
-  addComponents,
-  addEntity,
-  createWorld,
-  query,
-} from 'bitecs'
+import { addComponents, addEntity, createWorld, query } from "bitecs";
 
 function createGame() {
   const components = {
     Position: { x: [] as number[], y: [] as number[] },
     Velocity: { x: [] as number[], y: [] as number[] },
     Player: {},
-  }
+  };
   return createWorld({
     components,
     time: { stepSeconds: 1 / 60, tick: 0 },
-  })
+  });
 }
 
-type GameWorld = ReturnType<typeof createGame>
+type GameWorld = ReturnType<typeof createGame>;
 
 function spawnPlayer(world: GameWorld, x: number, y: number) {
-  const { Position, Velocity, Player } = world.components
-  const eid = addEntity(world)
+  const { Position, Velocity, Player } = world.components;
+  const eid = addEntity(world);
   // Initialize owned backing data before membership observers can run.
-  Position.x[eid] = x
-  Position.y[eid] = y
-  Velocity.x[eid] = 3
-  Velocity.y[eid] = 0
-  addComponents(world, eid, Position, Velocity, Player)
-  return eid
+  Position.x[eid] = x;
+  Position.y[eid] = y;
+  Velocity.x[eid] = 3;
+  Velocity.y[eid] = 0;
+  addComponents(world, eid, Position, Velocity, Player);
+  return eid;
 }
 
 function movementSystem(world: GameWorld) {
-  const { Position, Velocity } = world.components
-  const dt = world.time.stepSeconds
+  const { Position, Velocity } = world.components;
+  const dt = world.time.stepSeconds;
   for (const eid of query(world, [Position, Velocity])) {
-    Position.x[eid] += Velocity.x[eid] * dt
-    Position.y[eid] += Velocity.y[eid] * dt
+    Position.x[eid] += Velocity.x[eid] * dt;
+    Position.y[eid] += Velocity.y[eid] * dt;
   }
 }
 
-const game = createGame()
-const player = spawnPlayer(game, 5, 8)
+const game = createGame();
+const player = spawnPlayer(game, 5, 8);
 for (let tick = 0; tick < 60; tick++) {
-  movementSystem(game)
-  game.time.tick++
+  movementSystem(game);
+  game.time.tick++;
 }
-console.log(game.components.Position.x[player]) // Approximately 8
+console.log(game.components.Position.x[player]); // Approximately 8
 ```
 
 This factory also solves a practical ownership problem: two tests or two game sessions obtain different component objects and arrays. Context inference gives systems a concrete world type. A full `World` annotation would discard useful context information unless given the corresponding context type. The source defines `World<T>` from the supplied context rather than declaring a mandatory world class. [World types and creation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/World.ts).
@@ -113,16 +108,16 @@ World membership state is separate, but component values are only isolated if th
 Complete example of the latter:
 
 ```ts
-import { addEntity, createEntityIndex, createWorld } from 'bitecs'
+import { addEntity, createEntityIndex, createWorld } from "bitecs";
 
-const ids = createEntityIndex()
-const Position = { x: [] as number[], y: [] as number[] }
-const firstMatch = createWorld({ components: { Position } }, ids)
-const secondMatch = createWorld({ components: { Position } }, ids)
+const ids = createEntityIndex();
+const Position = { x: [] as number[], y: [] as number[] };
+const firstMatch = createWorld({ components: { Position } }, ids);
+const secondMatch = createWorld({ components: { Position } }, ids);
 
-const a = addEntity(firstMatch)
-const b = addEntity(secondMatch)
-console.assert(a !== b)
+const a = addEntity(firstMatch);
+const b = addEntity(secondMatch);
+console.assert(a !== b);
 ```
 
 **Recommendation:** use distinct stores and distinct indices for independent matches, editor previews, replay simulations, and tests. A shared index is advanced shared ownership: in 0.4.0 `entityExists` checks index liveness, rather than independent membership in each world. Do not interpret a successful liveness check as evidence that a handle belongs to a particular session. Keep game/session identity at your API boundary. [Entity implementation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Entity.ts).
@@ -139,13 +134,13 @@ Component identity is reference identity. Reconstructing `{}` for a tag or recon
 
 ### Choosing a store
 
-| Storage | Good fit | Cost or invariant |
-| --- | --- | --- |
-| SoA regular arrays | Initial implementation, flexible numeric fields, growing games | Initialize each field; sparse slots and high IDs need attention |
-| SoA typed arrays | Hot numeric simulation, fixed budgets, GPU/worker boundaries | Fixed length and numeric precision/range; explicit capacity policy |
-| AoS object arrays | Inventories, dialogue, infrequent nested data | Allocations, object lifetime, and serializer schema need deliberate ownership |
-| Tags | Membership/state that materially changes which systems should run | Membership changes maintain queries; toggling thousands each frame has a cost |
-| Maps/custom stores | External objects and irregular data | Your lifetime/access rules; raw serializers do not automatically understand them |
+| Storage            | Good fit                                                          | Cost or invariant                                                                |
+| ------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| SoA regular arrays | Initial implementation, flexible numeric fields, growing games    | Initialize each field; sparse slots and high IDs need attention                  |
+| SoA typed arrays   | Hot numeric simulation, fixed budgets, GPU/worker boundaries      | Fixed length and numeric precision/range; explicit capacity policy               |
+| AoS object arrays  | Inventories, dialogue, infrequent nested data                     | Allocations, object lifetime, and serializer schema need deliberate ownership    |
+| Tags               | Membership/state that materially changes which systems should run | Membership changes maintain queries; toggling thousands each frame has a cost    |
+| Maps/custom stores | External objects and irregular data                               | Your lifetime/access rules; raw serializers do not automatically understand them |
 
 These are design recommendations grounded in the library's agnostic storage model, not universal speed rankings. JavaScript engine, entity distribution, access pattern, and workload determine the result. [Introduction and storage discussion](https://bitecs.dev/docs/introduction), [storage helper source](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/utils/soa.ts).
 
@@ -153,11 +148,11 @@ A store factory for a fixed budget can be this small:
 
 ```ts
 // Complete store definition; not a world-capacity setting.
-const maxLiveSlot = 50_000
+const maxLiveSlot = 50_000;
 const Position = {
   x: new Float32Array(maxLiveSlot + 1),
   y: new Float32Array(maxLiveSlot + 1),
-}
+};
 ```
 
 The extra slot accounts for IDs starting at 1. The library does not automatically cap entity creation to that length. Typed-array out-of-range writes do not expand storage. Enforce an allocation policy before writing, and remember that “maximum simultaneously alive” and “largest handle used as an index” can differ. Float32 changes numeric precision; unsigned integer arrays wrap values to their representable range. [Entity allocation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/EntityIndex.ts), [component storage examples](https://bitecs.dev/docs/component).
@@ -173,14 +168,14 @@ Removing membership or an entity does **not** erase your user-owned data. Initia
 Continuation of the foundation example:
 
 ```ts
-import { Not, Or, query } from 'bitecs'
+import { Not, Or, query } from "bitecs";
 
-const { Position, Velocity, Player } = game.components
-const Frozen = {}
-const AIControlled = {}
+const { Position, Velocity, Player } = game.components;
+const Frozen = {};
+const AIControlled = {};
 
-const movable = query(game, [Position, Velocity, Not(Frozen)])
-const controlled = query(game, [Position, Or(Player, AIControlled)])
+const movable = query(game, [Position, Velocity, Not(Frozen)]);
+const controlled = query(game, [Position, Or(Player, AIControlled)]);
 // Numeric filters remain ordinary application logic.
 for (const eid of movable) {
   if (Position.y[eid] < -100) {
@@ -196,11 +191,11 @@ A nested normal query can commit pending removals and mutate the outer result du
 Pattern sketch, assuming these stores belong to one world:
 
 ```ts
-import { entityExists, isNested, query } from 'bitecs'
+import { entityExists, isNested, query } from "bitecs";
 
 for (const source of query(world, [Position, Sensor])) {
   for (const target of query(world, [Position, Detectable], isNested)) {
-    if (!entityExists(world, target)) continue
+    if (!entityExists(world, target)) continue;
     // Sense now; queue structural consequences for a later phase.
   }
 }
@@ -221,13 +216,11 @@ Ordinary functions may return `void`; the exported `pipe` helper composes return
 Continuation of the foundation example:
 
 ```ts
-const simulationSystems: Array<(world: GameWorld) => void> = [
-  movementSystem,
-]
+const simulationSystems: Array<(world: GameWorld) => void> = [movementSystem];
 
 function stepGame(world: GameWorld) {
-  for (const system of simulationSystems) system(world)
-  world.time.tick++
+  for (const system of simulationSystems) system(world);
+  world.time.tick++;
 }
 ```
 
@@ -236,24 +229,24 @@ Use seconds consistently. For replayable simulation, drive `stepGame` with fixed
 Browser integration sketch, using the existing `game` and `stepGame`:
 
 ```ts
-const fixedSeconds = game.time.stepSeconds
-let previousMs = performance.now()
-let remainder = 0
+const fixedSeconds = game.time.stepSeconds;
+let previousMs = performance.now();
+let remainder = 0;
 
 function frame(nowMs: number) {
-  remainder += Math.min((nowMs - previousMs) / 1000, 0.1)
-  previousMs = nowMs
-  let steps = 0
+  remainder += Math.min((nowMs - previousMs) / 1000, 0.1);
+  previousMs = nowMs;
+  let steps = 0;
   while (remainder >= fixedSeconds && steps < 5) {
-    stepGame(game)
-    remainder -= fixedSeconds
-    steps++
+    stepGame(game);
+    remainder -= fixedSeconds;
+    steps++;
   }
-  if (steps === 5) remainder = Math.min(remainder, fixedSeconds)
+  if (steps === 5) remainder = Math.min(remainder, fixedSeconds);
   // Render with interpolation factor remainder / fixedSeconds.
-  requestAnimationFrame(frame)
+  requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame)
+requestAnimationFrame(frame);
 ```
 
 The clamp and step limit are deliberate game-time policies; choose them for your game's requirements. For an authoritative simulation, a server must make a different overload decision than an ornamental browser animation. Under Bun, a headless loop may sleep between ticks, but a timer's precision does not guarantee a simulation's deadline.
@@ -263,29 +256,28 @@ The clamp and step limit are deliberate game-time policies; choose them for your
 Removal compaction and ID reuse are different events: an ID can be recycled immediately even while an older query view still contains it. A practical lifecycle phase finishes all active iterations, processes removals, commits them, then processes spawns. Capture any death-effect data before removal. The following continuation of the foundation example assumes commands were collected during the current tick and no other code allocates entities before this phase:
 
 ```ts
-import { commitRemovals, entityExists, removeEntity } from 'bitecs'
+import { commitRemovals, entityExists, removeEntity } from "bitecs";
 
 type LifecycleCommand =
-  | { type: 'despawn'; eid: number }
-  | { type: 'spawnPlayer'; x: number; y: number }
+  { type: "despawn"; eid: number } | { type: "spawnPlayer"; x: number; y: number };
 
 function applyLifecycle(world: GameWorld, commands: LifecycleCommand[]) {
-  const removed = new Set<number>()
+  const removed = new Set<number>();
   for (const command of commands) {
-    if (command.type !== 'despawn' || removed.has(command.eid)) continue
+    if (command.type !== "despawn" || removed.has(command.eid)) continue;
     if (entityExists(world, command.eid)) {
       // Release external resources and capture effects before this removal.
-      removeEntity(world, command.eid)
-      removed.add(command.eid)
+      removeEntity(world, command.eid);
+      removed.add(command.eid);
     }
   }
-  commitRemovals(world)
+  commitRemovals(world);
   for (const command of commands) {
-    if (command.type === 'spawnPlayer') {
-      spawnPlayer(world, command.x, command.y)
+    if (command.type === "spawnPlayer") {
+      spawnPlayer(world, command.x, command.y);
     }
   }
-  commands.length = 0
+  commands.length = 0;
 }
 ```
 
@@ -299,28 +291,34 @@ Complete example showing the explicit setter/getter contract:
 
 ```ts
 import {
-  addComponent, addEntity, createWorld, getComponent,
-  observe, onGet, onSet, set, setComponent,
-} from 'bitecs'
+  addComponent,
+  addEntity,
+  createWorld,
+  getComponent,
+  observe,
+  onGet,
+  onSet,
+  set,
+  setComponent,
+} from "bitecs";
 
-const world = createWorld()
-const Shield = { points: [] as number[] }
-type ShieldInput = { points: number }
+const world = createWorld();
+const Shield = { points: [] as number[] };
+type ShieldInput = { points: number };
 
-const stopSet = observe(world, onSet(Shield),
-  (eid, value: ShieldInput) => {
-    Shield.points[eid] = Math.max(0, value.points)
-  })
-const stopGet = observe(world, onGet(Shield), eid => ({
+const stopSet = observe(world, onSet(Shield), (eid, value: ShieldInput) => {
+  Shield.points[eid] = Math.max(0, value.points);
+});
+const stopGet = observe(world, onGet(Shield), (eid) => ({
   points: Shield.points[eid],
-}))
+}));
 
-const hero = addEntity(world)
-addComponent(world, hero, set(Shield, { points: 30 }))
-setComponent(world, hero, Shield, { points: 12 })
-console.log(getComponent(world, hero, Shield)) // { points: 12 }
-stopGet()
-stopSet()
+const hero = addEntity(world);
+addComponent(world, hero, set(Shield, { points: 30 }));
+setComponent(world, hero, Shield, { points: 12 });
+console.log(getComponent(world, hero, Shield)); // { points: 12 }
+stopGet();
+stopSet();
 ```
 
 `set` packages a reference and payload; the callback writes the storage. It does not infer how to update any arbitrary custom store. Likewise, `getComponent` does not automatically reconstruct a row from SoA. With a present registered component and no getter observer, the inspected implementation returns an empty object. Getter observers are aggregated by shallow-merging returned objects; primitive callback returns do not create a scalar getter contract. Direct array writes bypass validation and notifications, so define which pathways a feature uses. Core component/payload typing is permissive; typed feature functions such as `setShield(world, eid, input)` can enforce the public contract. [Component data access](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Component.ts), [observable aggregation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/utils/Observer.ts).
@@ -330,17 +328,17 @@ An important ordering detail: a newly added component triggers membership observ
 Callbacks run synchronously inside ECS operations. Structural mutations inside callbacks can cause re-entrancy and hidden order dependencies. Queue effects and drain at a chosen phase; capture values needed after removal, because a queued numeric handle can be recycled. The following continuation uses a queue for external effects, not deferred mutation of a stale handle:
 
 ```ts
-import { observe, onRemove } from 'bitecs'
+import { observe, onRemove } from "bitecs";
 
-const effects: Array<{ x: number; y: number }> = []
-const stopEffects = observe(world, onRemove(Shield), eid => {
+const effects: Array<{ x: number; y: number }> = [];
+const stopEffects = observe(world, onRemove(Shield), (eid) => {
   // Capture any required values now, rather than retaining eid forever.
-  effects.push({ x: 0, y: 0 })
-})
+  effects.push({ x: 0, y: 0 });
+});
 
 function drainEffects(emit: (x: number, y: number) => void) {
-  for (const effect of effects) emit(effect.x, effect.y)
-  effects.length = 0
+  for (const effect of effects) emit(effect.x, effect.y);
+  effects.length = 0;
 }
 // Call stopEffects() when this integration is disposed.
 ```
@@ -355,37 +353,42 @@ Complete example:
 
 ```ts
 import {
-  addComponent, addEntity, createRelation, createWorld,
-  getRelationTargets, makeExclusive, query, Wildcard, withStore,
-} from 'bitecs'
+  addComponent,
+  addEntity,
+  createRelation,
+  createWorld,
+  getRelationTargets,
+  makeExclusive,
+  query,
+  Wildcard,
+  withStore,
+} from "bitecs";
 
-const world = createWorld()
-const Equipped = createRelation(makeExclusive)
-const Owns = createRelation(
-  withStore(() => ({ quantity: [] as number[] })),
-)
-const hero = addEntity(world)
-const bow = addEntity(world)
-const arrows = addEntity(world)
+const world = createWorld();
+const Equipped = createRelation(makeExclusive);
+const Owns = createRelation(withStore(() => ({ quantity: [] as number[] })));
+const hero = addEntity(world);
+const bow = addEntity(world);
+const arrows = addEntity(world);
 
-addComponent(world, hero, Equipped(bow))
-addComponent(world, hero, Owns(arrows))
-Owns(arrows).quantity[hero] = 12
+addComponent(world, hero, Equipped(bow));
+addComponent(world, hero, Owns(arrows));
+Owns(arrows).quantity[hero] = 12;
 
-const bowUsers = query(world, [Equipped(bow)])
-const equippedSubjects = query(world, [Equipped(Wildcard)])
-const equippedTargets = query(world, [Wildcard(Equipped)])
-const ownedItems = getRelationTargets(world, hero, Owns)
+const bowUsers = query(world, [Equipped(bow)]);
+const equippedSubjects = query(world, [Equipped(Wildcard)]);
+const equippedTargets = query(world, [Wildcard(Equipped)]);
+const ownedItems = getRelationTargets(world, hero, Owns);
 ```
 
 `Relation('*')` and `Relation(Wildcard)` match subjects having any target. `Wildcard(Relation)` selects targets participating in that relation. `Wildcard(targetEid)` selects subjects pointing at a target across relation types. `Pair(relation, target)` is an alternative spelling of `relation(target)`. [Wildcard behavior](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Relation.ts), [pair bookkeeping](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Component.ts).
 
-| Relation option | Meaning | Suggested application |
-| --- | --- | --- |
-| `withStore(factory)` / `store` | A distinct store for each target pair | Quantity held, relationship weight, equipped slot |
-| `makeExclusive` / `exclusive` | A subject has at most one target of this relation | Current target, parent, selected weapon |
-| `withAutoRemoveSubject` / `autoRemoveSubject` | Delete subjects when the target is deleted | Child effects with an owner's lifetime |
-| `withOnTargetRemoved(callback)` / `onTargetRemoved` | Callback when a linked target disappears | Queue domain-specific cleanup or replacement |
+| Relation option                                     | Meaning                                           | Suggested application                             |
+| --------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| `withStore(factory)` / `store`                      | A distinct store for each target pair             | Quantity held, relationship weight, equipped slot |
+| `makeExclusive` / `exclusive`                       | A subject has at most one target of this relation | Current target, parent, selected weapon           |
+| `withAutoRemoveSubject` / `autoRemoveSubject`       | Delete subjects when the target is deleted        | Child effects with an owner's lifetime            |
+| `withOnTargetRemoved(callback)` / `onTargetRemoved` | Callback when a linked target disappears          | Queue domain-specific cleanup or replacement      |
 
 These can be supplied through modifiers or a single options object. Configure relations before creating pairs. In 0.4.0, the target-removal callback's exported TypeScript type disagrees with its invocation; use an isolated, verified adapter before depending on this feature. [Relation configuration](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Relation.ts), [target-removal call site](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Entity.ts).
 
@@ -399,24 +402,30 @@ Complete small hierarchy example:
 
 ```ts
 import {
-  addComponent, addEntity, createRelation, createWorld,
-  getHierarchyDepth, Hierarchy, makeExclusive, query,
-} from 'bitecs'
+  addComponent,
+  addEntity,
+  createRelation,
+  createWorld,
+  getHierarchyDepth,
+  Hierarchy,
+  makeExclusive,
+  query,
+} from "bitecs";
 
-const world = createWorld()
-const ChildOf = createRelation(makeExclusive)
-const Transform = { localX: [] as number[], worldX: [] as number[] }
-const root = addEntity(world)
-const child = addEntity(world)
+const world = createWorld();
+const ChildOf = createRelation(makeExclusive);
+const Transform = { localX: [] as number[], worldX: [] as number[] };
+const root = addEntity(world);
+const child = addEntity(world);
 for (const eid of [root, child]) {
-  addComponent(world, eid, Transform)
-  Transform.localX[eid] = eid === root ? 10 : 2
-  Transform.worldX[eid] = 0
+  addComponent(world, eid, Transform);
+  Transform.localX[eid] = eid === root ? 10 : 2;
+  Transform.worldX[eid] = 0;
 }
-addComponent(world, child, ChildOf(root))
+addComponent(world, child, ChildOf(root));
 
-const ordered = query(world, [Transform, Hierarchy(ChildOf)])
-console.log([...ordered], getHierarchyDepth(world, child, ChildOf))
+const ordered = query(world, [Transform, Hierarchy(ChildOf)]);
+console.log([...ordered], getHierarchyDepth(world, child, ChildOf));
 ```
 
 Hierarchy support has important 0.4.0 boundaries. A supplied numeric `depth` selects exactly that depth, rather than a traversal depth limit; the depth-specific code path ignores additional component filters. Hierarchy calls also take a different removal-commit path, and cached ordering/invalidation deserves explicit tests for deletion, reparenting, and new members. A published-package probe reproduced stale descendant depths after attaching one existing multi-level root beneath another tree, matching [issue #214](https://github.com/NateTheGreatt/bitECS/issues/214). Keep authoritative transform propagation behind a small module so an application-owned traversal can replace it if required. [Hierarchy query dispatch](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Query.ts), [hierarchy caches](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Hierarchy.ts).
@@ -429,28 +438,33 @@ Complete copy-at-spawn example:
 
 ```ts
 import {
-  addComponent, addEntity, addPrefab, createWorld,
-  IsA, observe, onGet, onSet, set,
-} from 'bitecs'
+  addComponent,
+  addEntity,
+  addPrefab,
+  createWorld,
+  IsA,
+  observe,
+  onGet,
+  onSet,
+  set,
+} from "bitecs";
 
-const world = createWorld()
-const Stamina = { current: [] as number[], maximum: [] as number[] }
-observe(world, onGet(Stamina), eid => ({
+const world = createWorld();
+const Stamina = { current: [] as number[], maximum: [] as number[] };
+observe(world, onGet(Stamina), (eid) => ({
   current: Stamina.current[eid],
   maximum: Stamina.maximum[eid],
-}))
-observe(world, onSet(Stamina),
-  (eid, value: { current: number; maximum: number }) => {
-    Stamina.current[eid] = value.current
-    Stamina.maximum[eid] = value.maximum
-  })
+}));
+observe(world, onSet(Stamina), (eid, value: { current: number; maximum: number }) => {
+  Stamina.current[eid] = value.current;
+  Stamina.maximum[eid] = value.maximum;
+});
 
-const scoutTemplate = addPrefab(world)
-addComponent(world, scoutTemplate,
-  set(Stamina, { current: 75, maximum: 75 }))
-const scout = addEntity(world)
-addComponent(world, scout, IsA(scoutTemplate))
-console.assert(Stamina.current[scout] === 75)
+const scoutTemplate = addPrefab(world);
+addComponent(world, scoutTemplate, set(Stamina, { current: 75, maximum: 75 }));
+const scout = addEntity(world);
+addComponent(world, scout, IsA(scoutTemplate));
+console.assert(Stamina.current[scout] === 75);
 ```
 
 The inspected implementation copies inherited data via getters/setters when `IsA` is added. It does not establish automatic live linkage of primitive values. The site's example gallery claims later template changes affect all instances; do not rely on that without implementing such behavior explicitly. Shallow object-returning getters/setters can accidentally share nested arrays; clone mutable inventory or use immutable asset/config references deliberately. [Recursive inheritance](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Component.ts), [official prefab example](https://bitecs.dev/examples/#prefabs).
@@ -461,12 +475,12 @@ For a growing game, ordinary typed spawn functions plus immutable authored data 
 
 Import serializers from `bitecs/serialization`, separately from core. Choose a layer based on what must be transferred:
 
-| Layer | Captures | What the application still owns |
-| --- | --- | --- |
-| SoA | Supported component field values for selected IDs | Membership, removed slots, packet schema, ID mapping |
-| AoS | Values in schema-described row/object storage | Same responsibilities; schema must describe object fields |
-| Observer | Tagged-entity/component lifecycle operations; relation operations/data in supported forms | Regular value updates, initial bootstrap, transport reliability |
-| Snapshot | Selected world structure plus supported values | Replacement policy, assets/resources, versioned save format, migration |
+| Layer    | Captures                                                                                  | What the application still owns                                        |
+| -------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| SoA      | Supported component field values for selected IDs                                         | Membership, removed slots, packet schema, ID mapping                   |
+| AoS      | Values in schema-described row/object storage                                             | Same responsibilities; schema must describe object fields              |
+| Observer | Tagged-entity/component lifecycle operations; relation operations/data in supported forms | Regular value updates, initial bootstrap, transport reliability        |
+| Snapshot | Selected world structure plus supported values                                            | Replacement policy, assets/resources, versioned save format, migration |
 
 The official guide describes these layers. Exact contracts and constraints below are from the published serializer source; they matter more than the phrase “full world state.” [Serialization guide](https://bitecs.dev/docs/serialization), [serializer exports](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/serialization/index.ts).
 
@@ -478,35 +492,43 @@ Complete standalone raw-store example, demonstrating different source/destinatio
 
 ```ts
 import {
-  array, createSoADeserializer, createSoASerializer,
-  f32, ref, str, u16,
-} from 'bitecs/serialization'
+  array,
+  createSoADeserializer,
+  createSoASerializer,
+  f32,
+  ref,
+  str,
+  u16,
+} from "bitecs/serialization";
 
 const outgoing = {
   x: f32(),
   owner: ref(),
   title: str(),
   items: array(u16),
-}
+};
 const incoming = {
   x: f32(),
   owner: ref(),
   title: str(),
   items: array(u16),
-}
-outgoing.x[1] = 1.25
-outgoing.owner[1] = 2
-outgoing.title[1] = 'Courier'
-outgoing.items[1] = [10, 11]
+};
+outgoing.x[1] = 1.25;
+outgoing.owner[1] = 2;
+outgoing.title[1] = "Courier";
+outgoing.items[1] = [10, 11];
 
 const encode = createSoASerializer([outgoing], {
   buffer: new ArrayBuffer(4096),
-})
-const decode = createSoADeserializer([incoming])
-const map = new Map([[1, 101], [2, 102]])
-decode(encode([1]), map)
-console.assert(incoming.x[101] === 1.25)
-console.assert(incoming.owner[101] === 102)
+});
+const decode = createSoADeserializer([incoming]);
+const map = new Map([
+  [1, 101],
+  [2, 102],
+]);
+decode(encode([1]), map);
+console.assert(incoming.x[101] === 1.25);
+console.assert(incoming.owner[101] === 102);
 ```
 
 Pass the same component/schema ordering to encoder and decoder. The packet contains numeric component/field indices, not a self-describing TypeScript schema. Changing component order or fields can change interpretation. Wrap the payload with an application protocol/save-format version and validate compatibility before decoding. Keep serializable schemas in one module shared by server/client or writer/reader. [SoA wire-format implementation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/serialization/SoASerializer.ts).
@@ -522,11 +544,11 @@ const encodeDelta = createSoASerializer([outgoing], {
   diff: true,
   epsilon: 0.001,
   buffer: new ArrayBuffer(4096),
-})
-const decodeDelta = createSoADeserializer([incoming], { diff: true })
-decodeDelta(encodeDelta([1]), map) // Establish this encoder's baseline.
-outgoing.x[1] += 0.5
-decodeDelta(encodeDelta([1]), map)
+});
+const decodeDelta = createSoADeserializer([incoming], { diff: true });
+decodeDelta(encodeDelta([1]), map); // Establish this encoder's baseline.
+outgoing.x[1] += 0.5;
+decodeDelta(encodeDelta([1]), map);
 ```
 
 **Networking recommendation:** an encoder's baseline represents its own send history, not acknowledged receipt at every client. Do not blindly share one stateful diff encoder among independently connected clients. Reliable ordered delivery, per-client baselines, sequence numbers, resynchronization, bootstrap snapshots, and loss policy belong to the application. A newly connected peer needs full baseline state. Restart/rebootstrap appropriately when IDs are recycled. In published 0.4.0, a recycled ID with unchanged values can produce a zero-byte delta because its encoder shadow still belongs to the old occupant; this was reproduced during this research and is tracked in [issue #209](https://github.com/NateTheGreatt/bitECS/issues/209). Proposed reset/removal APIs shown in that issue are **not released APIs** and are intentionally not taught here. Diffs are a compression tool, not a replication protocol.
@@ -542,22 +564,20 @@ The implementation uses 32-bit change masks for SoA fields and AoS component gro
 An array of `{ x, y }` rows is valid core storage, but the AoS serializer needs metadata describing field encodings. `aos` can attach that metadata. Complete example:
 
 ```ts
-import { aos } from 'bitecs'
-import {
-  createAoSDeserializer, createAoSSerializer, f32, u8,
-} from 'bitecs/serialization'
+import { aos } from "bitecs";
+import { createAoSDeserializer, createAoSSerializer, f32, u8 } from "bitecs/serialization";
 
-type Row = { charge: number; tier: number }
-const schema = { charge: f32(), tier: u8() }
-const source = aos<Row, typeof schema>(schema)
-const target = aos<Row, typeof schema>({ charge: f32(), tier: u8() })
-source[1] = { charge: 2.5, tier: 3 }
+type Row = { charge: number; tier: number };
+const schema = { charge: f32(), tier: u8() };
+const source = aos<Row, typeof schema>(schema);
+const target = aos<Row, typeof schema>({ charge: f32(), tier: u8() });
+source[1] = { charge: 2.5, tier: 3 };
 const encode = createAoSSerializer([source], {
   buffer: new ArrayBuffer(1024),
-})
-const decode = createAoSDeserializer([target])
-decode(encode([1]))
-console.assert(target[1].charge === 2.5)
+});
+const decode = createAoSDeserializer([target]);
+decode(encode([1]));
+console.assert(target[1].charge === 2.5);
 ```
 
 ### Structural replication
@@ -567,52 +587,58 @@ Create an observer serializer before the mutations you want to capture. It subsc
 Complete minimal replication example:
 
 ```ts
-import { addComponents, addEntity, createWorld, query, removeEntity } from 'bitecs'
+import { addComponents, addEntity, createWorld, query, removeEntity } from "bitecs";
 import {
-  createObserverDeserializer, createObserverSerializer,
-  createSoADeserializer, createSoASerializer, f32,
-} from 'bitecs/serialization'
+  createObserverDeserializer,
+  createObserverSerializer,
+  createSoADeserializer,
+  createSoASerializer,
+  f32,
+} from "bitecs/serialization";
 
 function createPeer() {
   return {
     world: createWorld(),
     Networked: {},
     Position: { x: f32(), y: f32() },
-  }
+  };
 }
-const server = createPeer()
-const client = createPeer()
-addEntity(client.world) // Local-only entity makes source/local IDs differ.
-const ids = new Map<number, number>()
+const server = createPeer();
+const client = createPeer();
+addEntity(client.world); // Local-only entity makes source/local IDs differ.
+const ids = new Map<number, number>();
 const encodeStructure = createObserverSerializer(
-  server.world, server.Networked, [server.Position],
+  server.world,
+  server.Networked,
+  [server.Position],
   { buffer: new ArrayBuffer(4096) },
-)
+);
 const decodeStructure = createObserverDeserializer(
-  client.world, client.Networked, [client.Position], { idMap: ids },
-)
+  client.world,
+  client.Networked,
+  [client.Position],
+  { idMap: ids },
+);
 const encodeValues = createSoASerializer([server.Position], {
   buffer: new ArrayBuffer(4096),
-})
-const decodeValues = createSoADeserializer([client.Position])
+});
+const decodeValues = createSoADeserializer([client.Position]);
 
-const eid = addEntity(server.world)
-addComponents(server.world, eid, server.Networked, server.Position)
-server.Position.x[eid] = 10
-server.Position.y[eid] = 20
+const eid = addEntity(server.world);
+addComponents(server.world, eid, server.Networked, server.Position);
+server.Position.x[eid] = 10;
+server.Position.y[eid] = 20;
 
-decodeStructure(encodeStructure(), ids)
+decodeStructure(encodeStructure(), ids);
 // The query's public type also permits Uint32Array; the encoder expects an array.
-const selected = Array.from(query(
-  server.world, [server.Networked, server.Position],
-))
-decodeValues(encodeValues(selected), ids)
-const localEid = ids.get(eid)
-if (localEid === undefined) throw new Error('Missing network ID mapping')
-console.assert(localEid !== eid)
-console.assert(client.Position.x[localEid] === 10)
-removeEntity(server.world, eid)
-decodeStructure(encodeStructure(), ids)
+const selected = Array.from(query(server.world, [server.Networked, server.Position]));
+decodeValues(encodeValues(selected), ids);
+const localEid = ids.get(eid);
+if (localEid === undefined) throw new Error("Missing network ID mapping");
+console.assert(localEid !== eid);
+console.assert(client.Position.x[localEid] === 10);
+removeEntity(server.world, eid);
+decodeStructure(encodeStructure(), ids);
 ```
 
 The selected-ID query requires both Networked and Position membership; spawn must also initialize values. The array copy makes the public type boundary explicit; if profiling justifies removing it, isolate a verified conversion/adapter rather than spreading unchecked assertions across gameplay. With multiple heterogeneous components, create per-schema selection groups or explicitly clear removed values and test absent-field semantics: raw value serialization has no world argument and cannot check whether a component is attached. Stale stores are especially hazardous after membership removal. Relation replication also needs focused tests: the 0.4.0 observer implementation tracks wildcard transitions and stores one target per relation index, so arbitrary multi-target updates should not be assumed complete. [Observer relation tracking](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/serialization/ObserverSerializer.ts).
@@ -624,30 +650,26 @@ The selected-ID query requires both Networked and Position membership; spawn mus
 Complete snapshot roundtrip into fresh stores and a fresh destination world:
 
 ```ts
-import { addComponent, addEntity, createWorld, hasComponent } from 'bitecs'
-import {
-  createSnapshotDeserializer, createSnapshotSerializer, f32,
-} from 'bitecs/serialization'
+import { addComponent, addEntity, createWorld, hasComponent } from "bitecs";
+import { createSnapshotDeserializer, createSnapshotSerializer, f32 } from "bitecs/serialization";
 
-const savedWorld = createWorld()
-const savedPosition = { x: f32(), y: f32() }
-const oldEid = addEntity(savedWorld)
-addComponent(savedWorld, oldEid, savedPosition)
-savedPosition.x[oldEid] = 4.5
-savedPosition.y[oldEid] = 9
-const save = createSnapshotSerializer(
-  savedWorld, [savedPosition], new ArrayBuffer(4096),
-)
-const packet = save()
+const savedWorld = createWorld();
+const savedPosition = { x: f32(), y: f32() };
+const oldEid = addEntity(savedWorld);
+addComponent(savedWorld, oldEid, savedPosition);
+savedPosition.x[oldEid] = 4.5;
+savedPosition.y[oldEid] = 9;
+const save = createSnapshotSerializer(savedWorld, [savedPosition], new ArrayBuffer(4096));
+const packet = save();
 
-const loadedWorld = createWorld()
-const loadedPosition = { x: f32(), y: f32() }
-const load = createSnapshotDeserializer(loadedWorld, [loadedPosition])
-const mapping = load(packet)
-const newEid = mapping.get(oldEid)
-if (newEid === undefined) throw new Error('Snapshot omitted the entity')
-console.assert(hasComponent(loadedWorld, newEid, loadedPosition))
-console.assert(loadedPosition.x[newEid] === 4.5)
+const loadedWorld = createWorld();
+const loadedPosition = { x: f32(), y: f32() };
+const load = createSnapshotDeserializer(loadedWorld, [loadedPosition]);
+const mapping = load(packet);
+const newEid = mapping.get(oldEid);
+if (newEid === undefined) throw new Error("Snapshot omitted the entity");
+console.assert(hasComponent(loadedWorld, newEid, loadedPosition));
+console.assert(loadedPosition.x[newEid] === 4.5);
 ```
 
 Create fresh codecs/maps too when starting a replacement load; a persistent decoder map can retain IDs whose destination entities have since been destroyed. Do not confuse a successful first restore with reusable replace-all behavior.
@@ -671,14 +693,10 @@ Do not mutate a shared query set while workers read it. Buffered sparse sets can
 Complete allocation example; the synchronization protocol is intentionally an application responsibility:
 
 ```ts
-const slots = 10_001
-const x = new Float32Array(
-  new SharedArrayBuffer(slots * Float32Array.BYTES_PER_ELEMENT),
-)
-const y = new Float32Array(
-  new SharedArrayBuffer(slots * Float32Array.BYTES_PER_ELEMENT),
-)
-const sharedPosition = { x, y }
+const slots = 10_001;
+const x = new Float32Array(new SharedArrayBuffer(slots * Float32Array.BYTES_PER_ELEMENT));
+const y = new Float32Array(new SharedArrayBuffer(slots * Float32Array.BYTES_PER_ELEMENT));
+const sharedPosition = { x, y };
 ```
 
 For browser deployment, shared memory requires the appropriate secure/cross-origin-isolated environment. Use feature detection and a serial fallback. For shared counters or concurrent command queues, design synchronization with `Atomics`; a shared typed array does not make arbitrary read-modify-write safe. A worker barrier does not protect two workers writing the same value during the same job. [MDN SharedArrayBuffer reference](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer), [MDN Atomics reference](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics).
@@ -848,15 +866,15 @@ A narrow feature surface can expose `createStores`, `installObservers`, `spawn`,
 
 ### Growth decisions
 
-| Trigger | Useful next change | Avoid |
-| --- | --- | --- |
-| More features share one component | Give that data a clear shared owner and writer contract | Importing a feature's internals from everywhere |
-| Spawn recipes duplicate invariants | Centralize recipes or immutable definitions | Deep inheritance trees as a default |
-| Test worlds interfere | Create stores/resources per world | Resetting only entity membership and hoping globals cleared |
-| Hundreds of files become hard to navigate | Group by feature and add a small public entry point | One global folder per technical noun |
-| Renderer/physics lifecycle becomes tangled | Session-scoped adapters with disposal and explicit sync | Gameplay mutations hidden in external callbacks |
-| Saves/networking become requirements | Dedicated schemas, stable content IDs, migration policy | Treating runtime arrays as a permanent file format |
-| Performance hotspots appear | Profile and optimize that feature's data path | Broad rewrites based on ECS folklore |
+| Trigger                                    | Useful next change                                      | Avoid                                                       |
+| ------------------------------------------ | ------------------------------------------------------- | ----------------------------------------------------------- |
+| More features share one component          | Give that data a clear shared owner and writer contract | Importing a feature's internals from everywhere             |
+| Spawn recipes duplicate invariants         | Centralize recipes or immutable definitions             | Deep inheritance trees as a default                         |
+| Test worlds interfere                      | Create stores/resources per world                       | Resetting only entity membership and hoping globals cleared |
+| Hundreds of files become hard to navigate  | Group by feature and add a small public entry point     | One global folder per technical noun                        |
+| Renderer/physics lifecycle becomes tangled | Session-scoped adapters with disposal and explicit sync | Gameplay mutations hidden in external callbacks             |
+| Saves/networking become requirements       | Dedicated schemas, stable content IDs, migration policy | Treating runtime arrays as a permanent file format          |
+| Performance hotspots appear                | Profile and optimize that feature's data path           | Broad rewrites based on ECS folklore                        |
 
 ### Tests that carry their weight
 
@@ -896,16 +914,16 @@ These are engineering recommendations derived from the source's update and stora
 
 ### Trade-offs that deserve an explicit decision
 
-| Decision | Performance benefit | Maintenance risk | Suggested default |
-| --- | --- | --- | --- |
-| Direct store access | Low abstraction overhead | Bypasses validation/observers | Use inside owned systems; typed feature APIs at boundaries |
-| Global component singletons | Short imports | World/test collisions and retained data | World-local stores |
-| Many state tags | Selective queries | Structural churn and transition invariants | Tags for meaningful membership; scalar for rapidly changing values |
-| Relations for every reference | Rich queries and cleanup | Pair/store/query cardinality | Relations when relational queries/lifetime help |
-| Deep prefab trees | Reused composition | Initialization precedence and mutable aliasing | Shallow templates or ordinary spawn recipes |
-| Fine-grained systems | Easier profiling/ownership | More passes and scheduling complexity | Cohesive responsibility; merge only measured expensive passes |
-| Shared-memory workers | Parallel numeric computation | Races, barriers, deployment constraints | Single-threaded first |
-| Stateful delta encoders | Lower payload volume | Baseline correctness and per-client state | Full-state bootstrap plus explicit baseline lifecycle |
+| Decision                      | Performance benefit          | Maintenance risk                               | Suggested default                                                  |
+| ----------------------------- | ---------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
+| Direct store access           | Low abstraction overhead     | Bypasses validation/observers                  | Use inside owned systems; typed feature APIs at boundaries         |
+| Global component singletons   | Short imports                | World/test collisions and retained data        | World-local stores                                                 |
+| Many state tags               | Selective queries            | Structural churn and transition invariants     | Tags for meaningful membership; scalar for rapidly changing values |
+| Relations for every reference | Rich queries and cleanup     | Pair/store/query cardinality                   | Relations when relational queries/lifetime help                    |
+| Deep prefab trees             | Reused composition           | Initialization precedence and mutable aliasing | Shallow templates or ordinary spawn recipes                        |
+| Fine-grained systems          | Easier profiling/ownership   | More passes and scheduling complexity          | Cohesive responsibility; merge only measured expensive passes      |
+| Shared-memory workers         | Parallel numeric computation | Races, barriers, deployment constraints        | Single-threaded first                                              |
+| Stateful delta encoders       | Lower payload volume         | Baseline correctness and per-client state      | Full-state bootstrap plus explicit baseline lifecycle              |
 
 The goal is a small set of visible invariants that make both correctness and optimization local: what a component means, who owns its values, when it can change, which phase consumes it, and how its lifetime ends.
 
@@ -915,36 +933,36 @@ This inventory covers the actual public runtime exports of the current package's
 
 ### Core runtime exports: `bitecs`
 
-| Category | Public values | Purpose/notes |
-| --- | --- | --- |
-| World | `createWorld`, `resetWorld`, `deleteWorld`, `getWorldComponents`, `getAllEntities` | Create/context, lifecycle, inspection; reset/disposal caveats above |
-| Entity | `addEntity`, `removeEntity`, `getEntityComponents`, `entityExists` | Numeric handle lifecycle and component inspection |
-| Entity index | `createEntityIndex`, `withVersioning`, `getId`, `getVersion` | Shared IDs and versioned handles |
-| Components | `registerComponent`, `registerComponents`, `hasComponent`, `addComponent`, `addComponents`, `removeComponent`, `removeComponents` | Registration/membership; plural remove is an alias |
-| Data access | `getComponent`, `setComponent`, `set` | Explicit getter/setter hooks, rather than automatic row access |
-| Query lifecycle | `query`, `registerQuery`, `removeQuery`, `commitRemovals` | Cached membership selection and deferred compaction |
-| Logical terms | `And`, `All`, `Or`, `Any`, `Not`, `None` | Alias pairs; simple-operator limits above |
-| Query modifiers | `asBuffer`, `isNested`, `noCommit` | Buffered IDs and no-commit alias pair |
-| Observers | `observe`, `onAdd`, `onRemove`, `onSet`, `onGet` | Subscriptions to membership/data pathways |
-| Relationships | `createRelation`, `withStore`, `makeExclusive`, `withAutoRemoveSubject`, `withOnTargetRemoved`, `getRelationTargets`, `Wildcard`, `Pair`, `isRelation`, `isWildcard` | Configured pair factories and inspection |
-| Hierarchies | `Hierarchy`, `Cascade`, `getHierarchyDepth`, `getMaxHierarchyDepth` | Ordered/depth traversal; Cascade is an alias |
-| Prefabs | `Prefab`, `addPrefab`, `IsA` | Template tag, creation, and inheritance relation |
-| Convenience | `pipe`, `soa`, `aos` | Return-value composition and storage helpers |
-| Internal access | `$internal` | Publicly exported escape hatch; avoid application dependence on private layout |
+| Category        | Public values                                                                                                                                                        | Purpose/notes                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| World           | `createWorld`, `resetWorld`, `deleteWorld`, `getWorldComponents`, `getAllEntities`                                                                                   | Create/context, lifecycle, inspection; reset/disposal caveats above            |
+| Entity          | `addEntity`, `removeEntity`, `getEntityComponents`, `entityExists`                                                                                                   | Numeric handle lifecycle and component inspection                              |
+| Entity index    | `createEntityIndex`, `withVersioning`, `getId`, `getVersion`                                                                                                         | Shared IDs and versioned handles                                               |
+| Components      | `registerComponent`, `registerComponents`, `hasComponent`, `addComponent`, `addComponents`, `removeComponent`, `removeComponents`                                    | Registration/membership; plural remove is an alias                             |
+| Data access     | `getComponent`, `setComponent`, `set`                                                                                                                                | Explicit getter/setter hooks, rather than automatic row access                 |
+| Query lifecycle | `query`, `registerQuery`, `removeQuery`, `commitRemovals`                                                                                                            | Cached membership selection and deferred compaction                            |
+| Logical terms   | `And`, `All`, `Or`, `Any`, `Not`, `None`                                                                                                                             | Alias pairs; simple-operator limits above                                      |
+| Query modifiers | `asBuffer`, `isNested`, `noCommit`                                                                                                                                   | Buffered IDs and no-commit alias pair                                          |
+| Observers       | `observe`, `onAdd`, `onRemove`, `onSet`, `onGet`                                                                                                                     | Subscriptions to membership/data pathways                                      |
+| Relationships   | `createRelation`, `withStore`, `makeExclusive`, `withAutoRemoveSubject`, `withOnTargetRemoved`, `getRelationTargets`, `Wildcard`, `Pair`, `isRelation`, `isWildcard` | Configured pair factories and inspection                                       |
+| Hierarchies     | `Hierarchy`, `Cascade`, `getHierarchyDepth`, `getMaxHierarchyDepth`                                                                                                  | Ordered/depth traversal; Cascade is an alias                                   |
+| Prefabs         | `Prefab`, `addPrefab`, `IsA`                                                                                                                                         | Template tag, creation, and inheritance relation                               |
+| Convenience     | `pipe`, `soa`, `aos`                                                                                                                                                 | Return-value composition and storage helpers                                   |
+| Internal access | `$internal`                                                                                                                                                          | Publicly exported escape hatch; avoid application dependence on private layout |
 
 Public core type exports include `World`, `InternalWorld`, `WorldContext`, `EntityId`, `ComponentRef`, `ComponentData`, `ObservableHookDef`, `ObservableHook`, `QueryResult`, `Query`, `QueryOperatorType`, `OpReturnType`, `QueryOperator`, `QueryTerm`, `QueryOptions`, `HierarchyTerm`, `QueryModifier`, `OnTargetRemovedCallback`, `Relation`, and `RelationTarget`. Some useful types such as `EntityIndex` are not re-exported by the core index; infer them from factories rather than importing unsupported internal package paths. Core `ComponentRef` is permissive (`any`), so feature APIs provide stronger invariants than the library alone. [Exported types](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/index.ts).
 
 ### Serialization runtime exports: `bitecs/serialization`
 
-| Category | Public values |
-| --- | --- |
-| Raw SoA | `createSoASerializer`, `createSoADeserializer` |
-| Raw AoS | `createAoSSerializer`, `createAoSDeserializer` |
-| Structural stream | `createObserverSerializer`, `createObserverDeserializer` |
-| Snapshot | `createSnapshotSerializer`, `createSnapshotDeserializer` |
-| Numeric tags | `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `f32`, `f64` |
-| Other tags | `str`, `array`, `ref` |
-| Tag symbols | `$u8`, `$i8`, `$u16`, `$i16`, `$u32`, `$i32`, `$f32`, `$f64`, `$str`, `$ref` |
+| Category          | Public values                                                                |
+| ----------------- | ---------------------------------------------------------------------------- |
+| Raw SoA           | `createSoASerializer`, `createSoADeserializer`                               |
+| Raw AoS           | `createAoSSerializer`, `createAoSDeserializer`                               |
+| Structural stream | `createObserverSerializer`, `createObserverDeserializer`                     |
+| Snapshot          | `createSnapshotSerializer`, `createSnapshotDeserializer`                     |
+| Numeric tags      | `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `f32`, `f64`                         |
+| Other tags        | `str`, `array`, `ref`                                                        |
+| Tag symbols       | `$u8`, `$i8`, `$u16`, `$i16`, `$u32`, `$i32`, `$f32`, `$f64`, `$str`, `$ref` |
 
 Public serialization type exports are `PrimitiveBrand`, `AoSSerializerOptions`, `AoSDeserializerOptions`, `ObserverSerializerOptions`, and `ObserverDeserializerOptions`. Prefer the functions over manipulating tag symbols directly. SoA option types are present in their implementation module but not re-exported by the entry point. [Serialization exports](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/serialization/index.ts).
 
@@ -954,24 +972,24 @@ The package manifest also exposes a compatibility subpath, and the repository co
 
 A current-version site can still contain inaccurate examples. The following source-backed findings should shape adoption and tests:
 
-| Topic | Current finding | Practical consequence |
-| --- | --- | --- |
-| Reset | Source replaces registrations, observers attached there, query caches, and entity index | Rebuild setup; do not assume only entities were cleared |
-| User data cleanup | Entity/component removal updates membership but does not erase your stores | Initialize reused slots and release owned object/resource references |
-| Plain `getComponent` | Access is mediated by `onGet` callbacks; no automatic SoA row extraction | Install the contract or read owned fields directly |
-| Setter initialization | `onAdd` fires before the initial setter payload | Do not read initialized payload from `onAdd` without a protocol |
-| Query logic | Compilation supports simple mask operators, with flattened `Or` handling | Test boolean logic; avoid arbitrary nested/multiple independent groups |
-| Hierarchy depth | Numeric depth is exact selection; other terms are not applied on that path | Filter explicitly or use a verified wrapper |
-| Prefab values | Inheritance copies through getter/setter hooks at attachment time | Do not assume live propagation from a template |
-| Target-removed callback | Type declares two parameters; runtime supplies world plus two IDs | Isolate and verify the adapter before use |
-| Buffered queries | May fall back to ordinary ArrayBuffer; views/allocations can change | Check shared-memory capability and refresh current work views |
-| Query teardown | `removeQuery` removes top-level entries but does not comprehensively unlink all references | Do not rely on it for unbounded dynamic-query lifecycle cleanup |
-| Snapshot restore | Adds/upserts through an ID map, rather than deleting unrelated prior state | Prefer a fresh destination world for replacement loads |
-| Snapshot coverage | Captures selected schemas, not all context/external resources/arbitrary AoS | Define an application save contract |
-| Observer encoding | Subscribes to future events; relation tracking is not a general graph-change log | Explicit bootstrap; verify each relation mutation pattern |
-| Serializer memory | Encoder defaults allocate 100 MiB backing buffers | Supply measured buffers and handle capacity policy |
-| Wire schema | Component/property indices and limited-width counters/masks are encoded | Version the protocol; test schema and scale boundaries |
-| License metadata | Homepage footer says MIT, but current package manifest says MPL-2.0 | Use the published package/license evidence when evaluating adoption |
+| Topic                   | Current finding                                                                            | Practical consequence                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Reset                   | Source replaces registrations, observers attached there, query caches, and entity index    | Rebuild setup; do not assume only entities were cleared                |
+| User data cleanup       | Entity/component removal updates membership but does not erase your stores                 | Initialize reused slots and release owned object/resource references   |
+| Plain `getComponent`    | Access is mediated by `onGet` callbacks; no automatic SoA row extraction                   | Install the contract or read owned fields directly                     |
+| Setter initialization   | `onAdd` fires before the initial setter payload                                            | Do not read initialized payload from `onAdd` without a protocol        |
+| Query logic             | Compilation supports simple mask operators, with flattened `Or` handling                   | Test boolean logic; avoid arbitrary nested/multiple independent groups |
+| Hierarchy depth         | Numeric depth is exact selection; other terms are not applied on that path                 | Filter explicitly or use a verified wrapper                            |
+| Prefab values           | Inheritance copies through getter/setter hooks at attachment time                          | Do not assume live propagation from a template                         |
+| Target-removed callback | Type declares two parameters; runtime supplies world plus two IDs                          | Isolate and verify the adapter before use                              |
+| Buffered queries        | May fall back to ordinary ArrayBuffer; views/allocations can change                        | Check shared-memory capability and refresh current work views          |
+| Query teardown          | `removeQuery` removes top-level entries but does not comprehensively unlink all references | Do not rely on it for unbounded dynamic-query lifecycle cleanup        |
+| Snapshot restore        | Adds/upserts through an ID map, rather than deleting unrelated prior state                 | Prefer a fresh destination world for replacement loads                 |
+| Snapshot coverage       | Captures selected schemas, not all context/external resources/arbitrary AoS                | Define an application save contract                                    |
+| Observer encoding       | Subscribes to future events; relation tracking is not a general graph-change log           | Explicit bootstrap; verify each relation mutation pattern              |
+| Serializer memory       | Encoder defaults allocate 100 MiB backing buffers                                          | Supply measured buffers and handle capacity policy                     |
+| Wire schema             | Component/property indices and limited-width counters/masks are encoded                    | Version the protocol; test schema and scale boundaries                 |
+| License metadata        | Homepage footer says MIT, but current package manifest says MPL-2.0                        | Use the published package/license evidence when evaluating adoption    |
 
 Sources: [world lifecycle](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/World.ts), [entity lifecycle](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Entity.ts), [component/inheritance implementation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Component.ts), [query implementation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Query.ts), [hierarchy implementation](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/core/Hierarchy.ts), [serializer source directory](https://github.com/NateTheGreatt/bitECS/tree/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/src/serialization), [package manifest](https://github.com/NateTheGreatt/bitECS/blob/1585cdb4ae9a6586aef5e4d9d30d7039e22cd543/package.json), [homepage](https://bitecs.dev/).
 
@@ -991,22 +1009,22 @@ This guide includes representative original snippets across the API surface. The
 
 ### Documentation snippets
 
-| Official page | Snippet topics available |
-| --- | --- |
-| [Introduction](https://bitecs.dev/docs/introduction) | Complete entity/component/query movement walkthrough |
-| [Installation](https://bitecs.dev/docs/installation) | Package setup, TypeScript configuration, import styles |
-| [Quick Start](https://bitecs.dev/docs/quick-start) | World/stores/spawning, query/update, Canvas rendering, full movement demo |
-| [World](https://bitecs.dev/docs/world) | Basic world, resources/context, separate worlds, shared index, versioning, lifecycle/inspection |
-| [Entity](https://bitecs.dev/docs/entity) | Creation/removal, inspection, recycling, deferred query removals, versioned handles |
-| [Component](https://bitecs.dev/docs/component) | SoA, typed/shared arrays, AoS, tags, batch membership, setter hooks, multiple-world storage |
-| [Query](https://bitecs.dev/docs/query) | Basic/boolean selection, deferred removals, nested calls, buffered/options forms, hierarchy examples |
-| [System](https://bitecs.dev/docs/system) | Function systems, ordering/pipelines, conditional cadence, delta/fixed time, browser/headless loops |
-| [Relationships](https://bitecs.dev/docs/relationships) | Relation creation/data, exclusive and lifetime rules, target-removal callback, wildcard traversal, hierarchy |
-| [Observers](https://bitecs.dev/docs/observers) | Membership transitions, getters/setters, validation, operators, queues, integration/disposal, derived data |
-| [Prefabs](https://bitecs.dev/docs/prefabs) | Template creation/inheritance, composition and getters/setters |
-| [Serialization](https://bitecs.dev/docs/serialization) | SoA/AoS, tags, strings/arrays, diffs/options, lifecycle replication, snapshots, ID mapping, interpolation |
-| [Multithreading](https://bitecs.dev/docs/multithreading) | Shared components, buffered queries, worker jobs/queues, partitioning, physics/AI examples |
-| [API reference](https://bitecs.dev/api) | Signatures and grouped function descriptions; less complete than the actual export inventory above |
+| Official page                                            | Snippet topics available                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [Introduction](https://bitecs.dev/docs/introduction)     | Complete entity/component/query movement walkthrough                                                         |
+| [Installation](https://bitecs.dev/docs/installation)     | Package setup, TypeScript configuration, import styles                                                       |
+| [Quick Start](https://bitecs.dev/docs/quick-start)       | World/stores/spawning, query/update, Canvas rendering, full movement demo                                    |
+| [World](https://bitecs.dev/docs/world)                   | Basic world, resources/context, separate worlds, shared index, versioning, lifecycle/inspection              |
+| [Entity](https://bitecs.dev/docs/entity)                 | Creation/removal, inspection, recycling, deferred query removals, versioned handles                          |
+| [Component](https://bitecs.dev/docs/component)           | SoA, typed/shared arrays, AoS, tags, batch membership, setter hooks, multiple-world storage                  |
+| [Query](https://bitecs.dev/docs/query)                   | Basic/boolean selection, deferred removals, nested calls, buffered/options forms, hierarchy examples         |
+| [System](https://bitecs.dev/docs/system)                 | Function systems, ordering/pipelines, conditional cadence, delta/fixed time, browser/headless loops          |
+| [Relationships](https://bitecs.dev/docs/relationships)   | Relation creation/data, exclusive and lifetime rules, target-removal callback, wildcard traversal, hierarchy |
+| [Observers](https://bitecs.dev/docs/observers)           | Membership transitions, getters/setters, validation, operators, queues, integration/disposal, derived data   |
+| [Prefabs](https://bitecs.dev/docs/prefabs)               | Template creation/inheritance, composition and getters/setters                                               |
+| [Serialization](https://bitecs.dev/docs/serialization)   | SoA/AoS, tags, strings/arrays, diffs/options, lifecycle replication, snapshots, ID mapping, interpolation    |
+| [Multithreading](https://bitecs.dev/docs/multithreading) | Shared components, buffered queries, worker jobs/queues, partitioning, physics/AI examples                   |
+| [API reference](https://bitecs.dev/api)                  | Signatures and grouped function descriptions; less complete than the actual export inventory above           |
 
 The site's migration page is intentionally outside this research scope. Use the modern entry-point inventory and 0.4.0 examples above rather than importing an older schema/system/query paradigm.
 

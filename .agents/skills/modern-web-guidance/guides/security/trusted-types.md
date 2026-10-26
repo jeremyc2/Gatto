@@ -18,9 +18,9 @@ To use Trusted Types, follow four main steps:
 A policy is a set of rules for sanitizing content. You create it using `trustedTypes.createPolicy()`, typically delegating to a sanitizer library such as DOMPurify or your application's HTML escaping rules:
 
 ```javascript
-import DOMPurify from 'dompurify';
+import DOMPurify from "dompurify";
 
-const myPolicy = trustedTypes.createPolicy('sanitize-html', {
+const myPolicy = trustedTypes.createPolicy("sanitize-html", {
   createHTML: (input) =>
     // Return a sanitized string; createPolicy() wraps it in a TrustedHTML object.
     // Example using DOMPurify:
@@ -57,6 +57,7 @@ trustedTypes.createPolicy("default", {
 ```
 
 Common sinks that support Trusted Types include:
+
 - **HTML:** `element.innerHTML`, `element.outerHTML`, `document.write()`, `element.setHTMLUnsafe()`, `Document.parseHTMLUnsafe()`
 - **Script:** `<script>` text content, `eval()`
 - **ScriptURL:** `<script src>`, `Worker()`, `SharedWorker()`

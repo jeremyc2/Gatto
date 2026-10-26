@@ -21,6 +21,7 @@ Study: multiverse-study · version 0.2
 Status: exploratory reactions, not approval to build or finalize a design.
 
 ## Visual settings
+
 - meeting: discovery
 - frame: night
 - composition notes: false
@@ -34,10 +35,11 @@ Inspect each meeting. Does the connection come from their action, contact, gaze,
 - Choice: Paws and physical contact
 - Confidence: Medium — leaning this way
 - Reason / what would change my answer:
-> I definitely feel like this looks very good. If anything, there wasn't enough consistency between the pictures.  
->   
-> I forgot what it's called, but it was almost like when you're watching a movie and, because of the way they filmed it, something changes. It's not supposed to be there, and it messes with the story a little bit or can be confusing. It's not like a plot hole, but I forgot the word for it, and it can be applied here too.  
->   
+
+> I definitely feel like this looks very good. If anything, there wasn't enough consistency between the pictures.
+>
+> I forgot what it's called, but it was almost like when you're watching a movie and, because of the way they filmed it, something changes. It's not supposed to be there, and it messes with the story a little bit or can be confusing. It's not like a plot hole, but I forgot the word for it, and it can be applied here too.
+>
 > Some of the images with more than one cat had the proportions of the cat wrong. It felt like the paws were coming out of the wrong part of the cat's body, or they just weren't anatomically correct enough for cute little animated cats in these different art styles.
 
 ### U2 — Which meeting is most worth developing?
@@ -47,11 +49,12 @@ Each scene has distinct actions. Think about the relationship and clarity, not o
 - Choice: A shared discovery
 - Confidence: Medium — leaning this way
 - Reason / what would change my answer:
+
 > I did like a little bit of all of them, but if we had to shape the narrative around one, I like the shared discovery, especially because I feel like it fits as a plot device. We need more plot devices, and I feel like it's a common one where the main character is also learning.
-> 
+>
 > Obviously, that works with all three stories, but it's nice if you can pick the cat you want to see yourself in, especially because they're in different art styles. That helps you pick which one is your favorite.
-> 
-> I don't think we necessarily need so much of a mentor cat. We just need all of them to be very exploratory and fit the vibe of "Hey, let's explore the world together." I say "plot," but really, in the end, it's not so much about the plot of the story. It's more about how we're trying to reveal the features of the app. We can use curiosity, a curious cat, and shared discovery. I like that. 
+>
+> I don't think we necessarily need so much of a mentor cat. We just need all of them to be very exploratory and fit the vibe of "Hey, let's explore the world together." I say "plot," but really, in the end, it's not so much about the plot of the story. It's more about how we're trying to reveal the features of the app. We can use curiosity, a curious cat, and shared discovery. I like that.
 
 ### U3 — Which secondary-character question should we study next?
 
@@ -60,8 +63,9 @@ The current scenes explore black cats with different materials and features. A d
 - Choice: A black cat with different eyes and proportions
 - Confidence: Medium — leaning this way
 - Reason / what would change my answer:
-> I like them all being black cats. I do think we probably need more diversity in proportions, maybe including a really long, thin cat, a fat cat, and a young baby cat. The baby cat will be very cute, and obviously, there should be different multiverse cat styles.  
->   
+
+> I like them all being black cats. I do think we probably need more diversity in proportions, maybe including a really long, thin cat, a fat cat, and a young baby cat. The baby cat will be very cute, and obviously, there should be different multiverse cat styles.
+>
 > If anything, I do like the eye colors being different too. Maybe we need to really lean into the different styles and make one cat have different eye colors. I think parts of the cat that aren't black should be more saturated, almost glowing and unrealistic, but awesome for one of the cats. Mostly, I want all the cats to be black cats still.
 
 ### U4 — What must stay stable when the material changes?
@@ -71,7 +75,8 @@ Which change would most quickly make the character or scene stop feeling like it
 - Choice: Unsure
 - Confidence: Low — still exploring
 - Reason / what would change my answer:
-> I'm not exactly sure what this one means. 
+
+> I'm not exactly sure what this one means.
 
 ### U5 — Does the story help you understand the app?
 
@@ -80,10 +85,11 @@ The mixed-media handoff is a sharing metaphor, not a promise of image transforma
 - Choice: Pair it with a more literal result example
 - Confidence: Low — still exploring
 - Reason / what would change my answer:
-> I do think we need to make it less of a subtle nod. We still want to use this metaphor, but we want to incorporate more of our actual app into it, or at least more of the actual app's concepts.  
->   
-> I don't know if I'm ready for screenshots because they are kind of boring. We need more of the user-facing details of the app, not the technical details. We need to tie it together and make sure it follows the story, or at least the emotional beats. The metaphor needs to continue to hold as it changes and as we talk about different things the user actually wants to use the app for.  
->   
+
+> I do think we need to make it less of a subtle nod. We still want to use this metaphor, but we want to incorporate more of our actual app into it, or at least more of the actual app's concepts.
+>
+> I don't know if I'm ready for screenshots because they are kind of boring. We need more of the user-facing details of the app, not the technical details. We need to tie it together and make sure it follows the story, or at least the emotional beats. The metaphor needs to continue to hold as it changes and as we talk about different things the user actually wants to use the app for.
+>
 > It is a metaphor, but it also needs to feel like a website about the app. It can't just be a cute thing about a cat.
 
 ## Still open

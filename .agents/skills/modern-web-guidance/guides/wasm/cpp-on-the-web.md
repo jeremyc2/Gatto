@@ -27,15 +27,15 @@ thread.
 To avoid running such code on the main browser thread there are several possible
 approaches:
 
-1. Run the whole WebAssembly program in a Web Worker.  This is often the
+1. Run the whole WebAssembly program in a Web Worker. This is often the
    simplest solution since it doesn't involve setting up SharedArrayBuffer
    access, or changing the program source.
 
-2. Use pthreads or Wasm Workers.  This allows the work to be shared across
+2. Use pthreads or Wasm Workers. This allows the work to be shared across
    many workers but requires SharedArrayBuffer access which can involve adding
    COOP/COEP HTTP headers.
 
-3. Refactor the C/C++ code to avoid long running calls.  For example slicing
+3. Refactor the C/C++ code to avoid long running calls. For example slicing
    the work into small pieces that can be called from `requestIdleCallback`.
 
 ## 3. Pay attention for runtime warnings and errors
@@ -59,6 +59,7 @@ When integrating existing C/C++ libraries with standard build systems:
 ### CMake Projects
 
 Wrap CMake commands with `emcmake` and `emmake`:
+
 ```bash
 mkdir build && cd build
 emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -68,6 +69,7 @@ emmake make
 ### Autoconf / Make Projects
 
 Use `emconfigure` to set cross-compilation toolchain targets:
+
 ```bash
 emconfigure ./configure --host=wasm32-unknown-emscripten --disable-shared
 emmake make

@@ -1,4 +1,4 @@
-# README cat and favicon
+# README cat, favicon and macOS icons
 
 Created October 25, 2026; whiskers and lighting refined October 26. A seated
 charcoal-black kitten connects the README illustration
@@ -7,18 +7,19 @@ paws carry Gatto's identity. The README adds a compact seated body and curled
 tail. The favicon keeps the face against warm paper. Neither includes a portal
 or jetpack; the [flying visitor](../portal-cat/artwork.md) is separate artwork.
 
-All three masters were drawn directly with the Aseprite MCP pixel tools. They
+All masters were drawn directly with the Aseprite MCP pixel tools. They
 are single-frame stills with transparent exterior pixels and separate editable
 layers. A generated combined cat/portal study was rejected and is not used in
 any delivered asset. No third-party logo was used as a drawing reference.
 
 ## Sources
 
-| Master | Native size | Layers |
-| --- | --- | --- |
-| [brand-cat.aseprite](brand-cat.aseprite) | 64 × 64 | Cat silhouette; coat and ears; eyes and expression |
-| [favicon-32.aseprite](favicon-32.aseprite) | 32 × 32 | Warm paper; cat portrait |
-| [favicon-16.aseprite](favicon-16.aseprite) | 16 × 16 | Warm paper; cat portrait |
+| Master                                     | Native size | Layers                                             |
+| ------------------------------------------ | ----------- | -------------------------------------------------- |
+| [brand-cat.aseprite](brand-cat.aseprite)   | 64 × 64     | Cat silhouette; coat and ears; eyes and expression |
+| [favicon-32.aseprite](favicon-32.aseprite) | 32 × 32     | Warm paper; cat portrait                           |
+| [favicon-16.aseprite](favicon-16.aseprite) | 16 × 16     | Warm paper; cat portrait                           |
+| [menu-bar.aseprite](menu-bar.aseprite)     | 18 × 18     | Monochrome cat portrait on transparency            |
 
 Keep the 16 px portrait as an optical redraw. Its eyes, ears and nose use
 deliberate small clusters; reducing the 32 px picture would move those features
@@ -46,17 +47,64 @@ icon sizes ([MDN link metadata](https://developer.mozilla.org/en-US/docs/Web/HTM
 
 ## Exports
 
+### macOS menu bar
+
+Added October 26, 2026. The menu bar adapts the favicon's front-facing head,
+pointed ears, broad cheeks, wide eyes and small nose to a single black silhouette.
+Eye, inner-ear and nose details are transparent cutouts; the two isolated black
+pupil pixels are intentional. The paper backing, coat shading and eye colors
+are omitted so AppKit can tint the template for light, dark and selected states.
+The 18 × 18 master has transparent padding and an optical redraw of the portrait
+for the menu bar's size. Export frame 1 at 2× to `packaging/menu-bar-icon.png`
+(36 × 36 pixels). `src/desktop/menu.rs` embeds this PNG and displays it as an
+18 × 18 point `NSImage` template. Keep the native grid aligned at both standard
+and Retina scales; review black-on-light and white-on-dark versions at actual
+size as well as integer enlargements. No website export changes are needed.
+
+### Dock, Finder and Applications
+
+Added October 26, 2026. The colored app icon reuses `favicon-32.aseprite`'s cat
+portrait without the warm-paper layer. The cream-to-lavender background,
+rounded macOS silhouette, edge lighting and shadow come from Apple's Icon
+Composer document at `packaging/AppIcon.icon`. The glyph has glass and
+translucency disabled to preserve the charcoal coat and cyan/violet eyes.
+
+To regenerate the glyph, use Aseprite MCP `copy_sprite` to make a temporary copy
+of `favicon-32.aseprite`, hide its `Warm paper` layer with `set_layer_visibility`,
+and `export_frame` frame 1 at scale 24 to `/tmp/gatto-app-portrait.png`.
+Leave the original favicon master unchanged. Then run from the repository root
+with Xcode and ImageMagick installed:
+
+```sh
+magick /tmp/gatto-app-portrait.png -background none -gravity center -extent 1024x1024 -depth 8 packaging/AppIcon.icon/Assets/glyph.png
+mkdir -p /tmp/gatto-compiled-icon
+xcrun actool packaging/AppIcon.icon --compile /tmp/gatto-compiled-icon --platform macosx --minimum-deployment-target 13.0 --app-icon AppIcon --output-partial-info-plist /tmp/gatto-icon-info.plist
+cp /tmp/gatto-compiled-icon/AppIcon.icns packaging/AppIcon.icns
+cp /tmp/gatto-compiled-icon/Assets.car packaging/Assets.car
+"$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool" packaging/AppIcon.icon --export-image --output-file packaging/app-icon.png --platform macOS --rendition Default --width 256 --height 256 --scale 1
+```
+
+The glyph centers the 768 px portrait canvas on a transparent 1024 px canvas,
+with nearest-neighbor scaling. Commit the Composer document, glyph and all three
+compiled/preview outputs together. Bundles use `Assets.car` and `AppIcon.icns`;
+source runs embed `AppIcon.icns` through `src/window_limits.rs`. Check the
+compiled ICNS and light/dark Composer previews, then run `scripts/build-app.sh`
+to verify packaging and its signature. Keep README size figures tied to their
+published release until the next release is measured.
+
+### Website and README
+
 Use Aseprite MCP `export_frame`, frame 1, with these integer scale factors.
 Resolve paths against the repository root and pass absolute paths to MCP.
 
-| Master | Export | Scale |
-| --- | --- | ---: |
-| `brand-cat.aseprite` | `docs/images/readme-cat.png` | 4 |
-| `favicon-16.aseprite` | `web/public/favicon-16.png` | 1 |
-| `favicon-32.aseprite` | `web/public/favicon-32.png` | 1 |
-| `favicon-32.aseprite` | `web/public/favicon-96.png` | 3 |
-| `favicon-32.aseprite` | `/tmp/gatto-favicon-64.png` | 2 |
-| `favicon-32.aseprite` | `/tmp/gatto-apple-160.png` | 5 |
+| Master                | Export                       | Scale |
+| --------------------- | ---------------------------- | ----: |
+| `brand-cat.aseprite`  | `docs/images/readme-cat.png` |     4 |
+| `favicon-16.aseprite` | `web/public/favicon-16.png`  |     1 |
+| `favicon-32.aseprite` | `web/public/favicon-32.png`  |     1 |
+| `favicon-32.aseprite` | `web/public/favicon-96.png`  |     3 |
+| `favicon-32.aseprite` | `/tmp/gatto-favicon-64.png`  |     2 |
+| `favicon-32.aseprite` | `/tmp/gatto-apple-160.png`   |     5 |
 
 Then assemble the ICO and opaque Apple touch canvas with ImageMagick:
 

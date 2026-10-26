@@ -22,12 +22,12 @@ available; recent crawl dates are not publication dates.
 
 ## 1. Decide what kind of physics you actually need
 
-| Approach | Good initial fit | Work you own | Main limitation |
-| --- | --- | --- | --- |
-| Custom movement and simple collision | Precise platforming, top-down movement, a ball in a small arena | Movement, shape tests, contact response, game rules | Slopes, moving platforms, and fast objects need deliberate treatment |
-| Custom controls over engine collision queries | Games needing authored movement with more varied geometry | Movement and response policy; engine finds contacts | Understand the engine's collision semantics and update order |
-| Rigid-body engine plus custom game rules | Stacks, rotating objects, joints, mechanisms, physical puzzles | Game design, controller, materials, constraints, tuning | Realistic interaction does not automatically produce satisfying control |
-| General physics engine written from scratch | Learning physics-engine construction is itself a goal | Collision, solver, stability, contacts, constraints, optimization | Substantial work beyond proving a small game's core action |
+| Approach                                      | Good initial fit                                                | Work you own                                                      | Main limitation                                                         |
+| --------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Custom movement and simple collision          | Precise platforming, top-down movement, a ball in a small arena | Movement, shape tests, contact response, game rules               | Slopes, moving platforms, and fast objects need deliberate treatment    |
+| Custom controls over engine collision queries | Games needing authored movement with more varied geometry       | Movement and response policy; engine finds contacts               | Understand the engine's collision semantics and update order            |
+| Rigid-body engine plus custom game rules      | Stacks, rotating objects, joints, mechanisms, physical puzzles  | Game design, controller, materials, constraints, tuning           | Realistic interaction does not automatically produce satisfying control |
+| General physics engine written from scratch   | Learning physics-engine construction is itself a goal           | Collision, solver, stability, contacts, constraints, optimization | Substantial work beyond proving a small game's core action              |
 
 These are scope recommendations. The middle options still let you design your
 own physics behavior. Godot's character body explicitly leaves gravity and
@@ -67,14 +67,14 @@ Or:
 Those targets imply different acceleration, braking, air control, and forgiveness.
 My proposed criteria are:
 
-| Quality | What to look for in play |
-| --- | --- |
-| Agency | The player can connect their input to an outcome and intentionally change it |
-| Predictability | Similar situations behave similarly enough to support learning |
-| Readability | Motion, collision shapes, sound, and camera explain what happened |
-| Expressiveness | Timing, direction, or commitment allow meaningfully different outcomes |
-| Mastery | Practice produces visible improvement or new useful techniques |
-| Recovery and stakes | Mistakes create a fitting consequence and a reason to try again |
+| Quality             | What to look for in play                                                     |
+| ------------------- | ---------------------------------------------------------------------------- |
+| Agency              | The player can connect their input to an outcome and intentionally change it |
+| Predictability      | Similar situations behave similarly enough to support learning               |
+| Readability         | Motion, collision shapes, sound, and camera explain what happened            |
+| Expressiveness      | Timing, direction, or commitment allow meaningfully different outcomes       |
+| Mastery             | Practice produces visible improvement or new useful techniques               |
+| Recovery and stakes | Mistakes create a fitting consequence and a reason to try again              |
 
 A useful mechanical seed is one action with more than one purpose. Downwell's
 publisher describes gunboots that both attack and slow the player's descent;
@@ -236,15 +236,15 @@ are game rules, not details to leave to incidental overlap order.
 
 Expose parameters in terms you can judge while playing:
 
-| Design question | Useful parameter |
-| --- | --- |
-| How quickly do I get moving? | Time to reach target speed |
-| How far do I slide after release? | Stopping distance or stopping time |
-| How high and how long is a jump? | Height and time to apex |
+| Design question                      | Useful parameter                         |
+| ------------------------------------ | ---------------------------------------- |
+| How quickly do I get moving?         | Time to reach target speed               |
+| How far do I slide after release?    | Stopping distance or stopping time       |
+| How high and how long is a jump?     | Height and time to apex                  |
 | How quickly does the landing arrive? | Fall duration or fall-gravity multiplier |
-| How far does a dash carry me? | Dash distance and duration |
-| How long does a puck keep moving? | Velocity half-life |
-| How much does a bounce retain? | Normal restitution and tangential loss |
+| How far does a dash carry me?        | Dash distance and duration               |
+| How long does a puck keep moving?    | Velocity half-life                       |
+| How much does a bounce retain?       | Normal restitution and tangential loss   |
 
 Mark Brown's Platformer Toolkit implementation independently exposes running,
 stopping, turning, ground/air behavior, jump height, apex time, and fall behavior.
@@ -269,13 +269,13 @@ parameters and discusses piecewise arcs and integration choices.
 These are deliberately invented prototype targets, not recommended industry
 constants or Celeste's numbers:
 
-| Target | Example | Derived baseline |
-| --- | --- | --- |
-| Full jump | 64 world-pixels high, apex at 0.30 s | Gravity ≈ 1,422.22 px/s²; launch ≈ 426.67 px/s upward |
-| Faster descent | Fall 64 px from rest in 0.24 s | Fall gravity ≈ 2,222.22 px/s² |
-| Running | 240 px/s reached from rest in 0.12 s | Constant acceleration 2,000 px/s² |
-| Braking | Stop from 240 px/s in 0.08 s | Constant braking 3,000 px/s²; stopping distance 9.6 px |
-| Dash | 96 px in 0.12 s | 800 px/s if speed is constant |
+| Target         | Example                              | Derived baseline                                       |
+| -------------- | ------------------------------------ | ------------------------------------------------------ |
+| Full jump      | 64 world-pixels high, apex at 0.30 s | Gravity ≈ 1,422.22 px/s²; launch ≈ 426.67 px/s upward  |
+| Faster descent | Fall 64 px from rest in 0.24 s       | Fall gravity ≈ 2,222.22 px/s²                          |
+| Running        | 240 px/s reached from rest in 0.12 s | Constant acceleration 2,000 px/s²                      |
+| Braking        | Stop from 240 px/s in 0.08 s         | Constant braking 3,000 px/s²; stopping distance 9.6 px |
+| Dash           | 96 px in 0.12 s                      | 800 px/s if speed is constant                          |
 
 A full uncut jump in this idealized two-gravity example lasts 0.54 s. At an
 already-established constant horizontal speed of 240 px/s, its reference-point
@@ -361,14 +361,14 @@ such as fixed jump height.
 
 ### Step 5: diagnose a specific complaint
 
-| Observation | Investigate before changing |
-| --- | --- |
-| “It ignored my jump” | Input capture, buffer expiry, grounded state, eligibility, tick order |
-| “It's floaty” | Total airtime, apex duration, fall speed, air control, camera lag |
-| “It's slippery” | Stop distance, reversal delay, input dead zone, surface rules |
-| “I hit that” | Collider/hurtbox, displayed pose, contact timing, effects origin |
-| “I can't see the landing” | Camera framing, look-ahead, scenery, visual effects |
-| “It's easy but boring” | Repeated decisions, risk/reward, route variety, mastery opportunities |
+| Observation               | Investigate before changing                                           |
+| ------------------------- | --------------------------------------------------------------------- |
+| “It ignored my jump”      | Input capture, buffer expiry, grounded state, eligibility, tick order |
+| “It's floaty”             | Total airtime, apex duration, fall speed, air control, camera lag     |
+| “It's slippery”           | Stop distance, reversal delay, input dead zone, surface rules         |
+| “I hit that”              | Collider/hurtbox, displayed pose, contact timing, effects origin      |
+| “I can't see the landing” | Camera framing, look-ahead, scenery, visual effects                   |
+| “It's easy but boring”    | Repeated decisions, risk/reward, route variety, mastery opportunities |
 
 These are hypotheses, not automatic fixes. Reducing airtime will not repair a
 jump press that was lost between ticks.

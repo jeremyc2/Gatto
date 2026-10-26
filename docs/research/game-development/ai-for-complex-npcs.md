@@ -12,11 +12,11 @@ This recommendation is a synthesis of the primary sources below. Those sources e
 
 ## 1. Separate three uses of AI
 
-| Approach | What AI does | What ships | Why consider it | Main limitation |
-| --- | --- | --- | --- | --- |
-| Authoring assistance | Proposes motivations, challenges contradictions, rehearses scenes, drafts alternatives, finds missing reactions | Human-approved writing and ordinary game logic | Makes an ambitious cast more tractable; supports offline play and editorial control | Generated ideas can converge on clichés; editing and testing remain work |
-| Offline generation and selection | Generates candidate storylets, reaction variants, or test trajectories; a person curates them | A finite, reviewed content library selected using game state | Adds variation while retaining testable content, localization, and predictable delivery | More variants can create more continuity and coverage problems |
-| Runtime language or agent system | Interprets free text, proposes responses or actions, or generates speech during play | A model service or local model plus supporting game systems | Useful when negotiating, improvising, or expressing player intent is central to play | Reliability, delay, operating cost, privacy, moderation, and consistency become ongoing product concerns |
+| Approach                         | What AI does                                                                                                    | What ships                                                   | Why consider it                                                                         | Main limitation                                                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Authoring assistance             | Proposes motivations, challenges contradictions, rehearses scenes, drafts alternatives, finds missing reactions | Human-approved writing and ordinary game logic               | Makes an ambitious cast more tractable; supports offline play and editorial control     | Generated ideas can converge on clichés; editing and testing remain work                                 |
+| Offline generation and selection | Generates candidate storylets, reaction variants, or test trajectories; a person curates them                   | A finite, reviewed content library selected using game state | Adds variation while retaining testable content, localization, and predictable delivery | More variants can create more continuity and coverage problems                                           |
+| Runtime language or agent system | Interprets free text, proposes responses or actions, or generates speech during play                            | A model service or local model plus supporting game systems  | Useful when negotiating, improvising, or expressing player intent is central to play    | Reliability, delay, operating cost, privacy, moderation, and consistency become ongoing product concerns |
 
 These approaches can be combined. An NPC can have a sophisticated social model and entirely authored speech. An LLM can interpret player input while the response remains authored. A runtime model can phrase a refusal without deciding whether the NPC refuses.
 
@@ -56,16 +56,16 @@ These approaches can be combined. An NPC can have a sophisticated social model a
 
 The following is a recommended authoring model, not a validated psychological taxonomy. Model only dimensions that create content or affect play.
 
-| Layer | Questions for the writer | How the player can perceive it |
-| --- | --- | --- |
-| Stable values | What does this person protect? What would make them ashamed? What boundary will they usually maintain? | Consistent refusals, selective generosity, recognizable judgments |
-| Conflicting desires | What do they want that conflicts with another thing they want? | Hesitation, bargains, costly choices, partial cooperation |
-| Immediate pressure | What needs to happen today? What are they afraid will happen next? | Urgency, diverted attention, initiating or ending a conversation |
-| Knowledge and belief | What have they witnessed, heard, misunderstood, or deliberately concealed? | Different accounts, reasonable mistakes, changes after evidence |
-| Relationships | Who is trusted, resented, admired, feared, or owed something? Are these feelings reciprocated? | Public/private differences, alliances, favors, third-party consequences |
-| History | What did the player actually do, and what did this NPC notice? | Specific callbacks, changed access, commitments remembered later |
-| Strategy and presentation | How do they try to get what they want? How does their public self differ from their private one? | Evasion, humor, flattery, understatement, confrontation |
-| Capacity for change | Which experiences can change a belief, habit, or allegiance? Which cannot? | Gradual or event-driven change with an understandable cause |
+| Layer                     | Questions for the writer                                                                               | How the player can perceive it                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Stable values             | What does this person protect? What would make them ashamed? What boundary will they usually maintain? | Consistent refusals, selective generosity, recognizable judgments       |
+| Conflicting desires       | What do they want that conflicts with another thing they want?                                         | Hesitation, bargains, costly choices, partial cooperation               |
+| Immediate pressure        | What needs to happen today? What are they afraid will happen next?                                     | Urgency, diverted attention, initiating or ending a conversation        |
+| Knowledge and belief      | What have they witnessed, heard, misunderstood, or deliberately concealed?                             | Different accounts, reasonable mistakes, changes after evidence         |
+| Relationships             | Who is trusted, resented, admired, feared, or owed something? Are these feelings reciprocated?         | Public/private differences, alliances, favors, third-party consequences |
+| History                   | What did the player actually do, and what did this NPC notice?                                         | Specific callbacks, changed access, commitments remembered later        |
+| Strategy and presentation | How do they try to get what they want? How does their public self differ from their private one?       | Evasion, humor, flattery, understatement, confrontation                 |
+| Capacity for change       | Which experiences can change a belief, habit, or allegiance? Which cannot?                             | Gradual or event-driven change with an understandable cause             |
 
 A long biography is useful only if parts of it can influence decisions, voice, or interpretation. A single friendship endangered by a concrete promise can create more playable depth than pages of unexpressed lore.
 
@@ -146,13 +146,13 @@ This is an invented design example. The following lines are authored illustratio
 
 Mara is proud of her competence, dislikes public humiliation, and refuses to falsify a safety certificate. She will conceal a name; she will not certify a dangerous machine. These are distinct boundaries.
 
-| Situation | Mara's response | Consequence |
-| --- | --- | --- |
-| Player asks who skipped inspection in front of Ivo | Deflects toward getting the mechanism fixed | Ivo knows the player is investigating; trust in the player's discretion may fall |
-| Player brings a damaged part in private | Acknowledges danger and asks to examine it | Opens a practical repair route; no automatic confession |
-| Player asks her to sign a false safety certificate while blaming someone else | Refuses the false certificate, even if she likes the player | Reveals a value the player can rely on |
-| Player earns Sen's cooperation without humiliating Ivo | Accepts a supervised repair and discloses Ivo's role | Repair access changes; the brother's future depends on a later accountable action |
-| Player threatens public exposure | May stop protecting the player and seek Sen directly | A plausible alternative alliance forms; intimidation has a continuing cost |
+| Situation                                                                     | Mara's response                                             | Consequence                                                                       |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Player asks who skipped inspection in front of Ivo                            | Deflects toward getting the mechanism fixed                 | Ivo knows the player is investigating; trust in the player's discretion may fall  |
+| Player brings a damaged part in private                                       | Acknowledges danger and asks to examine it                  | Opens a practical repair route; no automatic confession                           |
+| Player asks her to sign a false safety certificate while blaming someone else | Refuses the false certificate, even if she likes the player | Reveals a value the player can rely on                                            |
+| Player earns Sen's cooperation without humiliating Ivo                        | Accepts a supervised repair and discloses Ivo's role        | Repair access changes; the brother's future depends on a later accountable action |
+| Player threatens public exposure                                              | May stop protecting the player and seek Sen directly        | A plausible alternative alliance forms; intimidation has a continuing cost        |
 
 First meeting:
 
@@ -233,16 +233,16 @@ Do not compare a polished AI version only against a deliberately weak fixed scri
 
 Run repeated visits and delayed returns. Counterbalance presentation order where feasible, and distinguish participants who enjoy improvising from those who prefer clear objectives. Record player behavior and interview responses as well as ratings.
 
-| Question | Useful evidence | Failure to watch for |
-| --- | --- | --- |
-| Is the person distinctive? | Players identify the speaker from unlabelled lines and explain priorities | Every NPC shares the same warm, explanatory voice |
-| Is the person coherent? | Players explain surprising choices using earlier evidence | Motivations change to accommodate the latest request |
-| Is talking worthwhile? | Players voluntarily return, pursue an unresolved issue, or change a plan | High word count and politeness with little reason to continue |
-| Does history matter? | A specific action changes a later option, refusal, or alliance | Generic “I remember you” with no behavioral difference |
-| Does the player have agency? | Intent maps to a visible consequence, including intelligible failure | The prose celebrates a choice the game ignores |
-| Is variation substantive? | Different strategies lead to meaningfully different social outcomes | Synonym changes conceal identical decisions |
-| Is challenge fair? | Players can discover why an approach failed and try a plausible alternative | Opaque mood rolls, keyword guessing, or hidden prerequisites |
-| Is it sustainable? | Return visits remain interesting within measured cost and delay | First-session novelty masks repetition or exhausted content |
+| Question                     | Useful evidence                                                             | Failure to watch for                                          |
+| ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Is the person distinctive?   | Players identify the speaker from unlabelled lines and explain priorities   | Every NPC shares the same warm, explanatory voice             |
+| Is the person coherent?      | Players explain surprising choices using earlier evidence                   | Motivations change to accommodate the latest request          |
+| Is talking worthwhile?       | Players voluntarily return, pursue an unresolved issue, or change a plan    | High word count and politeness with little reason to continue |
+| Does history matter?         | A specific action changes a later option, refusal, or alliance              | Generic “I remember you” with no behavioral difference        |
+| Does the player have agency? | Intent maps to a visible consequence, including intelligible failure        | The prose celebrates a choice the game ignores                |
+| Is variation substantive?    | Different strategies lead to meaningfully different social outcomes         | Synonym changes conceal identical decisions                   |
+| Is challenge fair?           | Players can discover why an approach failed and try a plausible alternative | Opaque mood rolls, keyword guessing, or hidden prerequisites  |
+| Is it sustainable?           | Return visits remain interesting within measured cost and delay             | First-session novelty masks repetition or exhausted content   |
 
 Collect examples of memorable moments, frustration, repeated topics, unsupported intents, contradictions, and fabricated affordances. Use human review for humor, subtext, emotional impact, and whether a player understood the consequence. Automated checks can reliably inspect state invariants and missing references; model judges can triage transcripts but should not decide the overall verdict.
 
@@ -282,9 +282,9 @@ These are engineering and product recommendations, not a complete security revie
 
 ## 11. What to borrow from authored narrative games
 
-Sam Barlow's GDC session on *Her Story* explicitly frames writing for the player's imagination as a design goal. The session overview was verified; the complete talk was not reviewed here. The transferable proposal is to let players infer a person from partial, conflicting evidence instead of having the NPC explain their full psychology on demand. [First-party GDC session](https://www.gdcvault.com/play/1023430/Making-Her-Story-Telling-a).
+Sam Barlow's GDC session on _Her Story_ explicitly frames writing for the player's imagination as a design goal. The session overview was verified; the complete talk was not reviewed here. The transferable proposal is to let players infer a person from partial, conflicting evidence instead of having the NPC explain their full psychology on demand. [First-party GDC session](https://www.gdcvault.com/play/1023430/Making-Her-Story-Telling-a).
 
-ZA/UM writer Justin Keenan's GDC session on *Disco Elysium* discusses the cost and value of difficult dialogue and narrative choices. Only the session overview was inspected, so no detailed implementation claim is attributed to it. Treat it as a next reading/viewing source, not proof that a particular AI architecture recreates that game's writing. [First-party GDC session](https://www.gdcvault.com/play/1027048/contactUs).
+ZA/UM writer Justin Keenan's GDC session on _Disco Elysium_ discusses the cost and value of difficult dialogue and narrative choices. Only the session overview was inspected, so no detailed implementation claim is attributed to it. Treat it as a next reading/viewing source, not proof that a particular AI architecture recreates that game's writing. [First-party GDC session](https://www.gdcvault.com/play/1027048/contactUs).
 
 The practical recommendation is to preserve authored specificity: a precise observation, an unfair judgment, an awkward joke, a refusal that costs the speaker something. Use AI to explore and test those choices, then select and revise them. A system's capacity to continue indefinitely is different from an author's ability to choose the next worthwhile moment.
 
@@ -300,28 +300,28 @@ The core production question is: **can a player encounter this person again, do 
 
 Links were checked during this review. Publication dates below identify the cited work; a living documentation page may change later. Peer review, public code, and first-party design commentary provide different kinds of evidence and should not be treated as interchangeable.
 
-| Source | Type / date | Reviewed scope | Use in these notes |
-| --- | --- | --- | --- |
-| [Mateas & Stern, Structuring Content in the Façade Interactive Drama Architecture](https://ojs.aaai.org/index.php/AIIDE/article/view/18722) | Research paper, 2005 | Publisher abstract | Authored behaviors, beats, drama management |
-| [Evans & Short, The AI Architecture of Versu](https://versu.com/wp-content/uploads/2014/05/versu.pdf) | Author-hosted architecture paper | Full text, selected sections | Character/situation separation, inspectable state, social practices |
-| [Evans & Short, Versu—A Simulationist Storytelling System](https://cs.uky.edu/~sgware/reading/papers/evans2014versu.pdf) | Peer-reviewed paper, 2014 | Abstract and architecture discussion | Autonomous choices within social practices |
-| [McCoy et al., Social Story Worlds with Comme il Faut](https://mtreanor.com/publications/TCIAIG-CiF.pdf) | Author-hosted research paper, published 2014 | Full text, social-state architecture | Relationships and social history as game state |
-| [McCoy et al., Prom Week](https://ojs.aaai.org/index.php/AIIDE/article/view/12662) | AIIDE paper, 2013 | Publisher abstract | Game applying CiF |
-| [Park et al., Generative Agents](https://arxiv.org/html/2304.03442v2) | UIST paper, 2023 | Full text, architecture, evaluation, limitations | Memory/reflection/planning and their limitations |
-| [Shao et al., Character-LLM](https://aclanthology.org/2023.emnlp-main.814/) | EMNLP paper, 2023 | Abstract and full-paper evaluation | Character training and interview-based fidelity |
-| [CharacterBox](https://arxiv.org/html/2412.05631v1) | Preprint, 2024 | Abstract and evaluation framing | Assessing unfolding character trajectories |
-| [Towards Enhanced Immersion and Agency for LLM-based Interactive Drama](https://aclanthology.org/2025.acl-long.546.pdf) | ACL paper, 2025 | Full-paper evaluation and limitations | Narrative scaffolding and leakage risks |
-| [Office Whispers study](https://publikationen.bibliothek.kit.edu/1000190720/175162755) | Journal article, 2026 | Author-institution full text | Expressive freedom versus unreliable progress |
-| [The Double-Edged Sword of Open-Ended Interaction](https://arxiv.org/abs/2604.10107) | Preprint, 2026 | Full paper, with method-reporting caveat | Cognitive load and mixed experience findings |
-| [Latency study, Entertainment Computing, DOI 10.1016/j.entcom.2026.101213](https://www.sciencedirect.com/science/article/pii/S1875952126001357) | Journal article, 2026 | Publisher abstract/snippets only | Pacing needs measurement; no universal thresholds |
-| [Doshi & Hauser, Generative artificial intelligence enhances creativity but reduces the diversity of novel content](https://arxiv.org/abs/2312.00506) | Author paper; journal publication 2024 | Abstract | Ideation benefits and similarity concern; nongame experiment |
-| [Alavi et al., Game Plot Design with an LLM-powered Assistant](https://arxiv.org/html/2411.02714v1) | Author preprint, 2024 | Abstract, design workflow, user-study discussion | Iterative authoring with human control; limited N=14 designer evidence |
-| [Emily Short, Conversation](https://emshort.blog/how-to-play/writing-if/my-articles/conversation/) | First-party design essay | Full text, selected sections | Context, agency, initiative, repetition |
-| [Emily Short, Conversation as Gameplay](https://emshort.blog/2019/01/20/conversation-as-gameplay-talk/) | First-party retrospective, 2019 | Full text | Stateful variation, legibility, consequences |
-| [Emily Short, What does your narrative system need to do?](https://emshort.blog/2022/04/09/what-does-your-narrative-system-need-to-do/) | First-party design essay, 2022 | Full text | Separate choices, resolution, and presentation |
-| [Writing with ink](https://github.com/inkle/inky/blob/master/app/resources/Documentation/WritingWithInk.md) | Official living documentation | Conditional-choice and variation sections | Authored implementation option |
-| [Yarn Spinner saliency](https://docs.yarnspinner.dev/write-yarn-scripts/advanced-scripting/saliency) and [storylets](https://yarnspinner.dev/docs/godot/gdscript/05-connecting-to-your-game/06-saliency-and-storylets/) | Official living documentation | Selection strategies and examples | Authored implementation option |
-| [Barlow, Making Her Story](https://www.gdcvault.com/play/1023430/Making-Her-Story-Telling-a) | First-party GDC session, 2016 | Overview only | Player imagination; further viewing |
-| [Keenan, Disco Elysium: Meaningless Choices and Impractical Advice](https://www.gdcvault.com/play/1027048/contactUs) | First-party GDC session, 2021 | Overview only | Further viewing, no detailed architecture claims |
+| Source                                                                                                                                                                                                                  | Type / date                                  | Reviewed scope                                   | Use in these notes                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| [Mateas & Stern, Structuring Content in the Façade Interactive Drama Architecture](https://ojs.aaai.org/index.php/AIIDE/article/view/18722)                                                                             | Research paper, 2005                         | Publisher abstract                               | Authored behaviors, beats, drama management                            |
+| [Evans & Short, The AI Architecture of Versu](https://versu.com/wp-content/uploads/2014/05/versu.pdf)                                                                                                                   | Author-hosted architecture paper             | Full text, selected sections                     | Character/situation separation, inspectable state, social practices    |
+| [Evans & Short, Versu—A Simulationist Storytelling System](https://cs.uky.edu/~sgware/reading/papers/evans2014versu.pdf)                                                                                                | Peer-reviewed paper, 2014                    | Abstract and architecture discussion             | Autonomous choices within social practices                             |
+| [McCoy et al., Social Story Worlds with Comme il Faut](https://mtreanor.com/publications/TCIAIG-CiF.pdf)                                                                                                                | Author-hosted research paper, published 2014 | Full text, social-state architecture             | Relationships and social history as game state                         |
+| [McCoy et al., Prom Week](https://ojs.aaai.org/index.php/AIIDE/article/view/12662)                                                                                                                                      | AIIDE paper, 2013                            | Publisher abstract                               | Game applying CiF                                                      |
+| [Park et al., Generative Agents](https://arxiv.org/html/2304.03442v2)                                                                                                                                                   | UIST paper, 2023                             | Full text, architecture, evaluation, limitations | Memory/reflection/planning and their limitations                       |
+| [Shao et al., Character-LLM](https://aclanthology.org/2023.emnlp-main.814/)                                                                                                                                             | EMNLP paper, 2023                            | Abstract and full-paper evaluation               | Character training and interview-based fidelity                        |
+| [CharacterBox](https://arxiv.org/html/2412.05631v1)                                                                                                                                                                     | Preprint, 2024                               | Abstract and evaluation framing                  | Assessing unfolding character trajectories                             |
+| [Towards Enhanced Immersion and Agency for LLM-based Interactive Drama](https://aclanthology.org/2025.acl-long.546.pdf)                                                                                                 | ACL paper, 2025                              | Full-paper evaluation and limitations            | Narrative scaffolding and leakage risks                                |
+| [Office Whispers study](https://publikationen.bibliothek.kit.edu/1000190720/175162755)                                                                                                                                  | Journal article, 2026                        | Author-institution full text                     | Expressive freedom versus unreliable progress                          |
+| [The Double-Edged Sword of Open-Ended Interaction](https://arxiv.org/abs/2604.10107)                                                                                                                                    | Preprint, 2026                               | Full paper, with method-reporting caveat         | Cognitive load and mixed experience findings                           |
+| [Latency study, Entertainment Computing, DOI 10.1016/j.entcom.2026.101213](https://www.sciencedirect.com/science/article/pii/S1875952126001357)                                                                         | Journal article, 2026                        | Publisher abstract/snippets only                 | Pacing needs measurement; no universal thresholds                      |
+| [Doshi & Hauser, Generative artificial intelligence enhances creativity but reduces the diversity of novel content](https://arxiv.org/abs/2312.00506)                                                                   | Author paper; journal publication 2024       | Abstract                                         | Ideation benefits and similarity concern; nongame experiment           |
+| [Alavi et al., Game Plot Design with an LLM-powered Assistant](https://arxiv.org/html/2411.02714v1)                                                                                                                     | Author preprint, 2024                        | Abstract, design workflow, user-study discussion | Iterative authoring with human control; limited N=14 designer evidence |
+| [Emily Short, Conversation](https://emshort.blog/how-to-play/writing-if/my-articles/conversation/)                                                                                                                      | First-party design essay                     | Full text, selected sections                     | Context, agency, initiative, repetition                                |
+| [Emily Short, Conversation as Gameplay](https://emshort.blog/2019/01/20/conversation-as-gameplay-talk/)                                                                                                                 | First-party retrospective, 2019              | Full text                                        | Stateful variation, legibility, consequences                           |
+| [Emily Short, What does your narrative system need to do?](https://emshort.blog/2022/04/09/what-does-your-narrative-system-need-to-do/)                                                                                 | First-party design essay, 2022               | Full text                                        | Separate choices, resolution, and presentation                         |
+| [Writing with ink](https://github.com/inkle/inky/blob/master/app/resources/Documentation/WritingWithInk.md)                                                                                                             | Official living documentation                | Conditional-choice and variation sections        | Authored implementation option                                         |
+| [Yarn Spinner saliency](https://docs.yarnspinner.dev/write-yarn-scripts/advanced-scripting/saliency) and [storylets](https://yarnspinner.dev/docs/godot/gdscript/05-connecting-to-your-game/06-saliency-and-storylets/) | Official living documentation                | Selection strategies and examples                | Authored implementation option                                         |
+| [Barlow, Making Her Story](https://www.gdcvault.com/play/1023430/Making-Her-Story-Telling-a)                                                                                                                            | First-party GDC session, 2016                | Overview only                                    | Player imagination; further viewing                                    |
+| [Keenan, Disco Elysium: Meaningless Choices and Impractical Advice](https://www.gdcvault.com/play/1027048/contactUs)                                                                                                    | First-party GDC session, 2021                | Overview only                                    | Further viewing, no detailed architecture claims                       |
 
 No vendor demonstration is used as evidence of long-term enjoyment, production reliability, or economic feasibility. No source reviewed here settles how much runtime autonomy this particular game should have; that remains an experiment for the proposed small cast and intended players.

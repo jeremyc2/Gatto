@@ -118,7 +118,7 @@ long clips, 4:2:0 chroma and lossy H.264 can still reduce readability.
 provide the same direct control of hardware requirements, exact source
 resolution and custom bitrate. Estimates are estimates; validate actual output
 with either pipeline. [Export file limit](https://developer.apple.com/documentation/avfoundation/avassetexportsession/filelengthlimit),
-[export estimates](https://developer.apple.com/documentation/avfoundation/avassetexportsession/estimateoutputfilelength(completionhandler:))
+[export estimates](<https://developer.apple.com/documentation/avfoundation/avassetexportsession/estimateoutputfilelength(completionhandler:)>)
 
 ## Reading, ownership, progress and cancellation
 
@@ -129,9 +129,9 @@ Concrete 0.3.2 Rust method names include:
 - `AVAssetReaderOutput::setAlwaysCopiesSampleData(false)` and
   `copyNextSampleBuffer() -> Option<Retained<CMSampleBuffer>>`.
 - `AVAssetReader::{canAddOutput, addOutput, startReading, status, error,
-  cancelReading}`.
+cancelReading}`.
 - `AVAssetWriterInput::{requestMediaDataWhenReadyOnQueue_usingBlock,
-  isReadyForMoreMediaData, appendSampleBuffer, markAsFinished}`.
+isReadyForMoreMediaData, appendSampleBuffer, markAsFinished}`.
 
 The returned retained sample owns its native reference. Keep all native objects
 on an owning worker / serial dispatch queue, use an autorelease pool around
@@ -149,7 +149,7 @@ offsets, rather than synthesizing timestamps from frame counts. Copy the
 source `preferredTransform` to the video writer input to preserve orientation
 without rotating / scaling pixel buffers.
 [Writer backpressure](https://developer.apple.com/documentation/avfoundation/avassetwriterinput),
-[session timeline](https://developer.apple.com/documentation/avfoundation/avassetwriter/startsession(atsourcetime:)),
+[session timeline](<https://developer.apple.com/documentation/avfoundation/avassetwriter/startsession(atsourcetime:)>),
 [orientation](https://developer.apple.com/library/archive/qa/qa1744/)
 
 UI cancellation should set a shared cancellation flag and schedule teardown on

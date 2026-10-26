@@ -8,10 +8,10 @@ that earn that response. Draft the whole arc early, including the final action
 and its aftermath. Revise it through play, rather than treating an outline as a
 finished story.
 
-**Spoilers:** discusses the structure and an escape ending of *Papers, Please*,
-the design of *Galatea*, *Alabaster*, and *Floatpoint*, and broad narrative
-approaches in *Undertale*, *Hades*, *Outer Wilds*, *Heaven's Vault*, *A Highland
-Song*, *SOMA*, and *Scarlet Hollow*. Linked sources may contain larger spoilers.
+**Spoilers:** discusses the structure and an escape ending of _Papers, Please_,
+the design of _Galatea_, _Alabaster_, and _Floatpoint_, and broad narrative
+approaches in _Undertale_, _Hades_, _Outer Wilds_, _Heaven's Vault_, _A Highland
+Song_, _SOMA_, and _Scarlet Hollow_. Linked sources may contain larger spoilers.
 
 This guide addresses authored stories in independent games, including small
 linear games, branching conversations, exploration mysteries, and repeated-run
@@ -48,7 +48,7 @@ tragedy, and acceptance can also produce an ending. For an exploration mystery,
 the important change may be in the player's model of the world rather than in
 the protagonist's personality.
 
-**Creator evidence:** Toby Fox says *Undertale*'s story followed its battle
+**Creator evidence:** Toby Fox says _Undertale_'s story followed its battle
 system, and describes supporting nonviolent completion as substantially more
 complex than following established combat conventions. That is evidence for a
 mechanics-first route to story, not a requirement to start every game that way.
@@ -87,7 +87,7 @@ revise the route or the ending.
 **Creator evidence:** Emily Short recommends identifying the minimum facts
 required to understand an ending, charting their dependencies, and making those
 dependencies playable through puzzles, geography, stats, or choice flow. In
-*Floatpoint*, access to materials for a diplomatic outcome required experiencing
+_Floatpoint_, access to materials for a diplomatic outcome required experiencing
 vignettes relevant to that outcome. She also recommends letting players act on
 critical information, including choosing how an inevitable event happens or
 how the protagonist responds.
@@ -124,7 +124,7 @@ raising the volume without changing the situation produces escalation in
 presentation only. Conversely, a small act can turn the story if it changes who
 trusts whom or what the player now understands.
 
-**Creator evidence:** Lucas Pope describes constructing *Papers, Please* from
+**Creator evidence:** Lucas Pope describes constructing _Papers, Please_ from
 pieces such as encounters, characters, documents, puzzles, and story threads,
 then arranging them in a grid. His intended progression hooks players early,
 develops longer stories in the middle, introduces variation, and builds toward
@@ -145,12 +145,12 @@ The finale can then repeat it under changed circumstances.
 
 An original planning pattern:
 
-| Earlier experience | Later pressure | Possible payoff |
-| --- | --- | --- |
-| A repair always requires disconnecting power first | A distress signal is using that power | The final repair requires an understood sacrifice |
-| A companion habitually completes your instructions | The last situation is outside your knowledge | You must ask for their judgment |
-| A familiar sound signals a safe route | Its source is revealed to be dangerous | Navigation gains a new meaning |
-| You keep returning an object to its owner | The owner finally leaves | Giving it away becomes an ending action |
+| Earlier experience                                 | Later pressure                               | Possible payoff                                   |
+| -------------------------------------------------- | -------------------------------------------- | ------------------------------------------------- |
+| A repair always requires disconnecting power first | A distress signal is using that power        | The final repair requires an understood sacrifice |
+| A companion habitually completes your instructions | The last situation is outside your knowledge | You must ask for their judgment                   |
+| A familiar sound signals a safe route              | Its source is revealed to be dangerous       | Navigation gains a new meaning                    |
+| You keep returning an object to its owner          | The owner finally leaves                     | Giving it away becomes an ending action           |
 
 A twist should change the meaning of earlier evidence. Write the earlier
 interpretation, the later interpretation, and the evidence compatible with both.
@@ -158,7 +158,7 @@ If the reveal needs a previously unmentioned rule to work, seed that rule or
 change the reveal. Surprise is optional; a player anticipating the outcome can
 still care deeply about carrying it out.
 
-**Creator evidence:** Thomas Grip's pre-release *SOMA* design pillars call for
+**Creator evidence:** Thomas Grip's pre-release _SOMA_ design pillars call for
 puzzles and encounters to arise from narrative situations and for themes to
 emerge through participation. This documents an intended approach, not measured
 proof of how every player experienced the released game.
@@ -179,13 +179,13 @@ Specify which promises your game actually makes. One ending can support rich
 participation; several endings can still feel arbitrary.
 
 **Creator evidence:** the official description of Kelsey Beachum's 2021
-*Outer Wilds* talk states that the game's primary goal was curiosity-driven,
+_Outer Wilds_ talk states that the game's primary goal was curiosity-driven,
 player-directed exploration, using a nonlinear story instead of assigned
 missions. This supports a knowledge-and-discovery form of progression. It does
 not establish detailed claims here about the game's final sequence.
 [GDC 2021 session abstract](https://www.gdcvault.com/play/1027368/Independent-Games-Summit-Sparking-Curiosity/).
 
-**Creator evidence:** Tony Howard-Arias's 2022 *Scarlet Hollow* session abstract
+**Creator evidence:** Tony Howard-Arias's 2022 _Scarlet Hollow_ session abstract
 distinguishes intended discrete endings reflecting players' thematic behavior
 from a relationship system using smaller dialogue and art changes to personalize
 play. This is a description of the design approach at that time, not a claim
@@ -194,15 +194,15 @@ that all planned endings had shipped.
 
 **Proposed practice:** choose a structure for a particular purpose:
 
-| Structure | Useful when | Obligation to watch |
-| --- | --- | --- |
-| One authored destination | The central experience is mastery, discovery, or a particular dramatic arc | Preserve meaningful participation on the way |
-| Local branches that reconverge | Choices primarily express approach or relationship | Remember meaningful differences after reconvergence |
-| Several outcome families | Distinct commitments deserve distinct resolutions | Establish each outcome's requirements and consequences |
-| Shared finale with conditional aftermath | Many relationships need acknowledgment | Avoid incompatible combinations and generic summaries |
-| Repeated runs with persistent narrative | Failure and return belong to the premise | Handle widely different rates of player progress |
+| Structure                                | Useful when                                                                | Obligation to watch                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------ |
+| One authored destination                 | The central experience is mastery, discovery, or a particular dramatic arc | Preserve meaningful participation on the way           |
+| Local branches that reconverge           | Choices primarily express approach or relationship                         | Remember meaningful differences after reconvergence    |
+| Several outcome families                 | Distinct commitments deserve distinct resolutions                          | Establish each outcome's requirements and consequences |
+| Shared finale with conditional aftermath | Many relationships need acknowledgment                                     | Avoid incompatible combinations and generic summaries  |
+| Repeated runs with persistent narrative  | Failure and return belong to the premise                                   | Handle widely different rates of player progress       |
 
-Reconvergence does not require forgetting. Inkle's official *Writing with ink*
+Reconvergence does not require forgetting. Inkle's official _Writing with ink_
 guide documents branching and rejoining, conditional content, variables, and
 visit-based state. These are implementation facilities for remembering earlier
 play, not evidence that a particular branch is dramatically meaningful.
@@ -227,14 +227,14 @@ conversations, and long breaks between sessions change the distance between
 setup and payoff. Decide where attention is available and where the player can
 pause, reflect, or resume.
 
-**Creator evidence:** Greg Kasavin describes *Hades* as extending *Pyre*'s
+**Creator evidence:** Greg Kasavin describes _Hades_ as extending _Pyre_'s
 continuous narrative, where success and failure both move the story forward.
 Characters respond to accomplishments, and players choose how much to engage
 with them. This explains an approach to failure as narrative continuity; it is
 not a prescription for the number of runs before a finale.
 [Kasavin, August 5, 2021](https://blog.playstation.com/2021/08/05/the-origins-of-hades-out-next-week-on-ps5-ps4/).
 
-**Creator evidence:** Jon Ingold's *A Highland Song* development posts describe
+**Creator evidence:** Jon Ingold's _A Highland Song_ development posts describe
 context-sensitive remembered correspondence, shaped by what Moira has recently
 seen and learned. A later post explains how players can walk away from most
 conversations, with reactions and tracking of seen or skipped content. The
@@ -277,7 +277,7 @@ actions. This is a useful caution against treating branch count as quality.
 
 ### Galatea: an ending must fit the conversation that produced it
 
-Short describes the challenge of making *Galatea*'s ending conditions produce
+Short describes the challenge of making _Galatea_'s ending conditions produce
 coherent conclusions to varied conversations, and acknowledges that some
 generated stories are weaker than others. She also reports players becoming
 anxious about whether they had found all endings, despite her intention that
@@ -291,7 +291,7 @@ If replay is essential, make that expectation legible.
 
 ### Alabaster: failures can teach, and endings need explicit tests
 
-While assembling *Alabaster*, Short charted outcomes beyond the conversation
+While assembling _Alabaster_, Short charted outcomes beyond the conversation
 tree because nonconversation actions also mattered. She marked unimplemented
 endings and those with test commands. She proposed that unfavorable endings
 offer interesting information and directions for another attempt. In her own
@@ -331,16 +331,16 @@ become a living service? For this small linear version, the authored arc reaches
 the latter. The player participates through discovery and execution; it does not
 promise an outcome branch.
 
-| Beat | Playable event and scene turn | What it earns |
-| --- | --- | --- |
-| Familiar routine | Tune the looping recording; the apprentice corrects a loose dial just as her father taught her | The recording is comforting; tuning is learned |
-| Disruption | A boat calls for assistance, interrupting the recording; answering requires temporarily switching it off | The same channel has a present-day use |
-| First attempt | She tries to run recording and receiver together; the lights dim and the caller breaks up | Her preferred compromise has a visible limitation |
-| Relationship turn | A former colleague offers a replacement component; she initially insists her father's setup was perfect | The obstacle has emotional and practical dimensions |
-| Reversal | Testing reveals her father's handwritten rewiring notes: he changed the station repeatedly to help others | Preservation and loyalty no longer mean the same thing |
-| Cost clarified | A storm disables the safe power supply; the only available compatible part is in the recording unit | The final sacrifice follows established equipment rules |
-| Final action | Disconnect the recording unit, move its part, retune, and guide the ferry | Familiar verbs now enact the changed commitment |
-| Aftermath | A passenger thanks the station; another boat asks to use it tomorrow; she writes a new entry in the maintenance log | The loss remains, while continued service becomes possible |
+| Beat              | Playable event and scene turn                                                                                       | What it earns                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Familiar routine  | Tune the looping recording; the apprentice corrects a loose dial just as her father taught her                      | The recording is comforting; tuning is learned             |
+| Disruption        | A boat calls for assistance, interrupting the recording; answering requires temporarily switching it off            | The same channel has a present-day use                     |
+| First attempt     | She tries to run recording and receiver together; the lights dim and the caller breaks up                           | Her preferred compromise has a visible limitation          |
+| Relationship turn | A former colleague offers a replacement component; she initially insists her father's setup was perfect             | The obstacle has emotional and practical dimensions        |
+| Reversal          | Testing reveals her father's handwritten rewiring notes: he changed the station repeatedly to help others           | Preservation and loyalty no longer mean the same thing     |
+| Cost clarified    | A storm disables the safe power supply; the only available compatible part is in the recording unit                 | The final sacrifice follows established equipment rules    |
+| Final action      | Disconnect the recording unit, move its part, retune, and guide the ferry                                           | Familiar verbs now enact the changed commitment            |
+| Aftermath         | A passenger thanks the station; another boat asks to use it tomorrow; she writes a new entry in the maintenance log | The loss remains, while continued service becomes possible |
 
 The ending is earned by the dependency chain: attachment → competing need →
 failed compromise → revised understanding → informed cost → action → evidence
@@ -410,17 +410,17 @@ interaction. Preserve enough time and budget to make these changes.
 
 ## 10. Pitfalls and deliberate tradeoffs
 
-| Symptom | What to inspect or change |
-| --- | --- |
-| The ending explains a theme never encountered in play | Add an earlier decision, task, or relationship that puts the value under pressure |
-| A twist replaces the story instead of reinterpreting it | Identify the prior evidence and costs that remain meaningful after the reveal |
-| A final choice makes earlier choices feel erased | Carry history into eligibility, staging, reactions, or aftermath where the game's promise requires it |
-| Every choice opens a permanent new route | Reconverge where outcomes can share a situation; preserve consequential state |
-| The player receives the “wrong” ending without understanding why | Improve intermediate feedback and test a causal explanation after completion |
-| A sad ending feels like punishment for engagement | Examine the promised experience, player intention, and acknowledgment of effort |
-| The climax is followed by a long inventory of minor fates | Prioritize consequences that answer established concerns; let optional detail remain optional |
-| Required setup is easy to miss | Change access, reinforce naturally, or adapt the ending to the knowledge actually acquired |
-| A beautiful ending exists only as prose | Build its transitions, inputs, failure states, timing, and aftermath in a playable draft |
+| Symptom                                                          | What to inspect or change                                                                             |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| The ending explains a theme never encountered in play            | Add an earlier decision, task, or relationship that puts the value under pressure                     |
+| A twist replaces the story instead of reinterpreting it          | Identify the prior evidence and costs that remain meaningful after the reveal                         |
+| A final choice makes earlier choices feel erased                 | Carry history into eligibility, staging, reactions, or aftermath where the game's promise requires it |
+| Every choice opens a permanent new route                         | Reconverge where outcomes can share a situation; preserve consequential state                         |
+| The player receives the “wrong” ending without understanding why | Improve intermediate feedback and test a causal explanation after completion                          |
+| A sad ending feels like punishment for engagement                | Examine the promised experience, player intention, and acknowledgment of effort                       |
+| The climax is followed by a long inventory of minor fates        | Prioritize consequences that answer established concerns; let optional detail remain optional         |
+| Required setup is easy to miss                                   | Change access, reinforce naturally, or adapt the ending to the knowledge actually acquired            |
+| A beautiful ending exists only as prose                          | Build its transitions, inputs, failure states, timing, and aftermath in a playable draft              |
 
 These are diagnostic proposals, not prohibitions. A game can deliberately deny
 control, break a convention, withhold closure, or frustrate a desire. Name the
@@ -438,9 +438,9 @@ and session length can change the appropriate structure.
 
 Primary material used here consists of creator-authored posts, Pope's own
 archive of his original development log, direct creator interview answers, the
-official ink manual, and two official GDC abstracts. The *Outer Wilds* slide PDF
+official ink manual, and two official GDC abstracts. The _Outer Wilds_ slide PDF
 was discoverable but returned an access error; no claims depend on its unread
-contents. The *Scarlet Hollow* abstract is treated as historical design intent,
+contents. The _Scarlet Hollow_ abstract is treated as historical design intent,
 not as verification of its October 2026 release state. This note does not claim
 to have played all cited games or establish player reception through reviews.
 

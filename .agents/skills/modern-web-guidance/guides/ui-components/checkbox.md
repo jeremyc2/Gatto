@@ -11,7 +11,7 @@ For simple, brand-consistent styling that retains native rendering, keyboard beh
 ```css
 .checkbox-native {
   accent-color: #1a73e8;
-  
+
   /* Sizing is controlled via relative units */
   inline-size: 1.25em;
   aspect-ratio: 1;
@@ -90,13 +90,12 @@ Set explicit relative sizes for `--checkbox-size` and `--checkbox-icon-size` bec
 }
 ```
 
-
 ## The indeterminate state
 
 The indeterminate state cannot be set via an HTML attribute; set the `indeterminate` DOM property in JavaScript (`checkbox.indeterminate = true`) and ensure the `:indeterminate` pseudo-class is visually distinct from both `:checked` and unchecked states:
 
-* **Native (`accent-color`):** Automatically styled by the browser using the element's `accent-color` (no extra `:indeterminate` CSS rule needed).
-* **Custom (`appearance: none`):** Swap `--checkbox-icon` to `var(--icon-dash)` on `.checkbox-custom:indeterminate` as shown above.
+- **Native (`accent-color`):** Automatically styled by the browser using the element's `accent-color` (no extra `:indeterminate` CSS rule needed).
+- **Custom (`appearance: none`):** Swap `--checkbox-icon` to `var(--icon-dash)` on `.checkbox-custom:indeterminate` as shown above.
 
 ```js
 const selectAll = document.querySelector("#select-all");
@@ -119,7 +118,6 @@ selectAll.indeterminate = true;
   ```
 - **DO** provide a `:disabled` style variant that lowers opacity and sets `cursor: not-allowed` to convey inactive states clearly.
 
-
 ## Fallback strategies
 
 ### Fallbacks & browser support for accent-color
@@ -129,6 +127,7 @@ Supported by: Chrome 93 (Aug 2021), Edge 93 (Sep 2021), Firefox 92 (Sep 2021), a
 
 The `accent-color` property is progressive enhancement.
 Browsers that do not support this property will ignore it and use their default UI colors.
+
 ### CSS Masks
 
 Baseline status for Masks: Widely available. It's been Baseline since 2023-12-07.

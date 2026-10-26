@@ -8,7 +8,7 @@
 
 ```css
 .hero {
-  background-image: url('texture.png'), linear-gradient(to bottom, #fff, #eee);
+  background-image: url("texture.png"), linear-gradient(to bottom, #fff, #eee);
   background-blend-mode: soft-light;
 }
 ```
@@ -16,9 +16,10 @@
 ### Gradients and `color-mix()`
 
 Use `in oklch` or `in oklab` to explicitly specify the interpolation color space for gradients or `color-mix()`.
+
 - `in oklch` preserves chroma better, but can more easily get out of device gamut, especially for bigger differences between colors
 - `in oklab` stays in gamut more easily (assuming in-gamut endpoints) but can create washed out desaturated colors in the middle, especially when interpolating between opposite hues.
-- *DON'T* use `in srgb` unless you have a specific reason to do so (e.g. you are building a color picker that needs to interpolate in srgb).
+- _DON'T_ use `in srgb` unless you have a specific reason to do so (e.g. you are building a color picker that needs to interpolate in srgb).
 
 #### Fallback
 
@@ -80,8 +81,14 @@ Polka dot with `.5em` radius dots spaced `2em` apart (horizontally/vertically â€
 ```css
 --distance: 2em;
 --radius: .5em;
---polka: radial-gradient(circle, var(--color-1) var(--radius), transparent calc(var(--radius) + 1px));
-background: var(--polka) 0 0, var(--polka) var(--distance) var(--distance) var(--color-2);
+--polka: radial-gradient(
+  circle,
+  var(--color-1) var(--radius),
+  transparent calc(var(--radius) + 1px)
+);
+background:
+  var(--polka) 0 0,
+  var(--polka) var(--distance) var(--distance) var(--color-2);
 background-size: calc(var(--distance) * 2) calc(var(--distance) * 2);
 ```
 

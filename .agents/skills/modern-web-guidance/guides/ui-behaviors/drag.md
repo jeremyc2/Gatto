@@ -35,8 +35,8 @@ Use a viewport-relative positioning model such as `position: fixed` when clampin
 With pointer capture, the movement listeners can remain on the handle:
 
 ```js
-handle.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0 || event.target.closest('button, input, select, textarea, a')) return;
+handle.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || event.target.closest("button, input, select, textarea, a")) return;
 
   const rect = draggable.getBoundingClientRect();
   offsetX = event.clientX - rect.left;
@@ -44,14 +44,14 @@ handle.addEventListener('pointerdown', (event) => {
   handle.setPointerCapture(event.pointerId);
 });
 
-handle.addEventListener('pointermove', (event) => {
+handle.addEventListener("pointermove", (event) => {
   if (!handle.hasPointerCapture(event.pointerId)) return;
-  handle.classList.add('dragging');
+  handle.classList.add("dragging");
   moveTo(event.clientX - offsetX, event.clientY - offsetY);
 });
 
-handle.addEventListener('lostpointercapture', () => {
-  handle.classList.remove('dragging');
+handle.addEventListener("lostpointercapture", () => {
+  handle.classList.remove("dragging");
 });
 
 function moveTo(left, top) {

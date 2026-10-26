@@ -19,13 +19,13 @@ reference cels in 15 layers. These are current model drawings and components,
 not alternate versions of the film. Their colors already match the scene’s coat
 ramps, before character scaling.
 
-| Reference layers | Cel numbers in this document |
-| --- | --- |
-| Paper walking / standing; pickup; seated | 1–6 and 9; 1–6; 1 and 3 |
-| Watercolor walking / sniffing / standing; seated | 1–9 and 12; 1–3 |
-| Round walking / sniffing; seated | 1–4 and 6–8; 1–4 |
-| Four tail banks: paper, watercolor, round seated, round walking | 1–28 each |
-| Clean courtyard, GitHub box, front rim, flower picture | 1 each |
+| Reference layers                                                | Cel numbers in this document |
+| --------------------------------------------------------------- | ---------------------------- |
+| Paper walking / standing; pickup; seated                        | 1–6 and 9; 1–6; 1 and 3      |
+| Watercolor walking / sniffing / standing; seated                | 1–9 and 12; 1–3              |
+| Round walking / sniffing; seated                                | 1–4 and 6–8; 1–4             |
+| Four tail banks: paper, watercolor, round seated, round walking | 1–28 each                    |
+| Clean courtyard, GitHub box, front rim, flower picture          | 1 each                       |
 
 Reference cel numbers identify model poses, independently of the story playing
 at those frame numbers. Isolate one reference layer to inspect it. Layer user
@@ -82,12 +82,12 @@ Bending begins near the root 1–2 frames after each cue; the tip follows up to
 out of each gesture without overshooting. The small
 walking-stop sway and final tip response finish once, without repeating.
 
-| Body cue | Tail response |
-| --- | --- |
-| Sniff begins at 23 | Small counterbalance, 24–37, then hold. |
-| Sit at 46 | Draw into the close curl, 47–62, then hold. |
-| Look forward at 72 | One moderate lift, 74–93, then hold. |
-| Look left at 95 | Slowly relax back into the curl, 97–123. |
+| Body cue            | Tail response                                        |
+| ------------------- | ---------------------------------------------------- |
+| Sniff begins at 23  | Small counterbalance, 24–37, then hold.              |
+| Sit at 46           | Draw into the close curl, 47–62, then hold.          |
+| Look forward at 72  | One moderate lift, 74–93, then hold.                 |
+| Look left at 95     | Slowly relax back into the curl, 97–123.             |
 | Look forward at 117 | Small tip response, 119–126; hold through the blink. |
 
 The box sits flat, with taller sage sides, botanical lining and large GitHub
@@ -95,14 +95,14 @@ lettering. The flower picture is a rigid 180 × 120 rectangle while carried. Its
 straight top edge meets a small lip at the mouth; it stays in front of the carrier.
 It settles into floor perspective behind the rim without changing physical size.
 
-| Frames | Action |
-| --- | --- |
-| 1–34 | Explore, sniff; kitten moves ahead; paper cat crouches. |
-| 35–46 | Grip and lift through complete body poses. |
-| 47–96 | Carry and lower, keeping paws outside the box. |
-| 97–105 | Release and settle behind the rim. |
-| 102–117 | Withdraw and back away. |
-| 118–131 | Gather and rest; kitten’s tongue appears at 119–123. |
+| Frames  | Action                                                  |
+| ------- | ------------------------------------------------------- |
+| 1–34    | Explore, sniff; kitten moves ahead; paper cat crouches. |
+| 35–46   | Grip and lift through complete body poses.              |
+| 47–96   | Carry and lower, keeping paws outside the box.          |
+| 97–105  | Release and settle behind the rim.                      |
+| 102–117 | Withdraw and back away.                                 |
+| 118–131 | Gather and rest; kitten’s tongue appears at 119–123.    |
 
 The kitten’s paws stay planted once it stops. Each cat has a distinct rhythm;
 the round cat’s tail follows its body and head cues. It blinks at 128–130;

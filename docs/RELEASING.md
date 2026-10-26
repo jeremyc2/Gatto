@@ -13,7 +13,7 @@ There is no active release workflow in GitHub Actions.
   `xcrun notarytool`, `xcrun stapler`, `spctl`, `plutil`, `ditto`, `hdiutil`, `diskutil`,
   `swift`, `tiffutil`, and `osascript`.
 - Bun and `cargo-deny` 0.20.2 installed for release checks (`cargo install --locked
-  cargo-deny --version 0.20.2` is one-time setup).
+cargo-deny --version 0.20.2` is one-time setup).
 - A logged-in macOS desktop session. Finder saves the disk image's window layout;
   allow your terminal to control Finder if macOS asks on the first build.
 - A **Developer ID Application** certificate and its private key in the login
@@ -21,12 +21,12 @@ There is no active release workflow in GitHub Actions.
 - Notarization credentials stored in the `gatto-notary` keychain profile. Follow
   the [one-time setup](#one-time-signing-setup); do not commit credentials.
 
-| Environment variable | Purpose |
-| --- | --- |
-| `SIGN_IDENTITY` | Signing certificate name. Required if more than one Developer ID Application identity is present. |
-| `SPARKLE_ACCOUNT` | Keychain account for the persistent Sparkle Ed25519 signing key; defaults to `gatto-updates`. |
-| `NOTARY_PROFILE` | Existing notarization keychain profile; defaults to `gatto-notary`. |
-| `GIT_COMMIT_HASH` | Build metadata override for ordinary Cargo builds. The release script sets this to the full release commit itself. |
+| Environment variable | Purpose                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SIGN_IDENTITY`      | Signing certificate name. Required if more than one Developer ID Application identity is present.                  |
+| `SPARKLE_ACCOUNT`    | Keychain account for the persistent Sparkle Ed25519 signing key; defaults to `gatto-updates`.                      |
+| `NOTARY_PROFILE`     | Existing notarization keychain profile; defaults to `gatto-notary`.                                                |
+| `GIT_COMMIT_HASH`    | Build metadata override for ordinary Cargo builds. The release script sets this to the full release commit itself. |
 
 ## One-time signing setup
 

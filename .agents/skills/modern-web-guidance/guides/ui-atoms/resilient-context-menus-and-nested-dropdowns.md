@@ -14,16 +14,14 @@ The first step is to create a trigger button that opens the overlay container us
 **MANDATORY Accessibility Distinction:** This pattern explicitly models a **button group revealed inside a popover** rather than a true ARIA menu. Do not apply `role="menu"` or `role="menuitem"` unless you fully implement the corresponding keyboard navigation contract (such as handling spatial arrow-key navigation between items). For the same reason, do not add `aria-haspopup` to the trigger — its value (`menu`, `listbox`, `tree`, `grid`, or the legacy `true`) is a promise that the target exposes a matching role, which this pattern does not.
 
 ```html
-<button popovertarget="action-panel">
-  Open Actions
-</button>
+<button popovertarget="action-panel">Open Actions</button>
 <!-- Use the Popover API (`popover="auto"`) for the overlay to ensure it is placed in the top layer and handled accessibly by the browser. -->
 <div id="action-panel" popover="auto" class="panel">
   <button class="action-item" type="button">Edit</button>
 </div>
 ```
 
-This creates an *implicit* anchor association between the button and the panel, so that the panel can be positioned relative to the button.
+This creates an _implicit_ anchor association between the button and the panel, so that the panel can be positioned relative to the button.
 
 ### 2. Positioning with `position-area`
 
@@ -36,7 +34,7 @@ Instead of manual `top`/`left` offsets, use `position-area` to place the target 
      aligned to the start of the anchor and spanning to its end (span-inline-end).
   */
   position-area: block-end span-inline-end;
-  
+
   /* Reset insets to allow the grid to take control */
   inset: auto;
 }
@@ -57,7 +55,10 @@ To prevent the panel from being cut off at the edge of the screen, define "try t
      If it overflows the inline edges, flip it horizontally (flip-inline).
      If it overflows both (e.g., in a corner), flip on both axes (flip-block flip-inline).
   */
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
 }
 ```
 
@@ -107,7 +108,7 @@ Unsupported in: Chrome, Edge, and Firefox.
 
 To support browsers without anchor positioning, you must set a reasonable position. By default popovers are centered in the middle of the screen, which may work for your use case.
 
-For some use cases, you may be able to use the `@oddbird/css-anchor-positioning` polyfill, which adds support for some anchor positioning use cases. It does not support implicit anchors, so you MUST add anchor names to the trigger. Additionally, `position-area` is not supported on popovers by the polyfill, so you MUST use `anchor()` on the desired insets. 
+For some use cases, you may be able to use the `@oddbird/css-anchor-positioning` polyfill, which adds support for some anchor positioning use cases. It does not support implicit anchors, so you MUST add anchor names to the trigger. Additionally, `position-area` is not supported on popovers by the polyfill, so you MUST use `anchor()` on the desired insets.
 
 ```html
 <!-- MANDATORY: Conditionally install the anchor positioning polyfill -->

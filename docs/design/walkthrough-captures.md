@@ -29,14 +29,14 @@ composited UI.
 They exclude the title bar, menus, document tabs, and capture pointer. Coordinates
 below use pixels in the original window capture, with an exclusive lower edge.
 
-| File | Window crop | View |
-| --- | --- | --- |
-| `canvas.png` | x 0–1408, y 164–948 | Centered canvas at 300%, timeline hidden. |
-| `timeline.png` | x 0–1408, y 164–1220 | Centered canvas at 200%, timeline and artwork layers visible. |
-| `detail.png` | x 0–1100, y 164–864 | Closer crop of the canvas capture, keeping the character, complete shovel, palette and annotation area. |
-| `path.png` | x 0–1408, y 164–1276 | Timeline view including the visible local document-path prefix in the status bar. |
-| `comparison-orange.png` | x 0–1408, y 164–948 | Original orange gardener at 300%, timeline hidden. |
-| `comparison-black.png` | x 0–1408, y 164–948 | Same pose and clothes with a black coat, at the same 300% framing. |
+| File                    | Window crop          | View                                                                                                    |
+| ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `canvas.png`            | x 0–1408, y 164–948  | Centered canvas at 300%, timeline hidden.                                                               |
+| `timeline.png`          | x 0–1408, y 164–1220 | Centered canvas at 200%, timeline and artwork layers visible.                                           |
+| `detail.png`            | x 0–1100, y 164–864  | Closer crop of the canvas capture, keeping the character, complete shovel, palette and annotation area. |
+| `path.png`              | x 0–1408, y 164–1276 | Timeline view including the visible local document-path prefix in the status bar.                       |
+| `comparison-orange.png` | x 0–1408, y 164–948  | Original orange gardener at 300%, timeline hidden.                                                      |
+| `comparison-black.png`  | x 0–1408, y 164–948  | Same pose and clothes with a black coat, at the same 300% framing.                                      |
 
 The unannotated path capture is a fixture for the privacy demonstration; the
 published editor image covers that path with Gatto’s pixelation tool. Other

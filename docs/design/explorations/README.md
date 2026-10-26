@@ -6,17 +6,17 @@ The [approved website](../../../web/README.md) has moved to the Solid project in
 
 ## What each study asks
 
-| Study | Question | Interaction |
-| --- | --- | --- |
-| [Approved website](../../../web/README.md) | Where is the approved website implemented? | Native scrolling crossfades a fixed scene and nearby text; chapter navigation, responsive layout and README download badges. Reduced motion removes fades without changing layouts. |
-| [One developing scene](story-sequence.html) | How do the three pictures and practical text unfold together while scrolling? | Full sequence with short copy; reactions concern text rather than reselecting the artwork. |
-| [Identity postcards](identity-postcards.html) | Can distinct cat materials and characters form a coherent little encounter? | Three composed scenes, alternate pitches, large-image inspection, reactions. |
-| [Character studio](character-studio.html) | Which character details and material relationships deserve more development? | Different actions across materials, surrounding context, full expression sheets. |
-| [Shared worlds](multiverse-study.html) | What makes watercolor, paper, and app-like cats belong together? | Switch encounters and framing, inspect composition notes, record reactions. |
-| [Type and color](type-color-lab.html) | Do the lettering and palette survive real words and different conditions? | Fonts, text, size, palette, light/dark, narrow composition, calculated contrast pairs. |
-| [Motion](motion-lab.html) | Does the movement help after the novelty wears off? | Gesture, timing, play/pause/reset, complete still equivalent. |
-| [Story and copy](story-and-copy.html) | Which voice and information sequence feel useful and believable? | Three writing drafts and keyboard-accessible reordering. |
-| [Taste interview](taste-interview.html) | What do you prefer, why, and which decisions does that enable next? | Seven starting questions, conditional follow-ups, confidence, reasons, Markdown export. |
+| Study                                         | Question                                                                      | Interaction                                                                                                                                                                         |
+| --------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Approved website](../../../web/README.md)    | Where is the approved website implemented?                                    | Native scrolling crossfades a fixed scene and nearby text; chapter navigation, responsive layout and README download badges. Reduced motion removes fades without changing layouts. |
+| [One developing scene](story-sequence.html)   | How do the three pictures and practical text unfold together while scrolling? | Full sequence with short copy; reactions concern text rather than reselecting the artwork.                                                                                          |
+| [Identity postcards](identity-postcards.html) | Can distinct cat materials and characters form a coherent little encounter?   | Three composed scenes, alternate pitches, large-image inspection, reactions.                                                                                                        |
+| [Character studio](character-studio.html)     | Which character details and material relationships deserve more development?  | Different actions across materials, surrounding context, full expression sheets.                                                                                                    |
+| [Shared worlds](multiverse-study.html)        | What makes watercolor, paper, and app-like cats belong together?              | Switch encounters and framing, inspect composition notes, record reactions.                                                                                                         |
+| [Type and color](type-color-lab.html)         | Do the lettering and palette survive real words and different conditions?     | Fonts, text, size, palette, light/dark, narrow composition, calculated contrast pairs.                                                                                              |
+| [Motion](motion-lab.html)                     | Does the movement help after the novelty wears off?                           | Gesture, timing, play/pause/reset, complete still equivalent.                                                                                                                       |
+| [Story and copy](story-and-copy.html)         | Which voice and information sequence feel useful and believable?              | Three writing drafts and keyboard-accessible reordering.                                                                                                                            |
+| [Taste interview](taste-interview.html)       | What do you prefer, why, and which decisions does that enable next?           | Seven starting questions, conditional follow-ups, confidence, reasons, Markdown export.                                                                                             |
 
 The earlier [mood board](moodboard.html), [system study](design-system.html), and [storyboard](storyboard.md) remain available. The mood board and system study now show developed character artwork in place of relying only on the initial rough silhouette.
 

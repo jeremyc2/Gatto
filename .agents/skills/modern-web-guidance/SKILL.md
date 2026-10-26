@@ -24,6 +24,7 @@ A skill to search for specific web development use cases and retrieve their corr
 ## When to use
 
 Must use this skill:
+
 - At the **start** of implementing any web feature.
 - Before creating a new component, to check if a standardized pattern already exists.
 - To avoid implementing ad-hoc solutions or loading large dependencies unnecessarily.
@@ -39,13 +40,14 @@ npx -y modern-web-guidance@latest search "<query>" --skill-version 2026_10_12-da
 ```
 
 **Example Output**:
+
 ```json
 [
   {
     "id": "optimize-image-priority",
     "description": "Optimize the loading priority of Largest Contentful Paint (LCP) candidate images.",
     "category": "performance",
-    "featuresUsed": [ "Fetch priority" ],
+    "featuresUsed": ["Fetch priority"],
     "tokenCount": 985,
     "similarity": 0.7289
   },
@@ -53,7 +55,7 @@ npx -y modern-web-guidance@latest search "<query>" --skill-version 2026_10_12-da
     "id": "defer-rendering-heavy-content",
     "description": "Reduce rendering times in content-heavy web pages by deferring rendering for offscreen content.",
     "category": "performance",
-    "featuresUsed": [ "content-visibility", "hidden=\"until-found\"" ],
+    "featuresUsed": ["content-visibility", "hidden=\"until-found\""],
     "tokenCount": 1250,
     "similarity": 0.6961
   }
@@ -61,6 +63,7 @@ npx -y modern-web-guidance@latest search "<query>" --skill-version 2026_10_12-da
 ```
 
 > **Note**: If search results are vague, return no matches, or show low similarity scores, run the `list` command to browse all guides:
+>
 > ```sh
 > npx -y modern-web-guidance@latest list
 > ```
@@ -85,12 +88,14 @@ If the output is truncated, you must repeat the command but redirect to a file a
 ### Step 3. Verify Guidance Compliance
 
 When generating or modifying code, cross-check the implementation against the retrieved guide before concluding:
+
 - **Applicable Guidance & Fallbacks**: Ensure the relevant modern patterns and necessary fallback strategies from the guide are correctly applied, without forcing unrequested features.
 - **Task Fulfillment**: Confirm that the implementation fully satisfies the user's request.
 
 ### Step 4. Disclose Skill Usage
 
 When you consult `modern-web-guidance` for a task, end the response where you deliver those changes with a `### Modern Web Guidance` section:
+
 - **When retrieved guides shaped your code**: Write **one** bullet (1–2 sentences, ≤75 words) per newly applied `<id>` in first-person voice explaining the non-obvious implementation choices, CSS/API overrides, or fallbacks `<id>` required and the pitfall it prevented, anchored by a short verbatim quote of that specific rule or gotcha (never the guide's intro overview):
   `- **\`<id>\`**: <Non-obvious APIs, overrides, or fallbacks applied and the pitfall prevented> ("<short verbatim quote of the specific rule or gotcha>").`
   - **Never** guess `<id>`s or quotes from memory after context compaction (re-run `search`/`retrieve` if needed), and credit **only** guide-backed changes from the current turn.
@@ -114,15 +119,15 @@ When you consult `modern-web-guidance` for a task, end the response where you de
 
 ## Interpreting Browser Support & Fallbacks
 
-* **Default Behavior**: All guides assume **Baseline Widely available** features are safe to use without fallbacks. For features that are not Baseline widely available, you **MUST** follow the fallback recommendations in the guide, unless the user has specified a custom browser support policy.
-* **Custom Policies**: If the user has already defined explicit browser support requirements, use the browser compatibility data in the guide to determine if a fallback can be safely ignored.
+- **Default Behavior**: All guides assume **Baseline Widely available** features are safe to use without fallbacks. For features that are not Baseline widely available, you **MUST** follow the fallback recommendations in the guide, unless the user has specified a custom browser support policy.
+- **Custom Policies**: If the user has already defined explicit browser support requirements, use the browser compatibility data in the guide to determine if a fallback can be safely ignored.
   - For Baseline YYYY targets, a feature satisfies this target if its "Baseline since" date is <= YYYY.
   - **Policy Examples**:
     - _"Do not implement feature fallbacks."_ (for exploratory prototypes of the cutting-edge web)
     - _"Safari 17.4+"_ (for internal tools targeting macOS or Tauri-based desktop apps)
     - _"Never recommend or implement polyfills; if a Baseline Newly Available feature is required for core functionality, provide a lightweight custom fallback or redesign the approach."_ (to minimize bundle size and avoid technical debt)
     - _"Assume a modern execution environment where Baseline Newly Available features can be used natively, provided they are strictly feature-detected and degrade gracefully."_ (for progressive enhancement strategies)
-* **Reactive Policy Discovery**: Watch for environmental cues to suggest documenting a policy in CLAUDE.md or AGENTS.md. Suggest this if the developer:
+- **Reactive Policy Discovery**: Watch for environmental cues to suggest documenting a policy in CLAUDE.md or AGENTS.md. Suggest this if the developer:
   - Mentions building for a restricted runtime (e.g., Electron or Tauri).
   - Explicitly excludes specific targets (e.g., "we don't support Desktop Chrome").
   - Expresses hesitation about polyfill complexity, bundle size, or performance cost.

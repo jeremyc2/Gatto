@@ -32,8 +32,8 @@ as well as browser packages and fails on registry errors, malformed reports,
 new advisories, or an expired/changed exception. It does not automatically fix
 or silently ignore findings.
 
-| Temporary exception | Affected functionality and reachability | Owner / removal condition |
-| --- | --- | --- |
+| Temporary exception                                                                      | Affected functionality and reachability                                                                                                                                                                                                                                                                                                                | Owner / removal condition                                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), `braces 3.0.3` | Development-only `@stylexjs/eslint-plugin 0.19.1 → micromatch 4.0.8 → braces 3.0.3`. The inspected StyleX rules only call `micromatch.isMatch`, which delegates to picomatch rather than the vulnerable recursive braces walkers. The vulnerable package is still installed/imported; this is a scoped static assessment, not an exploitability proof. | Jeremy (@jeremyc2). Expires **2026-11-22 00:00 UTC**, or earlier when a compatible fixed release exists, the plugin/call path changes, or this branch is removed. |
 
 The gate verifies the exact three lock entries and SHA-512 identities, that the
@@ -47,13 +47,13 @@ The upstream advisory currently lists no patched version.
 RustSec reports five informational, transitive “unmaintained” notices. None is a
 known vulnerability, none is a direct dependency, and no advisory is suppressed:
 
-| Advisory | Package | Introduced through | Current disposition |
-| --- | --- | --- | --- |
-| `RUSTSEC-2024-0384` | `instant 0.1.13` | GPUI Base/Component | Monitor GPUI releases for migration to `web-time`. |
-| `RUSTSEC-2024-0436` | `paste 1.0.15` | GPUI Component, Metal, and image codecs | Monitor upstream migration to `pastey` or native macros. |
-| `RUSTSEC-2025-0134` | `rustls-pemfile 2.2.0` | GPUI Kit assets' HTTP stack | Monitor upstream migration to `rustls-pki-types`. |
-| `RUSTSEC-2026-0206` | `rustybuzz 0.20.1` | GPUI SVG/text rendering | Monitor upstream migration to `harfrust`. |
-| `RUSTSEC-2026-0192` | `ttf-parser 0.25.1` | GPUI font/SVG rendering | Monitor upstream migration to `skrifa`. |
+| Advisory            | Package                | Introduced through                      | Current disposition                                      |
+| ------------------- | ---------------------- | --------------------------------------- | -------------------------------------------------------- |
+| `RUSTSEC-2024-0384` | `instant 0.1.13`       | GPUI Base/Component                     | Monitor GPUI releases for migration to `web-time`.       |
+| `RUSTSEC-2024-0436` | `paste 1.0.15`         | GPUI Component, Metal, and image codecs | Monitor upstream migration to `pastey` or native macros. |
+| `RUSTSEC-2025-0134` | `rustls-pemfile 2.2.0` | GPUI Kit assets' HTTP stack             | Monitor upstream migration to `rustls-pki-types`.        |
+| `RUSTSEC-2026-0206` | `rustybuzz 0.20.1`     | GPUI SVG/text rendering                 | Monitor upstream migration to `harfrust`.                |
+| `RUSTSEC-2026-0192` | `ttf-parser 0.25.1`    | GPUI font/SVG rendering                 | Monitor upstream migration to `skrifa`.                  |
 
 Replacing these packages locally would require patching or forking GPUI and its
 rendering stack. That would create a private dependency fork and a larger review
@@ -212,10 +212,10 @@ Until the first stable release, security fixes are applied to the latest `0.x`
 release and the default development branch. Upgrade to the latest release when
 reporting a problem; earlier pre-1.0 releases do not receive separate backports.
 
-| Version | Supported |
-| ------- | --------- |
-| Latest 0.x release and `main` | Yes |
-| Earlier releases | No |
+| Version                       | Supported |
+| ----------------------------- | --------- |
+| Latest 0.x release and `main` | Yes       |
+| Earlier releases              | No        |
 
 ## Reporting a vulnerability
 

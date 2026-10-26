@@ -24,6 +24,7 @@
 ### Accessibility
 
 Use `prefers-reduced-motion` media queries to turn off heavy motion for users who prefer it.
+
 - **Provide Pause mechanism**: Allow users to stop auto-running carousels, banners, or other persistent animations.
 - **Default to static views**: Consider defaulting to static states and allowing users to opt-in to motion.
 - **Don't exceed flash limits (three per second)**: Never include rapid light-to-dark flashing. Such effects can cause seizures.
@@ -72,13 +73,13 @@ When `event.animation` is not available, you can usually find the `Animation` in
 
 - Web Animations API (`element.animate()`) animations do not have an `animationName`, so they cannot be matched by name when filtering `event.target.getAnimations()`.
 - Filtering by `animationName` for `AnimationEvent`s is ambiguous when multiple animations with the same name are attached to the same element.
-  - Note that filtering on `transitionProperty` for `TransitionEvent`s works as there is only one event per transition property. 
+  - Note that filtering on `transitionProperty` for `TransitionEvent`s works as there is only one event per transition property.
 - `event.target` always points to the originating DOM element, so it does not distinguish between animations running on the element itself versus one of its pseudo-elements — whereas `event.animation.effect.pseudoElement` exposes the target pseudo-element directly.
 
 ```js
 // Works in most basic CSS animation cases, but fails for WAAPI animations,
 // duplicate animation names on the same element, or pseudo-elements.
-document.addEventListener('animationstart', (event) => {
+document.addEventListener("animationstart", (event) => {
   const animation = event.target
     .getAnimations()
     .find((anim) => anim.animationName === event.animationName);
@@ -86,7 +87,7 @@ document.addEventListener('animationstart', (event) => {
 });
 
 // PREFERRED: Directly access the exact Animation object via event.animation
-document.addEventListener('animationstart', (event) => {
+document.addEventListener("animationstart", (event) => {
   const animation = event.animation;
   console.log(animation);
 });

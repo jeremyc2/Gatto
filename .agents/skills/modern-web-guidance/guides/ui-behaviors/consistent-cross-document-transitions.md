@@ -50,11 +50,10 @@ If a non-blocking script in the `<head>` must run before the transition animates
   <!--
     DO: Mark layout-critical scripts with blocking="render".
   -->
-  <script type=module blocking="render">
+  <script type="module" blocking="render">
     // Example: apply a stored theme before the page renders,
     // so the transition snapshot reflects the correct theme.
-    document.documentElement.dataset.theme =
-      localStorage.getItem('theme') || 'light';
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
   </script>
 </head>
 ```
@@ -73,7 +72,7 @@ Even when no individual elements have a `view-transition-name`, the default `roo
 
 ```html
 <head>
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css" />
 
   <!--
     DO: Block rendering until the main content area is parsed,
@@ -81,7 +80,7 @@ Even when no individual elements have a `view-transition-name`, the default `roo
     snapshot the page before visible content exists in the DOM,
     causing the cross-fade to reveal a blank or partial page.
   -->
-  <link rel="expect" href="#main-content" blocking="render">
+  <link rel="expect" href="#main-content" blocking="render" />
 </head>
 <body>
   <header>...</header>
@@ -102,7 +101,7 @@ Because `<link rel="expect">` only pauses rendering until the target DOM element
 
 ```html
 <head>
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css" />
 
   <!--
     DO: Preload critical transition images so their pixels are
@@ -110,7 +109,7 @@ Because `<link rel="expect">` only pauses rendering until the target DOM element
     <link rel="expect"> only waits for the DOM element to be parsed,
     NOT for image pixels to download or decode.
   -->
-  <link rel="preload" as="image" href="/img/product.webp" fetchpriority="high">
+  <link rel="preload" as="image" href="/img/product.webp" fetchpriority="high" />
 
   <!--
     DO: Block rendering until the element participating in the
@@ -118,7 +117,7 @@ Because `<link rel="expect">` only pauses rendering until the target DOM element
     may start the transition before #hero exists, causing the
     morph to degrade to a fade-out/fade-in.
   -->
-  <link rel="expect" href="#hero" blocking="render">
+  <link rel="expect" href="#hero" blocking="render" />
 
   <!--
     When multiple blocking="render" resources are present,
@@ -143,7 +142,7 @@ Because `<link rel="expect">` only pauses rendering until the target DOM element
       width="800"
       height="600"
       alt="Product"
-    >
+    />
   </section>
 </body>
 ```
@@ -160,18 +159,8 @@ Different viewport sizes may show different amounts of content above the fold. U
     so block until both are parsed. On narrow screens, only the
     hero is visible initially.
   -->
-  <link
-    rel="expect"
-    href="#hero"
-    blocking="render"
-    media="screen and (width <= 768px)"
-  >
-  <link
-    rel="expect"
-    href="#sidebar"
-    blocking="render"
-    media="screen and (width > 768px)"
-  >
+  <link rel="expect" href="#hero" blocking="render" media="screen and (width <= 768px)" />
+  <link rel="expect" href="#sidebar" blocking="render" media="screen and (width > 768px)" />
 </head>
 ```
 
@@ -198,7 +187,7 @@ If `view-transition-name` values are assigned statically in CSS, or if you are o
 
 ```javascript
 // transition-setup.js
-window.addEventListener('pagereveal', async (event) => {
+window.addEventListener("pagereveal", async (event) => {
   if (!event.viewTransition) return;
 
   const from = navigation.activation?.from;
@@ -209,17 +198,17 @@ window.addEventListener('pagereveal', async (event) => {
   // DO: Assign view-transition-name based on navigation context.
   // This enables a morph animation from the product card on the
   // list page to the heading on the detail page.
-  if (fromUrl.pathname === '/products/') {
-    const heading = document.querySelector('main h1');
+  if (fromUrl.pathname === "/products/") {
+    const heading = document.querySelector("main h1");
     if (!heading) return;
 
-    heading.style.viewTransitionName = 'product-title';
+    heading.style.viewTransitionName = "product-title";
 
     try {
       await event.viewTransition.ready;
     } catch (error) {
       // Skipped view transitions reject `ready` with InvalidStateError.
-      if (error.name !== 'InvalidStateError') {
+      if (error.name !== "InvalidStateError") {
         throw error;
       }
     } finally {
@@ -227,7 +216,7 @@ window.addEventListener('pagereveal', async (event) => {
       // finishes. Stale names interfere with subsequent navigations
       // and prevent the page from entering the bfcache.
       await event.viewTransition.finished;
-      heading.style.viewTransitionName = '';
+      heading.style.viewTransitionName = "";
     }
   }
 });

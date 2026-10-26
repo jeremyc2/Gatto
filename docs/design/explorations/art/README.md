@@ -10,16 +10,16 @@ The latest [redraw notes](redraw-notes.md) own the current cast, three composed 
 
 ## Earlier assets and user preferences
 
-| File | Role | Generated source |
-| --- | --- | --- |
-| [cat-watercolor.png](cat-watercolor.png) | First favorite: watercolor/ink black kitten, six expressions. | `exec-69ffd41e-593b-4672-9923-0f1a79524bfb.png` |
-| [cat-paper.png](cat-paper.png) | Second favorite: tactile layered-paper kitten, six expressions. | `exec-02a2c20b-cf71-41b8-bf99-e1088869d999.png` |
-| [cat-cel.png](cat-cel.png) | Accepted luminous companion treatment. | `exec-7574578c-33f3-4d80-a833-e96a79e65c1e.png` |
-| [cat-luminous-layered.png](cat-luminous-layered.png) | Additional accepted luminous treatment, retained for inspection. | `exec-3d8c6687-b60c-4cc9-ab4b-14c1bc64894b.png` |
-| [cat-luminous-textured.png](cat-luminous-textured.png) | Additional accepted luminous treatment, retained for inspection. | `exec-dbe84b59-00f6-486a-9dbd-6cf85075eb27.png` |
-| [ensemble-handoff.png](ensemble-handoff.png) | Watercolor and paper cats sharing a picture. | `exec-1b371a0d-ee39-4725-8014-adb61ed9e137.png` |
-| [ensemble-discovery.png](ensemble-discovery.png) | Different cats attending to a picture from distinct positions. | `exec-68207c82-9f45-417c-9e92-3eef19f4af39.png` |
-| [ensemble-together.png](ensemble-together.png) | Three materials, different eyes and proportions, one completed moment. | `exec-b3a65696-0d96-488a-9696-2a308f3b183d.png` |
+| File                                                   | Role                                                                   | Generated source                                |
+| ------------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------- |
+| [cat-watercolor.png](cat-watercolor.png)               | First favorite: watercolor/ink black kitten, six expressions.          | `exec-69ffd41e-593b-4672-9923-0f1a79524bfb.png` |
+| [cat-paper.png](cat-paper.png)                         | Second favorite: tactile layered-paper kitten, six expressions.        | `exec-02a2c20b-cf71-41b8-bf99-e1088869d999.png` |
+| [cat-cel.png](cat-cel.png)                             | Accepted luminous companion treatment.                                 | `exec-7574578c-33f3-4d80-a833-e96a79e65c1e.png` |
+| [cat-luminous-layered.png](cat-luminous-layered.png)   | Additional accepted luminous treatment, retained for inspection.       | `exec-3d8c6687-b60c-4cc9-ab4b-14c1bc64894b.png` |
+| [cat-luminous-textured.png](cat-luminous-textured.png) | Additional accepted luminous treatment, retained for inspection.       | `exec-dbe84b59-00f6-486a-9dbd-6cf85075eb27.png` |
+| [ensemble-handoff.png](ensemble-handoff.png)           | Watercolor and paper cats sharing a picture.                           | `exec-1b371a0d-ee39-4725-8014-adb61ed9e137.png` |
+| [ensemble-discovery.png](ensemble-discovery.png)       | Different cats attending to a picture from distinct positions.         | `exec-68207c82-9f45-417c-9e92-3eef19f4af39.png` |
+| [ensemble-together.png](ensemble-together.png)         | Three materials, different eyes and proportions, one completed moment. | `exec-b3a65696-0d96-488a-9696-2a308f3b183d.png` |
 
 The extra sheet `exec-6d42e96b-820e-4d4b-9361-458a95cac564.png` is excluded from the active collection at the user's request. Its generated original was not deleted. The accepted luminous files are distinct saved outputs even where visually similar. Their backgrounds are part of the current source art; do not assume that they are clean production cutouts.
 

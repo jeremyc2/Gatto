@@ -19,14 +19,16 @@ Connection-Allowlist-Report-Only: (response-origin "https://api.example.com/v2/*
 ```
 
 ```javascript
-const ALLOWLIST_DESTS = new Set(['document', 'iframe', 'worker', 'sharedworker', 'serviceworker']);
+const ALLOWLIST_DESTS = new Set(["document", "iframe", "worker", "sharedworker", "serviceworker"]);
 
 // Normalize a config URL or URLPattern string for Connection-Allowlist:
 // - Rewrites ws:// and wss:// to http:// and https:// (WebSocket matching rule).
 // - Strips a bare trailing slash on origin-only URLs (e.g. from new URL(...).href)
 //   so all subpaths on the origin are permitted instead of only "/".
 export function normalizeAllowlistPattern(rawPattern) {
-  const trimmed = String(rawPattern).trim().replace(/^ws(s?):\/\//i, 'http$1://');
+  const trimmed = String(rawPattern)
+    .trim()
+    .replace(/^ws(s?):\/\//i, "http$1://");
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new Error(`Pattern must include an http:// or https:// scheme: ${rawPattern}`);
   }
@@ -36,7 +38,7 @@ export function normalizeAllowlistPattern(rawPattern) {
   if (/[()]/.test(trimmed)) {
     throw new Error(`Custom regex groups are rejected by Connection-Allowlist: ${rawPattern}`);
   }
-  return trimmed.replace(/^(https?:\/\/[^/?#]+)\/$/i, '$1');
+  return trimmed.replace(/^(https?:\/\/[^/?#]+)\/$/i, "$1");
 }
 
 // Build an RFC 9651 Inner List value for Connection-Allowlist or Connection-Allowlist-Report-Only.
@@ -44,24 +46,26 @@ export function buildConnectionAllowlistHeader({
   allowSelf = true,
   patterns = [],
   reportTo,
-  redirects = 'block',
-  webrtc = 'block',
+  redirects = "block",
+  webrtc = "block",
 } = {}) {
-  const items = allowSelf ? ['response-origin'] : [];
+  const items = allowSelf ? ["response-origin"] : [];
   for (const pattern of patterns) {
     const raw = String(pattern).trim();
-    if (raw === 'response-origin') {
-      if (!items.includes('response-origin')) items.push('response-origin');
+    if (raw === "response-origin") {
+      if (!items.includes("response-origin")) items.push("response-origin");
       continue;
     }
     const normalized = normalizeAllowlistPattern(raw);
-    items.push(`"${normalized.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    items.push(`"${normalized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
   }
-  let header = `(${items.join(' ')})`;
-  if (redirects === 'allow') header += '; redirects=allow';
-  if (webrtc === 'allow') header += '; webrtc=allow';
+  let header = `(${items.join(" ")})`;
+  if (redirects === "allow") header += "; redirects=allow";
+  if (webrtc === "allow") header += "; webrtc=allow";
   if (reportTo) {
-    const endpointToken = String(reportTo).trim().replace(/^"+|"+$/g, '');
+    const endpointToken = String(reportTo)
+      .trim()
+      .replace(/^"+|"+$/g, "");
     header += `; report-to=${endpointToken}`;
   }
   return header;
@@ -71,37 +75,47 @@ export function buildConnectionAllowlistHeader({
 // on document and worker responses.
 export function setConnectionAllowlistHeaders(res, options = {}) {
   const {
-    secFetchDest = 'document',
-    patterns = ['https://api.example.com', 'https://realtime.example.com', 'https://*.cdn.example.com/*'],
+    secFetchDest = "document",
+    patterns = [
+      "https://api.example.com",
+      "https://realtime.example.com",
+      "https://*.cdn.example.com/*",
+    ],
     reportOnlyPatterns,
-    reportEndpointName = 'conn-reports',
-    reportEndpointUrl = 'https://app.example.com/api/security-reports',
-    redirects = 'block',
-    webrtc = 'block',
+    reportEndpointName = "conn-reports",
+    reportEndpointUrl = "https://app.example.com/api/security-reports",
+    redirects = "block",
+    webrtc = "block",
     reportOnly = false,
   } = options;
 
   const setHeader = (name, value) =>
-    typeof res.setHeader === 'function' ? res.setHeader(name, value) : res.headers.set(name, value);
+    typeof res.setHeader === "function" ? res.setHeader(name, value) : res.headers.set(name, value);
 
-  if (typeof res.appendHeader === 'function') {
-    res.appendHeader('Vary', 'Sec-Fetch-Dest');
-  } else if (typeof res.headers?.append === 'function') {
-    res.headers.append('Vary', 'Sec-Fetch-Dest');
+  if (typeof res.appendHeader === "function") {
+    res.appendHeader("Vary", "Sec-Fetch-Dest");
+  } else if (typeof res.headers?.append === "function") {
+    res.headers.append("Vary", "Sec-Fetch-Dest");
   } else {
-    setHeader('Vary', 'Sec-Fetch-Dest');
+    setHeader("Vary", "Sec-Fetch-Dest");
   }
   if (secFetchDest && !ALLOWLIST_DESTS.has(String(secFetchDest).toLowerCase())) return;
 
-  setHeader('Reporting-Endpoints', `${reportEndpointName}="${reportEndpointUrl}"`);
+  setHeader("Reporting-Endpoints", `${reportEndpointName}="${reportEndpointUrl}"`);
   setHeader(
-    reportOnly ? 'Connection-Allowlist-Report-Only' : 'Connection-Allowlist',
-    buildConnectionAllowlistHeader({ allowSelf: true, patterns, reportTo: reportEndpointName, redirects, webrtc }),
+    reportOnly ? "Connection-Allowlist-Report-Only" : "Connection-Allowlist",
+    buildConnectionAllowlistHeader({
+      allowSelf: true,
+      patterns,
+      reportTo: reportEndpointName,
+      redirects,
+      webrtc,
+    }),
   );
 
   if (!reportOnly && Array.isArray(reportOnlyPatterns)) {
     setHeader(
-      'Connection-Allowlist-Report-Only',
+      "Connection-Allowlist-Report-Only",
       buildConnectionAllowlistHeader({
         allowSelf: true,
         patterns: reportOnlyPatterns,

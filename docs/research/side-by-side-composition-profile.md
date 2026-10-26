@@ -7,7 +7,6 @@ exist. These tables preserve their original evidence; they do not measure the
 current workflow. Current behavior is documented in [the architecture guide](../ARCHITECTURE.md).
 Sizing research and primary tldraw sources are in [image sizing](comparison-image-sizing.md).
 
-
 Measured October 22, 2026 on an Apple M4 Pro, 48 GiB RAM, macOS 27.0.1,
 Rust 1.99.0. These are local examples, not measurements of the user's attachments.
 
@@ -20,9 +19,9 @@ then the stitched canvas passed through another full-document render and PNG
 encode. No network request is involved in Preview.
 
 | Input size, per image | Development median | Optimized median |
-| --- | ---: | ---: |
-| 1920 × 1080 | 7,249.5 ms | 266.3 ms |
-| 3840 × 2160 | 27,847.2 ms | 934.7 ms |
+| --------------------- | -----------------: | ---------------: |
+| 1920 × 1080           |         7,249.5 ms |         266.3 ms |
+| 3840 × 2160           |        27,847.2 ms |         934.7 ms |
 
 Three runs per size, with fixture preparation excluded from each composition
 timer. Both sides use the repository's `image-editor.png`, resized to the input
@@ -33,15 +32,15 @@ validation but exclude UI rendering, uploads, and disk writes.
 Temporary stage timers in the actual production pipeline gave this typical
 optimized 4K breakdown. The timers have been removed from normal code.
 
-| Work | Approximate time |
-| --- | ---: |
-| Rasterize two annotated sources | 151 ms |
-| Encode their two intermediate PNGs | 253 ms |
-| Decode those PNGs again | 55 ms |
-| Stitch source pixels and paint tabs | 22 ms |
-| Rasterize the final canvas and label layers | 220 ms |
-| Encode the final PNG | 180 ms |
-| Decode for attachment validation | 52 ms |
+| Work                                        | Approximate time |
+| ------------------------------------------- | ---------------: |
+| Rasterize two annotated sources             |           151 ms |
+| Encode their two intermediate PNGs          |           253 ms |
+| Decode those PNGs again                     |            55 ms |
+| Stitch source pixels and paint tabs         |            22 ms |
+| Rasterize the final canvas and label layers |           220 ms |
+| Encode the final PNG                        |           180 ms |
+| Decode for attachment validation            |            52 ms |
 
 Allocation, background fill, label layout, and timing overhead account for the
 remaining time. An independent optimized three-run repeat gave medians of 253.3
@@ -56,10 +55,10 @@ process/runtime memory; it is not a per-export allocation count.
 A separate harness clicks the production buttons using the two existing
 1240 × 1560 walkthrough images. It loads the sources before starting the timer.
 
-| Measurement | Development | Optimized |
-| --- | ---: | ---: |
-| Preview click through first captured GPU frame | 5,622.8 ms | 167.4 ms |
-| Save click through staged-attachment event, before reuse | 5,057.4 ms | 140.4 ms |
+| Measurement                                              | Development | Optimized |
+| -------------------------------------------------------- | ----------: | --------: |
+| Preview click through first captured GPU frame           |  5,622.8 ms |  167.4 ms |
+| Save click through staged-attachment event, before reuse |  5,057.4 ms |  140.4 ms |
 
 These are individual samples, not medians. The preview timer includes renderer
 settling, image decoding, and screenshot readback. The Save timer ends at the
@@ -127,9 +126,9 @@ branch on October 22, 2026:
 Three-run medians with the same fixtures and timing boundaries as the baseline:
 
 | Input size per side | Initial pipeline | New, cold | Both sides unchanged | Right side edited |
-| --- | ---: | ---: | ---: | ---: |
-| 1920 × 1080 | 266.3 ms | 94.0 ms | 54.3 ms | 74.8 ms |
-| 3840 × 2160 | 934.7 ms | 337.5 ms | 182.5 ms | 259.6 ms |
+| ------------------- | ---------------: | --------: | -------------------: | ----------------: |
+| 1920 × 1080         |         266.3 ms |   94.0 ms |              54.3 ms |           74.8 ms |
+| 3840 × 2160         |         934.7 ms |  337.5 ms |             182.5 ms |          259.6 ms |
 
 The cold comparison is about 64% faster at both sizes. Warm runs still stitch,
 render labels, and encode the final PNG; they skip only the unchanged source

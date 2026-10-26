@@ -18,13 +18,13 @@ less gray than the first app variant. The five fur tones were darkened by one
 additional exposure stop on October 26 (linear RGB × 0.5), keeping their hue and
 surface separation:
 
-| Role | Color |
-| --- | --- |
+| Role                      | Color     |
+| ------------------------- | --------- |
 | Outline and deepest seams | `#170b24` |
-| Shadow | `#231430` |
-| Coat | `#361e4a` |
-| Lit planes | `#503068` |
-| Upper-left highlight | `#74538a` |
+| Shadow                    | `#231430` |
+| Coat                      | `#361e4a` |
+| Lit planes                | `#503068` |
+| Upper-left highlight      | `#74538a` |
 
 Keep outlines darker than adjacent fills. Preserve the eyes, lavender ears,
 metal barrels, cyan bands and white/yellow flame cores. Avoid a uniform glow

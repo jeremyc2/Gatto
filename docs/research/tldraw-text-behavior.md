@@ -164,11 +164,11 @@ height to whole pixels and documents cross-engine drift as the reason. The
 default theme uses base font size 16 and line height 1.35. The resulting default
 presets are:
 
-| Text host | S | M | L | XL |
-| --- | ---: | ---: | ---: | ---: |
-| Standalone | 18 | 24 | 36 | 44 |
-| Geometric label | 18 | 22 | 26 | 32 |
-| Arrow label | 18 | 20 | 24 | 28 |
+| Text host       |   S |   M |   L |  XL |
+| --------------- | --: | --: | --: | --: |
+| Standalone      |  18 |  24 |  36 |  44 |
+| Geometric label |  18 |  22 |  26 |  32 |
+| Arrow label     |  18 |  20 |  24 |  28 |
 
 These are unscaled document pixels, separate from zoom and object scale.
 [Default theme](https://github.com/tldraw/tldraw/blob/e8eb1cf5635d28a2d516f0c0d823ed35f3ea9dc9/packages/editor/src/lib/editor/managers/ThemeManager/defaultThemes.ts#L15-L20),

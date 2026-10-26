@@ -19,13 +19,13 @@ Use the **Interest Invokers** API to trigger the hovercard. This ensures the car
   <h2>The buzz on hummingbirds</h2>
   <p class="byline">By Delphi Aguilar</p>
   <div>
-    <img src="bird.jpg" alt="A vibrant hummingbird">
+    <img src="bird.jpg" alt="A vibrant hummingbird" />
     <p>Brief summary of the article...</p>
   </div>
 </div>
 ```
 
-You do not need to include an additional link to the content inside of the hovercard, as it is redundant to the triggering link. 
+You do not need to include an additional link to the content inside of the hovercard, as it is redundant to the triggering link.
 
 ### Accessibility built in to `interestfor`
 
@@ -53,7 +53,7 @@ Position the hovercard relative to its trigger using **CSS Anchor Positioning**.
 By default, interest is shown and lost for keyboard and mouse users with a delay of half a second. This prevents the targeted popover from opening while tabbing through a page or moving your mouse around, and from closing while moving your mouse from the trigger to the popover. To adjust the timing, use the `interest-delay` CSS property.
 
 ```css
-[interestfor]{
+[interestfor] {
   /* Shorthand for interest-delay-start and interest-delay-end */
   interest-delay: 0.2s 0.1s;
 }
@@ -90,11 +90,7 @@ Use `@starting-style` to define the entry animation and `transition-behavior: al
 /* MANDATORY: Respect user preference for reduced motion by selectively applying transitions. */
 @media (prefers-reduced-motion: no-preference) {
   [popover].hovercard {
-    transition:
-      opacity,
-      transform,
-      display,
-      overlay;
+    transition: opacity, transform, display, overlay;
     transition-duration: 0.4s;
     transition-behavior: allow-discrete;
   }
@@ -142,12 +138,12 @@ By assigning matching `view-transition-name` values to elements in the hovercard
 <head>
   <!-- Block rendering until the hero image and title are parsed,
        ensuring the view transition snapshot is taken at the right time. -->
-  <link rel="expect" href="#main-content" blocking="render">
+  <link rel="expect" href="#main-content" blocking="render" />
 </head>
 <body>
   <main id="main-content">
     <h1>The buzz on hummingbirds</h1>
-    <img src="bird.jpg">
+    <img src="bird.jpg" />
   </main>
 </body>
 ```
@@ -254,8 +250,12 @@ When using the polyfill, the CSS API changes slightly to account for the lack of
 
 ```css
 /* Styles to apply when the effect is being previewed */
-:is(:interest-source, .interest-source) { /* ... */ }
-:is(:interest-target, .interest-target) { /* ... */ }
+:is(:interest-source, .interest-source) {
+  /* ... */
+}
+:is(:interest-target, .interest-target) {
+  /* ... */
+}
 ```
 
 - **CSS Properties:** For `interest-delay`, `interest-delay-start`, and `interest-delay-end`, the polyfill requires using CSS variables as it cannot read the custom properties directly in all browsers.

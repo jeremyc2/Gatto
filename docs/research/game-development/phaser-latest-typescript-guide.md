@@ -79,7 +79,7 @@ Create `index.html`:
 This complete `src/main.ts` example has no external artwork. It generates a texture, creates a lit Arcade Physics object, uses normalized arrow-key movement, and demonstrates a current cone light:
 
 ```ts
-import * as Phaser from 'phaser';
+import * as Phaser from "phaser";
 
 class Play extends Phaser.Scene {
   private hero?: Phaser.Physics.Arcade.Image;
@@ -87,29 +87,26 @@ class Play extends Phaser.Scene {
   private readonly direction = new Phaser.Math.Vector2();
 
   constructor() {
-    super('play');
+    super("play");
   }
 
   create(): void {
-    if (!this.textures.exists('hero')) {
+    if (!this.textures.exists("hero")) {
       const brush = this.add.graphics();
       brush.fillStyle(0xffce73);
       brush.fillRect(0, 0, 24, 24);
-      brush.generateTexture('hero', 24, 24);
+      brush.generateTexture("hero", 24, 24);
       brush.destroy();
     }
 
     this.hero = this.physics.add
-      .image(320, 180, 'hero')
+      .image(320, 180, "hero")
       .setCollideWorldBounds(true)
       .setLighting(true);
     this.cursors = this.input.keyboard?.createCursorKeys();
 
     this.lights.enable().setAmbientColor(0x303030);
-    this.lights.addConeLight(
-      320, 180, 260, 0xffe3b0, 2,
-      0, Math.PI / 6, Math.PI / 3,
-    );
+    this.lights.addConeLight(320, 180, 260, 0xffe3b0, 2, 0, Math.PI / 6, Math.PI / 3);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.hero = undefined;
@@ -133,16 +130,16 @@ class Play extends Phaser.Scene {
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.WEBGL,
-  parent: 'game',
+  parent: "game",
   width: 640,
   height: 360,
-  backgroundColor: '#151a25',
+  backgroundColor: "#151a25",
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   physics: {
-    default: 'arcade',
+    default: "arcade",
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
   scene: [Play],
@@ -180,11 +177,11 @@ Textures, asset caches, and the Animation Manager are game-level resources share
 
 Both built-in systems below are present in 4.2.1. Their continued availability does not make their APIs obsolete; choose between current systems on behavior and workload.
 
-| Requirement | Recommended starting point | Reason and constraint |
-| --- | --- | --- |
-| Fast platformer, top-down character, bullets, straightforward overlaps | Arcade Physics | Rectangular/circular collision with simple separation; good fit for authored arcade controls |
-| Rotating bodies, constraints, irregular/compound shapes, stacking | Matter Physics | Full rigid-body model, constraints, material properties, collision queries, and stable resting/stacking |
-| A highly specific controller or unusual movement law | Explicit simulation with a deliberate collision boundary | A design choice when owning movement rules is useful; avoid two systems both writing the same transform |
+| Requirement                                                            | Recommended starting point                               | Reason and constraint                                                                                   |
+| ---------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Fast platformer, top-down character, bullets, straightforward overlaps | Arcade Physics                                           | Rectangular/circular collision with simple separation; good fit for authored arcade controls            |
+| Rotating bodies, constraints, irregular/compound shapes, stacking      | Matter Physics                                           | Full rigid-body model, constraints, material properties, collision queries, and stable resting/stacking |
+| A highly specific controller or unusual movement law                   | Explicit simulation with a deliberate collision boundary | A design choice when owning movement rules is useful; avoid two systems both writing the same transform |
 
 Arcade's own source cautions that its separation method is unsuitable for demanding stacks and dense resting contacts. Matter offers those richer interactions at a different complexity and tuning cost. These are fit recommendations, not a claim that one engine is universally faster or guarantees a particular frame rate. [Arcade plugin](https://github.com/phaserjs/phaser/blob/v4.2.1/src/physics/arcade/ArcadePhysics.js), [Matter plugin](https://github.com/phaserjs/phaser/blob/v4.2.1/src/physics/matter-js/MatterPhysics.js).
 
@@ -210,16 +207,13 @@ Game-object filters require `enableFilters()`. The object then exposes `filters.
 This is an independent continuation inside `create`, assuming the complete example's `hero` texture exists:
 
 ```ts
-const badge = this.add.image(100, 80, 'hero');
+const badge = this.add.image(100, 80, "hero");
 badge.enableFilters();
 badge.filters?.internal.addGlow(0x78caff, 2, 0);
 
 // A separate tint example; does not need a filter framebuffer.
-const inverted = this.add.image(150, 80, 'hero');
-inverted
-  .setTint(0x000000)
-  .setTint2(0xffffff)
-  .setTintMode(Phaser.TintModes.MULTIPLY_TWO);
+const inverted = this.add.image(150, 80, "hero");
+inverted.setTint(0x000000).setTint2(0xffffff).setTintMode(Phaser.TintModes.MULTIPLY_TWO);
 ```
 
 Useful current tools include `Mask` for alpha masking, `GradientMap` for palette treatment, `Quantize` for reduced-color looks, `ImageLight` for normal/environment-based lighting, and `Blend` for texture compositing beyond native WebGL blend modes. Bloom and shine are available through `Phaser.Actions.AddEffectBloom` and `AddEffectShine`, which assemble their component operations. Consult each current function signature before copying effect code. [Current filter exports](https://github.com/phaserjs/phaser/blob/v4.2.1/src/filters/index.js), [bloom action](https://github.com/phaserjs/phaser/blob/v4.2.1/src/actions/AddEffectBloom.js), [shine action](https://github.com/phaserjs/phaser/blob/v4.2.1/src/actions/AddEffectShine.js), [two-color tint implementation](https://github.com/phaserjs/phaser/blob/v4.2.1/src/gameobjects/components/Tint.js).
@@ -270,11 +264,11 @@ Important current details:
 
 ## 10. GPU layers: use the constraints to get the benefit
 
-| Current object | Best starting use | Critical constraints |
-| --- | --- | --- |
-| `SpriteGPULayer` | Dense decorative backgrounds, foliage, stars, or repeated props with GPU-driven animation | One single-image texture, no multi-atlas; editing membership/data triggers buffer work; members are not ordinary interactive sprites |
-| `TilemapGPULayer` | Large mostly unchanged orthographic layers, including zoomed-out maps | One tileset/image; up to 4096 × 4096 tiles; orthographic only; edits require explicit GPU data regeneration |
-| Ordinary Sprite / TilemapLayer | Interactive actors, frequently changing content, flexible maps | More CPU-side work, but easier object-level behavior and flexible map rendering |
+| Current object                 | Best starting use                                                                         | Critical constraints                                                                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `SpriteGPULayer`               | Dense decorative backgrounds, foliage, stars, or repeated props with GPU-driven animation | One single-image texture, no multi-atlas; editing membership/data triggers buffer work; members are not ordinary interactive sprites |
+| `TilemapGPULayer`              | Large mostly unchanged orthographic layers, including zoomed-out maps                     | One tileset/image; up to 4096 × 4096 tiles; orthographic only; edits require explicit GPU data regeneration                          |
+| Ordinary Sprite / TilemapLayer | Interactive actors, frequently changing content, flexible maps                            | More CPU-side work, but easier object-level behavior and flexible map rendering                                                      |
 
 `SpriteGPULayer` stores member render data in GPU buffers and can animate properties without rewriting that data every frame. Populate coherently and keep data stable; frequent add/remove/patch operations undermine that advantage. Drawn area still costs fragments, so a huge transparent or overlapping quad population can become fill-rate limited. Published “million sprite” or speed-multiplier language is not an independently reproduced guarantee for your game. [4.2.1 SpriteGPULayer](https://github.com/phaserjs/phaser/blob/v4.2.1/src/gameobjects/spritegpulayer/SpriteGPULayer.js).
 
@@ -339,16 +333,16 @@ Recommended sequence:
 
 For future reading, start with these current release artifacts:
 
-| Source | What it is best for |
-| --- | --- |
-| [4.2.1 release](https://github.com/phaserjs/phaser/releases/tag/v4.2.1) | Exact installed release and patch fixes, including ESM, resize, stencil, and tween-delay corrections |
-| [4.2.1 declarations](https://github.com/phaserjs/phaser/blob/v4.2.1/types/phaser.d.ts) | Actual TypeScript interface of the pinned package |
-| [4.2.1 rendering concepts](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Rendering%20Concepts/Phaser%204%20Rendering%20Concepts.md) | Render architecture, current objects, filter concepts, GPU-layer model |
-| [4.2.1 shader guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Shader%20Guide/Phaser%204%20Shader%20Guide.md) | Managed WebGL state, shader/filter authoring, render nodes |
-| [4.2.1 internal-space guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Internal%20Space%20Guide/Phaser%204%20Internal%20Space%20Guide.md) | Coordinates, internal/external filters, masking and compositing |
-| [4.2.1 pixel-art guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Pixel%20Art%20Guide/Phaser%204%20Pixel%20Art%20Guide.md) | Choosing smooth or rounded pixel rendering; inspect API signatures for examples |
-| [4.2.1 cone-light guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Cone%20Lights/Phaser%204%20Cone%20Lights.md) | Complete cone-light semantics and examples |
-| [4.2.1 source tree](https://github.com/phaserjs/phaser/tree/v4.2.1/src) | Source authority when a live documentation page or example disagrees |
+| Source                                                                                                                                                           | What it is best for                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [4.2.1 release](https://github.com/phaserjs/phaser/releases/tag/v4.2.1)                                                                                          | Exact installed release and patch fixes, including ESM, resize, stencil, and tween-delay corrections |
+| [4.2.1 declarations](https://github.com/phaserjs/phaser/blob/v4.2.1/types/phaser.d.ts)                                                                           | Actual TypeScript interface of the pinned package                                                    |
+| [4.2.1 rendering concepts](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Rendering%20Concepts/Phaser%204%20Rendering%20Concepts.md)           | Render architecture, current objects, filter concepts, GPU-layer model                               |
+| [4.2.1 shader guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Shader%20Guide/Phaser%204%20Shader%20Guide.md)                             | Managed WebGL state, shader/filter authoring, render nodes                                           |
+| [4.2.1 internal-space guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Internal%20Space%20Guide/Phaser%204%20Internal%20Space%20Guide.md) | Coordinates, internal/external filters, masking and compositing                                      |
+| [4.2.1 pixel-art guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Pixel%20Art%20Guide/Phaser%204%20Pixel%20Art%20Guide.md)                | Choosing smooth or rounded pixel rendering; inspect API signatures for examples                      |
+| [4.2.1 cone-light guide](https://github.com/phaserjs/phaser/blob/v4.2.1/docs/Phaser%204%20Cone%20Lights/Phaser%204%20Cone%20Lights.md)                           | Complete cone-light semantics and examples                                                           |
+| [4.2.1 source tree](https://github.com/phaserjs/phaser/tree/v4.2.1/src)                                                                                          | Source authority when a live documentation page or example disagrees                                 |
 
 ### Research verification and limits
 

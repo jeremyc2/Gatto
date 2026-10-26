@@ -100,13 +100,13 @@ exist. Both paths can be overridden. See [DMG previews](docs/RELEASING.md#previe
 
 ## Project layout
 
-| Path | Contents |
-| --- | --- |
-| `src/` | Rust interface, GitHub uploads, and macOS integration. |
-| `web/` | Solid website, Bun build and development tools, and website tests. |
-| `docs/` | User guides, architecture, decisions, and research. |
-| `scripts/` and `packaging/` | Build, packaging, release tools, and assets. |
-| `.github/` | Contribution templates and retained workflow definitions. |
+| Path                        | Contents                                                           |
+| --------------------------- | ------------------------------------------------------------------ |
+| `src/`                      | Rust interface, GitHub uploads, and macOS integration.             |
+| `web/`                      | Solid website, Bun build and development tools, and website tests. |
+| `docs/`                     | User guides, architecture, decisions, and research.                |
+| `scripts/` and `packaging/` | Build, packaging, release tools, and assets.                       |
+| `.github/`                  | Contribution templates and retained workflow definitions.          |
 
 ## Making a change
 
@@ -341,8 +341,7 @@ Keep new dependencies to a minimum. In a dependency change, explain:
 
 When updating GPUI Kit, confirm its published package metadata pins a compatible
 GPUI release. Update the compatibility note above in the same pull request.
-Gatto's annotation renderer uses tiny-skia 0.12, Core Graphics 0.25, and Core Text
-22. Update the latter two together: Core Text exposes Core Graphics types at
+Gatto's annotation renderer uses tiny-skia 0.12, Core Graphics 0.25, and Core Text 22. Update the latter two together: Core Text exposes Core Graphics types at
 its API boundary. These remain in-process drawing and native framework bindings;
 no extra encoder or runtime is bundled. GPUI and its SVG renderer still require
 older versions transitively, so duplicate-version warnings are expected. Check

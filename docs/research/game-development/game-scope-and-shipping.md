@@ -18,12 +18,12 @@ guarantees commercial success.
 
 Use these working distinctions when reviewing a design:
 
-| Question | What to examine |
-| --- | --- |
-| What must a player learn? | Rules, controls, vocabulary, UI, exceptions, and information presented together |
-| What must a developer maintain? | State, dependencies, tools, interactions, persistence, and special cases |
-| How much must be produced? | Locations, encounters, characters, writing, art, audio, and their variations |
-| What makes continued play worthwhile? | Interesting choices, mastery, discovery, emotional development, or expression |
+| Question                              | What to examine                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| What must a player learn?             | Rules, controls, vocabulary, UI, exceptions, and information presented together |
+| What must a developer maintain?       | State, dependencies, tools, interactions, persistence, and special cases        |
+| How much must be produced?            | Locations, encounters, characters, writing, art, audio, and their variations    |
+| What makes continued play worthwhile? | Interesting choices, mastery, discovery, emotional development, or expression   |
 
 These are related, but should not be collapsed into one feature count. David
 Mullich distinguishes learning/rule complexity from depth through interesting
@@ -38,8 +38,8 @@ play. A simpler presentation can help players without reducing production cost;
 a hidden simulation still needs implementation and testing.
 
 Avoid assuming that a sophisticated simulation will become an enjoyable game
-once enough supporting features exist. Daniel Cook reports that his *Secret Life
-of Aliens* prototype had an original gossip simulation but opaque cause and
+once enough supporting features exist. Daniel Cook reports that his _Secret Life
+of Aliens_ prototype had an original gossip simulation but opaque cause and
 effect and slow feedback. His redesign simplified the model into explicit
 tokens, rules, and player actions. This is a firsthand failure and redesign,
 not proof that all simulation should be simplified or that this redesign shipped
@@ -75,7 +75,7 @@ Shrink the number of spaces or objectives around the essential experience first.
 If the defining requirement itself exceeds capacity, explicitly pause or change
 the concept rather than pretending an unrelated prototype validates it.
 
-The official GDC 2020 description of Adam Robinson-Yu's *A Short Hike*
+The official GDC 2020 description of Adam Robinson-Yu's _A Short Hike_
 postmortem records that he paused a larger project and made a small open-world
 game whose initial release fit a four-month deadline. This supports the
 possibility of preserving an appealing experience at a smaller scale. Four
@@ -89,14 +89,14 @@ Use a scope ledger rather than a list of attractive features. For each candidate
 record its player benefit, required content, dependencies, validation work,
 maintenance cost, and what could replace it more cheaply.
 
-| Cost category | Questions to answer before committing |
-| --- | --- |
-| Initial implementation | Can we make the basic behavior work? What remains unknown? |
-| Interactions | What existing behaviors must work with it? What happens in conflicting states? |
-| Content | How many assets or scenarios use it? Who creates and revises them? |
-| Communication | How does a player discover, understand, and control it? |
-| Integration | What changes in saving, input, UI, performance, audio, or build packaging? |
-| Completion | What testing, accessibility, compatibility, release preparation, and support apply? |
+| Cost category          | Questions to answer before committing                                               |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| Initial implementation | Can we make the basic behavior work? What remains unknown?                          |
+| Interactions           | What existing behaviors must work with it? What happens in conflicting states?      |
+| Content                | How many assets or scenarios use it? Who creates and revises them?                  |
+| Communication          | How does a player discover, understand, and control it?                             |
+| Integration            | What changes in saving, input, UI, performance, audio, or build packaging?          |
+| Completion             | What testing, accessibility, compatibility, release preparation, and support apply? |
 
 An illustrative example: adding an elemental attack is not just an attack effect
 if it changes enemy behavior, scenery, status icons, tutorials, saves, and
@@ -106,7 +106,7 @@ Inspect the actual dependency graph; do not claim every feature multiplies all
 other features or use an invented universal growth formula.
 
 Derek Yu warns that menus, transitions, saving, and repetitive content work are
-easy to overlook during the exciting conception stage. His *Finishing a Game*
+easy to overlook during the exciting conception stage. His _Finishing a Game_
 essay treats finishing as a skill and recommends maintaining a playable core
 that can survive cuts. [Yu, “Finishing a Game,” page dated September 17; year not
 displayed in the reviewed text](https://makegames.tumblr.com/post/1136623767/finishing-a-game).
@@ -134,13 +134,13 @@ useful than treating every impressive demo as evidence of readiness to scale.
 The following gates are an adapted operational framework. They are not a mandate
 to spend months on formal preproduction for a tiny game.
 
-| Gate | Deliverable | Evidence required to move forward | If evidence is missing |
-| --- | --- | --- | --- |
-| Design experiment | Cheapest playable or otherwise testable representation of the uncertain appeal | Intended experience appears; the main risk becomes clearer | Change the hypothesis, simplify, or stop |
-| External playable | A build someone else can start and use | Players can reach the important experience without constant explanation | Fix communication, controls, or the underlying interaction |
-| Production slice | A representative portion at credible intended quality, followed by another comparable unit | Actual production and revision costs fit capacity | Reduce content, fidelity, dependencies, or the concept |
-| Whole-game draft | Rough path through the complete intended experience | Beginning, progression, resolution or session boundary, and required transitions connect | Finish the missing path before expanding breadth |
-| Release candidate | Packaged build and accurate release materials | Declared requirements pass on supported configurations | Fix blockers or revise promises and scope |
+| Gate              | Deliverable                                                                                | Evidence required to move forward                                                        | If evidence is missing                                     |
+| ----------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Design experiment | Cheapest playable or otherwise testable representation of the uncertain appeal             | Intended experience appears; the main risk becomes clearer                               | Change the hypothesis, simplify, or stop                   |
+| External playable | A build someone else can start and use                                                     | Players can reach the important experience without constant explanation                  | Fix communication, controls, or the underlying interaction |
+| Production slice  | A representative portion at credible intended quality, followed by another comparable unit | Actual production and revision costs fit capacity                                        | Reduce content, fidelity, dependencies, or the concept     |
+| Whole-game draft  | Rough path through the complete intended experience                                        | Beginning, progression, resolution or session boundary, and required transitions connect | Finish the missing path before expanding breadth           |
+| Release candidate | Packaged build and accurate release materials                                              | Declared requirements pass on supported configurations                                   | Fix blockers or revise promises and scope                  |
 
 An isolated movement toy can answer a control question but cannot validate a
 long narrative arc or a multiplayer relationship. A beautiful scene can answer
@@ -288,17 +288,17 @@ cycle. [Sokpop Collective, January 4, 2021](https://www.patreon.com/sokpop/posts
 
 The following are proposed diagnostic triggers, not statistical predictors:
 
-| Warning sign | Decision to make now |
-| --- | --- |
-| The next build is always postponed for infrastructure | Name the experiment or release task being blocked; choose the smallest enabling work |
-| The core will become enjoyable only after several more systems | Isolate and test that dependency before expanding production |
-| New features enter faster than complete experiences emerge | Freeze additions and complete the current path |
-| The opening gets remade while the ending remains a note | Build the whole-game draft and reassess its shape |
-| Content estimates rely on unmeasured future speed | Finish and revise another representative unit; reforecast |
-| Every playtest request becomes a task | Identify the underlying observed problem and compare possible solutions |
-| Cuts remove the very thing players were promised | Change the release promise explicitly or pause the project |
-| “Almost done” has no finite acceptance list | Write and prioritize the remaining release requirements |
-| The work fits only by consuming all contingency or support time | Cut now, revise the release date, or reconsider capacity explicitly |
+| Warning sign                                                    | Decision to make now                                                                 |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| The next build is always postponed for infrastructure           | Name the experiment or release task being blocked; choose the smallest enabling work |
+| The core will become enjoyable only after several more systems  | Isolate and test that dependency before expanding production                         |
+| New features enter faster than complete experiences emerge      | Freeze additions and complete the current path                                       |
+| The opening gets remade while the ending remains a note         | Build the whole-game draft and reassess its shape                                    |
+| Content estimates rely on unmeasured future speed               | Finish and revise another representative unit; reforecast                            |
+| Every playtest request becomes a task                           | Identify the underlying observed problem and compare possible solutions              |
+| Cuts remove the very thing players were promised                | Change the release promise explicitly or pause the project                           |
+| “Almost done” has no finite acceptance list                     | Write and prioritize the remaining release requirements                              |
+| The work fits only by consuming all contingency or support time | Cut now, revise the release date, or reconsider capacity explicitly                  |
 
 ## Evidence limits
 

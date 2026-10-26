@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-26
+
+### Changed
+
+- Replace the flying cat menu bar icon with a monochrome adaptation of the
+  favicon's front-facing kitten portrait, following the macOS menu bar appearance.
+- Match the Dock, Finder and Applications icon to the colored favicon kitten on
+  a cream-to-lavender macOS icon background, including the source-build Dock icon.
+
 ## [0.19.0] - 2026-10-26
 
 ### Changed
@@ -26,7 +35,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   Open external links in a new tab and move GitHub from the footer to a labeled
   SVG icon in the header, without an underline or arrow. Match the footer
   wordmark to the header's spaced green dot, including on phones.
-  
+
 - Replace the app's main-page cat with a separate purple-highlighted pixel-art
   version of the website rocket cat, preserving the header's size and layout.
   Use deep purple fur with muted lavender highlights for the dark interface.
@@ -226,7 +235,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   on the original image while clearing unsaved changes and undo/redo history,
   including across multiple preview images. Reopening still allows moving,
   resizing, editing, and saving those objects; uploaded PNGs contain flat pixels.
-
 
 - Update Gatto's Cargo.lock version during release preparation, including when
   reusing a prepared release, so locked release checks pass without changing

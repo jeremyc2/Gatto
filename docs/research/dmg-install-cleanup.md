@@ -77,8 +77,8 @@ the image; `-force` ignores open files. The public Disk Arbitration APIs also
 provide unmount and eject operations and callbacks that report failure. The
 force-unmount option explicitly allows unmounting while files are active.
 Sources: Apple's local [hdiutil manual](/usr/share/man/man1/hdiutil.1),
-[DADiskUnmount](https://developer.apple.com/documentation/diskarbitration/dadiskunmount(_:_:_:_:)),
-[DADiskEject](https://developer.apple.com/documentation/diskarbitration/dadiskeject(_:_:_:_:)),
+[DADiskUnmount](<https://developer.apple.com/documentation/diskarbitration/dadiskunmount(_:_:_:_:)>),
+[DADiskEject](<https://developer.apple.com/documentation/diskarbitration/dadiskeject(_:_:_:_:)>),
 [unmount options](https://developer.apple.com/documentation/diskarbitration/dadiskunmountoptions),
 [eject callback](https://developer.apple.com/documentation/diskarbitration/dadiskejectcallback).
 
@@ -86,7 +86,7 @@ For the simple installed-app flow, AppKit also provides
 `NSWorkspace.unmountAndEjectDevice(at:)`, accepting a volume URL, reporting errors,
 and allowing use from any app thread. **Recommendation:** consider this public
 native API before introducing a subprocess for ejection. Source:
-[Apple NSWorkspace API](https://developer.apple.com/documentation/appkit/nsworkspace/unmountandejectdevice(at:)).
+[Apple NSWorkspace API](<https://developer.apple.com/documentation/appkit/nsworkspace/unmountandejectdevice(at:)>).
 
 **Recommendation:** never force an installer eject. Skip or retry briefly when
 the image is busy, including when the user launched the source app from the

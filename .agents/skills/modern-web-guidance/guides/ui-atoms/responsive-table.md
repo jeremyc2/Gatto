@@ -14,6 +14,7 @@ The core of a responsive table is maintaining the relationship between data cell
 ## Implementation Steps
 
 ### 1. Markup and Layout
+
 Structure your table with standard semantic headers. Use a `.table-wrapper` to handle overflow and provide a container for queries.
 
 ```html
@@ -40,6 +41,7 @@ Structure your table with standard semantic headers. Use a `.table-wrapper` to h
 ```
 
 ### 2. Configure Sticky Headers
+
 Enable scrolling and make headers sticky. Use logical properties and explicit z-index values to manage the stacking order.
 
 ```css
@@ -71,17 +73,23 @@ tbody th {
 ```
 
 ### 3. Responsive Stacked Layout
+
 When space is limited, hide the original header row and transform the table into cards. Inject labels using pseudo-elements, providing the accessible name directly in CSS.
 
 ```css
 @container (width < 600px) {
-  table, thead, tbody, tr, th, td {
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
     display: block;
   }
 
   thead {
     /* MANDATORY: Hide column header from layout and screen readers. */
-    display: none
+    display: none;
   }
 
   tr {

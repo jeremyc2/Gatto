@@ -55,7 +55,6 @@ Contents:
   - [Automated checks](#automated-checks)
   - [Manual testing](#manual-testing)
 
-
 ## 1. Content Navigability and Structure
 
 ### Landmarks
@@ -101,7 +100,9 @@ Contents:
   <section>
     <h2>User Statistics</h2>
     <table>
-      <caption>Monthly active users</caption>
+      <caption>
+        Monthly active users
+      </caption>
       <tr>
         <th scope="col">Month</th>
         <th scope="col">Users</th>
@@ -201,13 +202,13 @@ When the hidden content is focusable (skip links, focus-receiving wrappers), the
 ```html
 <!-- Good: Distinct title and language declaration -->
 <html lang="en">
-<head>
-  <title>Analytics Reports | Guidance Platform</title>
-</head>
-<body>
-  <p>The motto is <span lang="la">"Carpe diem"</span>.</p>
-  <iframe title="Interactive Sales Chart" src="/chart"></iframe>
-</body>
+  <head>
+    <title>Analytics Reports | Guidance Platform</title>
+  </head>
+  <body>
+    <p>The motto is <span lang="la">"Carpe diem"</span>.</p>
+    <iframe title="Interactive Sales Chart" src="/chart"></iframe>
+  </body>
 </html>
 ```
 
@@ -228,25 +229,25 @@ When the hidden content is focusable (skip links, focus-receiving wrappers), the
 // NOTE: This pattern applies ONLY to non-standard UI where no native HTML tag exists.
 // Always prioritize native <button> or <input> elements for standard interactions.
 // Elements MUST have the appropriate ARIA role (e.g., role="treeitem" or role="tab").
-customWidget.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+customWidget.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
     toggleWidgetState();
   }
-  if (e.key === ' ') {
+  if (e.key === " ") {
     e.preventDefault(); // Prevent page scrolling on Spacebar keydown
   }
 });
 
-customWidget.addEventListener('keyup', (e) => {
-  if (e.key === ' ') {
+customWidget.addEventListener("keyup", (e) => {
+  if (e.key === " ") {
     toggleWidgetState();
   }
 });
 
 function toggleWidgetState() {
   // E.g., Manage toggle/expanded states for custom controls
-  const isExpanded = customWidget.getAttribute('aria-expanded') === 'true';
-  customWidget.setAttribute('aria-expanded', !isExpanded);
+  const isExpanded = customWidget.getAttribute("aria-expanded") === "true";
+  customWidget.setAttribute("aria-expanded", !isExpanded);
 }
 ```
 
@@ -282,11 +283,11 @@ function toggleWidgetState() {
 
 ```html
 <!-- Decorative -->
-<img src="divider.png" alt="">
+<img src="divider.png" alt="" />
 
 <!-- Informative (Functional) -->
 <a href="/search">
-  <img src="glass.png" alt="Search the platform">
+  <img src="glass.png" alt="Search the platform" />
 </a>
 ```
 
@@ -298,7 +299,7 @@ function toggleWidgetState() {
 ```html
 <!-- Inline Decorative SVG (remove from tab flow) -->
 <svg aria-hidden="true" viewBox="0 0 24 24">
-  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
 </svg>
 ```
 
@@ -310,7 +311,7 @@ function toggleWidgetState() {
 ```html
 <!-- Complex graph with figcaption -->
 <figure>
-  <img src="chart.png" alt="Sales growth graph 2024.">
+  <img src="chart.png" alt="Sales growth graph 2024." />
   <figcaption>Sales grew 20% in Q3 due to new platform launch.</figcaption>
 </figure>
 ```
@@ -323,17 +324,15 @@ function toggleWidgetState() {
 ```html
 <!-- Video with Captions tracks -->
 <video controls>
-  <source src="intro.mp4" type="video/mp4">
-  <track src="caps.vtt" kind="captions" srclang="en" label="English">
+  <source src="intro.mp4" type="video/mp4" />
+  <track src="caps.vtt" kind="captions" srclang="en" label="English" />
 </video>
 
 <!-- Audio with expandable transcript details -->
 <audio controls src="podcast.mp3" aria-details="podcast-transcript"></audio>
 <details id="podcast-transcript">
   <summary>View Transcript</summary>
-  <div class="transcript-content">
-    Welcome to the show...
-  </div>
+  <div class="transcript-content">Welcome to the show...</div>
 </details>
 ```
 
@@ -343,12 +342,12 @@ function toggleWidgetState() {
 
 ### Content Visibility Decision Matrix
 
-| Intent | Visual | Screen Reader | Focusable | Structural Pattern |
-| :--- | :--- | :--- | :--- | :--- |
-| **Visible to all** | Yes | Yes | Yes | Standard rendering |
-| **Screen Reader only** | No | Yes | Yes (if interactive) | Visually hidden utility (e.g. `.visually-hidden`) |
-| **Visual only** | Yes | No | No | `aria-hidden="true"` / `role="presentation"` |
-| **Hidden for all** | No | No | No | `hidden` attribute / `display: none` |
+| Intent                 | Visual | Screen Reader | Focusable            | Structural Pattern                                |
+| :--------------------- | :----- | :------------ | :------------------- | :------------------------------------------------ |
+| **Visible to all**     | Yes    | Yes           | Yes                  | Standard rendering                                |
+| **Screen Reader only** | No     | Yes           | Yes (if interactive) | Visually hidden utility (e.g. `.visually-hidden`) |
+| **Visual only**        | Yes    | No            | No                   | `aria-hidden="true"` / `role="presentation"`      |
+| **Hidden for all**     | No     | No            | No                   | `hidden` attribute / `display: none`              |
 
 **Heuristic Rule**: If an element can receive keyboard focus, it must not be hidden via `aria-hidden="true"`.
 
@@ -365,7 +364,13 @@ function toggleWidgetState() {
 <form>
   <label for="pwd">Password:</label>
   <span id="pwd-hint">Must contain at least 8 characters.</span>
-  <input id="pwd" type="password" aria-describedby="pwd-hint" autocomplete="current-password" required>
+  <input
+    id="pwd"
+    type="password"
+    aria-describedby="pwd-hint"
+    autocomplete="current-password"
+    required
+  />
 </form>
 ```
 
@@ -375,18 +380,17 @@ function toggleWidgetState() {
 - **Provide form validation constraints**: Use `required` (or `aria-required="true"` only when `required` isn't applicable) to signal mandatory inputs.
 - **Don't trigger context shifts on focus changes**: Avoid auto-submitting forms or jumping pages on focus change events alone.
 
-
 ## 8. Live Regions
 
 Live regions let assistive tech announce content updates that aren't tied to navigation or focus changes. They're easy to misuse — too many regions, or noisy ones, quickly become spam for screen-reader users.
 
 ### Live Region Urgency Table
 
-| Urgency | Visual Analogue | `aria-live` Value | Behavioral Impact | Example |
-| :--- | :--- | :--- | :--- | :--- |
-| **Critical** | Modal / Alert | `assertive` (or `role="alert"`) | Interrupts immediately, clears speech queue | Session timeout, API failure |
-| **Standard**| Toast / Banner | `polite` | Announces at next graceful break | Search results, "Saved" status |
-| **Passive**  | Silent text | `off` | Only if user navigates to it | Live character count |
+| Urgency      | Visual Analogue | `aria-live` Value               | Behavioral Impact                           | Example                        |
+| :----------- | :-------------- | :------------------------------ | :------------------------------------------ | :----------------------------- |
+| **Critical** | Modal / Alert   | `assertive` (or `role="alert"`) | Interrupts immediately, clears speech queue | Session timeout, API failure   |
+| **Standard** | Toast / Banner  | `polite`                        | Announces at next graceful break            | Search results, "Saved" status |
+| **Passive**  | Silent text     | `off`                           | Only if user navigates to it                | Live character count           |
 
 **Heuristic Rule**: Use `assertive` only for critical, time-sensitive updates that require immediate attention or prevent safe continuation (e.g., data loss, session timeouts, or network drops).
 
@@ -432,6 +436,7 @@ Modern browsers provide native solutions for creating modal dialogs which avoid 
 - **Don't implement focus traps for native modal dialogs**: When a `<dialog>` element is opened in a modal state, browsers set outside content as inert which is sufficient for ensuring only the dialog’s content can be focused.
 
 **HTML & JS: Native `<dialog>` with standard close events**
+
 ```html
 <!-- Dialog opens natively with showModal() and locks focus -->
 <button id="open-btn">Open Dialog</button>
@@ -443,8 +448,8 @@ Modern browsers provide native solutions for creating modal dialogs which avoid 
 </dialog>
 
 <script>
-  document.getElementById('open-btn').addEventListener('click', () => {
-    document.getElementById('accessible-modal').showModal();
+  document.getElementById("open-btn").addEventListener("click", () => {
+    document.getElementById("accessible-modal").showModal();
   });
 </script>
 ```
@@ -452,7 +457,6 @@ Modern browsers provide native solutions for creating modal dialogs which avoid 
 ### Custom overlays
 
 - **Use the `inert` Attribute for Custom Overlays**: When `<dialog>` cannot be used (e.g., some non-modal overlays, framework constraints, or layouts where `<dialog>`'s top-layer/positioning behavior conflicts with the design), apply `inert` to outside content to ensure it cannot be interacted with by keyboard, pointer, or assistive technology. This requires structuring elements in such a way that the custom overlay is not a descendant of the element with `inert` set on it.
-
 
 ## 13. Testing Validations
 
