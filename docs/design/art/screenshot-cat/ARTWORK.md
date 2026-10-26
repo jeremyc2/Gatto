@@ -32,3 +32,24 @@ window crops and Gatto screenshot regeneration procedure.
 
 The artwork is original and uses the repository’s MIT license. The retro
 platform-game styling does not use a Nintendo character or third-party sprite.
+
+## Black gardener comparison variant
+
+Created on 2026-10-26 for the website and walkthrough comparison. The original
+orange Scout remains unchanged. [scout-black.aseprite](scout-black.aseprite) is
+a separate 48 × 48, one-frame source with the same editable layers, pose and
+silhouette; [scout-black.png](scout-black.png) is its native transparent export.
+
+Head, Tail and Arms use a continuous charcoal coat: `#434B5B` in the upper-left
+light, `#282D39` for the main fur, `#191D27` in shadow and `#111520` for the outline.
+The cream muzzle is removed rather than turned into another light patch. The
+nose and mouth use `#F4FFFF` to stay legible against the dark face. Pink inner
+ears and white eye highlights remain. Body, Scarf and Shovel are unchanged,
+preserving the blue overalls, red scarf, cream shoes and wooden-handled tool.
+
+The variant has 18 opaque colors, one connected 978-pixel silhouette and no
+detached or lone pixels. The lint report's single color orphan at (32, 24) is
+the preserved scarf outline where it meets the raised arm, not a loose pixel.
+Export frame 1 at 1× with Aseprite MCP. The comparison uses real, matched 300%
+editor-window captures of the two saved sources, as recorded in
+[walkthrough captures](../../walkthrough-captures.md).

@@ -7,6 +7,7 @@ export function DownloadBadge(props: { placement?: "story" | "footer" }) {
   return (
     <Link
       href="https://github.com/jeremyc2/Gatto/releases/latest"
+      variant="graphic"
       xstyle={[styles.root, props.placement === "footer" ? styles.footer : styles.story]}
     >
       <img

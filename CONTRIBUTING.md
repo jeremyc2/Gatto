@@ -247,10 +247,10 @@ preferences, so use a disposable macOS user if those settings need to be preserv
 
 ### Comparison diagnostics
 
-The advanced comparison feature is omitted from the walkthrough and its default
-screenshot generation. Its opt-in diagnostics cover the picker, staged result,
-combined PNG, caption editing, wrapping, and unequal image sizes. Generate these
-captures in a temporary directory:
+The walkthrough includes the combined comparison editor in `comparison-editor.png`.
+Additional opt-in diagnostics cover the picker, staged result, combined PNG,
+caption editing, wrapping, and unequal image sizes. Generate these captures in a
+temporary directory:
 
 ```sh
 cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- /tmp/gatto-comparison --comparison-only

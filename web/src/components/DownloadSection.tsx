@@ -21,7 +21,7 @@ export function DownloadSection() {
             <br />
             GitHub CLI required.{" "}
             <Link href="https://github.com/jeremyc2/Gatto/blob/main/docs/SETUP.md">
-              Setup guide ↗
+              Setup guide
             </Link>
           </Text>
         </div>

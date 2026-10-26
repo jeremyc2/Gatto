@@ -499,8 +499,8 @@ impl ImageComposer {
         cx: &mut Context<Self>,
     ) {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("docs/images/walkthrough")
-            .join(["03-image-staged.png", "04-upload-complete.png"][index]);
+            .join("docs/images/walkthrough/source")
+            .join(["comparison-orange.png", "comparison-black.png"][index]);
         self.load(index, move || load_source(path), window, cx);
     }
 }

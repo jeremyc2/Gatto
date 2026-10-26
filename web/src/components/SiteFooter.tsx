@@ -12,9 +12,8 @@ export function SiteFooter() {
       <PortalSeam edge="top" />
       <Container>
         <div {...stylex.attrs(styles.footerTop)}>
-          <Brand small />
+          <Brand small dot />
           <nav {...stylex.attrs(styles.footerNav)} aria-label="Project links">
-            <Link href="https://github.com/jeremyc2/Gatto">GitHub</Link>
             <Link href="https://github.com/jeremyc2/Gatto/blob/main/SUPPORT.md">Support</Link>
             <Link href="https://github.com/jeremyc2/Gatto/blob/main/LICENSE">MIT license</Link>
           </nav>

@@ -155,7 +155,7 @@ Wait for **Uploaded** before trying to copy an attachment. If you see
 **Waiting for GitHub…**, leave the upload running until it finishes or reports
 an error.
 
-<img src="images/walkthrough/07-mixed-upload-progress.png" alt="A mixed image and video batch with a completed image, transfer progress, and a cancel action" width="620">
+<img src="images/walkthrough/07-mixed-upload-progress.png" alt="A three-file batch with an uploaded image, a video sending, a queued timeline image, and a cancel action" width="620">
 
 Click **Cancel upload** to stop the upload and the rest of the batch. Completed
 uploads remain available to copy; click **Upload** to retry the unfinished files.
@@ -309,6 +309,20 @@ QuickTime Player. Use that app to play, pause, seek, or adjust the volume.
 WebM may need a compatible player; Gatto reports an error if it cannot open one.
 A video that uploads successfully may still need a different player or format
 for some viewers.
+
+## Compare two images
+
+Choose **Advanced → Side-by-Side Comparison** from Gatto’s menu. Select, paste, or drop a
+PNG, JPEG, or WebP image for each side. Once both are ready, Gatto combines them
+into one attachment in the main window. If you already have a draft, choose
+whether to replace it or switch to bulk upload.
+
+Click the combined attachment to open both images together in the editor.
+Captions start as **Before** and **After**; double-click either one to rename it.
+This example uses **orange cat** and **black cat**. Click **Save**, then upload
+and copy the comparison like any other image.
+
+<img src="images/walkthrough/comparison-editor.png" alt="Gatto’s comparison editor with matching pixel-editor views labeled orange cat and black cat, with the same gardener outfit and shovel" width="820">
 
 ## Faster clipboard uploads
 

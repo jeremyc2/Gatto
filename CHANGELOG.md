@@ -7,6 +7,24 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Use the pixel-art favicon portrait for website link previews and remove the
+  former SVG-based social card.
+- Use matched Aseprite captures of the orange gardener and a new black-coat
+  variant in comparison screenshots, with descriptive captions and no arrow.
+- Replace the website’s feature dividers with batch, annotation and comparison
+  screenshots using the story video’s rounded corners and canvas edge blend.
+  Add the combined comparison editor and its workflow to the walkthrough.
+- Reduce empty space in the walkthrough's main-window screenshots with shorter
+  windows and a three-file mixed batch showing uploaded, sending, and queued
+  attachments.
+- Give website text links consistent underlines and page links a small arrow,
+  keeping the download badges free of arrows.
+  Open external links in a new tab and move GitHub from the footer to a labeled
+  SVG icon in the header, without an underline or arrow. Match the footer
+  wordmark to the header's spaced green dot, including on phones.
+
 ## [0.19.0] - 2026-10-26
 
 ### Changed

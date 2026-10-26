@@ -68,9 +68,13 @@ fn generate() -> Result<()> {
         return render_image_editor(&output_directory.join("image-editor.png"));
     }
 
-    // Advanced comparison diagnostics are opt-in, outside the walkthrough.
+    if std::env::args().any(|arg| arg == "--comparison-editor-only") {
+        return render_comparison(&output_directory, true);
+    }
+
+    // Additional comparison diagnostics are opt-in.
     if std::env::args().any(|arg| arg == "--comparison-only") {
-        return render_comparison(&output_directory);
+        return render_comparison(&output_directory, false);
     }
     if std::env::args().any(|arg| arg == "--check-pixelation-edges") {
         return check_pixelation_edges(&output_directory);
@@ -94,6 +98,11 @@ fn generate() -> Result<()> {
     let editor_output = output_directory.join("image-editor.png");
     render_image_editor(&editor_output)?;
     println!("Wrote {}", editor_output.display());
+    render_comparison(&output_directory, true)?;
+    println!(
+        "Wrote {}",
+        output_directory.join("comparison-editor.png").display()
+    );
     image_preview::ImagePreview::write_walkthrough_cursors(
         &output_directory.join("annotation-cursors.png"),
     )?;
@@ -112,10 +121,13 @@ fn generate() -> Result<()> {
 
 /// Exercise the complete picker-to-single-editor path with the native renderer.
 #[cfg(target_os = "macos")]
-fn render_comparison(output: &std::path::Path) -> Result<()> {
-    use gpui_kit::{
-        Focusable as _, InputEvent as _, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
-        MouseMoveEvent, MouseUpEvent,
+fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> {
+    use gpui_kit::Focusable as _;
+    let intermediate = tempfile::tempdir()?;
+    let diagnostic_output = if editor_only {
+        intermediate.path()
+    } else {
+        output
     };
     let platform = gpui_kit::platform::current_platform(true);
     let mut cx = HeadlessAppContext::with_platform(
@@ -164,7 +176,7 @@ fn render_comparison(output: &std::path::Path) -> Result<()> {
             heading_bounds = Some(bounds);
         })?;
         cx.capture_screenshot(picker)?
-            .save(output.join(if populated {
+            .save(diagnostic_output.join(if populated {
                 "comparison-picker.png"
             } else {
                 "comparison-empty.png"
@@ -211,7 +223,7 @@ fn render_comparison(output: &std::path::Path) -> Result<()> {
     cx.run_until_parked();
     cx.update_window(main, |_, window, cx| window.render_frame(cx))?;
     cx.capture_screenshot(main)?
-        .save(output.join("comparison-main.png"))?;
+        .save(diagnostic_output.join("comparison-main.png"))?;
     let attachment = cx
         .update(|cx| main_view.read(cx).walkthrough_comparison())
         .context("Automatic comparison did not stage an attachment")?;
@@ -222,7 +234,7 @@ fn render_comparison(output: &std::path::Path) -> Result<()> {
         attachment.len()
     );
     std::fs::write(
-        output.join("comparison-output.png"),
+        diagnostic_output.join("comparison-output.png"),
         &attachment.image().unwrap().bytes,
     )?;
     let id = attachment.id;
@@ -248,54 +260,25 @@ fn render_comparison(output: &std::path::Path) -> Result<()> {
     })?;
     cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
     cx.run_until_parked();
-    cx.update_window(editor, |_, window, cx| {
-        window.dispatch_event(
-            KeyDownEvent {
-                keystroke: Keystroke::parse("a").unwrap(),
-                is_held: false,
-                prefer_character_input: false,
-            }
-            .to_platform_input(),
-            cx,
-        );
-        let start = gpui_kit::point(px(310.), px(380.));
-        let end = gpui_kit::point(px(740.), px(380.));
-        window.dispatch_event(
-            MouseDownEvent {
-                position: start,
-                button: MouseButton::Left,
-                modifiers: Default::default(),
-                click_count: 1,
-                first_mouse: false,
-            }
-            .to_platform_input(),
-            cx,
-        );
-        window.dispatch_event(
-            MouseMoveEvent {
-                position: end,
-                pressed_button: Some(MouseButton::Left),
-                modifiers: Default::default(),
-            }
-            .to_platform_input(),
-            cx,
-        );
-        window.dispatch_event(
-            MouseUpEvent {
-                position: end,
-                button: MouseButton::Left,
-                modifiers: Default::default(),
-                click_count: 1,
-            }
-            .to_platform_input(),
-            cx,
-        );
-        window.render_frame(cx);
-    })?;
-    cx.run_until_parked();
+    for (index, caption) in [(0_usize, "orange cat"), (1, "black cat")] {
+        cx.update_window(editor, |_, window, cx| {
+            window.activate_window();
+            window.double_click(("comparison-caption", index), cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(editor, |_, window, cx| {
+            window.input(caption, cx);
+            window.press("enter", cx);
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+    }
     cx.update_window(editor, |_, window, cx| window.render_frame(cx))?;
     cx.capture_screenshot(editor)?
         .save(output.join("comparison-editor.png"))?;
+    if editor_only {
+        return Ok(());
+    }
     let idle = cx.update_window(editor, |_, window, _| {
         window.find(("comparison-caption", 0_usize)).bounds()
     })?;
@@ -315,7 +298,7 @@ fn render_comparison(output: &std::path::Path) -> Result<()> {
     cx.capture_screenshot(editor)?
         .save(output.join("comparison-caption-selected.png"))?;
     cx.update_window(editor, |_, window, cx| {
-        window.input("Original interface", cx);
+        window.input("Orange gardener", cx);
         window.press("enter", cx);
         window.render_frame(cx);
     })?;
@@ -328,7 +311,7 @@ fn render_comparison(output: &std::path::Path) -> Result<()> {
     })?;
     cx.run_until_parked();
     cx.update_window(editor, |_, window, cx| {
-        window.input("Original interface", cx);
+        window.input("Orange gardener", cx);
         window.press("end", cx);
         window.press("shift-enter", cx);
         window.input(
@@ -624,6 +607,14 @@ fn render_rooftops(output: &std::path::Path, level: usize) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> Result<()> {
+    // Keep main-window examples near the app's 600px minimum height. Preferences
+    // and the mixed batch need more room to keep their relevant controls visible.
+    let height = match scenario {
+        WalkthroughScenario::Preferences => 780.,
+        WalkthroughScenario::MixedUploadProgress => 760.,
+        WalkthroughScenario::VideoCompressing => 640.,
+        _ => 600.,
+    };
     let platform = gpui_kit::platform::current_platform(true);
     let mut cx = HeadlessAppContext::with_platform(
         platform.text_system(),
@@ -642,7 +633,7 @@ fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> R
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
                     origin: Default::default(),
-                    size: size(px(620.), px(780.)),
+                    size: size(px(620.), px(height)),
                 })),
                 focus: false,
                 show: false,

@@ -25,6 +25,5 @@ const styles = stylex.create({
     borderRadius: "50%",
     alignSelf: "end",
     marginBottom: 5,
-    display: { default: null, [media.phone]: "none" },
   },
 });

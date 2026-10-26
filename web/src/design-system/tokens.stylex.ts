@@ -10,6 +10,7 @@ export const colors = stylex.defineVars({
   onAccent: { default: "#fffdf4", "@media (prefers-color-scheme: dark)": "#21382d" },
   subtle: { default: "#e7ecdf", "@media (prefers-color-scheme: dark)": "#30493b" },
   focus: "#a66c39",
+  mediaSurface: "#0e1017",
   notificationSurface: "#fff1d0",
   notificationText: "#263e36",
   notificationBorder: "#bd965a",

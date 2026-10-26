@@ -4,6 +4,7 @@ import { storyLayout, storyMedia } from "./story-layout.stylex";
 import { Heading, Text } from "./design-system/Typography";
 import { Button } from "./design-system/Button";
 import { VisuallyHidden } from "./design-system/VisuallyHidden";
+import { MediaFrame } from "./design-system/MediaFrame";
 import { createEffect, createSignal, flush } from "solid-js";
 import bringImage from "../assets/images/story-bring.webp";
 import uploadImage from "../assets/images/story-upload.webp";
@@ -269,7 +270,7 @@ export function Story() {
                 )}
               </div>
               <figure {...stylex.attrs(styles.scene, videoReady() && styles.coveredStill)}>
-                <div {...stylex.attrs(styles.sceneFrame)}>
+                <MediaFrame xstyle={styles.sceneFrame}>
                   <img
                     {...stylex.attrs(styles.sceneImage)}
                     src={chapter.image}
@@ -278,8 +279,7 @@ export function Story() {
                     fetchpriority={index === 0 ? "high" : "auto"}
                     alt={chapter.alt}
                   />
-                  <span {...stylex.attrs(styles.sceneEdge)} aria-hidden="true" />
-                </div>
+                </MediaFrame>
               </figure>
             </article>
           ))}
@@ -289,7 +289,7 @@ export function Story() {
           >
             <div {...stylex.attrs(styles.copy, styles.videoPlaceholder(copyHeight()))} />
             <figure {...stylex.attrs(styles.scene)} role="img" aria-label={chapters[active()].alt}>
-              <div {...stylex.attrs(styles.sceneFrame)}>
+              <MediaFrame xstyle={styles.sceneFrame}>
                 <video
                   {...stylex.attrs(styles.sceneImage)}
                   ref={(element) => {
@@ -309,8 +309,7 @@ export function Story() {
                 >
                   <source src={journeyVideo} type="video/mp4" />
                 </video>
-                <span {...stylex.attrs(styles.sceneEdge)} aria-hidden="true" />
-              </div>
+              </MediaFrame>
             </figure>
           </div>
         </div>
@@ -579,24 +578,13 @@ const styles = stylex.create({
   },
 
   sceneFrame: {
-    position: "relative",
-    width: "100%",
     marginInline: "auto",
-    borderRadius: radius.media,
-    overflow: "clip",
     // Keep the frame fitted to the artwork on height-constrained screens.
     maxWidth: {
       default: "100%",
       [storyMedia.shortFlow]: 585,
       [storyMedia.pinned]: `calc(${storyLayout.imageMaximum} * 1.5)`,
     },
-  },
-  sceneEdge: {
-    position: "absolute",
-    inset: 0,
-    borderRadius: "inherit",
-    pointerEvents: "none",
-    boxShadow: `inset 0 0 0 1px ${colors.canvas}, inset 0 0 12px 2px ${colors.canvas}`,
   },
   sceneImage: {
     imageRendering: "pixelated",

@@ -23,6 +23,7 @@
     "preview:web": "bunx --no-env-file --no-install --bun vite preview --config web/vite.config.ts",
     "size:web": "bun --no-env-file web/scripts/css-size.ts",
     "export:story": "bun --no-env-file web/scripts/export-story.ts",
+    "export:features": "bun --no-env-file web/scripts/export-features.ts",
     "deploy:web": "bun --no-env-file web/scripts/deploy.ts"
   },
   "devDependencies": {

@@ -22,7 +22,7 @@ information without repeating the download section's open-source claim.
 | Layer             | Location                                                   | Responsibility                                                                                                               |
 | ----------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Tokens            | `src/design-system/tokens.stylex.ts`                       | Semantic colors, type roles, fixed spacing and radii, viewport conditions, browser preferences and shared layout dimensions. |
-| Primitives        | `src/design-system/`                                       | `Container`, `Heading`, `Text`, `Link`, `Button` and `VisuallyHidden`, with styles beside their markup.                      |
+| Primitives        | `src/design-system/`                                       | `Container`, `Heading`, `Text`, `Link`, `Button`, `MediaFrame` and `VisuallyHidden`, with styles beside their markup.        |
 | Compositions      | `src/components/`                                          | Header, brand, features, download section and footer. These compose primitives and own their specific layout.                |
 | Story             | `src/Story.tsx`, `src/story-layout.stylex.ts`              | Pinned scenes, responsive story geometry and chapter state. These details do not belong to the shared token scale.           |
 | Document          | `src/design-system/document.stylex.ts`, `src/Document.tsx` | Page canvas and browser preferences. The client imports the foundation for build-time CSS extraction.                        |
@@ -44,6 +44,19 @@ Headings have `display`, `headline`, `title` and `subheading` sizes, independent
 of their semantic HTML level. Text has `body`, `lead`, `small` and `caption`
 sizes, plus a muted tone. Buttons have `quiet` and `selected` variants. Their
 native disabled state, keyboard focus and touch behavior belong to the primitive.
+
+Text links always use an underline with a 5px offset. `Link` adds a small ↗ arrow
+to destinations beyond the current page; do not include arrows in link copy.
+Absolute HTTP(S) and protocol-relative links open in a new tab with
+`noopener noreferrer`, with the new-tab behavior announced to screen readers.
+Fragment links stay in the current tab and have no arrow. The `graphic` variant
+omits both underline and arrow for the home brand and download badges.
+The `icon` variant also omits both decorations and provides a
+44px minimum target. Use it for the header's 24px GitHub SVG, with an accessible
+GitHub label and the inherited ink color in either appearance. GitHub appears
+only in the header; the footer keeps Support and MIT license.
+Both header and footer wordmarks include the same spaced green dot at every
+viewport size, using the shared brand component and accent color.
 
 The optional `xstyle` prop accepts typed StyleX styles for composition-specific
 spacing or layout. Prefer an existing variant for a shared visual decision. When
@@ -170,24 +183,26 @@ bytes and 6,959 gzip bytes, within the same budgets.
 The subsequent copy pass removes the duplicate footer license sentence and its
 unused styles: 23,135 raw bytes and 6,910 gzip bytes, measured the same day.
 
-| Build                                                               | Styling bytes | Gzip bytes |
-| ------------------------------------------------------------------- | ------------: | ---------: |
-| Initial direct StyleX translation, before Vite/minification         |        19,218 |      4,233 |
-| Refactored system, all production CSS including font declarations   |        11,497 |      3,967 |
-| Native snapshot transitions and connected chapter tracker           |        16,369 |      4,969 |
-| Responsive scene height correction                                  |        16,360 |      4,963 |
-| Approaching cat, feathered void and soft brush seam composition     |        20,316 |      6,122 |
-| Portal button and themed in-page notifications                      |        21,166 |      6,380 |
-| Contrasting notification surface and top-right slide entry          |        21,576 |      6,528 |
-| Story release at Share with continuous paw fade intervals           |        21,632 |      6,535 |
-| Deeper layered paper tears and contour shadows                      |        22,177 |      6,688 |
-| Remove the chapter tracker's top divider                            |        22,047 |      6,657 |
-| Complementary tear masks with a continuous paper setting            |        22,322 |      6,704 |
-| Final rainbow paw marker and compact continuous trails (2026-10-18) |        23,208 |      6,950 |
-| Keep chapter controls until the tracker runs out of space           |        23,326 |      6,971 |
-| Continuous story video and measured copy slot (2026-10-24)          |        23,274 |      6,956 |
-| Equal-height chapter snapshots without text overlap (2026-10-25)    |        23,476 |      6,986 |
-| Rounded story frame and inset canvas blend (2026-10-25)             |        23,781 |      7,050 |
+| Build                                                                     | Styling bytes | Gzip bytes |
+| ------------------------------------------------------------------------- | ------------: | ---------: |
+| Initial direct StyleX translation, before Vite/minification               |        19,218 |      4,233 |
+| Refactored system, all production CSS including font declarations         |        11,497 |      3,967 |
+| Native snapshot transitions and connected chapter tracker                 |        16,369 |      4,969 |
+| Responsive scene height correction                                        |        16,360 |      4,963 |
+| Approaching cat, feathered void and soft brush seam composition           |        20,316 |      6,122 |
+| Portal button and themed in-page notifications                            |        21,166 |      6,380 |
+| Contrasting notification surface and top-right slide entry                |        21,576 |      6,528 |
+| Story release at Share with continuous paw fade intervals                 |        21,632 |      6,535 |
+| Deeper layered paper tears and contour shadows                            |        22,177 |      6,688 |
+| Remove the chapter tracker's top divider                                  |        22,047 |      6,657 |
+| Complementary tear masks with a continuous paper setting                  |        22,322 |      6,704 |
+| Final rainbow paw marker and compact continuous trails (2026-10-18)       |        23,208 |      6,950 |
+| Keep chapter controls until the tracker runs out of space                 |        23,326 |      6,971 |
+| Continuous story video and measured copy slot (2026-10-24)                |        23,274 |      6,956 |
+| Equal-height chapter snapshots without text overlap (2026-10-25)          |        23,476 |      6,986 |
+| Rounded story frame and inset canvas blend (2026-10-25)                   |        23,781 |      7,050 |
+| Consistent links, header GitHub icon and matching brand dots (2026-10-26) |        23,674 |      7,032 |
+| Feature screenshots with a shared media frame (2026-10-26)                |        23,858 |      7,100 |
 
 The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
 correction. The independent cat approach and feathered void add 324 raw bytes
@@ -218,6 +233,34 @@ The initial figure excludes its separate stylesheet with embedded font data;
 this is a comparison of generated styling, not total page transfer. The change
 reflects both the source refactor and production minification. Refresh this dated
 measurement after intentional design-system or build changes.
+
+## Feature screenshots
+
+The three feature columns use real Gatto screenshots above their existing copy,
+replacing the short dividers. Bring a batch uses the three-file upload progress
+view; Make your point uses the annotation overview; Side by side uses the
+combined comparison open in the editor, with matching Aseprite views of the
+orange and black gardener and captions “orange cat” and “black cat”. The pose,
+outfit and shovel match; the black coat has a light mouth for contrast. There
+are no arrows or other annotations in the comparison.
+All three sources are also published in the walkthrough. Keep the approved views.
+
+`MediaFrame` owns the shared 20px corners and the video’s exact canvas-colored
+edge blend: a 1px inner rim plus a 12px blur with 2px inset spread. Both story
+media and feature screenshots use this primitive so the treatment stays in sync.
+The screenshot frame reserves a 4:3 landscape area before loading. The batch
+image uses `object-fit: cover` at `50% 86%` to focus on its three rows; the editor
+views fit in full against `colors.mediaSurface`. This website crop leaves the
+full walkthrough captures untouched. On phones, cards stack and stop at 530px
+wide. Verify the row and stacked layouts, the visible batch rows, both comparison
+panels and captions, and the editor tools after changing screenshots or spacing.
+
+After regenerating walkthrough PNGs with `./scripts/update-walkthrough-screenshots.sh`,
+run `bun export:features` (requires libwebp’s `cwebp`). The Bun script exports
+620px and 1240px WebPs from the committed PNGs, retaining the originals. The
+page uses `srcset` with matching `sizes`, native lazy loading, asynchronous
+decoding and explicit image dimensions. Asset exports are committed; ordinary
+website builds do not need Rust or image converters.
 
 ## Download badge
 
@@ -253,6 +296,10 @@ supersedes the SVG treatment in ADR 0003 at the user's request on 2026-10-25.
 with 16, 32 and 64 px entries. The Apple touch icon places a 160 px integer-scale
 portrait in an opaque 180 px warm-paper canvas. Keep these exports in sync;
 the smallest portrait is an optical redraw rather than a downsample.
+The Open Graph and Twitter preview uses the same 32 px portrait via its 96 px
+export, enlarged with nearest-neighbor sampling to 480 px on a 1200 × 630
+warm-paper canvas. Its separate `social-image-pixel.png` URL prevents cached
+previews from retaining the former SVG-based card.
 
 The website's flying visitor is separate artwork. Its
 [256 px Aseprite master](../docs/design/explorations/art/portal-cat/portal-cat.aseprite)

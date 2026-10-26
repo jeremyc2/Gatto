@@ -494,6 +494,17 @@ impl UploaderApp {
             this.staged_attachments.push(video);
         }
 
+        if matches!(scenario, WalkthroughScenario::MixedUploadProgress) {
+            let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("docs/images/walkthrough/source/timeline.png");
+            let mut image = StagedAttachment::from_path(path, Default::default())
+                .expect("the walkthrough timeline fixture should always be valid");
+            image.name = "timeline-feedback.png".into();
+            image.description = "Timeline feedback".into();
+            image.upload_state = AttachmentUploadState::Queued;
+            this.staged_attachments.push(image);
+        }
+
         if matches!(scenario, WalkthroughScenario::VideoCompressing) {
             this.pending_import = Some(PendingImport {
                 remaining: VecDeque::new(),

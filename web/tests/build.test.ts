@@ -34,7 +34,7 @@ test("prerenders all scenes, concise copy and the two README download badges", a
     ...html.matchAll(/<link[^>]+rel="preload"[^>]+href="([^"]+)"[^>]+as="font"/g),
   ];
   expect(preloadedFonts).toHaveLength(2);
-  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(5);
+  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(8);
   expect(html).not.toContain("Still view");
   expect(html).not.toContain("How it works");
   const articles = html.match(/<article\b[^>]*id="chapter-[^"]+"[^>]*>/g) ?? [];

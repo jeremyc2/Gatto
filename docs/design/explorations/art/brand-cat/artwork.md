@@ -63,11 +63,14 @@ Then assemble the ICO and opaque Apple touch canvas with ImageMagick:
 ```sh
 magick web/public/favicon-16.png web/public/favicon-32.png /tmp/gatto-favicon-64.png -strip web/public/favicon.ico
 magick /tmp/gatto-apple-160.png -background '#f7f3e9' -alpha remove -alpha off -gravity center -extent 180x180 -depth 8 -strip web/public/apple-touch-icon.png
+magick web/public/favicon-96.png -filter point -resize 480x480 -background '#f7f3e9' -alpha remove -gravity center -extent 1200x630 -depth 8 -strip PNG24:web/public/social-image-pixel.png
 ```
 
 The README displays its 256 px export at 256 CSS pixels, preserving a 4× native
 grid. The ICO contains 16, 32 and 64 px entries. The Apple touch export centers
 160 px of artwork in a 180 px opaque canvas, leaving masking to the device.
+The social preview centers a crisp 480 px enlargement of the favicon on a
+1200 × 630 warm-paper canvas.
 Keep declarations in `web/src/Document.tsx` synchronized with those files.
 
 Inspect native 16/32 px versions on light and dark tab backgrounds, their integer

@@ -11,10 +11,20 @@ The app's header artwork was refreshed on October 26, 2026 using the
 were regenerated through the same native renderer; the illustrated editor
 fixtures and their source crops remain independent.
 
+Main-window captures were reframed the same day to reduce unused space. Keep
+their width at 620 logical pixels and select the height for each task rather
+than giving every example the default 780px-tall window. Single-file, first-run,
+update and oversized-video captures use the app's 600px minimum height.
+Compression uses 640px to retain the full progress and cancel controls; the
+mixed batch uses 760px to show three attachments and the upload-cancel footer.
+Preferences stays at 780px, and editor and game captures retain their own sizes.
+The renderer exports these at 2×; regenerate them at these window sizes rather
+than scaling, cropping, or reconstructing the interface.
+
 ## Source images
 
 The committed PNGs in `docs/images/walkthrough/source/` are crops of actual
-1412 × 1012 and 1412 × 1280 window captures, without reconstructed controls or
+1412 × 1012, 1412 × 1280 and 1416 × 1012 window captures, without reconstructed controls or
 composited UI.
 They exclude the title bar, menus, document tabs, and capture pointer. Coordinates
 below use pixels in the original window capture, with an exclusive lower edge.
@@ -25,10 +35,14 @@ below use pixels in the original window capture, with an exclusive lower edge.
 | `timeline.png` | x 0–1408, y 164–1220 | Centered canvas at 200%, timeline and artwork layers visible. |
 | `detail.png` | x 0–1100, y 164–864 | Closer crop of the canvas capture, keeping the character, complete shovel, palette and annotation area. |
 | `path.png` | x 0–1408, y 164–1276 | Timeline view including the visible local document-path prefix in the status bar. |
+| `comparison-orange.png` | x 0–1408, y 164–948 | Original orange gardener at 300%, timeline hidden. |
+| `comparison-black.png` | x 0–1408, y 164–948 | Same pose and clothes with a black coat, at the same 300% framing. |
 
 The unannotated path capture is a fixture for the privacy demonstration; the
 published editor image covers that path with Gatto’s pixelation tool. Other
-captures exclude the status bar. Treat the sources as intentionally retained
+captures, including both comparison sources, exclude the status bar and its
+file paths. If a later crop includes a path, redact it with Gatto’s pixelation
+brush before publishing. Treat the sources as intentionally retained
 screenshot fixtures, not temporary working documents.
 
 ## Composition
@@ -62,6 +76,26 @@ No screenshots are uploaded while generating the walkthrough. Inspect the
 staged-image thumbnail as well as the full editor: the cat’s ears, face, scarf,
 blue outfit, curved tail and shovel should remain recognizable at the smaller
 size.
+
+Keep single-file staging and copy examples focused on one attachment. The mixed
+batch includes an uploaded interface image, a video currently sending, and a
+queued timeline image, so the extra row both fills the window and explains the
+remaining work. These are in-memory states with no network activity.
+
+`comparison-editor.png` shows the two matched Aseprite captures open together in
+Gatto’s editor, with captions renamed through its actual editing controls to
+“orange cat” and “black cat”. Keep this comparison free of arrows and other
+annotations: the changed coat, unchanged clothes and matching pose are the
+comparison. The original orange cat and the separate
+[black gardener variant](art/screenshot-cat/ARTWORK.md#black-gardener-comparison-variant)
+remain editable. These inputs replace the earlier Gatto main-window captures;
+no published editor or attachment example now uses Gatto itself as its image.
+The regular screenshot command captures it at 1060 × 740 logical pixels; use
+`--comparison-editor-only` with the same native screenshot executable to refresh
+just this view. Picker and caption diagnostics remain opt-in with
+`--comparison-only`. The website reuses the batch, annotation overview and
+comparison editor captures; its framing and exports belong to the
+[website design system](../../web/DESIGN-SYSTEM.md#feature-screenshots).
 
 ## Licenses and attribution
 
