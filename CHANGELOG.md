@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-26
+
 ### Changed
 
 - Use the pixel-art favicon portrait for website link previews and remove the
@@ -24,11 +26,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   Open external links in a new tab and move GitHub from the footer to a labeled
   SVG icon in the header, without an underline or arrow. Match the footer
   wordmark to the header's spaced green dot, including on phones.
-
-## [0.19.0] - 2026-10-26
-
-### Changed
-
+  
 - Replace the app's main-page cat with a separate purple-highlighted pixel-art
   version of the website rocket cat, preserving the header's size and layout.
   Use deep purple fur with muted lavender highlights for the dark interface.
