@@ -1,6 +1,6 @@
 cask "gatto" do
-  version "0.20.1"
-  sha256 "e36fc0da2b597ca8eeda76ecf78e360a21338faa7561ce5541c9b5826f6e49da"
+  version "0.20.2"
+  sha256 "3dd106206c2defd415497b34b91b4548552a797eb46875006686acbb87a8d6c9"
 
   url "https://github.com/jeremyc2/Gatto/releases/download/v#{version}/gatto-#{version}-aarch64-apple-darwin.dmg"
   name "Gatto"
