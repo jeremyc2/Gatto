@@ -47,6 +47,28 @@ func stopReceiver(_ identifier: String, at app: URL) throws {
     }
 }
 
+func performService(_ name: String, on board: NSPasteboard, identifier: String,
+                    app: URL, output: URL, cold: Bool) throws {
+    let deadline = Date().addingTimeInterval(15)
+    var attempts = 0
+    while true {
+        attempts += 1
+        if NSPerformService(name, board) { return }
+        let receiverStarted = {
+            NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
+                .contains { $0.bundleURL?.path == app.path }
+                || FileManager.default.fileExists(atPath: output.path)
+        }
+        let message = "Native service dispatch failed (\(cold ? "cold" : "warm"), attempt \(attempts), receiver started: \(receiverStarted()))"
+        // Launch Services and the Services database update independently. Only
+        // retry discovery before a cold receiver starts; a failed invocation of
+        // a running provider must still fail rather than turn into a warm retry.
+        try require(cold && !receiverStarted() && Date() < deadline, message)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        try require(!receiverStarted(), message)
+    }
+}
+
 func verify() throws {
     _ = NSApplication.shared
     let files = FileManager.default
@@ -119,12 +141,13 @@ func verify() throws {
     try stopReceiver(identifier, at: app)
     try files.removeItem(at: output)
     NSUpdateDynamicServices()
-    RunLoop.current.run(until: Date().addingTimeInterval(1))
     for (index, selection) in expected.enumerated() {
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
-        board.writeObjects(selection.map { NSURL(fileURLWithPath: $0) })
-        try require(NSPerformService(serviceName, board), "Native service dispatch failed")
+        try require(board.writeObjects(selection.map { NSURL(fileURLWithPath: $0) }),
+            "Could not write service selection to the pasteboard")
+        try performService(serviceName, on: board, identifier: identifier,
+            app: app, output: output, cold: index == 0)
         try waitForSelections(Array(expected.prefix(index + 1)), at: output)
     }
     print("Open With and native service passed cold/warm delivery with intact paths and batches.")

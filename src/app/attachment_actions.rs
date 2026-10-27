@@ -73,8 +73,9 @@ impl UploaderApp {
                         PopupMenuItem::new("Convert to side-by-side comparison").on_click(
                             move |_, _, cx| {
                                 let _ = view.update(cx, |this, cx| {
-                                    if !this.uploading && !this.import_busy() {
-                                        if let Some(source) = this
+                                    if !this.uploading
+                                        && !this.import_busy()
+                                        && let Some(source) = this
                                             .staged_attachments
                                             .iter()
                                             .find(|item| {
@@ -84,9 +85,8 @@ impl UploaderApp {
                                                         .is_some_and(|image| !image.is_comparison)
                                             })
                                             .cloned()
-                                        {
-                                            cx.emit(ConvertAttachmentRequested(source));
-                                        }
+                                    {
+                                        cx.emit(ConvertAttachmentRequested(source));
                                     }
                                 });
                             },

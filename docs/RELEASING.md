@@ -287,6 +287,9 @@ Run `./scripts/test-platform.sh` for native menu/hotkey and service-pasteboard
 checks, plus Open With registration and cold/existing-app file delivery against a
 disposable signed app. These do not modify the installed Gatto or install services
 in the user's Library.
+The Finder harness waits up to 15 seconds for macOS to discover its temporary
+service before cold launch. Dispatch failures after the receiver starts and warm
+dispatch failures fail immediately; every delivered batch must still match exactly.
 Before publishing, install and launch the current bundle on a disposable macOS
 user. Verify **Open With → Gatto** and Finder's **Send to Gatto** service with a
 single image, a mixed image/video batch, and a selection containing an unsupported

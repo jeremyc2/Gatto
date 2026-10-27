@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-27
+
 ### Added
 
 - Convert a single image attachment to a side-by-side comparison from its options

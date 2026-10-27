@@ -1015,7 +1015,7 @@ impl UploaderApp {
                                 this.save_project(cx);
                             }
                         }
-                        Err(error) => this.warn(&error.to_string(), window, cx),
+                        Err(error) => this.warn(error.to_string(), window, cx),
                     }
                 } else {
                     this.accept_attachment_result(result, window, cx);
