@@ -11,7 +11,7 @@ pub const SAVE_PNG_BUDGET: usize = 9_500_000;
 pub const LABEL_FONT_SIZE: f32 = 32.;
 pub const BACKGROUND: [u8; 4] = [24, 27, 39, 255];
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Comparison {
     /// Image columns can be wider than their source images. Both columns have
     /// the same top and height, anchoring captions to one shared baseline.
@@ -19,6 +19,21 @@ pub struct Comparison {
     pub labels: [String; 2],
 }
 impl Comparison {
+    pub(super) fn validate(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.panels.iter().all(|panel| {
+                [panel.x, panel.y, panel.w, panel.h]
+                    .iter()
+                    .all(|n| n.is_finite())
+                    && panel.w > 0.
+                    && panel.h > 0.
+            }),
+            "Invalid comparison geometry"
+        );
+        self.footer_rect()?;
+        Ok(())
+    }
+
     pub fn new(panels: [Rect; 2]) -> Self {
         Self {
             panels,
@@ -77,21 +92,21 @@ impl Comparison {
             h: band.h + 16.,
         }
     }
+    fn footer_rect(&self) -> Result<tiny_skia::Rect> {
+        let band = self.footer_background();
+        tiny_skia::Rect::from_xywh(band.x, band.y, band.w, band.h)
+            .ok_or_else(|| anyhow::anyhow!("Invalid comparison footer geometry"))
+    }
     pub(super) fn paint(
         &self,
         target: &mut Pixmap,
         transform: Transform,
         layer: &mut Option<Pixmap>,
     ) -> Result<()> {
-        let band = self.footer_background();
+        let band = self.footer_rect()?;
         let mut fill = Paint::default();
         fill.set_color_rgba8(BACKGROUND[0], BACKGROUND[1], BACKGROUND[2], BACKGROUND[3]);
-        target.fill_rect(
-            tiny_skia::Rect::from_xywh(band.x, band.y, band.w, band.h).unwrap(),
-            &fill,
-            transform,
-            None,
-        );
+        target.fill_rect(band, &fill, transform, None);
         for mark in self.label_marks() {
             mark.paint_onto(target, transform, layer)?;
         }

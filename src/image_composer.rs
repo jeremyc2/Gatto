@@ -18,6 +18,7 @@ use gpui_kit::component::{
     h_flex,
     kbd::Kbd,
     notification::Notification,
+    tab::{Tab, TabBar},
     v_flex,
 };
 use gpui_kit::{
@@ -27,10 +28,12 @@ use gpui_kit::{
     prelude::FluentBuilder as _, px,
 };
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub(crate) const TITLE: &str = "Side-by-Side Comparison";
 pub(crate) const WINDOW_WIDTH: f32 = 540.;
 pub(crate) const WINDOW_HEIGHT: f32 = 500.;
+pub(crate) const CONVERSION_WINDOW_HEIGHT: f32 = 580.;
 const PADDING: u32 = 16;
 const GAP: u32 = 24;
 const MIN_PANEL_WIDTH: u32 = 400;
@@ -111,8 +114,14 @@ pub(crate) fn combine(sources: [StagedAttachment; 2]) -> Result<StagedAttachment
     let mut document = Document::from_image(canvas);
     document.comparison = Some(comparison);
     let (bytes, pixel_size, _) = document.comparison_png(comparison::INITIAL_PNG_BUDGET)?;
-    let attachment =
+    let mut attachment =
         StagedAttachment::from_rendered_png("side-by-side.png".into(), bytes, pixel_size)?;
+    if let crate::model::Media::Image(image) = &mut attachment.media {
+        image.is_comparison = true;
+        image.annotation_document = Some(Arc::new(crate::annotation::AnnotationDocument::new(
+            &document,
+        )));
+    }
     // The PNG is already complete for staging/upload. The session keeps the
     // unlabeled base and editable captions for the ordinary annotation editor.
     let image = attachment.image().unwrap();
@@ -143,11 +152,13 @@ fn load_source(path: PathBuf) -> Result<StagedAttachment> {
     Ok(source)
 }
 
-pub(crate) struct ComparisonRequested(pub [StagedAttachment; 2]);
+pub(crate) struct ComparisonRequested(pub [StagedAttachment; 2], pub Option<u64>);
 impl EventEmitter<ComparisonRequested> for ImageComposer {}
 
 pub(crate) struct ImageComposer {
     sources: [Option<StagedAttachment>; 2],
+    original: Option<StagedAttachment>,
+    original_side: usize,
     loading: [bool; 2],
     combining: bool,
     generation: u64,
@@ -157,6 +168,8 @@ impl ImageComposer {
     pub(crate) fn new(_: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
             sources: [None, None],
+            original: None,
+            original_side: 0,
             loading: [false; 2],
             combining: false,
             generation: 0,
@@ -168,9 +181,29 @@ impl ImageComposer {
     }
     pub(crate) fn reset(&mut self, cx: &mut Context<Self>) {
         self.sources = [None, None];
+        self.original = None;
+        self.original_side = 0;
         self.loading = [false; 2];
         self.combining = false;
         self.generation = self.generation.wrapping_add(1);
+        cx.notify();
+    }
+    pub(crate) fn convert(&mut self, source: StagedAttachment, cx: &mut Context<Self>) {
+        self.reset(cx);
+        self.original_side = 0;
+        self.sources[0] = Some(source.clone());
+        self.original = Some(source);
+        cx.notify();
+    }
+    fn new_image_side(&self) -> usize {
+        1 - self.original_side
+    }
+    fn set_new_image_side(&mut self, side: usize, cx: &mut Context<Self>) {
+        if self.original.is_none() || self.busy() || side == self.new_image_side() {
+            return;
+        }
+        self.sources.swap(0, 1);
+        self.original_side = 1 - side;
         cx.notify();
     }
     fn load(
@@ -287,6 +320,10 @@ impl ImageComposer {
         }
     }
     fn paste_target(&self) -> Option<usize> {
+        if self.original.is_some() {
+            let index = self.new_image_side();
+            return (self.sources[index].is_none() && !self.loading[index]).then_some(index);
+        }
         self.sources
             .iter()
             .enumerate()
@@ -298,7 +335,10 @@ impl ImageComposer {
         }
         if let [Some(left), Some(right)] = self.sources.clone() {
             self.combining = true;
-            cx.emit(ComparisonRequested([left, right]));
+            cx.emit(ComparisonRequested(
+                [left, right],
+                self.original.as_ref().map(|source| source.id),
+            ));
         }
     }
     pub(crate) fn requested(
@@ -328,6 +368,7 @@ impl ImageComposer {
     }
     fn slot(&self, index: usize, cx: &mut Context<Self>) -> impl IntoElement {
         let busy = self.combining || self.loading[index];
+        let fixed = self.original.is_some() && self.original_side == index;
         v_flex()
             .id(("comparison-slot", index))
             .debug_selector(move || format!("comparison-slot-{index}"))
@@ -337,16 +378,20 @@ impl ImageComposer {
             .capture_any_mouse_down(cx.listener(move |this, _, window, cx| {
                 window.focus(&this.focus_handle, cx);
             }))
-            .can_drop(move |value, _, _| !busy && value.downcast_ref::<ExternalPaths>().is_some())
+            .can_drop(move |value, _, _| {
+                !busy && !fixed && value.downcast_ref::<ExternalPaths>().is_some()
+            })
             .on_drop(cx.listener(move |this, paths: &ExternalPaths, window, cx| {
-                this.load_paths(index, paths.paths().to_vec(), window, cx);
+                if !fixed {
+                    this.load_paths(index, paths.paths().to_vec(), window, cx);
+                }
             }))
             .child(
                 div()
                     .id(("comparison-slot-label", index))
                     .test_support()
                     .font_medium()
-                    .child(["Left image", "Right image"][index]),
+                    .child(["Left side", "Right side"][index]),
             )
             .child(v_flex().min_h(px(160.)).justify_center().map(|body| {
                 if let Some(source) = &self.sources[index] {
@@ -371,23 +416,27 @@ impl ImageComposer {
                                                 source.formatted_size(),
                                             )),
                                     )
-                                    .actions(
-                                        AttachmentActions::new().child(
-                                            Button::new(("remove-comparison-image", index))
-                                                .app_icon()
-                                                .icon(IconName::X)
-                                                .accessibility_label(format!(
-                                                    "Remove {} image",
-                                                    ["left", "right"][index]
-                                                ))
-                                                .tooltip("Remove image")
-                                                .disabled(busy)
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    this.sources[index] = None;
-                                                    cx.notify();
-                                                })),
-                                        ),
-                                    ),
+                                    .when(!fixed, |attachment| {
+                                        attachment.actions(
+                                            AttachmentActions::new().child(
+                                                Button::new(("remove-comparison-image", index))
+                                                    .app_icon()
+                                                    .icon(IconName::X)
+                                                    .accessibility_label(format!(
+                                                        "Remove {} image",
+                                                        ["left", "right"][index]
+                                                    ))
+                                                    .tooltip("Remove image")
+                                                    .disabled(busy)
+                                                    .on_click(cx.listener(
+                                                        move |this, _, _, cx| {
+                                                            this.sources[index] = None;
+                                                            cx.notify();
+                                                        },
+                                                    )),
+                                            ),
+                                        )
+                                    }),
                             ),
                     )
                 } else {
@@ -441,13 +490,12 @@ impl ImageComposer {
                                             .text_sm()
                                             .map(|hint| {
                                                 if self.paste_target() == Some(index) {
-                                                    hint.child("Press")
-                                                        .child(Kbd::new(
-                                                            Keystroke::parse("cmd-v").unwrap(),
-                                                        ))
-                                                        .child("or drop an image here")
+                                                    hint.child(Kbd::new(
+                                                        Keystroke::parse("cmd-v").unwrap(),
+                                                    ))
+                                                    .child("/ Drag and drop / Click to add image")
                                                 } else {
-                                                    hint.child("Drop second image here")
+                                                    hint.child("Drag and drop / Click to add image")
                                                 }
                                             }),
                                     ),
@@ -484,6 +532,22 @@ impl Render for ImageComposer {
                     .font_semibold()
                     .child(TITLE),
             )
+            .when(self.original.is_some(), |view| {
+                let owner = cx.entity().downgrade();
+                view.child(
+                    v_flex().gap_2().child("Pick a side for new image").child(
+                        TabBar::new("new-image-side")
+                            .segmented()
+                            .selected_index(self.new_image_side())
+                            .child(Tab::new().label("Left"))
+                            .child(Tab::new().label("Right"))
+                            .on_click(move |side, _, cx| {
+                                let _ =
+                                    owner.update(cx, |this, cx| this.set_new_image_side(*side, cx));
+                            }),
+                    ),
+                )
+            })
             .child(self.slot(0, cx))
             .child(self.slot(1, cx))
     }
@@ -553,10 +617,11 @@ mod tests {
         let left_bytes = left.image().unwrap().bytes.clone();
         let output = combine([left.clone(), right]).unwrap();
         assert_eq!(
-            output.description, output.name,
+            output.title, output.name,
             "use the normal attachment description"
         );
         let image = output.image().unwrap();
+        assert!(image.is_comparison);
         let retained = image
             .annotation_session
             .open(&image.bytes, image.preview.clone())
@@ -626,6 +691,53 @@ mod tests {
         });
         let picker = captured.borrow().clone().unwrap();
         (picker, window_cx)
+    }
+    #[gpui_kit::test]
+    fn conversion_keeps_original_fixed_and_picks_new_image_side(cx: &mut TestAppContext) {
+        let (picker, cx) = picker_window(cx);
+        let original = fixture(80, 60, [255, 0, 0, 255]);
+        let id = original.id;
+        let added = fixture(90, 70, [0, 0, 255, 255]);
+        let added_id = added.id;
+        let requests = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let capture = requests.clone();
+        cx.update(|window, cx| {
+            cx.subscribe(&picker, move |_, event: &ComparisonRequested, _| {
+                capture
+                    .borrow_mut()
+                    .push((event.0[0].id, event.0[1].id, event.1));
+            })
+            .detach();
+            picker.update(cx, |picker, cx| picker.convert(original, cx));
+            window.render_frame(cx);
+            assert!(
+                window
+                    .try_find(("comparison-attachment", 0_usize))
+                    .is_some()
+            );
+            assert!(
+                window
+                    .try_find(("remove-comparison-image", 0_usize))
+                    .is_none()
+            );
+            assert!(window.try_find(("comparison-drop-zone", 1_usize)).is_some());
+            picker.update(cx, |picker, cx| picker.set_new_image_side(0, cx));
+            window.render_frame(cx);
+            assert!(window.try_find(("comparison-drop-zone", 0_usize)).is_some());
+            assert!(
+                window
+                    .try_find(("comparison-attachment", 1_usize))
+                    .is_some()
+            );
+            assert_eq!(picker.read(cx).original.as_ref().unwrap().id, id);
+            picker.update(cx, |picker, cx| {
+                picker.load(0, move || Ok(added), window, cx);
+            });
+            assert_eq!(picker.read(cx).new_image_side(), 0);
+            assert_ne!(added_id, id);
+        });
+        cx.run_until_parked();
+        assert_eq!(&*requests.borrow(), &[(added_id, id, Some(id))]);
     }
     #[gpui_kit::test]
     fn paste_fills_left_then_right_and_automatically_requests_combination(cx: &mut TestAppContext) {

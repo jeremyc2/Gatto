@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-annotations.schema.json",
+  "title": "Gatto annotations",
+  "description": "Current editable marks and comparison settings for the original PNG referenced beside this JSON by the project manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "version",
+    "next_marker",
+    "annotation_scale",
+    "marks",
+    "comparison"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-annotations.schema.json"
+    },
+    "version": {
+      "const": 1
+    },
+    "next_marker": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "annotation_scale": {
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "marks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mark"
+      }
+    },
+    "comparison": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/comparison"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "rectangle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scale",
+        "color",
+        "fill",
+        "opacity",
+        "width",
+        "dash",
+        "start",
+        "end",
+        "font_size",
+        "text_align",
+        "vertical_align"
+      ],
+      "properties": {
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "color": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 11
+        },
+        "fill": {
+          "enum": [
+            "None",
+            "Soft",
+            "Solid",
+            "Hatch"
+          ]
+        },
+        "opacity": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "dash": {
+          "enum": [
+            "Solid",
+            "Dashed",
+            "Dotted"
+          ]
+        },
+        "start": {
+          "enum": [
+            "None",
+            "Arrow",
+            "Triangle",
+            "Circle"
+          ]
+        },
+        "end": {
+          "enum": [
+            "None",
+            "Arrow",
+            "Triangle",
+            "Circle"
+          ]
+        },
+        "font_size": {
+          "type": "number"
+        },
+        "text_align": {
+          "anyOf": [
+            {
+              "enum": [
+                "Start",
+                "Middle",
+                "End"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vertical_align": {
+          "enum": [
+            "Start",
+            "Middle",
+            "End"
+          ]
+        }
+      }
+    },
+    "mark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "description",
+        "tool",
+        "points",
+        "text",
+        "wrap",
+        "style",
+        "rotation",
+        "label_position",
+        "label_base_height",
+        "flip_x",
+        "flip_y"
+      ],
+      "properties": {
+        "number": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "tool": {
+          "enum": [
+            "Select",
+            "Pan",
+            "Text",
+            "Marker",
+            "Rectangle",
+            "Ellipse",
+            "Diamond",
+            "Triangle",
+            "Star",
+            "Hexagon",
+            "Rhombus",
+            "Oval",
+            "ArrowLeft",
+            "ArrowUp",
+            "ArrowDown",
+            "ArrowRight",
+            "Cloud",
+            "XBox",
+            "CheckBox",
+            "Heart",
+            "Arrow",
+            "Line",
+            "Pen",
+            "Redact",
+            "Eraser"
+          ]
+        },
+        "points": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/position"
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "wrap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "style": {
+          "$ref": "#/$defs/style"
+        },
+        "rotation": {
+          "type": "number"
+        },
+        "label_position": {
+          "type": "number"
+        },
+        "label_base_height": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flip_x": {
+          "type": "boolean"
+        },
+        "flip_y": {
+          "type": "boolean"
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "panels",
+        "labels"
+      ],
+      "properties": {
+        "panels": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/rectangle"
+          }
+        },
+        "labels": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

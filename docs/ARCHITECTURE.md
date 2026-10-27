@@ -136,8 +136,8 @@ Returning to Stable keeps a newer installed beta until Stable catches up. The
 native no-update delegate reads Sparkle's latest signed appcast item and reports
 both versions as a waiting status; it never offers a downgrade. Cached offers
 are scoped to their channel and must still be newer than the installed build.
-This beta adds no persisted-data migration; old settings readers ignore the new
-optional field. Manual rollback limitations live in Support.
+Release-channel selection does not migrate workspace data backward; manual
+rollback limitations live in [Support](../SUPPORT.md#app-updates).
 
 The available version and Sparkle check time/state use the app's macOS
 preferences domain (`~/Library/Preferences/com.jeremy-chandler.gatto.plist`);
@@ -156,7 +156,7 @@ Paste, drop, file selection, or Finder file opening
       Validate media and selected upload limit
              |
              v
-      Stage image in memory / video in a private temporary file
+      Stage attachments and save workspace copies
              |
              +------> Show preview state and metadata
              |
@@ -180,14 +180,99 @@ Attachments remain available after success or failure. Failed attachments can be
 selecting them again, and uploaded attachments retain their preview, description editor, and
 Markdown copy control.
 
+### Filesystem projects and attachment metadata
+
+`projects.rs` owns portable `gatto-project.json` manifests and immutable copied
+media in `gatto-media/`. Scratchpad uses the same storage and ordered writer as a
+project, at `~/.gatto/scratchpad`; inactive workspaces are unloaded. Settings live
+at `~/.gatto/settings.json`. New projects exclusively create named child folders
+under `~/.gatto/projects`. Creation never reuses an existing folder. Initial-save
+failures clean up only the new child folder.
+
+Manifests retain UUIDs, attachment order, filenames, titles, descriptions, marker
+notes, completed upload URLs, and workspace metadata: description, repository
+and owner, creation time, and update time. Timestamps are Unix milliseconds;
+updates advance monotonically. Project metadata is required when reading the
+manifest. Foundation formats timestamps in the user's local time zone.
+The schema reference points to
+`https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json`.
+Settings reference `schemas/gatto-settings.schema.json` at the same repository URL.
+
+SHA-256 fingerprints bind URLs to saved bytes. Metadata edits and reordering
+preserve URLs; pixel edits or external media changes invalidate only the affected
+URL. Media filenames combine immutable UUIDs and hashes. Saving syncs media before
+atomically replacing the manifest and removes retired files only after commit.
+Images with annotations keep an immutable original PNG and current annotation
+JSON beside the rendered media. `annotation/storage.rs` validates and restores
+marks, style, scale, marker numbering, and comparison settings without serializing
+undo/redo. Comparison validation also checks the derived caption footer rectangle;
+invalid edited geometry returns a project-read error. The JSON references
+`schemas/gatto-annotations.schema.json`. Sidecars use UUID/content-hash names,
+are committed before the manifest, and are retired only after a successful
+manifest replacement. External edits rerender the image and invalidate its URL
+when the resulting bytes change.
+
+`app/projects.rs` discovers projects only as direct folders in `~/.gatto/projects`;
+its catalog is held in memory. It manages disk-backed workspace loading, ordered
+background saves,
+creation, transfer, metadata editing, removal, metadata dialogs, and sidebar search.
+The active writer receives immutable snapshots of attachments and workspace
+metadata. Revisions ignore stale completions; a flush supports shutdown and
+switching after cancellation. Save failures retain UI state and the previous
+manifest. Pending writes block closing and quitting; ordinary window closure
+preserves work. The current workspace is never reloaded when selected again.
+Switching or canceling invalidates pending token and repository-resolution results
+before they can continue an upload in another workspace, and releases their busy
+flags so the new workspace can start its own requests.
+
+Creation offers a name, optional description, and an optional Scratchpad transfer.
+The destination is committed before Scratchpad is cleared. Attachment moves use
+the same destination-first transaction with rollback if the source save fails;
+bulk moves commit the selected group together. UUIDs and cached URLs survive moves.
+Scratchpad and each project restore their own repository selection only when its
+saved owner matches the configured owner without regard to case, including after
+repository loading. Repository pins remain application preferences. Quick Copy
+never opens a workspace.
+Clipboard drafting and comparison target the presented main workspace, or
+Scratchpad when there is no presented main window; startup requests wait for the
+initial Scratchpad load.
+
+The slate GPUI Kit sidebar has a fixed Projects/search header, a scrolling project
+list sorted by update time, and fixed Scratchpad/Create Project controls at the
+bottom. Search has only a placeholder. Command+B hides the sidebar entirely;
+the expand control appears beside Logs. The sidebar state persists in settings.
+Project menus contain Edit metadata and Delete. Editing changes the manifest title
+and description without moving the folder. Refresh discovers project folders in
+`~/.gatto/projects` and drops missing folders. Delete validates the manifest
+and removes the folder. Recursive removal never follows child symlinks. Delete All
+Projects removes project folders in `~/.gatto/projects` and preserves Scratchpad.
+Reset additionally clears Scratchpad and preferences.
+
+`app/attachment_actions.rs` supplies per-item and selected-item menus, annotation
+selection, and a destination picker that excludes the current project.
+`app/attachment_drag.rs` keeps full-card drag previews,
+live sibling shifts, edge scrolling, transactional sidebar drops, and Escape
+rollback; preview order is not saved before release. Interactive card controls
+consume pointer events so they cannot start a reorder.
+
+The main question mark opens workspace information: name, description, total
+storage, repository, and dates. The native Help menu opens documentation links.
+Modal Escape dispatches the dialog Cancel action before window-level dismissal,
+retaining cancellation and close hooks. Shared DialogFeedback renders validation
+within the owning modal.
+GPUI's Dock menu API exposes five projects in last-updated order; global typed
+actions open the main window and select the corresponding project.
+
 ## Loading, batches, and window lifecycle
 
-Launch restores the remembered repository name and ID from settings without a
-GitHub request. Opening the repository picker loads the account or organization's paginated
-repository list via GraphQL `repositoryOwner` (owned repositories only) and token through `gh`; uploading can instead resolve just the
-remembered repository ID and token when needed. The token is cached in process
-memory for the uploader window's lifetime. Reopen that window after changing the
-active GitHub CLI account to avoid using a previously loaded session. Quick Copy
+Opening the main window loads Scratchpad and restores its repository without a
+GitHub request. A new Scratchpad uses the remembered repository from settings.
+Opening the repository picker loads the account or organization's paginated
+repository list via GraphQL `repositoryOwner` (owned repositories only) and token
+through `gh`; uploading can instead resolve just the remembered repository ID
+and token when needed. The token is cached in process
+memory for the uploader view's lifetime. Restart Gatto after changing the active
+GitHub CLI account to avoid using a previously loaded session. Quick Copy
 reads the current CLI token for each background job.
 
 Media validation and CLI calls run on background tasks. Each HTTP upload uses
@@ -227,16 +312,9 @@ clang/libtool into the app binary; the Sparkle Swift bridge remains separately
 bundled and signed. The [Rust migration record](research/safe-rust-migration-2026-10-23.md)
 explains the remaining platform exceptions and their verification.
 Image and video variants share staging, retry, upload, and copy interfaces.
-File drops and Finder pastes preserve all input paths through validation and the
-replacement dialog. Switching to bulk keeps the existing attachment and appends
-the whole accepted batch in order; a multi-file input to an empty draft enables
-bulk upload directly. Cancel keeps the draft, while Replace uses the first new
-attachment.
+File drops and Finder pastes append every accepted file in order.
 
-The app's `CFBundleDocumentTypes` registers PNG, JPEG, GIF, WebP, MP4, MOV, and
-WebM as alternate Viewer types for **Open With**, without replacing default apps.
-Imported WebP and WebM declarations associate their extensions and MIME types.
-`NSServices` also declares **Send to Gatto**, limited to Finder and accepting file
+`NSServices` declares **Send to Gatto**, limited to Finder and accepting file
 items broadly so mixed selections reach the existing validator intact. macOS
 controls its visibility and context-menu placement. No Automator workflow or
 separate installer is shipped.
@@ -250,13 +328,13 @@ reference reports a service error instead of forwarding a synthetic `/.file/id=`
 path. It forwards the whole resolved selection
 to GPUI's `application:openURLs:` delegate, which only enqueues events. The file
 picker, paste, drop, and Finder file opening share one background path loader and
-import-busy guard, including cancellation on close/reset. Both the
+import-busy guard, including cancellation and reset guards. Both the
 service and Open With use the early `on_open_urls` channel until the controller is
 ready, including at cold launch. `open_request.rs` decodes local file URLs without
 changing existing `gatto://` actions. File events activate the main window and use
-the existing validation, draft choice, and compression flow. They never authorize
+the existing validation and compression flow. They never authorize
 upload. Busy operations and dialogs reject selections with retry feedback; an
-in-flight validation blocks reentry. Close/reset invalidate pending results.
+in-flight validation blocks reentry. Cancellation and reset invalidate pending results.
 
 Apple documents [document types](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes)
 and [Services properties](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html).
@@ -268,19 +346,21 @@ The shared image formatter defaults to an HTML `<img>` element accepted in GitHu
 Markdown, with `width` and `height` from the validated pixel dimensions and
 escaped `alt` and `src` attributes. The saved `copy_images_as_markdown` preference
 defaults to false, including for older settings. Enabling it selects
-`ImageCopyFormat::Markdown`, producing escaped `![description](URL)` snippets
+`ImageCopyFormat::Markdown`, producing escaped `![title](URL)` snippets
 without dimensions. Individual copy, batch copy, and Quick Copy use the same
 format selection; preference changes rebuild completed copy results without
-uploading again. Video snippets remain bare URLs in both modes.
+uploading again. Image titles supply alt text; optional descriptions appear only
+in an escaped HTML `data-description` attribute. Video snippets remain bare URLs
+in both modes.
 GPUI's clipboard image exposes encoded bytes without an
 original display size or scale factor; copied dimensions therefore describe
 pixels rather than the source app's logical size.
 Video snippets are bare URLs, and bulk copy uses blank paragraphs between all
 snippets so GitHub can promote each video URL to a player.
 Generation counters prevent stale task completions from restoring state after
-reset, close, or draft replacement. Reset and main-window close cancel active
-uploads and clear local state; they cannot remove a remote attachment that
-GitHub has already accepted.
+reset or workspace cancellation. Closing preserves the workspace, and pending
+work must finish or be canceled. Cancellation cannot remove remote attachments
+that GitHub has already accepted.
 
 Images are limited to 10,000,000 bytes. `allow_large_videos` defaults to false,
 including for older saved settings; `video_upload_limit()` maps it to a typed
@@ -354,7 +434,8 @@ type retains and reuses one handle, so repeated closes do not accumulate windows
 Explicit quit mode keeps the menu bar process alive after all windows are hidden.
 The main-window controller retains shared diagnostics and menu/shortcut services
 and creates the uploader view on first use, loading saved preferences. Main-window
-close cancels shortcut recording and discards staged attachments and copy results.
+close cancels shortcut recording and preserves saved workspace attachments and
+copy results. Active work must finish or be canceled before closing.
 Utility windows close independently: confirmed preview exit releases its image references,
 logs refresh on reopening, and Rooftops resets its run on close. Other platforms
 use native destruction.
@@ -382,9 +463,16 @@ leave the picker available to retry by removing and reattaching a source.
 `UploaderApp::begin_comparison` shows the normal main page and runs combination
 on a background worker. An attachment card with an animated thumbnail spinner
 reports resizing/combining while import/upload controls are gated. The completion
-uses the ordinary draft replacement/batch flow. Closing/clearing the main draft
-invalidates pending results through its upload generation. Combining does not
+appends the result to the current workspace. Canceling combination invalidates
+pending results through its upload generation. Combining does not
 upload or modify either original file.
+
+An individual PNG, JPEG, or WebP attachment can open the same composer with its
+image fixed in one slot. A segmented control chooses the new image's side. The
+result replaces the original attachment in its current position and keeps its
+identity, title, and description. The new PNG clears the previous upload URL.
+Project manifests record `is_comparison` for each attachment; reopening a
+workspace uses that flag to determine whether conversion is available.
 
 One common scale fits the complete result within 3840 × 2160, including the
 reserved caption area, padding, and gap. Photos keep their proportions and relative
@@ -620,7 +708,8 @@ Both renderers paint pixelation only within the source image and below every
 annotation; hit testing excludes pixelation entirely. It cannot be selected,
 transformed, erased, or reordered, but each stroke remains undoable. Pixelation alone cannot enlarge
 the output. Saved outputs
-contain no recoverable source layer. Each staged image owns an in-memory `Session`
+contain no recoverable source layer when uploaded. Local workspaces retain the
+original source and annotation JSON. Each staged image owns an in-memory `Session`
 that retains the original document and source image independently of the flattened
 upload bytes. The open preview paints from the original coordinate system, rather
 than annotating an already flattened replacement. Each preview image and retained
@@ -629,21 +718,23 @@ the current marks to that baseline, exports all changed images in a background b
 and shows a loading indicator while blocking additional edits. Each uploader event
 is acknowledged after the staged replacement is accepted; errors leave the preview
 open and retryable. Only after every acknowledgement does Save close the preview,
-retaining the original document, saved baseline, and history for reopening.
+retaining the original document and saved baseline for reopening. Window-local
+undo/redo is cleared by the retained snapshot when the editor closes.
 Both the native close button and Command+W close clean previews immediately.
 Unsaved edits open a Save/Discard/Cancel dialog. Save uses the same acknowledged
 batch export as the toolbar action; Cancel preserves the session, while Discard
 restores each document's saved-mark baseline and clears undo/redo before closing.
 The restored documents retain their original source image, annotation scale, and
-editable saved marks in the shared sessions. Reopening never has to decode a saved
-PNG as the source after Discard. Clean closes and Save preserve history.
-All closes preserve the hide/reuse workaround on macOS.
+editable saved marks in the shared sessions. Reopening after Discard uses that
+original source rather than the flattened upload PNG. All closes preserve the hide/reuse workaround
+on macOS. `preview_open` records presentation separately from the retained native
+window handle, so a hidden clean preview cannot block workspace switching.
 An incrementing session generation suppresses late Save results after exit,
 including if the same attachment is reopened before PNG export completes.
 The top-right Discard action opens a confirmation dialog, then uses the same
 restore-and-close behavior as the exit dialog: it retains the latest saved marks
 as editable objects and keeps previously staged saved pixels. It cannot
-be undone. It is disabled with no unsaved work or history in any preview image;
+be undone. It is disabled with no unsaved work in any preview image;
 Save is disabled if every image matches its saved baseline. Both actions close the preview.
 
 `image_preview/editor.rs` owns native GPUI pointer gestures; its `toolbar.rs`
@@ -729,8 +820,9 @@ transform pointer coordinates into original-image space. The uploader subscribes
 to apply events, rejects changes during import/upload, replaces the staged image
 with a validated flattened PNG, preserves its identity and description, and clears
 stale upload results. Save and Command+S apply background PNG snapshots and close
-after the uploader acknowledges them, without writing separate files or resetting
-history. Stroke presets use 2/3.5/5/10 annotation units. Each document establishes
+after the uploader acknowledges them. Workspace persistence writes the original
+source and current annotation JSON together with the rendered PNG. Stroke presets
+use 2/3.5/5/10 annotation units. Each document establishes
 one annotation scale from its first fitted view, before user zooming, and retains
 it through snapshots, save/reopen, undo/redo, and reverting the artwork. Creation
 uses that shared unit to convert stroke, font, label spacing, and tap-shape size
@@ -803,14 +895,16 @@ and staged attachments are untouched, and closing a window cannot stop its job.
 
 ## App Preferences and local state
 
-The repository owner (personal account or organization), repository selections, shortcut configuration, and general preferences are
-saved as JSON in `~/Library/Application Support/Gatto/settings.json`. The GitHub
-token and image bytes are never written there. Until an account or organization is set, the main screen only
-points the user to App Preferences. The `owner` setting accepts the former
+The repository owner (personal account or organization), repository selections,
+shortcut configuration, and general preferences are saved as JSON in
+`~/.gatto/settings.json`. The GitHub token and image bytes are never written there.
+Until an account or organization is set, the main screen points the user to
+App Preferences. The `owner` setting accepts the former
 `organization` key when reading existing preferences. Changing owners clears
-repository selections, cached IDs, and pins after successfully saving settings.
+the active repository selection, remembered repository IDs, and pins after
+successfully saving settings.
 
-Start at Login is represented by the exact file
+Start at Login is recorded in settings and synchronized with the macOS-required file
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the
 setting writes a LaunchAgent containing the current executable's canonical path
 and a `--login` argument; disabling it removes that one file. The agent runs in
@@ -822,9 +916,10 @@ On startup, an existing login item is atomically refreshed with the new argument
 this never enables Start at Login for users who have not selected it. No privileged
 helper or system-wide login service is installed.
 
-The **Reset app** preference removes both of these per-user files and returns
-the in-memory UI to first-run setup. It does not modify GitHub CLI
-authentication, which is managed outside of Gatto.
+The **Reset app** preference deletes projects, clears Scratchpad, removes settings
+and the login LaunchAgent, then returns the UI to first-run setup. Delete All
+Projects preserves Scratchpad and preferences. Neither operation modifies GitHub
+CLI authentication, which is managed outside of Gatto.
 
 The global Quick Copy shortcut uses macOS hotkey registration rather than global keyboard event
 monitoring, so it does not require Accessibility permission. The shortcut is opt-in, must contain
@@ -843,11 +938,14 @@ pair and upgrade rules.
 
 - Authentication remains delegated to GitHub CLI.
 - Tokens are requested only when needed and are not written to application config.
-- Image content remains in memory; videos use private per-user temporary files.
-  Both are sent directly to GitHub, and video preview shares the local snapshot
-  with the configured macOS player.
-- Custom action URLs do not accept parameters; repository selection remains controlled by saved
-  app preferences.
+- Scratchpad and projects persist media copies, metadata, and completed upload
+  URLs in workspace folders; see [storage locations](../SUPPORT.md#local-data-and-recovery).
+  Annotated images retain original sources and editable annotation JSON locally;
+  undo/redo history and GitHub credentials are not persisted.
+- Uploads send media directly to GitHub. Annotated images upload as flattened PNGs.
+  Staged videos use private temporary snapshots, shared with the configured macOS
+  player for preview.
+- Custom action URLs do not accept parameters.
 - Upload results are copied after an explicit copy action or a user-configured Quick Copy action.
 - Persistent settings contain repository names and app preferences, never tokens or image bytes;
   Start at Login stores the executable path in a per-user LaunchAgent.

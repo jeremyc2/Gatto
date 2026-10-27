@@ -1038,6 +1038,10 @@ impl ImagePreview {
             cx.notify();
         }
     }
+    pub(crate) fn has_pending_edits(&self) -> bool {
+        self.saving.is_some() || self.has_unsaved_changes()
+    }
+
     fn has_unsaved_changes(&self) -> bool {
         self.images.iter().any(|image| {
             image.document.as_ref().is_some_and(|doc| {
@@ -1103,13 +1107,12 @@ impl ImagePreview {
                         .into_iter()
                         .map(|(id, name, doc)| {
                             let (bytes, _) = doc.png(None)?;
-                            crate::model::validate_size(
-                                bytes.len() as u64,
-                                crate::model::MAX_ATTACHMENT_BYTES,
-                            )?;
                             let mut attachment = StagedAttachment::from_bytes(name, bytes, None)?;
                             if let crate::model::Media::Image(image) = &mut attachment.media {
                                 image.marker_descriptions = doc.marker_descriptions();
+                                let annotations = crate::annotation::AnnotationDocument::new(&doc);
+                                annotations.source_png()?;
+                                image.annotation_document = Some(Arc::new(annotations));
                             }
                             Ok((id, attachment))
                         })
@@ -1180,25 +1183,38 @@ impl ImagePreview {
         let image_id = self.current().map(|image| image.id);
         window.open_alert_dialog(cx, move |alert, _, _| {
             let preview = preview.clone();
-            alert.width(px(420.))
+            alert
+                .width(px(420.))
                 .title("Are you sure?")
-                .description("Discard unsaved edits and close the preview? Saved annotations stay editable. Undo/redo history will be erased. This can’t be undone.")
+                .description("Discard unsaved edits and close the preview?")
                 .show_cancel(true)
                 .cancel_text("Cancel")
                 .ok_text("Discard")
                 .footer(theme::confirmation_footer("ok", "Discard", 88.))
                 .on_ok(move |_, window, cx| {
-                    let closed = preview.update(cx, |this, cx| {
-                        if this.current().map(|image| image.id) != image_id { return false; }
-                        this.clear(cx);
-                        this.close_confirmed = true;
-                        true
-                    }).unwrap_or(false);
-                    if closed { crate::window_limits::request_close(window, cx); }
+                    let closed = preview
+                        .update(cx, |this, cx| {
+                            if this.current().map(|image| image.id) != image_id {
+                                return false;
+                            }
+                            this.clear(cx);
+                            this.close_confirmed = true;
+                            true
+                        })
+                        .unwrap_or(false);
+                    if closed {
+                        crate::window_limits::request_close(window, cx);
+                    }
                     true
                 })
         });
     }
+    pub(crate) fn cancel_and_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.clear(cx);
+        self.close_confirmed = true;
+        crate::window_limits::request_close(window, cx);
+    }
+
     pub(crate) fn confirm_exit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_confirmed || window.has_active_dialog(cx) {
             return;
@@ -1220,9 +1236,6 @@ impl ImagePreview {
             alert
                 .width(px(440.))
                 .title("Save changes before closing?")
-                .description(
-                    "Discard removes unsaved edits and edit history. Saved annotations stay editable.",
-                )
                 .footer(
                     DialogFooter::new()
                         .justify_between()
@@ -5181,7 +5194,7 @@ mod tests {
                     !preview.can_discard(),
                     "Reopening saved artwork must not enable Discard just for retained history"
                 );
-                assert!(preview.doc().unwrap().can_undo());
+                assert!(!preview.doc().unwrap().can_undo());
                 assert_eq!(preview.doc().unwrap().marks.len(), 1);
                 assert_eq!(preview.images[0].pixel_size, (400, 300));
                 assert!(
@@ -5195,39 +5208,14 @@ mod tests {
             assert!(!window.has_active_dialog(cx));
             let preview = view.read(cx);
             assert_eq!(preview.images.len(), 1);
-            assert!(preview.doc().unwrap().can_undo());
+            assert!(!preview.doc().unwrap().can_undo());
         });
-        cx.update(|window, cx| window.click("annotation-undo", cx));
-        cx.update(|_, cx| {
-            assert!(view.read(cx).doc().unwrap().marks.is_empty());
-            assert!(
-                view.read(cx).has_unsaved_changes(),
-                "Undoing saved work needs another save"
-            );
-        });
-        cx.update(|_, cx| {
-            view.update(cx, |preview, cx| {
-                preview.show(vec![staged.clone()], id, cx);
-            })
-        });
-        cx.update(|window, cx| window.click("annotation-redo", cx));
         cx.update(|window, cx| {
+            window.click("annotation-undo", cx);
             assert_eq!(view.read(cx).doc().unwrap().marks.len(), 1);
             assert!(!view.read(cx).has_unsaved_changes());
             window.click("annotation-apply", cx);
-            assert!(
-                view.read(cx).saving.is_none(),
-                "Saved work cannot be applied twice"
-            );
-            view.update(cx, |preview, cx| {
-                assert!(
-                    preview.should_close(window, cx),
-                    "Saved previews close without confirmation"
-                );
-                assert!(!window.has_active_dialog(cx));
-                preview.show(vec![staged.clone()], id, cx);
-                assert!(preview.doc().unwrap().can_undo());
-            });
+            assert!(view.read(cx).saving.is_none());
         });
         // Save a moved shape again, then make a third, unsaved change.
         cx.update(|window, cx| {

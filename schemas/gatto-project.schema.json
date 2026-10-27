@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json",
+  "title": "Gatto project",
+  "description": "Portable Gatto attachment project. Media files are relative to gatto-media/ beside the manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "version",
+    "id",
+    "title",
+    "metadata",
+    "attachments"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json"
+    },
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "readOnly": true,
+      "description": "Immutable project identity."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Distinct project display name. Renaming it leaves the folder unchanged."
+    },
+    "attachments": {
+      "type": "array",
+      "description": "Ordered attachments. Reordering never changes their IDs.",
+      "items": {
+        "$ref": "#/$defs/attachment"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "repository_owner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Creation time in milliseconds since the Unix epoch."
+        },
+        "updated_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Last saved change in milliseconds since the Unix epoch."
+        }
+      },
+      "required": [
+        "description",
+        "repository",
+        "repository_owner",
+        "created_at",
+        "updated_at"
+      ]
+    }
+  },
+  "$defs": {
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "file",
+        "sha256",
+        "name",
+        "title",
+        "description",
+        "uploaded_url",
+        "marker_descriptions",
+        "is_comparison"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "readOnly": true,
+          "description": "Immutable identity, preserved when pixels or metadata change."
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^[0-9a-f-]{36}-[0-9a-f]{64}\\.(png|jpg|gif|webp|mp4|mov|webm)$",
+          "description": "Attachment UUID followed by the content SHA-256 and media extension, inside gatto-media/."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Original upload filename."
+        },
+        "title": {
+          "type": "string",
+          "description": "Image alt text or local video title."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional multiline text for the copied HTML data-description attribute."
+        },
+        "uploaded_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "description": "Reusable upload URL, valid only when the media matches sha256."
+        },
+        "is_comparison": {
+          "type": "boolean",
+          "description": "Whether this image is a side-by-side comparison."
+        },
+        "marker_descriptions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "json"
+          ],
+          "properties": {
+            "source": {
+              "type": "string",
+              "pattern": "^[0-9a-f-]{36}-[0-9a-f]{64}\\.source\\.png$",
+              "description": "Original editable PNG source inside gatto-media/."
+            },
+            "json": {
+              "type": "string",
+              "pattern": "^[0-9a-f-]{36}-[0-9a-f]{64}\\.annotations\\.json$",
+              "description": "Current annotations and settings inside gatto-media/."
+            }
+          }
+        }
+      }
+    }
+  }
+}

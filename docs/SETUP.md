@@ -115,7 +115,7 @@ On first launch, open **App Preferences** from the settings icon or the menu bar
 Gatto waits for an account or organization login before loading repositories.
 Public release checks do not need GitHub CLI authentication.
 
-<img src="images/walkthrough/01-first-run.png" alt="Gatto's first-run screen with Application Logs, App Preferences, walkthrough help, and an Open App Preferences button" width="620">
+<img src="images/walkthrough/framed/01-first-run.png" alt="Gatto's first-run screen with Application Logs, App Preferences, and an Open App Preferences button" width="800">
 
 Enter a personal account login, such as `octocat`, or an organization login, such
 as `acme`, in **GitHub account/organization**, and save it. Use the login rather
@@ -127,17 +127,18 @@ Changing to a different account or organization clears the previous repository
 selection and pins. Choose and pin repositories for the new owner.
 
 Pin repositories you use often. Pins put them first in the repository picker
-and enable the menu bar's clipboard actions.
+and enable Quick Copy.
 
-<img src="images/walkthrough/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, Quick Copy shortcut, and an unchecked Copy images as Markdown option" width="620">
+<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, Quick Copy shortcut, and an unchecked Copy images as Markdown option" width="800">
 
 ## 4. Set your preferences
 
 - **Copy images as Markdown** is unchecked by default. Enable it to copy
-  `![description](URL)` instead of a sized HTML image tag. It applies to
+  `![title](URL)` instead of a sized HTML image tag. It applies to
   individual copy, bulk copy, and Quick Copy, including images already uploaded
   in the current window. Markdown image snippets have no width or height;
-  video links keep their existing format.
+  video links keep their existing format. The optional Description field is
+  included only on HTML images as a `data-description` attribute.
 - **Allow videos up to 100 MB** is unchecked by default. Enable it only when the
   destination repository belongs to a paid GitHub account or organization and
   you qualify to upload larger videos: you are an organization member, outside
@@ -155,8 +156,17 @@ and enable the menu bar's clipboard actions.
   permission. See the [walkthrough](WALKTHROUGH.md#faster-clipboard-uploads) to
   record a different shortcut.
 - **Close the window after copy** closes the main window after copying uploaded
-  Markdown. Closing clears the attachment list, including uncopied results.
+  Markdown. Attachments and completed upload URLs stay saved in the workspace.
 
 Ready to upload? Continue with the [walkthrough](WALKTHROUGH.md).
 For reset, uninstall, or unreadable settings, see
 [Support](../SUPPORT.md#reset-and-uninstall).
+
+### Project storage
+
+Scratchpad persists in `~/.gatto/scratchpad`. Projects live under
+`~/.gatto/projects` and are discovered there automatically.
+Preferences live in `~/.gatto/settings.json`, with a repository-hosted JSON Schema
+reference for code editors. Existing Application Support settings migrate on launch.
+Start at Login is also recorded there; macOS still requires its LaunchAgent in
+`~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`.

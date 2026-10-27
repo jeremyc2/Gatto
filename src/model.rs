@@ -46,7 +46,7 @@ impl VideoUploadLimit {
 
 static NEXT_STAGED_IMAGE_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Repository {
     pub id: u64,
     pub name: String,
@@ -74,7 +74,9 @@ pub struct OversizedVideo {
 #[derive(Clone)]
 pub struct StagedAttachment {
     pub id: u64,
+    pub persistent_id: uuid::Uuid,
     pub name: String,
+    pub title: String,
     pub description: String,
     pub upload_state: AttachmentUploadState,
     pub mime_type: String,
@@ -89,11 +91,13 @@ pub enum Media {
 
 #[derive(Clone)]
 pub struct ImageData {
+    pub is_comparison: bool,
     pub marker_descriptions: Vec<(u32, String)>,
     pub bytes: Arc<[u8]>,
     pub preview: Arc<Image>,
     pub pixel_size: (u32, u32),
     pub annotation_session: crate::annotation::Session,
+    pub annotation_document: Option<Arc<crate::annotation::AnnotationDocument>>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -171,7 +175,9 @@ impl StagedAttachment {
             let video = Video::stage(&mut file, &extension, video_limit)?;
             return Ok(Self {
                 id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
-                description: name.clone(),
+                persistent_id: uuid::Uuid::new_v4(),
+                title: name.clone(),
+                description: String::new(),
                 name,
                 upload_state: AttachmentUploadState::Preview,
                 mime_type: mime_type.into(),
@@ -220,8 +226,13 @@ impl StagedAttachment {
         match &self.media {
             Media::Image(image) => {
                 let mut snippet = match format {
-                    ImageCopyFormat::Html => html_image(&self.description, url, image.pixel_size),
-                    ImageCopyFormat::Markdown => markdown_image(&self.description, url),
+                    ImageCopyFormat::Html => html_image_with_description(
+                        &self.title,
+                        &self.description,
+                        url,
+                        image.pixel_size,
+                    ),
+                    ImageCopyFormat::Markdown => markdown_image(&self.title, url),
                 };
                 for (index, (number, description)) in image.marker_descriptions.iter().enumerate() {
                     snippet.push_str(if index == 0 { "\n\n" } else { "\n" });
@@ -254,13 +265,17 @@ impl StagedAttachment {
 
         Ok(Self {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
-            description: name.clone(),
+            persistent_id: uuid::Uuid::new_v4(),
+            title: name.clone(),
+            description: String::new(),
             name,
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             media: Media::Image(ImageData {
+                is_comparison: false,
                 marker_descriptions: Vec::new(),
                 annotation_session: Default::default(),
+                annotation_document: None,
                 preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
                 bytes,
                 pixel_size,
@@ -317,13 +332,17 @@ impl StagedAttachment {
         let bytes: Arc<[u8]> = bytes.into();
         Self {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
-            description: name.clone(),
+            persistent_id: uuid::Uuid::new_v4(),
+            title: name.clone(),
+            description: String::new(),
             name,
             upload_state: AttachmentUploadState::Preview,
             mime_type: format.mime_type().to_owned(),
             media: Media::Image(ImageData {
+                is_comparison: false,
                 marker_descriptions: Vec::new(),
                 annotation_session: Default::default(),
+                annotation_document: None,
                 preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
                 bytes,
                 pixel_size,
@@ -386,6 +405,25 @@ pub fn html_image(description: &str, url: &str, pixel_size: (u32, u32)) -> Strin
     format!(r#"<img width="{width}" height="{height}" alt="{alt_text}" src="{src}" />"#)
 }
 
+fn html_image_with_description(
+    title: &str,
+    description: &str,
+    url: &str,
+    pixel_size: (u32, u32),
+) -> String {
+    let tag = html_image(title, url, pixel_size);
+    if description.is_empty() {
+        return tag;
+    }
+    let description = escape_html_attribute(description)
+        .replace('\r', "&#13;")
+        .replace('\n', "&#10;");
+    format!(
+        "{} data-description=\"{description}\" />",
+        tag.trim_end_matches(" />")
+    )
+}
+
 fn markdown_image(description: &str, url: &str) -> String {
     let alt_text = description
         .replace(['\r', '\n'], " ")
@@ -425,6 +463,37 @@ fn escape_html_attribute(value: &str) -> String {
 #[cfg(test)]
 mod image_snippet_tests {
     use super::{html_image, markdown_image};
+
+    #[test]
+    fn description_only_adds_an_escaped_html_data_attribute() {
+        let mut item = super::StagedAttachment::from_bytes(
+            "filename.png".into(),
+            include_bytes!("../packaging/menu-bar-icon.png").to_vec(),
+            None,
+        )
+        .unwrap();
+        item.title = "A title".into();
+        item.description = "Details \"<&>\"\r\nMore".into();
+        let snippet = item.snippet("https://example.com/image", super::ImageCopyFormat::Html);
+        assert!(snippet.contains("alt=\"A title\""));
+        assert!(
+            snippet
+                .contains("data-description=\"Details &quot;&lt;&amp;&gt;&quot;&#13;&#10;More\"")
+        );
+        assert_eq!(
+            item.snippet(
+                "https://example.com/image",
+                super::ImageCopyFormat::Markdown
+            ),
+            "![A title](https://example.com/image)"
+        );
+        item.description.clear();
+        assert!(
+            !item
+                .snippet("https://example.com/image", super::ImageCopyFormat::Html)
+                .contains("data-description")
+        );
+    }
 
     #[test]
     fn seven_markers_copy_all_numbers_with_only_fifth_or_no_description() {

@@ -7,6 +7,59 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Convert a single image attachment to a side-by-side comparison from its options
+  menu, choosing which side receives the new image.
+- Persistent projects and Scratchpad with portable JSON manifests, UUID attachment
+  identities, reusable upload URLs, per-workspace repositories, descriptions,
+  timestamps, and storage information.
+- Sidebar search and last-updated ordering, pinned Scratchpad and Create Project
+  controls, project metadata editing, and immediate deletion.
+- Attachment checkboxes, Select All, and menus for editing, annotation, removal,
+  and moving one or more attachments to another project or a newly created project.
+- A native Help menu and the five most recently updated projects in the Dock menu.
+- Default project storage, Delete All Projects, and JSON Schema references
+  for project manifests, settings, and editable annotations.
+
+### Changed
+
+- Enlarge the cat portrait in the macOS app icon.
+- Persist original image sources and editable annotation JSON in projects and
+  Scratchpad. Clean editor visits no longer block workspace switching.
+- Edit project names and multiline descriptions in a labeled modal. Creation errors
+  stay above the fields without discarding the form. Project refreshes discover new
+  folders and remove missing ones. Escape dismisses modals from their fields.
+- Store settings under `~/.gatto`, migrate existing preferences, persist Scratchpad
+  under `~/.gatto/scratchpad`, and create new project subfolders in `~/.gatto/projects`.
+  Reset also removes projects and clears Scratchpad.
+- Always append staged attachments; remove the bulk-upload toggle and replacement
+  prompt. Quick Copy remains independent of Scratchpad.
+- Show Project: name or Scratchpad as the heading. The question mark opens
+  workspace information; Help links live in the macOS Help menu.
+- Drag full attachment cards to reorder, with live shifts, edge scrolling, and
+  Escape cancellation. Use a compact drag indicator over the sidebar and restore
+  the full card outside it.
+- Skip reloading the current workspace and offer cancellation when active work
+  prevents switching.
+- Refresh documentation and website screenshots for the project sidebar, with
+  compact website framing and thin rounded white borders in Markdown guides.
+- Place upload actions side by side and remove redundant cancellation and
+  save-dialog explanations from the app.
+- Simplify the oversized-video prompt to show the file size and ask about compression
+  below the selected 10 MB or 100 MB threshold.
+- Use separate attachment Title and Description fields. Titles supply alt text;
+  descriptions appear only in copied HTML `data-description` attributes.
+
+### Fixed
+
+- Ignore pending upload authentication and repository-resolution results after
+  switching workspaces, preventing uploads of another workspace's attachments.
+- Restore saved repository selections only when their owner matches the configured
+  account or organization.
+- Reject edited comparison geometry with invalid footer bounds instead of crashing
+  while opening the project.
+
 ## [0.19.1] - 2026-10-26
 
 ### Changed

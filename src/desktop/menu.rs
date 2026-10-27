@@ -131,10 +131,10 @@ impl Menu {
         if self.update_visible.get() {
             self.menu.addItem(&self.update);
         }
+        self.menu
+            .addItem(&NSMenuItem::separatorItem(self.main_thread));
+        self.menu.addItem(&self.preview);
         if self.paste_visible.get() {
-            self.menu
-                .addItem(&NSMenuItem::separatorItem(self.main_thread));
-            self.menu.addItem(&self.preview);
             self.menu.addItem(&self.quick);
         }
         self.menu
@@ -229,7 +229,7 @@ pub(super) fn verify() -> Result<()> {
                 .unwrap()
                 .isTemplate()
         );
-        assert_eq!(menu.menu.numberOfItems(), 6);
+        assert_eq!(menu.menu.numberOfItems(), 8);
         menu.paste_visible(true);
         assert_eq!(menu.menu.numberOfItems(), 9);
         assert_eq!(menu.preview.title().to_string(), "Draft from Clipboard");
@@ -250,15 +250,15 @@ pub(super) fn verify() -> Result<()> {
         assert!(!menu.update.isEnabled());
         assert_eq!(menu.menu.numberOfItems(), 10);
         menu.paste_visible(false);
-        assert_eq!(menu.menu.numberOfItems(), 7);
+        assert_eq!(menu.menu.numberOfItems(), 9);
         assert_eq!(menu.menu.itemAtIndex(2).as_deref(), Some(&*menu.update));
         menu.menu.performActionForItemAtIndex(1);
         assert_eq!(events.try_recv()?, 7);
-        menu.menu.performActionForItemAtIndex(4);
+        menu.menu.performActionForItemAtIndex(6);
         assert_eq!(events.try_recv()?, 4);
         menu.update_state(0, 517);
         assert_eq!(menu.update.tag(), 517);
-        assert_eq!(menu.menu.numberOfItems(), 6);
+        assert_eq!(menu.menu.numberOfItems(), 8);
         let retained_item = menu.open.clone();
         drop(menu);
         assert!(retained_item.target().is_none());

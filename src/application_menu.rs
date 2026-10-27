@@ -1,3 +1,4 @@
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, Window, actions};
 
 actions!(
@@ -9,11 +10,41 @@ actions!(
         InstallUpdate,
         CheckForUpdates,
         OpenPreferences,
-        CreateComposition
+        CreateComposition,
+        HelpRepository,
+        HelpWalkthrough,
+        HelpSetup,
+        HelpSupport
     ]
 );
 
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize, gpui_kit::Action)]
+#[action(namespace = gatto, no_json)]
+pub struct OpenRecentProject {
+    pub path: std::path::PathBuf,
+}
+
+pub fn set_recent_projects(projects: Vec<(String, std::path::PathBuf)>, cx: &App) {
+    cx.set_dock_menu(
+        projects
+            .into_iter()
+            .take(5)
+            .map(|(name, path)| MenuItem::action(name, OpenRecentProject { path }))
+            .collect(),
+    );
+}
+
 pub fn init(cx: &mut App) {
+    cx.intercept_keystrokes(|event, window, cx| {
+        if event.keystroke.key == "escape"
+            && window.root::<gpui_kit::base::Root>().flatten().is_some()
+            && window.has_active_dialog(cx)
+        {
+            window.dispatch_action(Box::new(gpui_kit::component::dialog::Cancel), cx);
+            cx.stop_propagation();
+        }
+    })
+    .detach();
     // Unscoped actions work in every window, including focused text fields.
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, None),
@@ -21,9 +52,19 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-,", OpenPreferences, None),
     ]);
-    cx.on_action(|_: &Quit, cx| cx.quit());
+    cx.on_action(|_: &Quit, cx| request_quit(cx));
     cx.on_action(|_: &CloseWindow, cx| close_focused_window(false, cx));
     cx.on_action(|_: &DismissWindow, cx| close_focused_window(true, cx));
+    cx.on_action(|_: &HelpRepository, cx| cx.open_url("https://github.com/jeremyc2/Gatto"));
+    cx.on_action(|_: &HelpWalkthrough, cx| {
+        cx.open_url("https://github.com/jeremyc2/Gatto/blob/main/docs/WALKTHROUGH.md")
+    });
+    cx.on_action(|_: &HelpSetup, cx| {
+        cx.open_url("https://github.com/jeremyc2/Gatto/blob/main/docs/SETUP.md")
+    });
+    cx.on_action(|_: &HelpSupport, cx| {
+        cx.open_url("https://github.com/jeremyc2/Gatto/blob/main/SUPPORT.md")
+    });
     cx.set_menus([
         Menu::new("Gatto").items([
             MenuItem::action("App Preferences", OpenPreferences),
@@ -37,7 +78,52 @@ pub fn init(cx: &mut App) {
             crate::image_composer::TITLE,
             CreateComposition,
         )]),
+        Menu::new("Help").items([
+            MenuItem::action("GitHub Repository", HelpRepository),
+            MenuItem::action("Walkthrough", HelpWalkthrough),
+            MenuItem::action("Setup", HelpSetup),
+            MenuItem::action("Support", HelpSupport),
+        ]),
     ]);
+}
+
+/// User-requested quits must not cut off a project write. The platform quit
+/// hook remains a bounded fallback for shutdowns initiated outside these actions.
+pub(crate) fn request_quit(cx: &mut App) {
+    cx.defer(|cx| {
+        let mut ready = true;
+        for handle in cx.windows() {
+            let _ = handle.update(cx, |_, window, cx| {
+                if let Some(root) = window.root::<gpui_kit::base::Root>().flatten()
+                    && let Ok(preview) = root
+                        .read(cx)
+                        .view()
+                        .clone()
+                        .downcast::<crate::image_preview::ImagePreview>()
+                    && preview.read(cx).has_pending_edits()
+                {
+                    window.activate_window();
+                    preview.update(cx, |preview, cx| preview.confirm_exit(window, cx));
+                    ready = false;
+                    return;
+                }
+                if let Some(root) = window.root::<gpui_kit::base::Root>().flatten()
+                    && let Ok(view) = root
+                        .read(cx)
+                        .view()
+                        .clone()
+                        .downcast::<crate::app::UploaderApp>()
+                    && !view.update(cx, |view, cx| view.prepare_to_close(window, cx))
+                {
+                    window.activate_window();
+                    ready = false;
+                }
+            });
+        }
+        if ready {
+            cx.quit();
+        }
+    });
 }
 
 pub(crate) fn is_extra_window(window: &Window, cx: &App) -> bool {
@@ -55,6 +141,13 @@ fn close_focused_window(dismiss: bool, cx: &mut App) {
         // window before deferring so another window cannot become the target.
         cx.defer(move |cx| {
             let _ = handle.update(cx, |_, window, cx| {
+                if dismiss
+                    && window.root::<gpui_kit::base::Root>().flatten().is_some()
+                    && window.has_active_dialog(cx)
+                {
+                    window.dispatch_action(Box::new(gpui_kit::component::dialog::Cancel), cx);
+                    return;
+                }
                 if let Some(root) = window.root::<gpui_kit::base::Root>().flatten() {
                     let content = root.read(cx).view().clone();
                     if dismiss
@@ -181,6 +274,48 @@ mod tests {
             .detach();
         });
         closed
+    }
+
+    #[gpui_kit::test]
+    fn escape_cancels_a_modal_and_runs_its_hooks_in_an_extra_window(cx: &mut TestAppContext) {
+        use gpui_kit::component::WindowExt as _;
+        let canceled = Rc::new(Cell::new(false));
+        let finished = Rc::new(Cell::new(false));
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            init(cx);
+        });
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            window.activate_window();
+            let input = cx.new(|cx| InputState::new(window, cx));
+            let view = cx.new(|_| PreferencesInput(input));
+            gpui_kit::base::Root::new(view, window, cx)
+        });
+        let cancel = canceled.clone();
+        let close = finished.clone();
+        cx.update(|window, cx| {
+            let input = cx.new(|cx| InputState::new(window, cx));
+            let focus = input.clone();
+            window.open_alert_dialog(cx, move |alert, window, cx| {
+                focus.update(cx, |input, cx| input.focus(window, cx));
+                let cancel = cancel.clone();
+                let close = close.clone();
+                alert
+                    .title("Test modal")
+                    .child(Input::new(&input))
+                    .on_cancel(move |_, _, _| {
+                        cancel.set(true);
+                        true
+                    })
+                    .on_close(move |_, _, _| close.set(true))
+            });
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        cx.update(|window, cx| assert!(!window.has_active_dialog(cx)));
+        assert!(canceled.get());
+        assert!(finished.get());
     }
 
     #[gpui_kit::test]

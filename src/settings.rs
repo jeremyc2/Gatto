@@ -12,6 +12,11 @@ use crate::global_shortcut::DEFAULT_QUICK_COPY_SHORTCUT;
 pub const LOGIN_ARGUMENT: &str = "--login";
 
 const APPLICATION_SUPPORT_DIRECTORY: &str = "Gatto";
+pub const SCHEMA_URL: &str =
+    "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-settings.schema.json";
+fn settings_schema() -> String {
+    SCHEMA_URL.into()
+}
 const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.gatto.plist";
 const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 
@@ -43,7 +48,13 @@ impl ReleaseChannel {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AppSettings {
+    #[serde(rename = "$schema", default = "settings_schema")]
+    pub schema: String,
     pub release_channel: ReleaseChannel,
+    #[cfg(test)]
+    #[serde(skip)]
+    pub project_directory_override: Option<PathBuf>,
+    pub sidebar_collapsed: bool,
     #[serde(alias = "organization")]
     pub owner: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
@@ -55,7 +66,6 @@ pub struct AppSettings {
     pub close_window_after_copy: bool,
     pub allow_large_videos: bool,
     pub copy_images_as_markdown: bool,
-    #[serde(skip)]
     pub start_at_login: bool,
 }
 
@@ -66,7 +76,11 @@ fn default_quick_copy_shortcut() -> String {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            schema: settings_schema(),
             release_channel: ReleaseChannel::Stable,
+            #[cfg(test)]
+            project_directory_override: None,
+            sidebar_collapsed: false,
             owner: None,
             pinned_repositories: BTreeSet::new(),
             last_repository: None,
@@ -82,6 +96,14 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    pub fn project_directory(&self) -> Result<PathBuf> {
+        #[cfg(test)]
+        if let Some(path) = &self.project_directory_override {
+            return Ok(path.clone());
+        }
+        Ok(data_directory()?.join("projects"))
+    }
+
     pub fn image_copy_format(&self) -> crate::model::ImageCopyFormat {
         if self.copy_images_as_markdown {
             crate::model::ImageCopyFormat::Markdown
@@ -123,15 +145,31 @@ impl AppSettings {
 
     pub fn load() -> Result<Self> {
         let path = settings_path()?;
-        let mut settings = if path.exists() {
-            let contents = fs::read_to_string(&path)
-                .with_context(|| format!("Could not read {}", path.display()))?;
+        let legacy = home_directory()?
+            .join("Library/Application Support")
+            .join(APPLICATION_SUPPORT_DIRECTORY)
+            .join("settings.json");
+        let source = if path.exists() { &path } else { &legacy };
+        let mut settings: Self = if source.exists() {
+            let contents = fs::read_to_string(source)
+                .with_context(|| format!("Could not read {}", source.display()))?;
             serde_json::from_str(&contents)
-                .with_context(|| format!("Could not parse {}", path.display()))?
+                .with_context(|| format!("Could not parse {}", source.display()))?
         } else {
             Self::default()
         };
-        settings.start_at_login = launch_agent_path()?.exists();
+        if source == &legacy && legacy.exists() {
+            settings.start_at_login = launch_agent_path()?.exists();
+            if legacy.exists() {
+                settings.save()?;
+                fs::remove_file(&legacy)?;
+            }
+        } else if !settings.start_at_login {
+            remove_launch_agent()?;
+        } else if !launch_agent_path()?.exists() {
+            install_launch_agent()?;
+        }
+
         Ok(settings)
     }
 
@@ -146,7 +184,7 @@ impl AppSettings {
             remove_launch_agent()?;
         }
         self.start_at_login = enabled;
-        Ok(())
+        self.save()
     }
 
     /// Upgrade an existing login item without enabling login startup for new users.
@@ -164,11 +202,14 @@ impl AppSettings {
     }
 }
 
+pub fn data_directory() -> Result<PathBuf> {
+    Ok(home_directory()?.join(".gatto"))
+}
+pub fn scratchpad_directory() -> Result<PathBuf> {
+    Ok(data_directory()?.join("scratchpad"))
+}
 fn settings_path() -> Result<PathBuf> {
-    Ok(home_directory()?
-        .join("Library/Application Support")
-        .join(APPLICATION_SUPPORT_DIRECTORY)
-        .join("settings.json"))
+    Ok(data_directory()?.join("settings.json"))
 }
 
 fn launch_agent_path() -> Result<PathBuf> {
@@ -305,6 +346,25 @@ mod tests {
     };
 
     use super::{AppSettings, clear_persistence, write_settings};
+
+    #[test]
+    fn workspace_settings_write_schema_and_login_preference() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let settings = AppSettings {
+            start_at_login: true,
+            ..Default::default()
+        };
+        write_settings(&settings, &path).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(json["$schema"], super::SCHEMA_URL);
+        assert_eq!(json["start_at_login"], true);
+        let restored: AppSettings = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            restored.project_directory().unwrap(),
+            super::data_directory().unwrap().join("projects")
+        );
+    }
 
     #[test]
     fn release_channel_defaults_and_persistence_remain_compatible() {

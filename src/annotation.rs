@@ -7,6 +7,8 @@ mod preview;
 mod raster;
 mod shapes;
 mod stack;
+mod storage;
+pub use storage::AnnotationDocument;
 mod text;
 pub use geometry::Frame;
 pub use preview::{PreviewCache, fill_icon, pixelate_icon, scribble_icon, shape_icon};
@@ -81,7 +83,7 @@ impl Pos {
         Self::new(self.x + (b.x - self.x) * t, self.y + (b.y - self.y) * t)
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
@@ -638,8 +640,8 @@ fn segment_distance(p: Pos, a: Pos, b: Pos) -> f32 {
     p.distance(a.lerp(b, t.clamp(0., 1.)))
 }
 
-/// Shares the original image and edit history within an editing session.
-/// Save and clean close retain it; Discard restores its saved editable marks.
+/// Shares the original image and saved editable marks between editor windows.
+/// Each open window owns its undo/redo history; closing retains a history-free snapshot.
 /// Staged image bytes remain independent.
 #[derive(Clone, Default)]
 pub struct Session(Arc<Mutex<Option<RetainedDocument>>>);
@@ -672,7 +674,7 @@ impl Session {
     }
     pub(crate) fn retain(&self, document: Document, image: Arc<gpui_kit::Image>, saved: EditState) {
         *self.0.lock().unwrap_or_else(|error| error.into_inner()) = Some(RetainedDocument {
-            document,
+            document: document.snapshot(),
             image,
             saved_next_marker: saved.next_marker,
             saved_marks: saved.marks,
@@ -692,6 +694,7 @@ pub struct Document {
     undo: Vec<EditState>,
     redo: Vec<EditState>,
     mosaic: Arc<OnceLock<Vec<[u8; 3]>>>,
+    source_png: Arc<OnceLock<Arc<Vec<u8>>>>,
 }
 #[derive(Clone)]
 pub(crate) struct EditState {
@@ -715,6 +718,7 @@ impl Document {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         }
     }
     pub fn snapshot(&self) -> Self {
@@ -727,6 +731,7 @@ impl Document {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: self.mosaic.clone(),
+            source_png: self.source_png.clone(),
         }
     }
     fn mosaic_colors(&self) -> &[[u8; 3]] {
@@ -1496,6 +1501,7 @@ mod tests {
             undo: vec![],
             redo: vec![],
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         }
     }
     #[test]

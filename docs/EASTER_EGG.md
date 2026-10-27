@@ -3,7 +3,7 @@
 Rooftops is a black-cat platformer with three levels. Closing the game window
 resets the run and returns to the app.
 
-![A black cat jumping toward cat-face coins above illuminated apartments](images/walkthrough/rooftops-1.png)
+![A black cat jumping toward cat-face coins above illuminated apartments](images/walkthrough/framed/rooftops-1.png)
 
 ## Controls
 
@@ -28,7 +28,7 @@ Dark windows have closed blinds or shutters; lit windows leave the residents
 fully visible. Three skyline layers scroll at different speeds
 to create the parallax effect.
 
-![A mid-level owl encounter above narrow rooftops](images/walkthrough/rooftops-2.png)
+![A mid-level owl encounter above narrow rooftops](images/walkthrough/framed/rooftops-2.png)
 
 ## Results
 
@@ -36,7 +36,7 @@ Finishing the third level opens your results: total coins, kills,
 deaths, and active play time. Time spent paused or waiting between levels does not count.
 **Save score** writes a 3600 × 2160 PNG to Downloads. Repeated saves use a new filename.
 
-![The results screen with coins, deaths, active play time, and the Save score button](images/walkthrough/rooftops-3.png)
+![The results screen with coins, deaths, active play time, and the Save score button](images/walkthrough/framed/rooftops-3.png)
 
 The saved scorecard:
 

@@ -803,6 +803,7 @@ mod tests {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         };
         let mut cache = PreviewCache::default();
         let left = Pos::new(100.5, 64.5);
@@ -860,6 +861,7 @@ mod tests {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         };
         let (png, bounds) = doc.png(None).unwrap();
         let exported = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -912,6 +914,7 @@ mod tests {
                 undo: Vec::new(),
                 redo: Vec::new(),
                 mosaic: Arc::default(),
+                source_png: Arc::default(),
             };
             let (png, b) = doc.png(None).unwrap();
             let output = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -979,6 +982,7 @@ mod tests {
                     undo: Vec::new(),
                     redo: Vec::new(),
                     mosaic: Arc::default(),
+                    source_png: Arc::default(),
                 };
                 let (png, bounds) = doc.png(None).unwrap();
                 let output = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -1030,6 +1034,7 @@ mod tests {
                             undo: Vec::new(),
                             redo: Vec::new(),
                             mosaic: Arc::default(),
+                            source_png: Arc::default(),
                         };
                         let (png, _) = doc.png(None).unwrap();
                         let output = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -1124,6 +1129,7 @@ mod tests {
                         undo: Vec::new(),
                         redo: Vec::new(),
                         mosaic: Arc::default(),
+                        source_png: Arc::default(),
                     };
                     let (png, bounds) = doc.png(None).unwrap();
                     let output = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -1183,6 +1189,7 @@ mod tests {
                 undo: Vec::new(),
                 redo: Vec::new(),
                 mosaic: Arc::default(),
+                source_png: Arc::default(),
             };
             let (png, bounds) = doc.png(None).unwrap();
             let output = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -1239,6 +1246,7 @@ mod tests {
                 undo: Vec::new(),
                 redo: Vec::new(),
                 mosaic: Arc::default(),
+                source_png: Arc::default(),
             };
             let mut cache = PreviewCache::default();
             cache.update(&doc);
@@ -1337,6 +1345,7 @@ mod tests {
                     undo: Vec::new(),
                     redo: Vec::new(),
                     mosaic: Arc::default(),
+                    source_png: Arc::default(),
                 };
                 let (png, bounds) = doc.png(None).unwrap();
                 let output = image::load_from_memory(&png).unwrap().to_rgba8();
@@ -1433,6 +1442,7 @@ mod tests {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         };
         for origin in [Pos::new(0., 0.), Pos::new(800., 400.)] {
             let mut mark = Mark::new(Tool::Redact, origin, Style::default());

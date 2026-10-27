@@ -135,6 +135,7 @@ mod tests {
                 undo: Vec::new(),
                 redo: Vec::new(),
                 mosaic: Arc::default(),
+                source_png: Arc::default(),
             };
             assert!(doc.can_reorder_many(&selected, order));
             let moved = doc.reorder_many(&selected, order);

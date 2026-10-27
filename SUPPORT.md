@@ -36,7 +36,7 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | Video does not play                                              | Click its play tile to open the default macOS video app. Install a compatible player or export as H.264 MP4. WebM and some MOV codecs are not supported by every player/browser.                                                                                                                                                                   |
 | GIF does not animate                                             | Animation plays in the separate image preview while active. macOS Reduce Motion holds the first frame.                                                                                                                                                                                                                                             |
 | Clipboard action finds no image                                  | Copy actual image data or an image/video file in Finder; a text URL or Markdown snippet is not media data.                                                                                                                                                                                                                                         |
-| A normal upload fails                                            | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Keep the window open; closing clears drafts.                                                                                                                                                                                          |
+| A normal upload fails                                            | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Scratchpad and projects persist drafts and completed URLs.                                                                                                                                                                                          |
 | Quick Copy fails                                                 | Configure an account or organization and pin an accessible repository. Copy the image or Finder file again and invoke Quick Copy again; this action clears its failed draft.                                                                                                                                                                       |
 | Global shortcut will not register                                | Use at least two modifiers and a supported key. If another app owns the chord, record a different shortcut. No Accessibility permission is required.                                                                                                                                                                                               |
 | Shortcut recorder keeps waiting or retains the previous shortcut | Quit any other Gatto copies, including source builds and local bundles, then retry with one copy running. A second copy can intercept the chord before the recorder receives it; each copy also retains its own preferences in memory.                                                                                                             |
@@ -52,7 +52,7 @@ rejects a larger upload, verify the repository owner's plan and your membership,
 collaborator status, or personal paid plan. Otherwise disable the option and
 remove/reimport the video to compress below 10 MB.
 Transfer progress can reach 100% while waiting for GitHub's
-response. See [uploads, cancellation, and retries](docs/WALKTHROUGH.md#bulk-uploads-and-retries)
+response. See [uploads, cancellation, and retries](docs/WALKTHROUGH.md#uploads-and-retries)
 for timeout behavior and recovery; canceling cannot remove a remote attachment
 GitHub already accepted.
 
@@ -60,9 +60,22 @@ GitHub already accepted.
 
 Gatto writes these per-user files:
 
-- `~/Library/Application Support/Gatto/settings.json`: account or organization, pinned and
+- `~/.gatto/settings.json`: account or organization, pinned and
   last-selected repositories, shortcut, copy preferences, and large-video opt-in.
 - `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at Login executable path.
+
+Scratchpad saves to `~/.gatto/scratchpad`. New projects use named subfolders in
+`~/.gatto/projects`. Each workspace contains `gatto-project.json` and
+`gatto-media/`; back them up together. Annotated images include original image
+sources and editable annotation JSON alongside rendered images. Removing an
+attachment cleans up its associated files. Workspace manifests store the repository, description,
+timestamps, media references, and reusable upload URLs. Previous settings from
+`~/Library/Application Support/Gatto/settings.json` migrate on launch.
+
+**Retry save** retries a failed write; **Create Project** in the sidebar can
+preserve the current attachments in a new project. Project menu **Delete** removes
+its folder immediately. Removing a project folder outside the app makes it
+disappear when the sidebar refreshes.
 
 Video staging creates private `gatto-video-*` files, and compression uses private
 `gatto-compress-*` directories, in the per-user macOS temporary directory.
@@ -72,10 +85,9 @@ its last draft, upload, or viewer reference is released; viewer references last
 until the external application exits. Failed compression attempts are removed.
 Forced termination may leave either kind of temporary data for macOS cleanup.
 
-If malformed or unreadable settings prevent use, quit Gatto, move `settings.json`
-somewhere safe, and reopen the app to configure it again. To clear a stale login
-item, remove only the exact LaunchAgent file above while Gatto is quit. Moving
-settings alone does not disable Start at Login.
+If malformed or unreadable settings prevent use, quit Gatto, move
+`~/.gatto/settings.json` somewhere safe, and reopen the app to configure it again.
+This resets preferences, including Start at Login; workspace folders remain.
 
 ## App updates
 
@@ -88,17 +100,15 @@ need a new DMG or Homebrew install once. Source builds do not check for updates.
 Updater state and Sparkle defaults live in
 `~/Library/Preferences/com.jeremy-chandler.gatto.plist`, with caches in
 `~/Library/Caches/com.jeremy-chandler.gatto`. The selected release channel lives in
-`~/Library/Application Support/Gatto/settings.json`. Reset app returns the channel
+`~/.gatto/settings.json`. Reset app returns the channel
 to Stable and invalidates the previous channel's update offer; Sparkle's check
 schedule remains separate. A beta waiting for Stable is expected behavior, not
 an installation failure. Gatto keeps the beta until Stable catches up.
 
-This beta adds an optional settings field that older stable builds ignore; it
-does not migrate the settings/data schema. If manually reinstalling an older
-build, quit Gatto and back up `settings.json` first. Older builds may discard
-fields they do not recognize when saving. Future betas that change persisted data
-must document their own rollback limits; the channel control does not downgrade
-or migrate data.
+Before manually reinstalling an older build, quit Gatto and back up `~/.gatto`.
+Builds that predate projects do not read the new settings location or saved
+workspaces. The release-channel control does not downgrade the app or migrate
+data backward.
 
 Homebrew users can uninstall with `brew uninstall --cask jeremyc2/gatto/gatto`;
 add `--zap` to remove the cask's declared per-user settings and caches too.
@@ -130,17 +140,18 @@ app does not install or update that separate workflow.
 
 ## Reset and uninstall
 
-**App Preferences → Reset app** asks for confirmation, removes saved preferences
-and the login item, disables the global shortcut, and clears the main upload state.
-It leaves GitHub CLI authentication, GitHub-hosted attachments, and Rooftops scorecards
-in Downloads intact. Reset cannot undo an upload request already sent to GitHub.
-Drafts and upload URLs are held in memory; closing the main window or quitting
-loses them.
+**App Preferences → Reset app** asks for confirmation, deletes project folders
+in `~/.gatto/projects`, clears Scratchpad, removes
+settings and the macOS login item, and disables the global shortcut. **Delete All
+Projects** beside it deletes projects while retaining settings and Scratchpad.
+Neither operation removes GitHub-hosted attachments, GitHub CLI authentication,
+or Rooftops scorecards.
 
 To uninstall, reset the app, choose **Quit** from the menu bar, and move
-`Gatto.app` to the Trash. If the app cannot open, quit it and remove the two files
-listed in [Local data and recovery](#local-data-and-recovery). Keep or remove
-Rooftops scorecards as you prefer. If installed while testing an earlier branch,
+`Gatto.app` to the Trash. If the app cannot open, quit it and remove `~/.gatto`
+and the login LaunchAgent listed in [Local data and recovery](#local-data-and-recovery).
+Keep or remove Rooftops scorecards as you prefer.
+If installed while testing an earlier branch,
 remove the legacy [Finder workflow](#finder-integration) separately.
 
 ## Development builds

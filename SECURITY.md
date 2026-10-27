@@ -181,17 +181,28 @@ Rust dependency audits do not audit the separately bundled native Sparkle SDK.
   and **Command+C** explicitly copy completed results. **Quick Copy**, invoked
   through the menu bar, custom URL, or enabled global shortcut, uploads a
   clipboard image or copied Finder media file and automatically copies its Markdown on success.
-- Preferences persist repository names and app settings; tokens, image bytes,
-  and upload URLs remain in memory. Video staging creates a private 0600
-  temporary snapshot with a random name; it is removed when its last draft,
-  upload, or external viewer reference is released. Viewer references last until
-  the macOS player application exits, and forced termination can leave temporary
-  files for operating-system cleanup. Optional compression uses private
-  `gatto-compress-*` directories and native hardware H.264/AAC encoding after an
-  explicit Compress choice. Failed/canceled attempts are deleted; successful
-  output is copied into the staged snapshot only after size validation. Source
-  videos are never modified. No screen or microphone capture permission is used.
-  Start at Login writes a per-user LaunchAgent containing the executable path.
+- Preferences persist repository names and app settings in
+  `~/.gatto/settings.json`; Gatto does not persist GitHub tokens.
+- Scratchpad automatically persists media, metadata, repository selection, and
+  completed upload URLs in `~/.gatto/scratchpad`. Named projects use subfolders of
+  `~/.gatto/projects` and are discovered there. Creation never reuses an existing
+  subfolder. Annotated images retain original PNG sources and editable annotation JSON
+  beside the rendered image in `gatto-media/`. Local copies therefore include
+  pixels underneath pixelation or other annotations; uploads contain only the
+  rendered image. Undo/redo history is not persisted.
+- Project deletion removes the project folder and its contents. Reset removes
+  projects and clears Scratchpad; Delete All Projects retains Scratchpad and
+  preferences. Deletion validates the manifest and does not follow child symlinks.
+- Video staging creates a private 0600 temporary snapshot with a random name;
+  it is removed when its last draft, upload, or external viewer reference is
+  released. Viewer references last until the macOS player application exits,
+  and forced termination can leave temporary files for operating-system cleanup.
+  Optional compression uses private `gatto-compress-*` directories and native
+  hardware H.264/AAC encoding after an explicit Compress choice. Failed/canceled
+  attempts are deleted; successful output is copied into the staged snapshot
+  only after size validation. Source videos are never modified. No screen or
+  microphone capture permission is used.
+- Start at Login writes a per-user LaunchAgent containing the executable path.
   See [local data and recovery](SUPPORT.md#local-data-and-recovery) for paths and
   removal instructions.
 

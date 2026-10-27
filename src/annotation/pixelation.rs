@@ -306,6 +306,7 @@ mod tests {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         };
         let mut preview = PixelationPreview::default();
         preview.update(&doc);
@@ -365,6 +366,7 @@ mod tests {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         };
         let mut stroke = Mark::new(
             Tool::Redact,
@@ -450,6 +452,7 @@ mod tests {
             undo: Vec::new(),
             redo: Vec::new(),
             mosaic: Arc::default(),
+            source_png: Arc::default(),
         };
         let mut preview = PixelationPreview::default();
         preview.update(&doc);

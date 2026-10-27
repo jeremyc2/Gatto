@@ -71,7 +71,7 @@ translucency disabled to preserve the charcoal coat and cyan/violet eyes.
 
 To regenerate the glyph, use Aseprite MCP `copy_sprite` to make a temporary copy
 of `favicon-32.aseprite`, hide its `Warm paper` layer with `set_layer_visibility`,
-and `export_frame` frame 1 at scale 24 to `/tmp/gatto-app-portrait.png`.
+and `export_frame` frame 1 at scale 32 to `/tmp/gatto-app-portrait.png`.
 Leave the original favicon master unchanged. Then run from the repository root
 with Xcode and ImageMagick installed:
 
@@ -84,9 +84,11 @@ cp /tmp/gatto-compiled-icon/Assets.car packaging/Assets.car
 "$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool" packaging/AppIcon.icon --export-image --output-file packaging/app-icon.png --platform macOS --rendition Default --width 256 --height 256 --scale 1
 ```
 
-The glyph centers the 768 px portrait canvas on a transparent 1024 px canvas,
-with nearest-neighbor scaling. Commit the Composer document, glyph and all three
-compiled/preview outputs together. Bundles use `Assets.car` and `AppIcon.icns`;
+The glyph fills a transparent 1024 px canvas, using 32× nearest-neighbor scaling
+from the 32 px master. This gives the cat more of the icon's area while retaining
+the original pixels. Commit the Composer
+document, glyph, and all three compiled/preview outputs together. Bundles use
+`Assets.car` and `AppIcon.icns`;
 source runs embed `AppIcon.icns` through `src/window_limits.rs`. Check the
 compiled ICNS and light/dark Composer previews, then run `scripts/build-app.sh`
 to verify packaging and its signature. Keep README size figures tied to their

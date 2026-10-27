@@ -11,15 +11,22 @@ The app's header artwork was refreshed on October 26, 2026 using the
 were regenerated through the same native renderer; the illustrated editor
 fixtures and their source crops remain independent.
 
-Main-window captures were reframed the same day to reduce unused space. Keep
-their width at 620 logical pixels and select the height for each task rather
-than giving every example the default 780px-tall window. Single-file, first-run,
-update and oversized-video captures use the app's 600px minimum height.
-Compression uses 640px to retain the full progress and cancel controls; the
-mixed batch uses 760px to show three attachments and the upload-cancel footer.
-Preferences stays at 780px, and editor and game captures retain their own sizes.
-The renderer exports these at 2×; regenerate them at these window sizes rather
-than scaling, cropping, or reconstructing the interface.
+Main-window captures show the current interface at 800 logical pixels wide,
+including the 220-pixel project sidebar. Most use a 600px height; Preferences uses
+780px, compression uses 640px, and reorder/collapsed-sidebar examples use 760px.
+The batch example uses a 1024 × 768 window so the sidebar and three attachment
+rows fit a compact 4:3 landscape frame. Editor and game captures use their own
+window sizes. Decorative motion is disabled while capturing.
+
+Run `./scripts/update-walkthrough-screenshots.sh` to regenerate all captures from
+the production interface. The native renderer exports at 2×. Raw PNGs live in
+`docs/images/walkthrough/`; the website exports its WebPs from these captures.
+Markdown guides use the generated `framed/` copies, with transparent rounded
+corners and a thin white edge (16-point radius and 1-point border). The frame is
+rendered into the PNG because [GitHub removes inline styles](https://github.com/github/markup#github-markup).
+
+Refresh only the project examples with
+`cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- docs/images/walkthrough --projects-only`.
 
 ## Source images
 

@@ -18,6 +18,7 @@ mod model;
 mod open_request;
 #[cfg(all(test, target_os = "macos"))]
 mod performance;
+mod projects;
 mod quick_copy;
 mod rooftops;
 mod rooftops_score;
@@ -96,6 +97,9 @@ fn main() {
             diagnostics.error(format!("Could not load startup preferences: {error:#}"));
             settings::AppSettings::default()
         });
+        let mut recent = startup_settings.project_directory().and_then(|directory| crate::projects::project_folders(&directory)).unwrap_or_default().into_iter().filter_map(|path| crate::projects::summary(&path).ok().map(|summary| (path, summary))).collect::<Vec<_>>();
+        recent.sort_by_key(|(_, summary)| std::cmp::Reverse(summary.metadata.updated_at));
+        application_menu::set_recent_projects(recent.into_iter().map(|(path, summary)| (summary.title, path)).collect(), cx);
         let menu_bar_controller = MenuBarController::default();
         let shortcut_menu = menu_bar_controller.clone();
         let shortcut_diagnostics = diagnostics.clone();
@@ -160,11 +164,19 @@ fn main() {
             let main = preferences_main.clone();
             cx.defer(move |cx| perform_action(MenuAction::Settings, &main, cx));
         });
+        let recent_main = controller.clone();
+        cx.on_action(move |action: &application_menu::OpenRecentProject, cx| {
+            let main = recent_main.clone(); let path = action.path.clone();
+            cx.defer(move |cx| {
+                let (handle, view) = main.show(cx);
+                let _ = handle.update(cx, |_, window, cx| view.update(cx, |this, cx| this.request_workspace(Some(path), window, cx)));
+            });
+        });
         controller.start(login_launch, cx);
         let composition_main = controller.clone();
         cx.on_action(move |_: &application_menu::CreateComposition, cx| {
             let main = composition_main.clone();
-            cx.defer(move |cx| main.show_composer(cx));
+            cx.defer(move |cx| main.show_composer(None, cx));
         });
         *main_window.borrow_mut() = Some(controller.clone());
         let open_main = controller.clone();
@@ -226,10 +238,6 @@ fn main() {
                 let Some(action) = menu_bar_controller.action_for(&event) else {
                     continue;
                 };
-                if action == MenuAction::Quit {
-                    cx.update(|cx| cx.quit());
-                    break;
-                }
                 cx.update(|cx| perform_action(action, &controller, cx));
             }
         })
@@ -300,13 +308,28 @@ impl MainWindow {
         }
     }
 
-    fn show_composer(&self, cx: &mut App) {
+    fn is_presented(&self, cx: &mut App) -> bool {
+        self.0.borrow().current.clone().is_some_and(|(handle, _)| {
+            handle
+                .update(cx, |_, window, _| window_limits::is_presented(window))
+                .unwrap_or(false)
+        })
+    }
+
+    fn show_composer(&self, source: Option<crate::model::StagedAttachment>, cx: &mut App) {
         set_dock_visible(true);
         cx.activate(true);
         let existing = self.0.borrow().composer.clone();
         if let Some((handle, view)) = existing
             && handle
                 .update(cx, |_, window, cx| {
+                    if let Some(source) = source.clone() {
+                        view.update(cx, |view, cx| view.convert(source, cx));
+                        window.resize(size(
+                            px(image_composer::WINDOW_WIDTH),
+                            px(image_composer::CONVERSION_WINDOW_HEIGHT),
+                        ));
+                    }
                     if !window_limits::is_presented(window) {
                         window.focus(&view.read(cx).focus_handle(cx), cx);
                     }
@@ -317,26 +340,31 @@ impl MainWindow {
             return;
         }
         let controller = self.clone();
+        let height = if source.is_some() {
+            image_composer::CONVERSION_WINDOW_HEIGHT
+        } else {
+            image_composer::WINDOW_HEIGHT
+        };
         let result = gpui_kit::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(gpui_kit::Bounds::centered(
                     None,
-                    size(
-                        px(image_composer::WINDOW_WIDTH),
-                        px(image_composer::WINDOW_HEIGHT),
-                    ),
+                    size(px(image_composer::WINDOW_WIDTH), px(height)),
                     cx,
                 ))),
-                window_min_size: Some(size(
-                    px(image_composer::WINDOW_WIDTH),
-                    px(image_composer::WINDOW_HEIGHT),
-                )),
+                window_min_size: Some(size(px(image_composer::WINDOW_WIDTH), px(height))),
                 ..Default::default()
             },
             cx,
             move |window, cx| {
                 window.set_window_title(&format!("{} — Gatto", image_composer::TITLE));
-                let view = cx.new(|cx| image_composer::ImageComposer::new(window, cx));
+                let view = cx.new(|cx| {
+                    let mut view = image_composer::ImageComposer::new(window, cx);
+                    if let Some(source) = source.clone() {
+                        view.convert(source, cx);
+                    }
+                    view
+                });
                 let close_view = view.downgrade();
                 window.on_window_should_close(cx, move |window, cx| {
                     if close_view
@@ -362,11 +390,15 @@ impl MainWindow {
         cx.subscribe(
             &view,
             move |view, event: &image_composer::ComparisonRequested, cx| {
+                let main_was_open = controller.is_presented(cx);
                 let (main_handle, main_view) = controller.show(cx);
                 let result = main_handle
                     .update(cx, |_, window, cx| {
                         main_view.update(cx, |main, cx| {
-                            main.begin_comparison(event.0.clone(), window, cx)
+                            if let Some(replace_id) = event.1 {
+                                main.replace_with_comparison(event.0.clone(), replace_id, window, cx)
+                            } else if main_was_open { main.begin_comparison(event.0.clone(), window, cx) }
+                            else { main.stage_comparison_in_scratchpad(event.0.clone(), window, cx) }
                         })
                     })
                     .unwrap_or(Err(
@@ -401,23 +433,27 @@ impl MainWindow {
         };
         let controller = self.clone();
         let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(620.), px(780.)), cx)),
-            window_min_size: Some(size(px(520.), px(600.))),
+            window_bounds: Some(WindowBounds::centered(size(px(800.), px(780.)), cx)),
+            window_min_size: Some(size(px(700.), px(600.))),
             ..Default::default()
         };
         let result = gpui_kit::open_window(options, cx, move |window, cx| {
             window.set_window_title("Gatto");
-            window_limits::set_maximum_content_size(window, 920., 1040.);
+            window_limits::set_maximum_content_size(window, 1100., 1040.);
             let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar, shortcut, cx));
             let close_view = view.downgrade();
             window.on_window_should_close(cx, move |window, cx| {
-                let _ = close_view.update(cx, |this, cx| {
-                    this.prepare_to_close(window, cx);
-                    this.clear_staged_attachments(
-                        "Closed the main window; discarded staged attachments.",
-                        cx,
-                    );
-                });
+                let can_close = close_view
+                    .update(cx, |this, cx| {
+                        if !this.prepare_to_close(window, cx) {
+                            return false;
+                        }
+                        true
+                    })
+                    .unwrap_or(true);
+                if !can_close {
+                    return false;
+                }
                 gpui_kit::component::WindowExt::close_dialog(window, cx);
                 let should_close = window_limits::close(window, cx);
                 if should_close {
@@ -429,6 +465,14 @@ impl MainWindow {
             view
         })
         .expect("Could not open the Gatto window");
+        let composer_controller = self.clone();
+        cx.subscribe(
+            &result.1,
+            move |_, event: &app::ConvertAttachmentRequested, cx| {
+                composer_controller.show_composer(Some(event.0.clone()), cx);
+            },
+        )
+        .detach();
         self.0.borrow_mut().current = Some(result.clone());
         result
     }
@@ -474,8 +518,12 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
             main.show(cx);
         }
         MenuAction::StageFromClipboard => {
-            let (handle, _) = main.show(cx);
+            let main_was_open = main.is_presented(cx);
+            let (handle, view) = main.show(cx);
             let _ = handle.update(cx, |_, window, cx| {
+                if !main_was_open {
+                    view.update(cx, |this, cx| this.request_workspace(None, window, cx));
+                }
                 window.dispatch_action(Box::new(app::StageFromClipboard), cx);
             });
         }
@@ -487,7 +535,7 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
             let (_, view) = main.show(cx);
             view.update(cx, |this, cx| this.show_settings(cx));
         }
-        MenuAction::CreateComposition => main.show_composer(cx),
+        MenuAction::CreateComposition => main.show_composer(None, cx),
         MenuAction::Update => {
             let (handle, view) = main.show(cx);
             let quick_copy_busy = main.0.borrow().quick_copy.is_busy();
@@ -497,7 +545,7 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
                 });
             });
         }
-        MenuAction::Quit => cx.quit(),
+        MenuAction::Quit => application_menu::request_quit(cx),
     }
 }
 

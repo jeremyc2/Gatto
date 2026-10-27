@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-settings.schema.json",
+  "title": "Gatto settings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-settings.schema.json"
+    },
+    "release_channel": {
+      "enum": [
+        "stable",
+        "beta"
+      ]
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pinned_repositories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "last_repository": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Last Scratchpad repository selection, used by Quick Copy when pinned."
+    },
+    "last_repository_id": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "global_quick_copy_shortcut": {
+      "type": "string"
+    },
+    "sidebar_collapsed": {
+      "type": "boolean"
+    },
+    "global_quick_copy_shortcut_enabled": {
+      "type": "boolean"
+    },
+    "close_window_after_copy": {
+      "type": "boolean"
+    },
+    "allow_large_videos": {
+      "type": "boolean"
+    },
+    "copy_images_as_markdown": {
+      "type": "boolean"
+    },
+    "start_at_login": {
+      "type": "boolean"
+    }
+  }
+}

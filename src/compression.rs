@@ -103,7 +103,7 @@ pub fn compress(
                     .and_then(|name| name.to_str())
                     .unwrap_or("video");
                 attachment.name = format!("{stem}-compressed.mp4");
-                attachment.description = attachment.name.clone();
+                attachment.title = attachment.name.clone();
                 progress(Progress {
                     attempt,
                     percent: 100,

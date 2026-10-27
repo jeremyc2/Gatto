@@ -1,9 +1,12 @@
 use gpui_kit::component::{
-    Sizable as _, Size, Theme, ThemeMode,
+    ActiveTheme as _, Sizable as _, Size, Theme, ThemeMode,
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogAction, DialogClose, DialogFooter},
 };
-use gpui_kit::{Hsla, ParentElement as _, Styled as _, div, px, rgb};
+use gpui_kit::{
+    App, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, Styled as _, Window,
+    div, px, rgb,
+};
 
 /// App actions share the landing page's geometry and outlined secondary style.
 /// Annotation tools keep their own compact, selectable treatment.
@@ -31,6 +34,35 @@ impl AppButtonStyle for Button {
     }
 }
 
+/// Validation belongs to the dialog that owns the action, above its backdrop.
+#[derive(Clone, Default)]
+pub struct DialogFeedback(std::rc::Rc<std::cell::RefCell<Option<String>>>);
+
+impl DialogFeedback {
+    pub fn show(&self, error: impl std::fmt::Display, window: &mut Window) {
+        *self.0.borrow_mut() = Some(error.to_string());
+        window.refresh();
+    }
+
+    pub fn clear(&self, window: &mut Window) {
+        if self.0.borrow_mut().take().is_some() {
+            window.refresh();
+        }
+    }
+
+    pub fn element(&self, cx: &App) -> Option<gpui_kit::AnyElement> {
+        self.0.borrow().as_ref().map(|message| {
+            div()
+                .id("dialog-validation-error")
+                .debug_selector(|| "dialog-validation-error".into())
+                .text_sm()
+                .text_color(cx.theme().danger)
+                .child(message.clone())
+                .into_any_element()
+        })
+    }
+}
+
 /// Fixed slots keep Base's full-size dialog wrappers from stretching the buttons.
 pub fn confirmation_footer(id: &'static str, label: &'static str, width: f32) -> DialogFooter {
     DialogFooter::new()
@@ -49,6 +81,7 @@ pub fn confirmation_footer(id: &'static str, label: &'static str, width: f32) ->
             div().w(px(width)).h(px(32.)).flex_none().child(
                 DialogAction::new().child(
                     Button::new(id)
+                        .debug_selector(move || id.into())
                         .app_primary()
                         .w(px(width))
                         .h(px(32.))
@@ -68,6 +101,9 @@ pub fn apply_dark_theme(cx: &mut gpui_kit::App) {
     Theme::update(cx, |theme| {
         theme.background = color(0x0e1017);
         theme.border = color(0x2b2f45);
+        theme.sidebar = color(0x171b25);
+        theme.sidebar_accent = color(0x252b3b);
+        theme.sidebar_border = color(0x2b3345);
         theme.primary = color(0x6c63ff);
         theme.primary_hover = color(0x8279ff);
         theme.primary_active = color(0x574edb);

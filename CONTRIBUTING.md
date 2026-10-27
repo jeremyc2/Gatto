@@ -123,8 +123,10 @@ features.
 
 Clipboard writes must always follow an explicit user action. Changes to settings
 storage or Start at Login must preserve the per-user scope documented in
-[the architecture notes](docs/ARCHITECTURE.md) and must never persist GitHub
-credentials or image content.
+[the architecture notes](docs/ARCHITECTURE.md). Never persist GitHub credentials.
+Scratchpad and projects persist media and upload URLs in their workspace folders;
+settings contain only preferences. See
+[local data and recovery](SUPPORT.md#local-data-and-recovery) for storage locations.
 
 ## Code quality
 
@@ -206,7 +208,8 @@ The script renders the production GPUI interface through its off-screen Metal
 renderer with fixed in-memory examples and committed source captures. It does not
 contact GitHub, read or modify saved preferences, use UI automation, or require Screen Recording
 permission. It overwrites `docs/images/walkthrough/`, including the Rooftops game,
-results, and exported scorecard images. Editor captures include the overview,
+results, and exported scorecard images, and generates rounded white frames in
+`framed/` for Markdown guides. Website exports use the unframed captures. Editor captures include the overview,
 text editing, shape choices, grouped selections, pixelation brush, and save/close
 dialogs. Each editor capture starts with a fresh scene and at most two feedback
 items; the pixelation example covers a local path. Source crops, framing, and
@@ -338,6 +341,11 @@ Keep new dependencies to a minimum. In a dependency change, explain:
 - Why the dependency is needed.
 - Why an existing dependency or the standard library is insufficient.
 - Any security, licensing, binary-size, or platform implications.
+
+Project persistence uses `uuid` for UUID generation and validation, and `sha2`
+0.11 for SHA-256 content fingerprints; Rust's standard library provides neither.
+Both packages already belong to the active GPUI dependency graph. Local timestamp
+display uses the existing Foundation bindings.
 
 When updating GPUI Kit, confirm its published package metadata pins a compatible
 GPUI release. Update the compatibility note above in the same pull request.

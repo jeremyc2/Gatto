@@ -22,6 +22,9 @@ window-close exception and a hide-and-reuse workaround in another GPUI app.
 
 ## Consequences
 
+The draft-clearing behavior below predates persistent workspaces. See the
+[current lifecycle](../ARCHITECTURE.md#loading-batches-and-window-lifecycle) for saved-draft behavior.
+
 - Closing affects only that window. Main-window close cancels shortcut recording
   and discards staged attachments and copy results; preview close releases its
   image references; Rooftops resets its run; Logs refreshes on reopening.

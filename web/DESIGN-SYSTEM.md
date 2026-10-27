@@ -249,16 +249,17 @@ All three sources are also published in the walkthrough. Keep the approved views
 edge blend: a 1px inner rim plus a 12px blur with 2px inset spread. Both story
 media and feature screenshots use this primitive so the treatment stays in sync.
 The screenshot frame reserves a 4:3 landscape area before loading. The batch
-image uses `object-fit: cover` at `50% 86%` to focus on its three rows; the editor
-views fit in full against `colors.mediaSurface`. This website crop leaves the
-full walkthrough captures untouched. On phones, cards stack and stop at 530px
+capture uses a 1024 × 768 app window to show the current sidebar and all three
+attachment rows. All screenshots use `object-fit: contain` against
+`colors.mediaSurface`, preserving their full interface. On phones, cards stack and stop at 530px
 wide. Verify the row and stacked layouts, the visible batch rows, both comparison
 panels and captions, and the editor tools after changing screenshots or spacing.
 
 After regenerating walkthrough PNGs with `./scripts/update-walkthrough-screenshots.sh`,
 run `bun export:features` (requires libwebp’s `cwebp`). The Bun script exports
-620px and 1240px WebPs from the committed PNGs, retaining the originals. The
-page uses `srcset` with matching `sizes`, native lazy loading, asynchronous
+620px and 1240px WebPs from the committed unframed PNGs; documentation's `framed/`
+copies are separate. The website's `MediaFrame` supplies its own edge treatment.
+The page uses `srcset` with matching `sizes`, native lazy loading, asynchronous
 decoding and explicit image dimensions. Asset exports are committed; ordinary
 website builds do not need Rust or image converters.
 

@@ -7,6 +7,25 @@ mod menu;
 #[allow(unused_imports)] // Standalone platform harness uses the private menu checks.
 pub use menu::Menu;
 
+/// Format a Unix-millisecond timestamp using the user's local time zone.
+pub fn format_local_timestamp(milliseconds: u64) -> Option<String> {
+    use objc2_foundation::{NSDate, NSDateFormatter, NSLocale, ns_string};
+
+    // Zero denotes missing metadata. Keep out-of-range JSON dates out of the
+    // native calendar formatter, whose display format uses a four-digit year.
+    if milliseconds == 0 || milliseconds > 253_402_300_799_999 {
+        return None;
+    }
+    let formatter = NSDateFormatter::new();
+    formatter.setLocale(Some(&NSLocale::localeWithLocaleIdentifier(ns_string!(
+        "en_US_POSIX"
+    ))));
+    formatter.setDateFormat(Some(ns_string!("MMM d, yyyy HH:mm")));
+    let date = NSDate::dateWithTimeIntervalSince1970(milliseconds as f64 / 1000.);
+    let formatted = formatter.stringFromDate(&date).to_string();
+    (!formatted.is_empty()).then_some(formatted)
+}
+
 pub fn install_file_service() -> Result<()> {
     file_service::install(
         MainThreadMarker::new()
@@ -119,6 +138,16 @@ pub fn verify_desktop() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn local_timestamp_formatting_handles_saved_and_missing_dates() {
+        assert!(super::format_local_timestamp(0).is_none());
+        assert!(super::format_local_timestamp(u64::MAX).is_none());
+        let formatted = super::format_local_timestamp(1_700_000_000_000).unwrap();
+        assert!(formatted.starts_with("Nov "), "{formatted}");
+        assert!(formatted.contains(", 2023 "), "{formatted}");
+        assert_eq!(formatted.chars().rev().nth(2), Some(':'));
+    }
+
     #[test]
     fn background_construction_rejects_main_thread_objects_before_native_registration() {
         std::thread::spawn(|| {

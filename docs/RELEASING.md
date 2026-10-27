@@ -290,7 +290,7 @@ in the user's Library.
 Before publishing, install and launch the current bundle on a disposable macOS
 user. Verify **Open With → Gatto** and Finder's **Send to Gatto** service with a
 single image, a mixed image/video batch, and a selection containing an unsupported
-file. Check draft choices, oversized-video prompts, and that nothing uploads
+file. Check attachment ordering, oversized-video prompts, and that nothing uploads
 automatically. Verify default image/video apps remain unchanged. Test the minimum
 supported macOS as well as the release Mac; the harness cannot verify Finder's
 menu placement or user service-visibility preferences.

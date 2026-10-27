@@ -19,9 +19,8 @@ const features = [
     image: batchImage,
     small: batchSmall,
     width: 1240,
-    height: 1520,
+    height: 930,
     alt: "Gatto with an uploaded image, a video sending, and a queued image in the same batch.",
-    crop: true,
   },
   {
     title: "Make your point.",
@@ -31,7 +30,6 @@ const features = [
     width: 1240,
     height: 943,
     alt: "Gatto’s image editor with a note and arrow pointing to the active color in a screenshot.",
-    crop: false,
   },
   {
     title: "Side by side.",
@@ -41,7 +39,6 @@ const features = [
     width: 1240,
     height: 866,
     alt: "Gatto’s comparison editor showing orange and black gardener cats in matching pixel-editor views.",
-    crop: false,
   },
 ];
 export function Features() {
@@ -54,7 +51,7 @@ export function Features() {
             <article {...stylex.attrs(styles.feature)}>
               <MediaFrame xstyle={styles.screenshotFrame}>
                 <img
-                  {...stylex.attrs(styles.screenshot, feature.crop && styles.batchCrop)}
+                  {...stylex.attrs(styles.screenshot)}
                   src={feature.image}
                   srcset={`${feature.small} 620w, ${feature.image} 1240w`}
                   sizes="(max-width: 760px) min(530px, calc(100vw - 36px)), (max-width: 1050px) calc((100vw - 146px) / 3), (min-width: 1500px) min(477px, calc((100vw - 230px) / 3)), min(437px, calc((100vw - 190px) / 3))"
@@ -112,7 +109,6 @@ const styles = stylex.create({
     height: "100%",
     objectFit: "contain",
   },
-  batchCrop: { objectFit: "cover", objectPosition: "50% 86%" },
   featureHeading: { marginBlockEnd: 14 },
   featureDescription: { maxWidth: { default: "29ch", [media.phone]: "38ch" }, marginBlockEnd: 13 },
 });

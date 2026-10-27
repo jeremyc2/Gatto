@@ -7,6 +7,9 @@ mod application_menu;
 mod compression;
 mod desktop;
 mod diagnostics;
+#[cfg(target_os = "macos")]
+#[path = "walkthrough_screenshots/frame.rs"]
+mod frame;
 mod github;
 mod global_shortcut;
 mod image_composer;
@@ -14,6 +17,7 @@ mod image_preview;
 mod log_viewer;
 mod menu_bar;
 mod model;
+mod projects;
 mod rooftops;
 mod rooftops_score;
 mod settings;
@@ -64,23 +68,43 @@ fn generate() -> Result<()> {
         )
     })?;
 
+    generate_captures(&output_directory)?;
+    frame::write_documentation_images(&output_directory)
+}
+
+#[cfg(target_os = "macos")]
+fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
     if std::env::args().any(|arg| arg == "--markers-only") {
         return render_image_editor(&output_directory.join("image-editor.png"));
     }
 
+    if std::env::args().any(|arg| arg == "--projects-only") {
+        for scenario in [
+            WalkthroughScenario::Project,
+            WalkthroughScenario::AttachmentDetails,
+            WalkthroughScenario::AttachmentReorder,
+            WalkthroughScenario::SidebarCollapsed,
+            WalkthroughScenario::EmptyProjects,
+            WalkthroughScenario::ProjectRename,
+        ] {
+            render_scenario(scenario, &output_directory.join(scenario.file_name()))?;
+        }
+        return Ok(());
+    }
+
     if std::env::args().any(|arg| arg == "--comparison-editor-only") {
-        return render_comparison(&output_directory, true);
+        return render_comparison(output_directory, true);
     }
 
     // Additional comparison diagnostics are opt-in.
     if std::env::args().any(|arg| arg == "--comparison-only") {
-        return render_comparison(&output_directory, false);
+        return render_comparison(output_directory, false);
     }
     if std::env::args().any(|arg| arg == "--check-pixelation-edges") {
-        return check_pixelation_edges(&output_directory);
+        return check_pixelation_edges(output_directory);
     }
     if std::env::args().any(|arg| arg == "--check-annotation-rendering") {
-        return check_annotation_rendering(&output_directory);
+        return check_annotation_rendering(output_directory);
     }
 
     for scenario in WalkthroughScenario::ALL {
@@ -98,7 +122,7 @@ fn generate() -> Result<()> {
     let editor_output = output_directory.join("image-editor.png");
     render_image_editor(&editor_output)?;
     println!("Wrote {}", editor_output.display());
-    render_comparison(&output_directory, true)?;
+    render_comparison(output_directory, true)?;
     println!(
         "Wrote {}",
         output_directory.join("comparison-editor.png").display()
@@ -609,11 +633,14 @@ fn render_rooftops(output: &std::path::Path, level: usize) -> Result<()> {
 fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> Result<()> {
     // Keep main-window examples near the app's 600px minimum height. Preferences
     // and the mixed batch need more room to keep their relevant controls visible.
-    let height = match scenario {
-        WalkthroughScenario::Preferences => 780.,
-        WalkthroughScenario::MixedUploadProgress => 760.,
-        WalkthroughScenario::VideoCompressing => 640.,
-        _ => 600.,
+    let (width, height) = match scenario {
+        WalkthroughScenario::MixedUploadProgress => (1024., 768.),
+        WalkthroughScenario::Preferences => (800., 780.),
+        WalkthroughScenario::AttachmentReorder | WalkthroughScenario::SidebarCollapsed => {
+            (800., 760.)
+        }
+        WalkthroughScenario::VideoCompressing => (800., 640.),
+        _ => (800., 600.),
     };
     let platform = gpui_kit::platform::current_platform(true);
     let mut cx = HeadlessAppContext::with_platform(
@@ -623,6 +650,7 @@ fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> R
     );
     cx.update(|cx| {
         gpui_kit::init(cx);
+        cx.set_reduce_motion(true);
         theme::apply_dark_theme(cx);
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
@@ -633,7 +661,7 @@ fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> R
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
                     origin: Default::default(),
-                    size: size(px(620.), px(height)),
+                    size: size(px(width), px(height)),
                 })),
                 focus: false,
                 show: false,
