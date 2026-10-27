@@ -16,6 +16,69 @@ fn native_window(window: &Window) -> Option<objc2::rc::Retained<objc2_app_kit::N
     view.window()
 }
 
+/// Installs native window styling once and restores it after fullscreen transitions.
+#[cfg(target_os = "macos")]
+pub fn style_window<V: 'static>(view: &gpui_kit::Entity<V>, window: &mut Window, cx: &mut App) {
+    use gpui_kit::component::ActiveTheme as _;
+    use objc2::MainThreadOnly as _;
+    use objc2_app_kit::{NSBox, NSBoxType, NSTitlePosition};
+
+    let Some(main_thread) = objc2::MainThreadMarker::new() else {
+        return;
+    };
+    let Some(native_window) = native_window(window) else {
+        return;
+    };
+    let Some(content) = native_window.contentView() else {
+        return;
+    };
+    let border = NSBox::initWithFrame(NSBox::alloc(main_thread), content.bounds());
+    border.setBoxType(NSBoxType::Custom);
+    border.setTitlePosition(NSTitlePosition::NoTitle);
+    border.setBorderWidth(0.);
+    border.setCornerRadius(0.);
+    content.addSubview(&border);
+
+    let update = move |window: &Window, cx: &App| {
+        border.setHidden(window.is_fullscreen());
+        if window.is_fullscreen() {
+            return;
+        }
+        native_window.setBackgroundColor(Some(&native_color(cx.theme().sidebar)));
+        native_window.setTitlebarAppearsTransparent(true);
+        border.setFillColor(&native_color(cx.theme().sidebar_border));
+        let bounds = content.bounds();
+        let y = if content.isFlipped() {
+            bounds.origin.y
+        } else {
+            bounds.origin.y + bounds.size.height - 1.
+        };
+        border.setFrame(objc2_foundation::NSRect::new(
+            objc2_foundation::NSPoint::new(bounds.origin.x, y),
+            objc2_foundation::NSSize::new(bounds.size.width, 1.),
+        ));
+    };
+    update(window, cx);
+    view.update(cx, |_, cx| {
+        cx.observe_window_bounds(window, move |_, window, cx| update(window, cx))
+            .detach();
+    });
+}
+
+#[cfg(target_os = "macos")]
+fn native_color(color: gpui_kit::Hsla) -> objc2::rc::Retained<objc2_app_kit::NSColor> {
+    let color = color.to_rgb();
+    objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(
+        color.r.into(),
+        color.g.into(),
+        color.b.into(),
+        color.a.into(),
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn style_window<V: 'static>(_: &gpui_kit::Entity<V>, _: &mut Window, _: &mut App) {}
+
 /// Counts minimized and occluded windows as open. GPUI visibility tracks
 /// occlusion and can
 /// lag behind AppKit, so it is not the right signal for Dock reopening.

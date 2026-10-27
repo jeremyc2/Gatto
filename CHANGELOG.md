@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-10-27
+
+### Changed
+
+- Match every app window's native title bar to the project sidebar background,
+  with a one-point bottom divider in the sidebar border color.
+
 ## [0.20.1] - 2026-10-27
 
 ### Changed

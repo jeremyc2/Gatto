@@ -166,7 +166,7 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
         cx.set_reduce_motion(true);
     });
     let (picker, view) = cx.update(|cx| {
-        gpui_kit::open_window(
+        crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::new(
                     Default::default(),
@@ -207,7 +207,7 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
             }))?;
     }
     let (main, main_view) = cx.update(|cx| {
-        gpui_kit::open_window(
+        crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::new(
                     Default::default(),
@@ -263,7 +263,7 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
     )?;
     let id = attachment.id;
     let (editor, preview) = cx.update(|cx| {
-        gpui_kit::open_window(
+        crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::new(
                     Default::default(),
@@ -604,7 +604,7 @@ fn render_rooftops(output: &std::path::Path, level: usize) -> Result<()> {
     );
     let (handle, _) = cx.update(|cx| {
         gpui_kit::init(cx);
-        gpui_kit::open_window(
+        crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
                     origin: Default::default(),
@@ -655,7 +655,7 @@ fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> R
     });
 
     let (window_handle, _) = cx.update(|cx| {
-        gpui_kit::open_window(
+        crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
                     origin: Default::default(),
@@ -699,7 +699,7 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
         theme::apply_dark_theme(cx);
     });
     let (handle, preview) = cx.update(|cx| {
-        gpui_kit::open_window(
+        crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
                     origin: Default::default(),

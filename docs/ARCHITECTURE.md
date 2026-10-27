@@ -265,6 +265,15 @@ actions open the main window and select the corresponding project.
 
 ## Loading, batches, and window lifecycle
 
+All app windows open through `theme::open_window`, which keeps GPUI's Root and
+view identity while installing shared native macOS styling in `window_limits.rs`.
+Title bars use the theme's sidebar background, with a one-point bottom divider
+using `sidebar_border`, matching the sidebar's right border. The native divider
+sits at the top of the content view without changing content layout or the native
+title and traffic-light controls. Bounds observers keep it full-width and restore
+title-bar transparency after GPUI's fullscreen transitions; the divider is hidden
+while fullscreen.
+
 Opening the main window loads Scratchpad and restores its repository without a
 GitHub request. A new Scratchpad uses the remembered repository from settings.
 Opening the repository picker loads the account or organization's paginated

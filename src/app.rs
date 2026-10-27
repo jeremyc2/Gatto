@@ -2540,7 +2540,7 @@ impl UploaderApp {
         {
             return;
         }
-        match gpui_kit::open_window(
+        match crate::theme::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::centered(size(px(960.), px(600.)), cx)),
                 window_min_size: Some(size(px(680.), px(440.))),
@@ -2588,7 +2588,7 @@ impl UploaderApp {
             window_min_size: Some(size(px(540.), px(420.))),
             ..Default::default()
         };
-        let result = gpui_kit::open_window(options, cx, move |window, cx| {
+        let result = crate::theme::open_window(options, cx, move |window, cx| {
             window.set_window_title("Gatto Logs");
             window_limits::set_maximum_content_size(window, 1200., 1000.);
             window.on_window_should_close(cx, move |window, cx| {
@@ -2693,7 +2693,7 @@ impl UploaderApp {
             window_min_size: Some(size(px(640.), px(500.))),
             ..Default::default()
         };
-        let result = gpui_kit::open_window(options, cx, move |window, cx| {
+        let result = crate::theme::open_window(options, cx, move |window, cx| {
             window.set_window_title(&window_title);
             let preview = cx.new(|cx| ImagePreview::new(preview_images, selected_id, cx));
             let close_preview = preview.downgrade();

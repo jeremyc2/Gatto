@@ -8,6 +8,19 @@ use gpui_kit::{
     div, px, rgb,
 };
 
+/// Opens every app window with shared native title-bar colors and a sidebar-style divider.
+pub fn open_window<V: gpui_kit::Render>(
+    options: gpui_kit::WindowOptions,
+    cx: &mut App,
+    build: impl FnOnce(&mut Window, &mut App) -> gpui_kit::Entity<V>,
+) -> anyhow::Result<(gpui_kit::AnyWindowHandle, gpui_kit::Entity<V>)> {
+    gpui_kit::open_window(options, cx, |window, cx| {
+        let view = build(window, cx);
+        crate::window_limits::style_window(&view, window, cx);
+        view
+    })
+}
+
 /// App actions share the landing page's geometry and outlined secondary style.
 /// Annotation tools keep their own compact, selectable treatment.
 pub trait AppButtonStyle {

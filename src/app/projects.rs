@@ -2008,7 +2008,7 @@ mod tests {
     fn closing_a_retained_clean_preview_does_not_block_workspace_switches(cx: &mut TestAppContext) {
         let (view, cx) = super::super::tests::upload_window(cx);
         cx.update(|_, cx| {
-            let (handle, preview) = gpui_kit::open_window(
+            let (handle, preview) = crate::theme::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(Bounds::new(
                         Default::default(),
