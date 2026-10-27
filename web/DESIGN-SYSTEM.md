@@ -304,14 +304,42 @@ previews from retaining the former SVG-based card.
 
 The website's flying visitor is separate artwork. Its
 [256 px Aseprite master](../docs/design/explorations/art/portal-cat/portal-cat.aseprite)
-separates exhaust, tail, body and hind legs, each rocket, forelegs and paws, head
-and ears, mounting hardware, and expression. The three-quarter flying pose turns
-toward the upper right, with the same charcoal coat and cyan/violet eyes as the
-README cat. Two long silver-lavender rocket barrels mount behind the shoulders;
-cyan bands, segmented collars and dark exhaust openings make them recognizable.
-Flames trail backward, clear of the hind legs, with a white/yellow core inside
-orange, violet and cyan clusters. The exhaust has its own editable layer; the
-portal remains separate. `PortalCat.tsx`
+separates exhaust, each rocket, tail, body and hind legs, mounting hardware,
+forelegs and paws, head and ears, and expression. The compact Pocket Kitten has
+an oversized rounded head, little forepaws tucked near its chest, short curled
+hind paws, a rich black-purple coat and the approved cyan/violet eyes. Soft,
+localized shading follows a diffuse light above and to the left, with stronger
+value separation for clear fur and anatomical detail, without ring bands,
+faceted planes or mottled spots. The slimmer tail is a continuous rounded
+curve with a solid root behind the body and no old fragments on other layers.
+Forelegs sweep gently into broad wrists; the hind ankles stay substantial
+through a softer hock bend, with an open gap between the forward-facing feet.
+Preserve the approved knee shapes and purple shading. All four paws show their
+fur-covered tops with short toe divisions, without exposed undersides or pads.
+Broader purple shadows and small fur clusters keep the limbs distinct.
+The rounded lower jaw meets the neck without a hooked chin ledge, transparent
+seam or bright internal edge.
+Keep torso fragments out of the head layer and shoulder straps smooth to avoid
+a zigzag across the back. The single tapered
+torso has no separate back bulge, belly lobe or underside flap. Avoid black
+hairlines and curved belly seams. A continuous light-purple rim frames the exposed
+body, feet and entire tail against black, without flame-colored reflections;
+avoid near-white highlights on its matte
+fur. The three-quarter flying pose turns toward the upper right. Exactly two
+silver-lavender thrusters sit behind the torso, with the tail behind the rocket
+assembly. Two visible shoulder straps and a partial near barrel establish the back
+attachment; the far engine is entirely obscured. Keep complete rounded leg and
+paw contours in front of all hardware, without cutouts for nozzles. Both barrels
+remain straight and the engines keep their compact size. Two straight teardrop
+flames flare wide from the small nozzle openings along the parallel barrel
+axes, with long pointed tails. Layered white/yellow hot cores, orange, violet and
+blue/cyan detail reproduce the earlier reference's spiky pixel fringe. The
+flames may have a sharper rendering style than the cat; keep the fringe attached
+and do not add floating sparks or sideways waves. The far flame remains visible
+after clearing the body. Fill enclosed flame pinholes and connect the visible
+nozzle directly to the hot core without a black gap. The 56-color source has
+its own editable exhaust layer; the portal remains
+separate. `PortalCat.tsx`
 uses the 512 px lossless WebP with `image-rendering: pixelated`. The
 [pixel portal master](../docs/design/explorations/art/pixel-portal/portal.aseprite)
 is a separate 384 px still adapted from the original ring, with ember-glow,

@@ -6,7 +6,7 @@ created for these examples. Its editable Aseprite source and native PNG live in
 the repository. The source art is independent of Gatto’s logo and website
 illustrations.
 
-The app's header artwork was refreshed on October 26, 2026 using the
+The app's header artwork was refreshed on October 27, 2026 using the
 [dark-background pixel cat](explorations/art/app-cat/artwork.md). App captures
 were regenerated through the same native renderer; the illustrated editor
 fixtures and their source crops remain independent.

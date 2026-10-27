@@ -789,12 +789,25 @@ mod tests {
             addressed_name(uuid::Uuid::nil(), b"abc", "source.png"),
             "00000000-0000-0000-0000-000000000000-ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.source.png"
         );
-        let bytes = include_bytes!("../packaging/rocket-cat-transparent.png");
+        // Keep the streaming fixture large independently of artwork compression.
+        let mut noise = 0x1234_5678_u32;
+        let pixels = image::RgbaImage::from_fn(256, 256, |_, _| {
+            noise ^= noise << 13;
+            noise ^= noise >> 17;
+            noise ^= noise << 5;
+            let [red, green, blue, _] = noise.to_le_bytes();
+            image::Rgba([red, green, blue, 255])
+        });
+        let mut output = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(pixels)
+            .write_to(&mut output, image::ImageFormat::Png)
+            .unwrap();
+        let bytes = output.into_inner();
         assert!(
             bytes.len() > 64 * 1024,
             "Exercise more than one read buffer"
         );
-        let item = StagedAttachment::from_bytes("large.png".into(), bytes.to_vec(), None).unwrap();
+        let item = StagedAttachment::from_bytes("large.png".into(), bytes.clone(), None).unwrap();
         assert_eq!(
             media_hash(&item).unwrap(),
             hash_hex(Sha256::digest(bytes).into())

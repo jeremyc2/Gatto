@@ -1,76 +1,100 @@
 # Flying website visitor
 
-Created October 25, 2026; redrawn October 26 at the user's request. The website
-visitor is a separate pixel-art flying cat, drawn directly with Aseprite MCP.
-The earlier [angled rocket cat](../../../../../packaging/rocket-cat-transparent.png)
-guides the flight direction and equipment placement. Its charcoal coat,
-lavender ears, and cyan/violet eyes match the
-[seated README cat and favicon](../brand-cat/artwork.md), while the pose and
-equipment remain specific to this separate asset. The
-[app header variant](../app-cat/artwork.md) preserves this pose in its own master
-with lighter indigo/lavender fur for the native dark interface.
+Created October 25, 2026; redesigned October 27 from the user-approved Pocket
+Kitten concept. The visitor is a compact black-purple kitten with cyan/violet
+eyes, tucked paws and two mostly obscured back-mounted thrusters.
 
-The first front-facing pixel drawing was rejected: the round closed engine caps
-looked like objects held in the paws. The current three-quarter view exposes
-long rocket barrels mounted on the back, recognizable nozzles, and visible
-exhaust. The user specifically requested bright white/yellow cores within the
-colored flames.
+The [app header cat](../app-cat/artwork.md) uses the same drawing in an independent
+master. The seated brand cat, favicon, Dock icon and menu bar icon are separate
+artwork. Superseded concept images, flame references and review previews were
+removed after the design was captured in the editable sprites.
 
-## Master and anatomy
+## Master and layers
 
-[portal-cat.aseprite](portal-cat.aseprite) is the editable source: **256 × 256,
-one still frame**, with nine visible layers in depth order:
+[portal-cat.aseprite](portal-cat.aseprite) is the transparent **256 × 256** RGB
+master: one still frame, a 56-color palette and nine visible layers, bottom to top:
 
 1. Exhaust flames.
 2. Tail.
 3. Far rocket.
-4. Body and hind legs, including the harness and buckle.
-5. Near rocket.
-6. Forelegs and paws.
-7. Head and ears.
-8. Mounts and harness.
-9. Eyes, muzzle and whiskers.
+4. Near rocket.
+5. Body and hind legs.
+6. Mounts and harness.
+7. Forelegs and paws.
+8. Head and ears.
+9. Eyes muzzle and whiskers.
 
-The round charcoal kitten flies toward the upper right in a three-quarter view,
-with both eyes visible. It has lavender inner ears and silver-lavender rocket
-pods with cyan bands. Its attached forelegs reach forward while the hind legs
-trail behind the body. Paws are
-continuous rounded feline shapes; short underside notches imply toes without
-separate finger-like protrusions. Keep four paws total and one attached tail.
+The source contains the cat, equipment and exhaust. The [portal ring](../pixel-portal/artwork.md),
+dark aperture, reveal masks and website motion remain independent.
 
-The rockets are long cylinders mounted behind the shoulders with visible
-hardware, cyan bands, segmented collars and dark exhaust openings. Their thrust
-points backward along the barrel axes. Keep both flames clear of the hind legs;
-do not place the legs across the exhaust path. The white/yellow hot core begins
-at each nozzle and tapers inside orange, violet and cyan clusters. Keep the
-harness on the torso and the forelegs in front of it. Light comes from the upper
-left; avoid bright lower fur rims and pillow shading.
+## Cat and lighting
 
-Only the cat, equipment and its exhaust are in this transparent asset. The
-separate [pixel portal](../pixel-portal/artwork.md), dark aperture, masks and
-page seams remain independent.
-The master has no portal, background, floor shadow, or baked animation. The
-exhaust has its own editable layer. The named layers leave room for
-later animation work without choosing an animation technique now.
+Preserve the oversized rounded head, lavender inner ears, small closed smile,
+cyan-blue viewer-left eye and violet-purple viewer-right eye. Keep the approved
+eye pixels intact when editing other parts.
 
-## Export
+The coat reads as black with rich purple shading. Its main value ramp is
+`#1c0d29`, `#251133`, `#30133f`, `#3b184e`, `#47205e`, `#54296e`,
+`#5b3077`, `#60357e` and `#6a3c87`. Broad diffuse light comes from above-left;
+local purple shadows and small fur clusters separate the limbs. Avoid ring
+bands, faceted planes, mottled spots, black hairlines and near-white fur patches.
 
-Use Aseprite MCP `export_frame` with frame 1 and scale 2 to write
-`web/assets/images/download-rocket-cat-pixel.png` (512 × 512). Pass absolute
-paths to MCP. Then, from the repository root with libwebp installed:
+Forelegs sweep gently into broad wrists. All four paws show fur-covered tops
+with short plum toe divisions, without exposed undersides or pads. Preserve
+the knee shapes and shading; keep hind ankles substantial through the softer
+hock bend, with an open gap between the forward-facing feet. The tapered torso
+has no separate back bulge, belly lobe or underside flap. Complete anatomy
+occludes the equipment; never cut gaps into a leg or paw to accommodate a nozzle.
+
+The neck joins the rounded lower jaw without a transparent seam, hooked chin
+ledge or bright internal outline. Keep torso fragments out of the head layer.
+A continuous one-native-pixel `#ce96e1` rim frames the exposed body and entire
+tail. Keep it uniformly lavender, without blue or orange flame reflections.
+
+The hooked tail is one continuous curve, about 7–14 native pixels thick,
+tapering toward its tip. Its solid root passes behind the rump and rocket
+assembly. Fur strokes follow its length without crosswise bands or slices.
+Inspect it alone and remove stray tail fragments from other layers after edits.
+
+## Equipment and exhaust
+
+Exactly two straight, parallel silver-lavender barrels with cyan bands sit on
+the back. A partial near barrel and two visible lavender shoulder straps with
+a small light buckle establish the attachment. Keep the straps smooth and
+behind the forelegs. The far barrel and nozzle are entirely hidden; its flame
+communicates the second engine. Keep both engines close together.
+
+Both rocket layers contain complete cylinders beneath the cat. Their caps,
+collars and nozzles share continuous centerlines. The near axis runs roughly
+from `(113,106)` to `(82,154)`; the far axis runs from `(136,126)` to `(105,173)`.
+Both point down-left along `(-2,+3)`, with lengths about 57 native pixels and
+near/far diameters about 16/14 pixels.
+
+Each flame flares rapidly from a narrow nozzle along the barrel's straight
+axis, with a broad blue/cyan exterior, violet detail, orange and yellow layers,
+and a white hot core. Preserve the approved wide teardrop shapes, connected
+spiky fringe and pointed trailing tips. Near/far lengths are about 96/86 native
+pixels. Keep the flames continuous, without sideways waves, floating sparks,
+transparent pinholes or a black gap between the visible nozzle and hot core.
+
+## Export and verification
+
+Use Aseprite MCP `export_frame`, frame 1, scale 2, with absolute paths to write
+[`web/assets/images/download-rocket-cat-pixel.png`](../../../../../web/assets/images/download-rocket-cat-pixel.png)
+at **512 × 512**, then run from the repository root:
 
 ```sh
 cwebp -quiet -lossless -z 9 web/assets/images/download-rocket-cat-pixel.png -o web/assets/images/download-rocket-cat-pixel.webp
 ```
 
-`PortalCat.tsx` imports the WebP with intrinsic dimensions 512 × 512 and
-`image-rendering: pixelated`. The existing CSS controls the independent forward
-approach and floating motion; the portal keeps its existing rendering and motion.
-The superseded side-view and forward-facing raster exports were removed during
-asset cleanup; retain the current editable master and its PNG/WebP exports.
+`PortalCat.tsx` imports the lossless WebP at intrinsic size 512 × 512 with
+`image-rendering: pixelated`. Keep runtime exports transparent. Generate review
+backgrounds and enlarged close-ups outside the repository as needed.
 
-After edits, inspect `view_sprite`, palette statistics and `lint_sprite`, then
-check the exported PNG and the visitor at its actual website size. Catchlights,
-small edge transitions and toe notches can be intentional color-orphan pixels;
-detached anatomy or stray exterior pixels need correction. Check the front-paw
-silhouette and equipment direction before adding detail.
+After edits, inspect `view_sprite`, `get_color_stats` and `lint_sprite`. The
+current composite has binary alpha, one connected silhouette and no detached
+parts or lone exterior pixels. Small catchlights, fur transitions and flame tips
+can be intentional color orphans. Check hidden rocket continuity and compare
+exports against the source at exact integer scale. Inspect the cat against black,
+the app's `#0e1017` background and warm paper, including the 72-point app mark
+and website visitor. Export both independent masters for shared design changes.

@@ -364,10 +364,8 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
             Default::default(),
         )
     };
-    let small = image_composer::combine([
-        source("menu-bar-icon.png")?,
-        source("rocket-cat-transparent.png")?,
-    ])?;
+    let small =
+        image_composer::combine([source("menu-bar-icon.png")?, source("app-cat-pixel.png")?])?;
     let id = small.id;
     cx.update_window(editor, |_, window, cx| {
         preview.update(cx, |preview, cx| preview.show(vec![small], id, cx));

@@ -206,7 +206,7 @@ mod tests {
     fn image() -> ClipboardItem {
         ClipboardItem::new_image(&Image::from_bytes(
             ImageFormat::Png,
-            include_bytes!("../packaging/rocket-cat-transparent.png").to_vec(),
+            include_bytes!("../packaging/app-cat-pixel.png").to_vec(),
         ))
     }
 
@@ -231,7 +231,7 @@ mod tests {
             assert!(cx.windows().is_empty());
             let staged = StagedAttachment::from_path(
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("packaging/rocket-cat-transparent.png"),
+                    .join("packaging/app-cat-pixel.png"),
                 Default::default(),
             )
             .unwrap();

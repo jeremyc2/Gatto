@@ -45,7 +45,7 @@ Use Gatto's existing rocket-cat illustration only as identity guidance. Reimagin
 
 Create an original, richly detailed mixed-media storybook illustration, landscape three-by-two, using the watercolor favorite as the main reference, layered paper second, and Gatto's existing rocket-cat art only for a complementary smooth animated character. Different materials must coexist in one scene, with individual personality, proportions, eye color, height, ears, muzzle, and tail. Use a shared ground, believable scale, soft illumination, contact shadows, and related attention. A small pale picture of a violet pansy connects the action. Keep pigment as pigment and cut paper as cut paper. Use a simple warm ivory/celadon place with breathing room. No dogs, humans, comic panels, speech balloons, halftones, RGB offsets, portals, superhero imagery, text, or watermarks. No repeated contact-sheet poses. Original characters only.
 
-The input images were [cat-watercolor.png](cat-watercolor.png), [cat-paper.png](cat-paper.png), and the existing [rocket cat](../../../../packaging/rocket-cat-transparent.png).
+The input images were [cat-watercolor.png](cat-watercolor.png), [cat-paper.png](cat-paper.png), and the then-current rocket-cat illustration, now retired.
 
 **Handoff scene:** two cats on a low workbench. A smaller watercolor-and-ink black kitten with teal eyes leans forward to offer one corner of the pansy picture. A slightly taller charcoal-paper kitten with amber eyes reaches to accept the other. Their paws share the object and their gazes connect. Different tail rhythms, a tiny paint jar and curled paper offcut, the beginning of a friendship and a useful handoff.
 

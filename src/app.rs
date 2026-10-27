@@ -3985,18 +3985,15 @@ mod tests {
     }
 
     fn mixed_attachments() -> Vec<StagedAttachment> {
-        [
-            "packaging/rocket-cat-transparent.png",
-            "tests/fixtures/sample.mp4",
-        ]
-        .map(|path| {
-            StagedAttachment::from_path(
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path),
-                Default::default(),
-            )
-            .unwrap()
-        })
-        .into()
+        ["packaging/app-cat-pixel.png", "tests/fixtures/sample.mp4"]
+            .map(|path| {
+                StagedAttachment::from_path(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path),
+                    Default::default(),
+                )
+                .unwrap()
+            })
+            .into()
     }
 
     #[gpui_kit::test]
@@ -4978,7 +4975,7 @@ mod tests {
         assert!(cx.debug_bounds("upload-markdown-copy-hint").is_none());
 
         let image_path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packaging/rocket-cat-transparent.png");
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("packaging/app-cat-pixel.png");
         for (bulk_upload, copy_images_as_markdown) in
             [(false, false), (true, false), (false, true), (true, true)]
         {

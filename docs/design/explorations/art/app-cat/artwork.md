@@ -1,54 +1,40 @@
 # App header cat
 
-Created October 26, 2026. This is a separate dark-background variant of the
-[website rocket cat](../portal-cat/artwork.md), preserving its three-quarter
-flight, cyan/violet eyes, rounded paws, back-mounted rockets and hot exhaust.
-The native app's 72-point header mark uses deep purple fur and muted lavender
-lit planes against the `#0e1017` background and purple controls.
+Created October 26, 2026; redesigned October 27 with the user-approved Pocket
+Kitten concept. The app's 72-point header mark shares the website visitor's
+rounded head, black-purple coat, cyan/violet eyes, tucked paws, lavender rim and
+mostly hidden twin thrusters.
 
-## Master and palette
+## Master and shared design
 
-[app-cat.aseprite](app-cat.aseprite) is the editable source: **256 × 256, one
-still frame**, with the same nine named layers as the website visitor. The
-masters are independent; edits and exports do not update each other.
+[app-cat.aseprite](app-cat.aseprite) is the transparent **256 × 256** RGB master:
+one still frame, a 56-color palette and nine named layers matching the
+[website master](../portal-cat/artwork.md). The masters are independent; edits
+and exports do not automatically update each other. Keep them synchronized
+unless a distinct app variation is requested.
 
-The fur keeps its upper-left light and surface shading, with these five
-value-separated purple/lavender steps. The coat is deliberately richer and
-less gray than the first app variant. The five fur tones were darkened by one
-additional exposure stop on October 26 (linear RGB × 0.5), keeping their hue and
-surface separation:
+The website artwork record owns the shared anatomy, palette, lighting, layer
+order, hidden barrel construction and flame direction. Keep the approved eye
+pixels and knee shading, fur-covered paw tops, broad wrists and ankles, a clean
+head-to-neck join, continuous tail and uniform lavender silhouette rim. The
+coat stays dark against the app's `#0e1017` background, with no near-white fur
+highlights. The Dock/menu-bar assets are separate artwork. Image tests and
+comparison diagnostics reuse the current PNG; the retired raster cat is removed.
 
-| Role                      | Color     |
-| ------------------------- | --------- |
-| Outline and deepest seams | `#170b24` |
-| Shadow                    | `#231430` |
-| Coat                      | `#361e4a` |
-| Lit planes                | `#503068` |
-| Upper-left highlight      | `#74538a` |
+## Export and verification
 
-Keep outlines darker than adjacent fills. Preserve the eyes, lavender ears,
-metal barrels, cyan bands and white/yellow flame cores. Avoid a uniform glow
-around the silhouette; light and shadow should describe the same surfaces as
-the website cat. Keep the background fully transparent.
-
-## Export and use
-
-Use Aseprite MCP `export_frame`, frame 1, scale 2, to write
+Use Aseprite MCP `export_frame`, frame 1, scale 2, with absolute paths to write
 [`packaging/app-cat-pixel.png`](../../../../../packaging/app-cat-pixel.png)
-(512 × 512). Pass absolute paths to MCP. `src/app.rs` embeds that PNG for
-`header_mark`; its existing 72-point image geometry and click target remain.
-The original rocket-cat asset still supplies historical artwork references and
-test fixtures; the Dock and menu bar have their own assets.
+at **512 × 512**. `src/app.rs` embeds this PNG for `header_mark`; its existing
+72-point geometry and click target remain.
 
-Inspect the source with `view_sprite`, `get_color_stats` and `lint_sprite` after
-edits. Small eye highlights and material-edge pixels are intentional color
-orphans; detached anatomy and stray exterior pixels are not. Verify the mark
-at its actual size through the native renderer:
+Inspect `view_sprite`, `get_color_stats` and `lint_sprite` after edits, following
+the shared artwork record. Check the mark against the actual app background:
 
 ```sh
 SEED=0 cargo run --locked --quiet --features walkthrough-screenshots --bin walkthrough-screenshots -- /tmp/gatto-app-cat-captures
 ```
 
-Inspect `01-first-run.png` against the real app background. Regenerate the
-published app captures with `scripts/update-walkthrough-screenshots.sh` when
-changing this header. Keep temporary proof images outside the repository.
+Inspect `01-first-run.png`. Regenerate published app captures with
+`scripts/update-walkthrough-screenshots.sh`, then refresh their website exports
+with `bun export:features`. Keep temporary previews outside the repository.

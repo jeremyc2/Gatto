@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-10-27
+
+### Changed
+
+- Redraw the app header and website portal cats as a compact black-purple kitten
+  with gently bent limbs, broad ankles, fur-covered paw tops, a clean head-to-body join, soft
+  purple shading and fur detail, a continuous lavender body and tail outline, visible shoulder straps,
+  and two back-mounted thrusters with wide straight blue-violet exhaust and a
+  spiky pixel fringe, with matching
+  editable Aseprite sources. Remove superseded raster references and use the
+  current artwork for image test fixtures and comparison diagnostics.
+
 ## [0.20.0] - 2026-10-27
 
 ### Added

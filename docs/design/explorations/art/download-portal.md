@@ -1,8 +1,9 @@
 # Download portal artwork
 
 Originally created October 17, 2026 for the website download section; the ring
-was redrawn as [Aseprite pixel art](pixel-portal/artwork.md) on October 26. The cat's identity is
-based on [the existing logo artwork](../../../../packaging/rocket-cat-transparent.png).
+was redrawn as [Aseprite pixel art](pixel-portal/artwork.md) on October 26. The
+original cat used a now-retired raster rocket-cat illustration; the current
+design and master live in the [visitor artwork record](portal-cat/artwork.md).
 The original portal was generated with the built-in image-generation tool as a
 separate transparent layer. The current ring is drawn in Aseprite. Both its
 aperture and exterior are transparent, allowing the
