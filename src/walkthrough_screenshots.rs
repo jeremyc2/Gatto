@@ -74,6 +74,15 @@ fn generate() -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
+    if std::env::args().any(|arg| arg == "--rooftops-arrival") {
+        for (index, time) in [0.6, 1.4, 2.6].into_iter().enumerate() {
+            render_rooftops(
+                &output_directory.join(format!("rooftops-arrival-{}.png", index + 1)),
+                RooftopsCapture::Arrival(time),
+            )?;
+        }
+        return Ok(());
+    }
     if std::env::args().any(|arg| arg == "--rooftops-preferences") {
         return render_scenario(
             WalkthroughScenario::Preferences,
@@ -84,28 +93,20 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
         for level in 0..rooftops::LEVELS {
             render_rooftops(
                 &output_directory.join(format!("rooftops-{}.png", level + 1)),
-                level,
-                level == 2,
-                None,
+                RooftopsCapture::Level(level, level == 2),
             )?;
         }
         render_rooftops(
             &output_directory.join("rooftops-phase-3.png"),
-            2,
-            false,
-            None,
+            RooftopsCapture::Level(2, false),
         )?;
         render_rooftops(
             &output_directory.join("rooftops-behind.png"),
-            0,
-            false,
-            Some(false),
+            RooftopsCapture::Gap(false),
         )?;
         render_rooftops(
             &output_directory.join("rooftops-ahead.png"),
-            0,
-            false,
-            Some(true),
+            RooftopsCapture::Gap(true),
         )?;
         let score = rooftops_score::Score {
             coins: 41,
@@ -161,7 +162,7 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
 
     for level in 0..rooftops::LEVELS {
         let output = output_directory.join(format!("rooftops-{}.png", level + 1));
-        render_rooftops(&output, level, level == 2, None)?;
+        render_rooftops(&output, RooftopsCapture::Level(level, level == 2))?;
         println!("Wrote {}", output.display());
     }
 
@@ -642,12 +643,14 @@ fn check_pixelation_edges(output: &std::path::Path) -> Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn render_rooftops(
-    output: &std::path::Path,
-    level: usize,
-    show_results: bool,
-    gap_preview: Option<bool>,
-) -> Result<()> {
+enum RooftopsCapture {
+    Level(usize, bool),
+    Gap(bool),
+    Arrival(f32),
+}
+
+#[cfg(target_os = "macos")]
+fn render_rooftops(output: &std::path::Path, capture: RooftopsCapture) -> Result<()> {
     let platform = gpui_kit::platform::current_platform(true);
     let mut cx = HeadlessAppContext::with_platform(
         platform.text_system(),
@@ -668,9 +671,16 @@ fn render_rooftops(
             },
             cx,
             |window, cx| {
-                cx.new(|cx| match gap_preview {
-                    Some(ahead) => rooftops::Rooftops::for_gap_preview(window, cx, ahead),
-                    None => rooftops::Rooftops::for_preview(window, cx, level, show_results),
+                cx.new(|cx| match capture {
+                    RooftopsCapture::Gap(ahead) => {
+                        rooftops::Rooftops::for_gap_preview(window, cx, ahead)
+                    }
+                    RooftopsCapture::Level(level, show_results) => {
+                        rooftops::Rooftops::for_preview(window, cx, level, show_results)
+                    }
+                    RooftopsCapture::Arrival(time) => {
+                        rooftops::Rooftops::for_arrival_preview(window, cx, time)
+                    }
                 })
             },
         )

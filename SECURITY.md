@@ -32,6 +32,22 @@ as well as browser packages and fails on registry errors, malformed reports,
 new advisories, or an expired/changed exception. It does not automatically fix
 or silently ignore findings.
 
+### Seroval security patch (2026-10-28)
+
+The root manifest overrides Seroval to **1.6.11**, with the resolved artifact
+recorded in `bun.lock`. Solid and `@solidjs/web` 2.0.0-rc.15 both pin the affected
+1.6.7 release, so reinstalling alone cannot pick up the security patches.
+This patch covers the reported [typed-array constructor injection](https://github.com/advisories/GHSA-f86p-h4j2-7qgj),
+[RegExp script injection](https://github.com/advisories/GHSA-9wx9-5pv9-3349),
+[array/sequence deserialization denial of service](https://github.com/advisories/GHSA-97r2-qh9m-474h),
+[array-length denial of service](https://github.com/advisories/GHSA-wp97-x4hv-qvhp),
+and [async-iterator callable invocation](https://github.com/advisories/GHSA-7rv5-mrxv-xcr9).
+No Seroval advisory is exempted from the audit. Remove the override when the
+Solid packages themselves resolve to a patched Seroval release and the full
+dependency audit and website checks pass.
+
+### Temporary lint exception
+
 | Temporary exception                                                                      | Affected functionality and reachability                                                                                                                                                                                                                                                                                                                | Owner / removal condition                                                                                                                                         |
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), `braces 3.0.3` | Development-only `@stylexjs/eslint-plugin 0.19.1 → micromatch 4.0.8 → braces 3.0.3`. The inspected StyleX rules only call `micromatch.isMatch`, which delegates to picomatch rather than the vulnerable recursive braces walkers. The vulnerable package is still installed/imported; this is a scoped static assessment, not an exploitability proof. | Jeremy (@jeremyc2). Expires **2026-11-22 00:00 UTC**, or earlier when a compatible fixed release exists, the plugin/call path changes, or this branch is removed. |

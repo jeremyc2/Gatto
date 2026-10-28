@@ -3,6 +3,8 @@ use std::{
     time::Instant,
 };
 
+mod arrival;
+
 use crate::rooftops_score::Score;
 use crate::rooftops_score::art::{self, StatIcon};
 use crate::rooftops_score::replay::{Frame, GameData, Pose, Recording, Replay};
@@ -622,6 +624,8 @@ impl Run {
 
 pub struct Rooftops {
     run: Run,
+    arrival: Option<f32>,
+    started: bool,
     focus: FocusHandle,
     last_frame: Option<Instant>,
     remainder: f32,
@@ -670,6 +674,8 @@ impl Rooftops {
         window.on_window_should_close(cx, move |window, cx| {
             let _ = game.update(cx, |game, cx| {
                 game.run = Run::new();
+                game.arrival = Some(0.);
+                game.started = false;
                 game.run_personal_best = game.personal_best;
                 game.ghost_replay = game.best_replay.clone();
                 game.recording = Recording::new(game.run.ghost_frame());
@@ -702,6 +708,8 @@ impl Rooftops {
         let recording = Recording::new(run.ghost_frame());
         Self {
             run,
+            arrival: Some(0.),
+            started: false,
             focus,
             last_frame: None,
             remainder: 0.,
@@ -733,6 +741,7 @@ impl Rooftops {
     ) -> Self {
         let mut game = Self::new_with_records(window, cx, false);
         game.preview = true;
+        game.arrival = None;
         game.run = Run::for_level(level);
         let run = &mut game.run;
         match level {
@@ -808,6 +817,19 @@ impl Rooftops {
         if level == 0 {
             game.set_preview_ghost(game.run.x + 98.);
         }
+        game
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn for_arrival_preview(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        time: f32,
+    ) -> Self {
+        let mut game = Self::new_with_records(window, cx, false);
+        game.preview = true;
+        game.arrival = (time < arrival::DURATION).then_some(time);
         game
     }
 
@@ -959,8 +981,10 @@ impl Rooftops {
     }
 
     fn continue_from_home(&mut self) {
+        self.finish_arrival();
         let restart = self.run.level + 1 == LEVELS;
         if restart {
+            self.started = false;
             self.run_personal_best = self.personal_best;
             self.ghost_replay = self.best_replay.clone();
         }
@@ -979,6 +1003,8 @@ impl Rooftops {
 
     pub(crate) fn reset_progress(&mut self, cx: &mut Context<Self>) {
         self.run = Run::new();
+        self.arrival = Some(0.);
+        self.started = false;
         self.personal_best = None;
         self.run_personal_best = None;
         self.best_replay = None;
@@ -1029,12 +1055,19 @@ impl Rooftops {
             return;
         }
         match event.keystroke.key.as_str() {
-            "left" => self.run.input.left = true,
-            "right" => self.run.input.right = true,
+            "left" => {
+                self.begin_play(Instant::now());
+                self.run.input.left = true;
+            }
+            "right" => {
+                self.begin_play(Instant::now());
+                self.run.input.right = true;
+            }
             "space" if !event.is_held => {
                 if self.run.home {
                     self.continue_from_home();
                 } else {
+                    self.begin_play(Instant::now());
                     self.run.jump_down();
                 }
             }
@@ -1055,6 +1088,25 @@ impl Rooftops {
         cx.notify();
     }
 
+    fn finish_arrival(&mut self) {
+        if self.arrival.take().is_some() {
+            self.last_frame = None;
+            self.remainder = 0.;
+        }
+    }
+
+    fn begin_play(&mut self, now: Instant) {
+        if self.run.home {
+            return;
+        }
+        self.finish_arrival();
+        if !self.started {
+            self.started = true;
+            self.last_frame = Some(now);
+            self.remainder = 0.;
+        }
+    }
+
     fn active_frame(&mut self, now: Instant, active: bool) -> Option<f32> {
         if !active {
             self.last_frame = None;
@@ -1064,6 +1116,18 @@ impl Rooftops {
             .last_frame
             .replace(now)
             .map_or(0., |last| now.duration_since(last).as_secs_f64());
+        if let Some(arrival) = &mut self.arrival {
+            *arrival += (elapsed as f32).min(0.05);
+            if *arrival >= arrival::DURATION {
+                self.finish_arrival();
+            }
+            // The arrival is scenery, outside the race and replay clock.
+            return None;
+        }
+        if !self.started {
+            self.last_frame = None;
+            return None;
+        }
         self.run.record_active_time(elapsed);
         // Count actual active time, while limiting physics catch-up after a stall.
         Some((elapsed as f32).min(0.05))
@@ -1127,6 +1191,12 @@ impl Rooftops {
             return;
         }
         let active = window.is_window_active() && self.focus.is_focused(window);
+        if self.arrival.is_some() && active {
+            if cx.reduce_motion() {
+                self.finish_arrival();
+            }
+            window.request_animation_frame();
+        }
         let Some(elapsed) = self.active_frame(Instant::now(), active) else {
             return;
         };
@@ -2247,10 +2317,11 @@ impl Render for Rooftops {
                 .child(circle(house - 13., 330., 26., 0x687d70, scale));
         }
 
-        if let Some(ghost) = self
-            .ghost_replay
-            .as_ref()
-            .and_then(|replay| replay.frame_at(run.elapsed))
+        if self.arrival.is_none()
+            && let Some(ghost) = self
+                .ghost_replay
+                .as_ref()
+                .and_then(|replay| replay.frame_at(run.elapsed))
         {
             if let Some(gap) = ghost_gap(run, ghost, camera, w) {
                 scene = scene.child(ghost_gap_indicator(gap, height));
@@ -2265,7 +2336,9 @@ impl Render for Rooftops {
         } else {
             (run.time * 26.).sin() * (run.vx.abs() / SPEED) * 2.5
         };
-        if run.home {
+        if let Some(time) = self.arrival {
+            scene = scene.child(arrival::sequence(time, camera, scale));
+        } else if run.home {
             scene = scene.child(resting_cat(run.x - camera, run.y, 0x05070d, scale));
         } else {
             scene = scene
@@ -2296,6 +2369,14 @@ impl Render for Rooftops {
                             scale,
                         )),
                 );
+        }
+        if run.level == 0 {
+            if self.arrival.is_none() {
+                scene = scene.child(arrival::empty_pack(camera, scale));
+            }
+            if self.arrival.is_some() || (run.time < 5. && run.x < 260.) {
+                scene = scene.child(arrival::caption());
+            }
         }
         let score = run.score();
         scene = scene
@@ -2522,10 +2603,22 @@ mod tests {
                 assert!(!game.run.home);
                 assert_eq!(game.run.coin_count(), 0);
                 assert_eq!(game.run.elapsed, 0.);
+                assert!(!game.started, "restarting waits for gameplay input");
                 assert_eq!(game.camera, 0.);
                 assert!(game.save_message.is_none());
                 assert_eq!(game.personal_best, Some(138.2));
                 assert!(game.focus.is_focused(window));
+            });
+            cx.update(|_, cx| {
+                view.update(cx, |game, _| {
+                    let now = Instant::now();
+                    assert!(game.active_frame(now, true).is_none());
+                    assert!(
+                        game.active_frame(now + std::time::Duration::from_secs(10), true)
+                            .is_none()
+                    );
+                    assert_eq!(game.run.elapsed, 0., "idle time after Play again is free");
+                });
             });
         }
     }
@@ -2604,6 +2697,7 @@ mod tests {
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 let start = Instant::now();
+                game.begin_play(start);
                 let after = |seconds| start + std::time::Duration::from_secs(seconds);
                 game.active_frame(start, true);
                 game.active_frame(after(2), true);
@@ -2616,6 +2710,50 @@ mod tests {
                 game.active_frame(after(40), true);
                 assert_eq!(game.run.score().seconds, 5.);
             })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn arrival_pauses_and_finishes_before_the_race_and_ghost_clock(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(Rooftops::new);
+        cx.update(|_, cx| {
+            view.update(cx, |game, _| {
+                let start = Instant::now();
+                game.active_frame(start, true);
+                game.active_frame(start + std::time::Duration::from_millis(50), true);
+                let progress = game.arrival;
+                game.active_frame(start + std::time::Duration::from_secs(10), false);
+                game.active_frame(start + std::time::Duration::from_secs(20), true);
+                assert_eq!(game.arrival, progress, "focus loss pauses the arrival");
+                for step in 1..=60 {
+                    game.active_frame(
+                        start + std::time::Duration::from_millis(20_000 + step * 50),
+                        true,
+                    );
+                    if game.arrival.is_none() {
+                        break;
+                    }
+                }
+                assert!(game.arrival.is_none());
+                assert_eq!(game.run.elapsed, 0.);
+                assert_eq!(game.run.time, 0.);
+                assert_eq!(game.run.x, START_X);
+                assert_eq!(game.run.ground, Some(0));
+                assert_eq!(game.run.jumps, 0);
+                assert_eq!(game.run.returns, 0);
+                assert_eq!(game.run.coin_count(), 0);
+                assert_eq!(game.run.ghost_frame().seconds, 0.);
+                let resume = start + std::time::Duration::from_secs(30);
+                game.active_frame(resume, true);
+                game.active_frame(resume + std::time::Duration::from_secs(1), true);
+                assert_eq!(game.run.elapsed, 0., "landing does not start the clock");
+                assert!(!game.started);
+                game.begin_play(resume + std::time::Duration::from_secs(2));
+                game.active_frame(resume + std::time::Duration::from_secs(3), true);
+                assert_eq!(game.run.elapsed, 1.);
+            });
         });
     }
 
@@ -2912,7 +3050,14 @@ mod tests {
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
         cx.simulate_keystrokes("right");
-        cx.update(|_, cx| assert!(view.read(cx).run.input.right));
+        cx.update(|_, cx| {
+            assert!(
+                view.read(cx).arrival.is_none(),
+                "movement skips the arrival"
+            );
+            assert!(view.read(cx).started, "movement starts the clock");
+            assert!(view.read(cx).run.input.right);
+        });
         cx.simulate_event(KeyUpEvent {
             keystroke: gpui_kit::Keystroke::parse("right").unwrap(),
         });
@@ -2920,11 +3065,17 @@ mod tests {
             assert!(
                 !view.read(cx).run.input.right,
                 "key release must clear movement"
-            )
+            );
+            view.update(cx, |game, _| {
+                game.arrival = Some(0.6);
+                game.started = false;
+            });
         });
         cx.simulate_keystrokes("space");
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
+                assert!(game.arrival.is_none(), "Space skips the arrival too");
+                assert!(game.started, "jumping starts the clock too");
                 game.run.step();
                 assert!(game.run.vy < 0.);
             })

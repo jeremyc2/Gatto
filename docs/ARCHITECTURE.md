@@ -42,7 +42,14 @@ are no cleanup dialogs, download deletions, or additional persistent settings.
 Each installed launch can retry cleanup; once ejected, later launches do nothing.
 
 Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite,
-with the app’s existing dependencies.
+with the app’s existing dependencies. `rooftops/arrival.rs` draws its opening
+flight, sputtering jetpack, and abandoned empty pack with the same native shapes.
+The arrival has its own active-window clock, outside gameplay physics, scoring,
+and replay recording. Movement skips it; Reduce Motion shows the landed state,
+and replaying a completed run starts directly on the roof.
+New runs hold gameplay physics and the shared score/replay clock until the first
+movement or jump input; opening, landing, focusing, and restarting alone do not
+start the clock. The first gameplay input establishes its time origin.
 
 ## App buttons
 

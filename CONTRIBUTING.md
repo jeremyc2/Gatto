@@ -220,6 +220,8 @@ early coin jump, a mid-level owl encounter, and the results screen in `rooftops-
 
 For a focused Rooftops check, run
 `cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- <output-directory> --rooftops-only`.
+Use `--rooftops-arrival` instead to capture three fixed opening frames: sputtering
+flight, descent after the engines stop, and the landed cat beside its empty pack.
 This also captures `rooftops-phase-3.png` during play to check the gibbous moon.
 It captures `rooftops-behind.png` and `rooftops-ahead.png` for the ghost's
 red/right and green/left distance indicators.

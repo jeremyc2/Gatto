@@ -17,6 +17,17 @@ resets the run and returns to the app.
 
 ## Playing
 
+The opening reads “Out of fuel and far from home.” The jetpack engines sputter
+out, the cat lands, and it leaves the empty pack on the first roof: home is
+across the rooftops. Press either movement arrow or Space to skip the short
+opening and start playing immediately. The opening pauses when the game loses focus and
+does not count toward your time or ghost replay. Reduce Motion skips the
+animation; the empty pack and opening message still explain the journey.
+**Play again** starts directly on the roof without replaying the opening.
+The clock and ghost wait for your first **←**, **→**, or **Space** gameplay input
+on each new run, including after **Play again**. Once started, standing still
+counts toward your time.
+
 Jump across the rooftops to reach the lit doorway. Later levels have narrower
 roofs, wider gaps, and more enemies.
 

@@ -7,6 +7,28 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.7] - 2026-10-28
+
+### Added
+
+- A short Rooftops opening: the cat's jetpack runs out of fuel, it lands, and
+  leaves the empty pack behind to head home on foot. The opening reads
+  “Out of fuel and far from home.” Movement skips the opening;
+  it does not count toward completion times or ghost replays. Reduce Motion and
+  Play again start directly on the roof.
+
+### Changed
+
+- Start the Rooftops clock and ghost only on the first movement or jump input
+  of each run. Waiting after landing or choosing Play again does not count;
+  standing still after starting still counts.
+
+### Fixed
+
+- Override the website's transitive Seroval dependency to 1.6.11, fixing the
+  five reported serialization and deserialization advisories while keeping the
+  current Solid version. Keep the dependency audit active for all findings.
+
 ## [0.20.6] - 2026-10-28
 
 ### Changed
