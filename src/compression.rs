@@ -102,7 +102,7 @@ pub fn compress(
                     .file_stem()
                     .and_then(|name| name.to_str())
                     .unwrap_or("video");
-                attachment.name = format!("{stem}-compressed.mp4");
+                attachment.name = format!("{stem}.mp4");
                 attachment.title = attachment.name.clone();
                 progress(Progress {
                     attempt,
@@ -170,7 +170,7 @@ mod tests {
         .unwrap();
         assert!(result.len() < MAX_ATTACHMENT_BYTES);
         assert_eq!(result.mime_type, "video/mp4");
-        assert!(result.name.ends_with("-compressed.mp4"));
+        assert_eq!(result.name, "sample.mp4");
         assert_eq!(std::fs::read(source).unwrap(), original);
     }
 

@@ -1439,6 +1439,14 @@ impl UploaderApp {
             .iter_mut()
             .find(|image| image.id == image_id)
             .ok_or_else(|| anyhow::anyhow!("That attachment is no longer staged."))?;
+        let updated_name = crate::model::filename_for_title(requested_name, &image.name);
+        if updated_name != image.name
+            && matches!(&image.media, Media::Video(_))
+            && image.upload_state.is_uploaded()
+        {
+            image.upload_state = AttachmentUploadState::Preview;
+        }
+        image.name = updated_name;
         image.title = requested_name.to_owned();
         image.description = description.to_owned();
         let description = image.title.clone();
@@ -3997,6 +4005,62 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn editing_attachment_title_updates_its_upload_filename(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let attachment = mixed_attachments().remove(1);
+        let id = attachment.id;
+        cx.update(|_, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = vec![attachment];
+                app.change_attachment_description(id, "Updated recording", "Description", cx)
+                    .unwrap();
+                assert_eq!(app.staged_attachments[0].title, "Updated recording");
+                assert_eq!(app.staged_attachments[0].name, "Updated recording.mp4");
+                assert_eq!(app.staged_attachments[0].description, "Description");
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn editing_uploaded_video_title_allows_reupload_but_photo_keeps_its_url(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        let mut attachments = mixed_attachments();
+        let photo_id = attachments[0].id;
+        let video_id = attachments[1].id;
+        for (index, attachment) in attachments.iter_mut().enumerate() {
+            attachment.upload_state = AttachmentUploadState::Uploaded {
+                url: format!("https://github.com/user-attachments/assets/{index}"),
+            };
+        }
+        cx.update(|_, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments = attachments;
+                app.sync_upload_result();
+
+                app.change_attachment_description(photo_id, "Updated photo", "", cx)
+                    .unwrap();
+                assert!(app.staged_attachments[0].upload_state.is_uploaded());
+
+                app.change_attachment_description(video_id, "Updated video", "", cx)
+                    .unwrap();
+                assert_eq!(
+                    app.staged_attachments[1].upload_state,
+                    AttachmentUploadState::Preview
+                );
+                assert_eq!(app.staged_attachments[1].name, "Updated video.mp4");
+                assert_eq!(app.upload_result.as_ref().unwrap().attachments.len(), 1);
+                assert!(
+                    app.upload_result.as_ref().unwrap().attachments[0]
+                        .markdown
+                        .contains("Updated photo")
+                );
+            })
+        });
+    }
+
+    #[gpui_kit::test]
     fn automatic_comparison_shows_loading_and_preserves_existing_draft_choices(
         cx: &mut TestAppContext,
     ) {
@@ -4551,7 +4615,13 @@ mod tests {
             view.update(cx, |app, _| {
                 assert!(!app.import_busy());
                 assert_eq!(app.staged_attachments.len(), 1);
-                assert!(app.staged_attachments[0].name.ends_with("-compressed.mp4"));
+                assert_eq!(
+                    app.staged_attachments[0].name,
+                    format!(
+                        "{}.mp4",
+                        source.path().file_stem().unwrap().to_string_lossy()
+                    )
+                );
                 assert!(app.staged_attachments[0].len() < crate::model::MAX_ATTACHMENT_BYTES);
                 assert!(
                     app.upload_result.is_none(),

@@ -360,6 +360,23 @@ impl StagedAttachment {
     }
 }
 
+pub(crate) fn filename_for_title(title: &str, current_name: &str) -> String {
+    let title = title.trim();
+    if title.is_empty() {
+        return current_name.to_owned();
+    }
+    if Path::new(title).extension().is_some() {
+        return title.to_owned();
+    }
+    match Path::new(current_name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some(extension) => format!("{title}.{extension}"),
+        None => title.to_owned(),
+    }
+}
+
 pub fn validate_size(len: u64, limit: u64) -> Result<()> {
     if len == 0 {
         bail!("The selected file is empty.");
@@ -604,6 +621,24 @@ mod attachment_upload_state_tests {
         assert_eq!(uploaded.uploaded_url(), Some("https://example.com/image"));
         assert_eq!(failed.failure_message(), Some("network error"));
         assert!(!failed.is_uploaded());
+    }
+}
+
+#[cfg(test)]
+mod filename_tests {
+    use super::filename_for_title;
+
+    #[test]
+    fn title_becomes_filename_while_preserving_the_extension_when_omitted() {
+        assert_eq!(
+            filename_for_title("Updated title", "recording.mp4"),
+            "Updated title.mp4"
+        );
+        assert_eq!(
+            filename_for_title("Updated title.webm", "recording.mp4"),
+            "Updated title.webm"
+        );
+        assert_eq!(filename_for_title("", "recording.mp4"), "recording.mp4");
     }
 }
 

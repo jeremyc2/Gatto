@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.4] - 2026-10-27
+
+### Changed
+
+- Keep compressed videos' original basename, and use an edited attachment title
+  for its GitHub upload filename while retaining the file extension when omitted.
+  Changing an uploaded video's filename allows re-upload; image title changes
+  retain the uploaded asset and update its generated text.
+
 ## [0.20.3] - 2026-10-27
 
 ### Changed

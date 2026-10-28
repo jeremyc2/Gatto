@@ -396,7 +396,11 @@ retries are disabled. Responses are capped at 64 KiB; errors distinguish auth,
 permissions/SSO, size/format rejection, rate limits, and server/network failures.
 It sends original image/video bytes to
 `https://uploads.github.com/user-attachments/assets` with filename, content type,
-and numeric repository ID query parameters. Returned URLs must use HTTPS,
+and numeric repository ID query parameters. Attachment titles determine the
+upload filename; when a title omits the extension, the existing file extension
+is retained. Changing an uploaded video's filename clears its previous upload
+so it can be re-uploaded; changing an image title reuses its uploaded asset and
+updates the generated text. Returned URLs must use HTTPS,
 `github.com`, the standard HTTPS port, no embedded credentials, and a nonempty
 `/user-attachments/assets/` path. The endpoint is
 hard-coded for GitHub.com; GitHub Enterprise Server hosts are not configurable.
