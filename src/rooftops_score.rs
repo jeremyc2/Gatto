@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+pub(crate) mod art;
+pub(crate) mod replay;
+
 pub(crate) const POSTER_FONT: &str = "Helvetica Neue";
 
 #[derive(Clone, Copy)]
@@ -8,6 +11,8 @@ pub(crate) struct Score {
     pub deaths: usize,
     pub kills: usize,
     pub seconds: f64,
+    // The record when this run began, before recording a new completion.
+    pub personal_best: Option<f64>,
 }
 
 pub(crate) struct PosterShape {
@@ -24,6 +29,7 @@ pub(crate) struct PosterText {
     pub size: f32,
     pub ink: u32,
     pub bold: bool,
+    pub centered_width: Option<f32>,
 }
 
 // One authored poster is shared by the GPUI results and the downloadable PNG.
@@ -39,15 +45,6 @@ pub(crate) fn poster_shapes() -> Vec<PosterShape> {
         })
     };
     add([0., 0., 900., 540.], 0x171a2d, 1., 0.);
-    for (rect, ink, opacity, radius) in [
-        ([613., 88., 204., 204.], 0xe9bc83, 0.025, 102.),
-        ([635., 110., 160., 160.], 0xe9bc83, 0.05, 80.),
-        ([654., 130., 122., 122.], 0xf3ddba, 1., 61.),
-        ([672., 148., 23., 23.], 0xd8b98e, 0.3, 11.5),
-        ([728., 185., 32., 32.], 0xd8b98e, 0.25, 16.),
-    ] {
-        add(rect, ink, opacity, radius);
-    }
     for i in 0..40 {
         let x = ((i * 137 + 33) % 820) as f32 + 40.;
         let y = ((i * 47 + 13) % 240) as f32 + 38.;
@@ -119,13 +116,20 @@ pub(crate) fn poster_shapes() -> Vec<PosterShape> {
     }
     add([36., 354., 828., 142.], 0x222338, 1., 8.);
     add([52., 354., 796., 1.], 0xd8b48c, 0.55, 0.);
-    for x in [258., 458., 658.] {
-        add([x, 378., 1., 94.], 0xb4938a, 0.18, 0.);
-    }
-    for x in [810., 826., 842.] {
-        add([x, 48., 6., 6.], 0xf3ddba, 1., 3.);
-    }
     shapes
+}
+
+pub(crate) fn poster_paths() -> Vec<art::ArtPath> {
+    let mut paths = Vec::new();
+    for (kind, center) in [
+        (art::StatIcon::Coin, 139.5),
+        (art::StatIcon::Deaths, 346.5),
+        (art::StatIcon::Kills, 553.5),
+        (art::StatIcon::Time, 760.5),
+    ] {
+        paths.extend(art::stat_paths(kind, center - 12., 371., 24., 0x222338));
+    }
+    paths
 }
 
 pub(crate) fn poster_text(score: Score) -> Vec<PosterText> {
@@ -137,6 +141,7 @@ pub(crate) fn poster_text(score: Score) -> Vec<PosterText> {
             size: 14.,
             ink: 0xd4b89c,
             bold: true,
+            centered_width: None,
         },
         PosterText {
             label: "Moonlit mischief".into(),
@@ -145,38 +150,47 @@ pub(crate) fn poster_text(score: Score) -> Vec<PosterText> {
             size: 52.,
             ink: 0xf3ddba,
             bold: true,
+            centered_width: None,
         },
-        PosterText {
-            label: "GATTO".into(),
+    ];
+    if let Some(best) = score.personal_best.filter(|best| score.seconds > *best) {
+        text.push(PosterText {
+            label: format!("personal best: {}", time_label(best)),
             x: 44.,
             y: 502.,
             size: 10.,
             ink: 0x96899f,
             bold: false,
-        },
-    ];
-    for (x, label, value) in [
-        (58., "COINS", score.coins.to_string()),
-        (280., "KILLS", score.kills.to_string()),
-        (480., "DEATHS", score.deaths.to_string()),
-        (680., "TIME", score.time_label()),
-    ] {
+            centered_width: None,
+        });
+    }
+    for (column, (label, value)) in [
+        ("COINS", score.coins.to_string()),
+        ("DEATHS", score.deaths.to_string()),
+        ("ENEMIES DEFEATED", score.kills.to_string()),
+        ("COMPLETION TIME", score.time_label()),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let x = 36. + column as f32 * 207.;
         text.push(PosterText {
             label: label.into(),
             x,
-            y: 376.,
-            size: 12.,
+            y: 460.,
+            size: 11.,
             ink: 0xb9a5b4,
             bold: true,
+            centered_width: Some(207.),
         });
         text.push(PosterText {
-            // Keep long runs and large totals inside their statistics column.
-            size: 52_f32.min(170. / (value.chars().count() as f32 * 0.7)),
+            size: 44_f32.min(172. / (value.chars().count() as f32 * 0.7)),
             label: value,
-            x: x - 2.,
-            y: 399.,
+            x,
+            y: 401.,
             ink: 0xf3ddba,
             bold: true,
+            centered_width: Some(207.),
         });
     }
     text
@@ -184,21 +198,25 @@ pub(crate) fn poster_text(score: Score) -> Vec<PosterText> {
 
 impl Score {
     pub fn time_label(self) -> String {
-        let seconds = self.seconds.max(0.).floor() as u64;
-        if seconds >= 3600 {
-            format!(
-                "{}:{:02}:{:02}",
-                seconds / 3600,
-                seconds / 60 % 60,
-                seconds % 60
-            )
-        } else {
-            format!("{}:{:02}", seconds / 60, seconds % 60)
-        }
+        time_label(self.seconds)
     }
 
     pub fn save(self) -> anyhow::Result<PathBuf> {
         save_in(self, &downloads_directory()?)
+    }
+}
+
+pub(crate) fn time_label(seconds: f64) -> String {
+    let seconds = seconds.max(0.).floor() as u64;
+    if seconds >= 3600 {
+        format!(
+            "{}:{:02}:{:02}",
+            seconds / 3600,
+            seconds / 60 % 60,
+            seconds % 60
+        )
+    } else {
+        format!("{}:{:02}", seconds / 60, seconds % 60)
     }
 }
 
@@ -288,7 +306,30 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
         )
         .fill();
     }
-    fn text(label: &str, x: f64, y: f64, size: f64, ink: u32, bold: bool) {
+    fn artwork(paths: Vec<art::ArtPath>) {
+        for shape in paths {
+            let path = NSBezierPath::bezierPath();
+            for (i, [x, y]) in shape.points.into_iter().enumerate() {
+                let point = NSPoint::new(
+                    x as f64 * EXPORT_SCALE,
+                    EXPORT_HEIGHT - y as f64 * EXPORT_SCALE,
+                );
+                if i == 0 {
+                    path.moveToPoint(point);
+                } else {
+                    path.lineToPoint(point);
+                }
+            }
+            path.closePath();
+            color(shape.ink, shape.opacity as f64).set();
+            path.fill();
+        }
+    }
+    fn text(item: PosterText) {
+        let x = item.x as f64 * EXPORT_SCALE;
+        let y = item.y as f64 * EXPORT_SCALE;
+        let size = item.size as f64 * EXPORT_SCALE;
+        let bold = item.bold;
         let name = if bold {
             "HelveticaNeue-Bold"
         } else {
@@ -302,7 +343,7 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
                     NSFont::systemFontOfSize(size)
                 }
             });
-        let color = color(ink, 1.);
+        let color = color(item.ink, 1.);
         // The documented AppKit attribute keys take NSFont and NSColor objects.
         unsafe {
             let attributes = NSDictionary::from_slices(
@@ -312,7 +353,13 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
                     &*color as &objc2::runtime::AnyObject,
                 ],
             );
-            NSString::from_str(label).drawAtPoint_withAttributes(
+            let label = NSString::from_str(&item.label);
+            let x = item.centered_width.map_or(x, |width| {
+                x + (width as f64 * EXPORT_SCALE
+                    - label.sizeWithAttributes(Some(&attributes)).width)
+                    * 0.5
+            });
+            label.drawAtPoint_withAttributes(
                 NSPoint::new(x, EXPORT_HEIGHT - y - size),
                 Some(&attributes),
             );
@@ -336,18 +383,15 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
     let saved_state = SavedGraphicsState;
     context.setShouldAntialias(true);
     NSGraphicsContext::setCurrentContext(Some(&context));
-    for shape in poster_shapes() {
+    let mut shapes = poster_shapes().into_iter();
+    rect(shapes.next().expect("poster has a background"));
+    artwork(art::full_moon_paths(654., 130., 122.));
+    for shape in shapes {
         rect(shape);
     }
+    artwork(poster_paths());
     for item in poster_text(score) {
-        text(
-            &item.label,
-            item.x as f64 * EXPORT_SCALE,
-            item.y as f64 * EXPORT_SCALE,
-            item.size as f64 * EXPORT_SCALE,
-            item.ink,
-            item.bold,
-        );
+        text(item);
     }
     drop(saved_state);
     // PNG accepts an empty properties dictionary for lossless default encoding.
@@ -370,6 +414,29 @@ pub(crate) fn png_bytes(_: Score) -> anyhow::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn footer_shows_saved_best_only_for_slower_runs() {
+        for (previous, seconds, expected) in [
+            (None, 120., None),
+            (Some(120.), 121., Some("personal best: 2:00")),
+            (Some(120.), 120., None),
+            (Some(120.), 119., None),
+        ] {
+            let score = Score {
+                coins: 0,
+                deaths: 0,
+                kills: 0,
+                seconds,
+                personal_best: previous,
+            };
+            let footer = poster_text(score)
+                .into_iter()
+                .find(|text| text.label.starts_with("personal best:"));
+            assert_eq!(footer.as_ref().map(|text| text.label.as_str()), expected);
+        }
+    }
+
     #[cfg(target_os = "macos")]
     #[gpui_kit::test]
     fn export_writes_a_readable_png_without_overwriting_previous_scores(
@@ -383,6 +450,7 @@ mod tests {
             deaths: 6,
             kills: 13,
             seconds: 143.6,
+            personal_best: Some(138.2),
         };
         let export_directory = directory.clone();
         let first = std::thread::spawn(move || {
@@ -410,6 +478,7 @@ mod tests {
             deaths: 0,
             kills: 0,
             seconds: 125.9,
+            personal_best: None,
         };
         assert_eq!(score.time_label(), "2:05");
         assert_eq!(

@@ -218,6 +218,17 @@ Use these alongside the matching tasks in the walkthrough. Game captures show an
 early coin jump, a mid-level owl encounter, and the results screen in `rooftops-1.png` through
 `rooftops-3.png`; the scorecard is `rooftops-score.png`.
 
+For a focused Rooftops check, run
+`cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- <output-directory> --rooftops-only`.
+This also captures `rooftops-phase-3.png` during play to check the gibbous moon.
+It captures `rooftops-behind.png` and `rooftops-ahead.png` for the ghost's
+red/right and green/left distance indicators.
+The examples use in-memory personal bests and ghost poses; they never read or
+write the player's record.
+
+Use `--rooftops-preferences` with the same screenshot command to capture the
+preferences page with Reset Rooftops unlocked using an in-memory example.
+
 Check pixelation edges with the same native renderer:
 
 ```sh

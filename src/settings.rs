@@ -196,9 +196,9 @@ impl AppSettings {
         Ok(())
     }
 
-    /// Removes repository preferences and the login item; updater state is separate.
+    /// Removes the complete local data directory and the login item.
     pub fn reset() -> Result<()> {
-        clear_persistence(&settings_path()?, &launch_agent_path()?)
+        clear_persistence(&data_directory()?, &launch_agent_path()?)
     }
 }
 
@@ -314,9 +314,15 @@ fn remove_launch_agent() -> Result<()> {
     remove_file_if_present(&path).with_context(|| format!("Could not remove {}", path.display()))
 }
 
-fn clear_persistence(settings_path: &PathBuf, launch_agent_path: &PathBuf) -> Result<()> {
-    remove_file_if_present(settings_path)
-        .with_context(|| format!("Could not remove {}", settings_path.display()))?;
+fn clear_persistence(data_directory: &PathBuf, launch_agent_path: &PathBuf) -> Result<()> {
+    match fs::remove_dir_all(data_directory) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("Could not remove {}", data_directory.display()));
+        }
+    }
     remove_file_if_present(launch_agent_path)
         .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
 }
@@ -465,22 +471,43 @@ mod tests {
     }
 
     #[test]
-    fn clearing_persistence_removes_settings_and_login_item() {
+    fn clearing_persistence_removes_entire_data_directory_and_login_item() {
         let unique_id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock is after the Unix epoch")
             .as_nanos();
         let directory = std::env::temp_dir().join(format!("gatto-settings-test-{unique_id}"));
         fs::create_dir_all(&directory).expect("test directory can be created");
-        let settings_path = directory.join("settings.json");
+        let data_directory = directory.join(".gatto");
+        fs::create_dir_all(data_directory.join("projects/Example/gatto-media")).unwrap();
+        fs::create_dir_all(data_directory.join("scratchpad")).unwrap();
+        fs::create_dir_all(data_directory.join("other-state/nested")).unwrap();
+        let settings_path = data_directory.join("settings.json");
         let launch_agent_path = directory.join("com.jeremy-chandler.gatto.plist");
         fs::write(&settings_path, "{}").expect("settings file can be created");
         fs::write(&launch_agent_path, "plist").expect("launch agent can be created");
+        fs::write(data_directory.join("rooftops.cbor"), b"game data").unwrap();
+        fs::write(
+            data_directory.join("projects/Example/gatto-media/photo.png"),
+            b"media",
+        )
+        .unwrap();
+        fs::write(data_directory.join("scratchpad/gatto-project.json"), b"{}").unwrap();
+        fs::write(
+            data_directory.join("other-state/nested/data.bin"),
+            b"extra state",
+        )
+        .unwrap();
+        let unrelated = directory.join("unrelated.txt");
+        fs::write(&unrelated, b"keep").unwrap();
 
-        clear_persistence(&settings_path, &launch_agent_path).expect("persistence can be cleared");
+        clear_persistence(&data_directory, &launch_agent_path).expect("persistence can be cleared");
 
-        assert!(!settings_path.exists());
+        assert!(!data_directory.exists());
         assert!(!launch_agent_path.exists());
+        assert!(unrelated.exists());
+        clear_persistence(&data_directory, &launch_agent_path).expect("repeated reset is harmless");
+        fs::remove_file(unrelated).unwrap();
         fs::remove_dir(&directory).expect("test directory can be removed");
     }
 

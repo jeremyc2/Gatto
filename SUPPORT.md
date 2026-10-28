@@ -62,6 +62,8 @@ Gatto writes these per-user files:
 
 - `~/.gatto/settings.json`: account or organization, pinned and
   last-selected repositories, shortcut, copy preferences, and large-video opt-in.
+- `~/.gatto/rooftops.cbor`: Rooftops' lowest completion time and fastest completed
+  ghost replay. Delete this file to clear both.
 - `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at Login executable path.
 
 Scratchpad saves to `~/.gatto/scratchpad`. New projects use named subfolders in
@@ -140,12 +142,18 @@ app does not install or update that separate workflow.
 
 ## Reset and uninstall
 
-**App Preferences → Reset app** asks for confirmation, deletes project folders
-in `~/.gatto/projects`, clears Scratchpad, removes
-settings and the macOS login item, and disables the global shortcut. **Delete All
-Projects** beside it deletes projects while retaining settings and Scratchpad.
+**App Preferences → Reset app** asks for confirmation, removes the entire
+`~/.gatto` folder, including projects, Scratchpad, settings, and Rooftops best times
+and ghost replays, removes the macOS login item, and disables the global shortcut.
+The app then initializes fresh local state. **Delete All Projects** deletes
+projects while retaining settings, Scratchpad, and Rooftops progress.
 Neither operation removes GitHub-hosted attachments, GitHub CLI authentication,
-or Rooftops scorecards.
+or downloaded Rooftops scorecards.
+
+To clear Rooftops, use **App Preferences → General → Reset Rooftops**. This button
+appears before **Reset app**, only after a completed run. It immediately clears the best time and
+ghost, restarts any open Rooftops game, and hides until the game is completed
+again. Downloaded scorecards remain in Downloads.
 
 To uninstall, reset the app, choose **Quit** from the menu bar, and move
 `Gatto.app` to the Trash. If the app cannot open, quit it and remove `~/.gatto`

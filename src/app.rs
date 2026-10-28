@@ -256,6 +256,10 @@ pub struct UploaderApp {
     _update_subscription: Subscription,
     header_mark: Arc<Image>,
     rooftops_window: Option<AnyWindowHandle>,
+    rooftops_view: Option<Entity<crate::rooftops::Rooftops>>,
+    rooftops_completed: bool,
+    rooftops_data_path: Option<PathBuf>,
+    _rooftops_subscription: Option<Subscription>,
     focus_handle: FocusHandle,
     _owner_subscription: Subscription,
     _global_shortcut_subscription: Subscription,
@@ -368,6 +372,12 @@ impl UploaderApp {
 
         let updater = Updater::shared(cx);
         let update_subscription = cx.observe(&updater, |_, _, cx| cx.notify());
+        let rooftops_data_path = persist_repository_selection
+            .then(|| crate::rooftops_score::replay::GameData::path().ok())
+            .flatten();
+        let rooftops_completed = rooftops_data_path
+            .as_deref()
+            .is_some_and(crate::rooftops_score::replay::GameData::has_completed);
         let mut this = Self {
             owner_input,
             global_shortcut_input,
@@ -421,6 +431,10 @@ impl UploaderApp {
                 include_bytes!("../packaging/app-cat-pixel.png").to_vec(),
             )),
             rooftops_window: None,
+            rooftops_view: None,
+            rooftops_completed,
+            rooftops_data_path,
+            _rooftops_subscription: None,
             focus_handle: cx.focus_handle(),
             _owner_subscription: owner_subscription,
             _global_shortcut_subscription: global_shortcut_subscription,
@@ -2448,6 +2462,54 @@ impl UploaderApp {
         });
     }
 
+    fn reset_rooftops(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        if !self.rooftops_completed {
+            return Ok(());
+        }
+        self.clear_rooftops_progress(cx)?;
+        self.diagnostics.info("Reset Rooftops best time and ghost.");
+        window.push_notification(Notification::success("Rooftops reset."), cx);
+        cx.notify();
+        Ok(())
+    }
+
+    fn clear_rooftops_progress(&mut self, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        if let Some(path) = &self.rooftops_data_path {
+            crate::rooftops_score::replay::GameData::reset(path)?;
+        }
+        if let Some(game) = &self.rooftops_view {
+            game.update(cx, |game, cx| game.reset_progress(cx));
+        }
+        self.rooftops_completed = false;
+        Ok(())
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn for_rooftops_preferences(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut app = Self::for_walkthrough(WalkthroughScenario::Preferences, window, cx);
+        app.rooftops_completed = true;
+        app
+    }
+
+    fn observe_rooftops(
+        &mut self,
+        game: &Entity<crate::rooftops::Rooftops>,
+        cx: &mut Context<Self>,
+    ) {
+        self._rooftops_subscription = Some(cx.subscribe(
+            game,
+            |this, game, _: &crate::rooftops::Completed, cx| {
+                this.rooftops_completed = game.read(cx).has_completed();
+                cx.notify();
+            },
+        ));
+    }
+
     fn set_release_channel(
         &mut self,
         channel: ReleaseChannel,
@@ -2492,6 +2554,7 @@ impl UploaderApp {
             "Wait for project saving or retry a failed save before resetting Gatto."
         );
         self.global_shortcut.set_shortcut(None)?;
+        self.clear_rooftops_progress(cx)?;
         AppSettings::reset()?;
 
         self.project_state = projects::ProjectState::default();
@@ -2574,7 +2637,11 @@ impl UploaderApp {
                 game
             },
         ) {
-            Ok((handle, _)) => self.rooftops_window = Some(handle),
+            Ok((handle, game)) => {
+                self.observe_rooftops(&game, cx);
+                self.rooftops_view = Some(game);
+                self.rooftops_window = Some(handle);
+            }
             Err(error) => {
                 self.diagnostics
                     .error(format!("Could not open Rooftops: {error}"));
@@ -3643,7 +3710,18 @@ impl UploaderApp {
                     )
                     .child(h_flex().gap_2().flex_wrap()
                         .child(Button::new("delete-all-projects").app_secondary().label("Delete All Projects").on_click(cx.listener(|this, _, window, cx| this.delete_all_projects(window, cx))))
-                        .child(Button::new("reset-app").app_secondary().label("Reset app").on_click(cx.listener(Self::confirm_reset)))),
+                        .when(self.rooftops_completed, |actions| actions.child(
+                            Button::new("reset-rooftops").debug_selector(|| "reset-rooftops".into())
+                                .app_secondary().label("Reset Rooftops")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if let Err(error) = this.reset_rooftops(window, cx) {
+                                        this.diagnostics.error(format!("Could not reset Rooftops: {error}"));
+                                        window.push_notification(Notification::error(format!("Could not reset Rooftops: {error}")), cx);
+                                    }
+                                })),
+                        ))
+                        .child(Button::new("reset-app").debug_selector(|| "reset-app".into())
+                            .app_secondary().label("Reset app").on_click(cx.listener(Self::confirm_reset)))),
 
             )
             .child(
@@ -3971,6 +4049,52 @@ mod tests {
     use gpui_kit::{Modifiers, TestAppContext};
 
     use super::*;
+
+    #[gpui_kit::test]
+    fn rooftops_reset_is_hidden_until_completion_and_clears_saved_progress(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::rooftops_score::replay::GameData;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rooftops.cbor");
+        let (view, cx) = upload_window(cx);
+        cx.simulate_resize(size(px(900.), px(2000.)));
+        cx.update(|_, cx| {
+            view.update(cx, |app, cx| {
+                app.rooftops_data_path = Some(path.clone());
+                app.show_settings(cx);
+            });
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(cx.debug_bounds("reset-rooftops").is_none());
+        GameData::save_progress(&path, 120., None).unwrap();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.rooftops_completed = GameData::has_completed(&path);
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        let reset = cx
+            .debug_bounds("reset-rooftops")
+            .expect("a completed game reveals reset");
+        let reset_app = cx
+            .debug_bounds("reset-app")
+            .expect("full reset is always available");
+        assert!(
+            reset.right() < reset_app.left(),
+            "Rooftops reset precedes full app reset"
+        );
+        cx.simulate_mouse_down(reset.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(reset.center(), MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(!window.has_active_dialog(cx));
+            assert!(!view.read(cx).rooftops_completed);
+        });
+        assert!(!path.exists());
+        assert!(cx.debug_bounds("reset-rooftops").is_none());
+    }
 
     pub(super) fn upload_window(
         cx: &mut TestAppContext,

@@ -1,6 +1,11 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, LazyLock},
+    time::Instant,
+};
 
 use crate::rooftops_score::Score;
+use crate::rooftops_score::art::{self, StatIcon};
+use crate::rooftops_score::replay::{Frame, GameData, Pose, Recording, Replay};
 use gpui_kit::component::{
     StyledExt as _,
     button::{Button, ButtonCustomVariant, ButtonVariants as _},
@@ -8,7 +13,7 @@ use gpui_kit::component::{
 };
 
 use gpui_kit::{
-    App, AppContext as _, Context, FocusHandle, Focusable, Image, ImageFormat,
+    App, AppContext as _, Context, EventEmitter, FocusHandle, Focusable, Image, ImageFormat,
     InteractiveElement as _, IntoElement, KeyDownEvent, KeyUpEvent, ParentElement as _, Render,
     Styled as _, Subscription, Window, div, img, px, rgb,
 };
@@ -19,6 +24,11 @@ const GRAVITY: f32 = 1450.;
 const JUMP: f32 = 535.;
 const SKY: u32 = 0x101322;
 const GOLD: u32 = 0xffdba0;
+const START_X: f32 = 105.;
+// A 27-unit cat body is about 0.42 m; most rooftop gaps are about 2 m.
+const WORLD_UNITS_PER_METER: f32 = 64.;
+const PLAYER_AHEAD_GREEN: u32 = 0x3ddc97;
+const PLAYER_BEHIND_RED: u32 = 0xff6b81;
 // The Button component intentionally fades custom colors at rest. Set this
 // surface directly below so the primary action remains visibly available.
 const SCORE_BUTTON_NORMAL: u32 = 0xffdfac;
@@ -159,6 +169,92 @@ fn level_roofs(level: usize) -> Vec<Roof> {
     roofs
 }
 
+fn course_progress(level: usize, x: f32) -> f32 {
+    static OFFSETS: LazyLock<[f32; LEVELS + 1]> = LazyLock::new(|| {
+        let mut offsets = [0.; LEVELS + 1];
+        for level in 0..LEVELS {
+            let roofs = level_roofs(level);
+            let last = roofs.last().expect("every level has a destination");
+            offsets[level + 1] = offsets[level] + last.x + last.width - 140. - START_X;
+        }
+        offsets
+    });
+    OFFSETS[level] + (x - START_X).clamp(0., OFFSETS[level + 1] - OFFSETS[level])
+}
+
+fn ghost_in_view(ghost: Frame, level: usize, camera: f32, width: f32) -> bool {
+    if ghost.level != level {
+        return false;
+    }
+    let (left, right) = if ghost.pose.home {
+        (-11., 29.)
+    } else if ghost.pose.facing > 0. {
+        (-27., 20.)
+    } else {
+        (-20., 32.)
+    };
+    ghost.pose.x + right >= camera && ghost.pose.x + left <= camera + width
+}
+
+struct GhostGap {
+    ahead: bool,
+    meters: f32,
+}
+
+fn ghost_gap(player: &Run, ghost: Frame, camera: f32, width: f32) -> Option<GhostGap> {
+    if ghost_in_view(ghost, player.level, camera, width) {
+        return None;
+    }
+    let delta =
+        course_progress(player.level, player.x) - course_progress(ghost.level, ghost.pose.x);
+    Some(GhostGap {
+        ahead: if ghost.level != player.level {
+            player.level > ghost.level
+        } else {
+            delta > 0.
+        },
+        meters: delta.abs() / WORLD_UNITS_PER_METER,
+    })
+}
+
+fn ghost_gap_indicator(gap: GhostGap, height: f32) -> gpui_kit::Div {
+    let color = if gap.ahead {
+        PLAYER_AHEAD_GREEN
+    } else {
+        PLAYER_BEHIND_RED
+    };
+    let mut marker = v_flex()
+        .absolute()
+        .top(px(height * 0.43))
+        .gap(px(2.))
+        .font_family(crate::rooftops_score::POSTER_FONT)
+        .text_color(rgb(color))
+        .child(
+            div()
+                .text_size(px(18.))
+                .line_height(px(22.))
+                .font_semibold()
+                .child(if gap.ahead {
+                    format!("← {:.1} m", gap.meters)
+                } else {
+                    format!("{:.1} m →", gap.meters)
+                }),
+        )
+        .child(
+            div()
+                .text_size(px(10.))
+                .line_height(px(14.))
+                .font_semibold()
+                .child(if gap.ahead { "AHEAD" } else { "BEHIND" }),
+        );
+    marker = if gap.ahead {
+        marker.left(px(20.)).items_start()
+    } else {
+        marker.right(px(20.)).items_end()
+    };
+    marker
+}
+
 struct Coin {
     x: f32,
     y: f32,
@@ -290,7 +386,7 @@ impl Run {
             roofs,
             coins,
             enemies,
-            x: 105.,
+            x: START_X,
             y: ROOFS[0].y,
             vx: 0.,
             vy: 0.,
@@ -438,12 +534,33 @@ impl Run {
             deaths: self.banked_returns + self.returns,
             kills: self.banked_kills + self.enemies.iter().filter(|enemy| enemy.defeated).count(),
             seconds: self.elapsed,
+            personal_best: None,
         }
     }
 
     fn record_active_time(&mut self, elapsed: f64) {
         if !self.home {
             self.elapsed += elapsed;
+        }
+    }
+
+    fn ghost_frame(&self) -> Frame {
+        Frame {
+            seconds: self.elapsed,
+            level: self.level,
+            returns: self.banked_returns + self.returns,
+            pose: Pose {
+                x: self.x,
+                y: self.y,
+                facing: self.facing,
+                squash: self.squash,
+                home: self.home,
+                gait: if self.ground.is_none() {
+                    1.5
+                } else {
+                    (self.time * 26.).sin() * (self.vx.abs() / SPEED) * 2.5
+                },
+            },
         }
     }
 
@@ -488,7 +605,7 @@ impl Run {
     fn respawn(&mut self) {
         let roof = self.roofs[self.checkpoint];
         self.x = if self.checkpoint == 0 {
-            105.
+            START_X
         } else {
             roof.x + 24.
         };
@@ -510,6 +627,13 @@ pub struct Rooftops {
     remainder: f32,
     camera: f32,
     coin_art: Arc<Image>,
+    personal_best: Option<f64>,
+    run_personal_best: Option<f64>,
+    best_replay: Option<Arc<Replay>>,
+    ghost_replay: Option<Arc<Replay>>,
+    recording: Recording,
+    best_path: Option<std::path::PathBuf>,
+    completion_recorded: bool,
     save_message: Option<String>,
     saving: bool,
     #[cfg(feature = "walkthrough-screenshots")]
@@ -518,8 +642,15 @@ pub struct Rooftops {
     _blur: Subscription,
 }
 
+pub(crate) struct Completed;
+impl EventEmitter<Completed> for Rooftops {}
+
 impl Rooftops {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::new_with_records(window, cx, !cfg!(test))
+    }
+
+    fn new_with_records(window: &mut Window, cx: &mut Context<Self>, remember: bool) -> Self {
         let focus = cx.focus_handle();
         let activation = cx.observe_window_activation(window, |this, _, cx| {
             this.run.input = Input::default();
@@ -539,10 +670,14 @@ impl Rooftops {
         window.on_window_should_close(cx, move |window, cx| {
             let _ = game.update(cx, |game, cx| {
                 game.run = Run::new();
+                game.run_personal_best = game.personal_best;
+                game.ghost_replay = game.best_replay.clone();
+                game.recording = Recording::new(game.run.ghost_frame());
                 game.last_frame = None;
                 game.remainder = 0.;
                 game.camera = 0.;
                 game.save_message = None;
+                game.completion_recorded = false;
                 #[cfg(feature = "walkthrough-screenshots")]
                 {
                     game.preview = false;
@@ -551,13 +686,34 @@ impl Rooftops {
             });
             crate::window_limits::close(window, cx)
         });
+        let best_path = remember.then(|| GameData::path().ok()).flatten();
+        let stored = best_path
+            .as_deref()
+            .map(|path| {
+                GameData::read(path).unwrap_or_else(|error| {
+                    eprintln!("Could not load Rooftops data: {error}");
+                    GameData::default()
+                })
+            })
+            .unwrap_or_default();
+        let personal_best = stored.personal_best;
+        let best_replay = stored.replay.map(Arc::new);
+        let run = Run::new();
+        let recording = Recording::new(run.ghost_frame());
         Self {
-            run: Run::new(),
+            run,
             focus,
             last_frame: None,
             remainder: 0.,
             camera: 0.,
             coin_art: kitten_coin_art(),
+            personal_best,
+            run_personal_best: personal_best,
+            ghost_replay: best_replay.clone(),
+            best_replay,
+            recording,
+            best_path,
+            completion_recorded: false,
             save_message: None,
             saving: false,
             #[cfg(feature = "walkthrough-screenshots")]
@@ -569,13 +725,18 @@ impl Rooftops {
 
     #[cfg(feature = "walkthrough-screenshots")]
     #[allow(dead_code)]
-    pub(crate) fn for_preview(window: &mut Window, cx: &mut Context<Self>, level: usize) -> Self {
-        let mut game = Self::new(window, cx);
+    pub(crate) fn for_preview(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        level: usize,
+        show_results: bool,
+    ) -> Self {
+        let mut game = Self::new_with_records(window, cx, false);
         game.preview = true;
         game.run = Run::for_level(level);
         let run = &mut game.run;
         match level {
-            0 => {
+            0 | 2 if !show_results => {
                 // An early leap: first coins and lit apartments.
                 run.x = run.roofs[2].x + run.roofs[2].width * 0.4;
                 run.y = run.roofs[2].y - 76.;
@@ -583,6 +744,7 @@ impl Rooftops {
                 run.ground = None;
                 run.vx = SPEED;
                 run.time = 3.2;
+                run.elapsed = 3.2;
                 run.jumps = 2;
                 run.lit[..=2].fill(true);
                 run.coins[..2]
@@ -593,6 +755,7 @@ impl Rooftops {
             1 => {
                 // Mid-level, descending toward an owl above a narrow roof.
                 run.time = 18.4;
+                run.elapsed = 58.4;
                 let owl = run
                     .enemies
                     .iter()
@@ -630,6 +793,8 @@ impl Rooftops {
                 run.banked_returns = 6;
                 run.banked_kills = 9;
                 run.elapsed = 143.6;
+                game.personal_best = Some(138.2);
+                game.run_personal_best = game.personal_best;
                 run.lit.fill(true);
                 for (i, coin) in run.coins.iter_mut().enumerate() {
                     coin.collected = i % 4 != 1;
@@ -640,7 +805,53 @@ impl Rooftops {
                 game.camera = run.roofs[last].x + run.roofs[last].width - 900.;
             }
         }
+        if level == 0 {
+            game.set_preview_ghost(game.run.x + 98.);
+        }
         game
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn for_gap_preview(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        ahead: bool,
+    ) -> Self {
+        let mut game = Self::for_preview(window, cx, 0, false);
+        if ahead {
+            game.run.x = 2000.;
+            game.camera = 1700.;
+        }
+        game.set_preview_ghost(if ahead {
+            game.camera - 84.
+        } else {
+            game.camera + 1024.
+        });
+        game
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    fn set_preview_ghost(&mut self, x: f32) {
+        // Fixed examples only: never load or write the player's replay for captures.
+        let mut demo = Recording::new(Run::new().ghost_frame());
+        let mut frame = self.run.ghost_frame();
+        frame.pose.x = x;
+        frame.pose.y -= 16.;
+        demo.capture(frame);
+        for level in 0..LEVELS {
+            let mut example = Run::for_level(level);
+            if level > 0 {
+                example.elapsed = level as f64 * 40.;
+                demo.capture(example.ghost_frame());
+            }
+            example.elapsed = (level + 1) as f64 * 40.;
+            example.x = example.destination();
+            example.home = true;
+            demo.capture(example.ghost_frame());
+            frame = example.ghost_frame();
+        }
+        self.ghost_replay = demo.finish(frame).map(Arc::new);
     }
 
     fn save_score(&mut self, _: &gpui_kit::ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -649,7 +860,7 @@ impl Rooftops {
         }
         self.saving = true;
         self.save_message = None;
-        let score = self.run.score();
+        let score = self.score();
         let task = cx.background_spawn(async move { score.save() });
         cx.spawn(async move |this, cx| {
             let result = task.await;
@@ -676,6 +887,7 @@ impl Rooftops {
         let scale = ((width - 48.) / 900.).min((height - 100.) / 540.).max(0.1);
         let quads = crate::rooftops_score::poster_shapes()
             .into_iter()
+            .skip(1)
             .map(|shape| native_quad(shape.rect, shape.ink, shape.opacity, shape.radius, scale))
             .collect();
         let mut poster = div()
@@ -685,13 +897,16 @@ impl Rooftops {
             .flex_shrink_0()
             .overflow_hidden()
             .rounded(px(8. * scale))
-            .child(div().absolute().child(NativeArt { quads }));
-        for item in crate::rooftops_score::poster_text(self.run.score()) {
+            .bg(rgb(0x171a2d))
+            .child(vector_art(art::full_moon_paths(654., 130., 122.), scale))
+            .child(div().absolute().child(NativeArt { quads }))
+            .child(vector_art(crate::rooftops_score::poster_paths(), scale));
+        for item in crate::rooftops_score::poster_text(self.score()) {
             let label = div()
                 .absolute()
                 .left(px(item.x * scale))
                 .top(px(item.y * scale))
-                .w(px((864. - item.x) * scale))
+                .w(px(item.centered_width.unwrap_or(864. - item.x) * scale))
                 .whitespace_nowrap()
                 // GPUI's system-font raster bounds clip large glyphs on macOS.
                 .font_family(crate::rooftops_score::POSTER_FONT)
@@ -699,6 +914,11 @@ impl Rooftops {
                 .line_height(px(item.size * 1.2 * scale))
                 .text_color(rgb(item.ink))
                 .child(item.label);
+            let label = if item.centered_width.is_some() {
+                label.text_center()
+            } else {
+                label
+            };
             poster = poster.child(if item.bold { label.font_bold() } else { label });
         }
         let mut card = v_flex().gap_3().items_center().child(poster).child(
@@ -706,19 +926,24 @@ impl Rooftops {
                 .w(px(860. * scale))
                 .justify_between()
                 .items_center()
-                .child(control_prompt("Space to play again"))
                 .child(
-                    Button::new("save-rooftops-score")
-                        .loading(self.saving)
-                        .custom(
-                            ButtonCustomVariant::new(cx)
-                                .color(rgb(SCORE_BUTTON_NORMAL).into())
-                                .foreground(rgb(SKY).into())
-                                .hover(rgb(SCORE_BUTTON_HOVER).into())
-                                .active(rgb(SCORE_BUTTON_ACTIVE).into()),
+                    h_flex()
+                        .gap_3()
+                        .child(
+                            score_button("play-rooftops-again", "Play again", cx)
+                                .debug_selector(|| "play-rooftops-again".into())
+                                .on_click(cx.listener(Self::play_again)),
                         )
-                        .bg(rgb(SCORE_BUTTON_NORMAL))
-                        .label("Save score")
+                        .child(
+                            score_button("exit-rooftops", "Exit", cx)
+                                .debug_selector(|| "exit-rooftops".into())
+                                .on_click(cx.listener(Self::exit_game)),
+                        ),
+                )
+                .child(
+                    score_button("save-rooftops-score", "Download Scorecard", cx)
+                        .debug_selector(|| "download-rooftops-scorecard".into())
+                        .loading(self.saving)
                         .on_click(cx.listener(Self::save_score)),
                 ),
         );
@@ -733,6 +958,69 @@ impl Rooftops {
         card
     }
 
+    fn continue_from_home(&mut self) {
+        let restart = self.run.level + 1 == LEVELS;
+        if restart {
+            self.run_personal_best = self.personal_best;
+            self.ghost_replay = self.best_replay.clone();
+        }
+        self.last_frame = None;
+        self.remainder = 0.;
+        self.save_message = None;
+        self.completion_recorded = false;
+        self.camera = 0.;
+        self.run.jump_down();
+        if restart {
+            self.recording = Recording::new(self.run.ghost_frame());
+        } else {
+            self.recording.capture(self.run.ghost_frame());
+        }
+    }
+
+    pub(crate) fn reset_progress(&mut self, cx: &mut Context<Self>) {
+        self.run = Run::new();
+        self.personal_best = None;
+        self.run_personal_best = None;
+        self.best_replay = None;
+        self.ghost_replay = None;
+        self.recording = Recording::new(self.run.ghost_frame());
+        self.last_frame = None;
+        self.remainder = 0.;
+        self.camera = 0.;
+        self.completion_recorded = false;
+        self.save_message = None;
+        #[cfg(feature = "walkthrough-screenshots")]
+        {
+            self.preview = false;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn has_completed(&self) -> bool {
+        self.personal_best.is_some()
+    }
+
+    fn play_again(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.run.home && self.run.level + 1 == LEVELS {
+            self.continue_from_home();
+            window.focus(&self.focus, cx);
+            cx.notify();
+        }
+    }
+
+    fn exit_game(&mut self, _: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // Use the normal close request so the run resets through the window's
+        // cleanup callback and retains the native macOS teardown workaround.
+        window.defer(cx, |window, cx| {
+            crate::window_limits::request_close(window, cx)
+        });
+    }
+
     fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         if event.keystroke.modifiers.platform
             || event.keystroke.modifiers.control
@@ -745,11 +1033,10 @@ impl Rooftops {
             "right" => self.run.input.right = true,
             "space" if !event.is_held => {
                 if self.run.home {
-                    self.last_frame = None;
-                    self.remainder = 0.;
-                    self.save_message = None;
+                    self.continue_from_home();
+                } else {
+                    self.run.jump_down();
                 }
-                self.run.jump_down();
             }
             _ => return,
         }
@@ -782,7 +1069,59 @@ impl Rooftops {
         Some((elapsed as f32).min(0.05))
     }
 
-    fn advance(&mut self, window: &mut Window, cx: &Context<Self>, view_width: f32) {
+    fn score(&self) -> Score {
+        Score {
+            personal_best: self.run_personal_best,
+            ..self.run.score()
+        }
+    }
+
+    fn record_completion(&mut self, cx: &mut Context<Self>) {
+        if !self.run.home || self.run.level + 1 != LEVELS || self.completion_recorded {
+            return;
+        }
+        self.completion_recorded = true;
+        let seconds = self.run.elapsed;
+        if !seconds.is_finite() || seconds <= 0. {
+            return;
+        }
+        let replay = self.recording.finish(self.run.ghost_frame()).map(Arc::new);
+        let faster_time = self.personal_best.is_none_or(|best| seconds < best);
+        let faster_replay = replay.as_ref().is_some_and(|replay| {
+            self.best_replay
+                .as_ref()
+                .is_none_or(|best| replay.seconds < best.seconds)
+        });
+        if faster_time {
+            self.personal_best = Some(seconds);
+        }
+        if faster_replay {
+            self.best_replay = replay.clone();
+        }
+        cx.emit(Completed);
+        if !faster_time && !faster_replay {
+            return;
+        }
+        if let Some(path) = self.best_path.clone() {
+            let generation = match GameData::save_generation(&path) {
+                Ok(generation) => generation,
+                Err(error) => {
+                    eprintln!("Could not save Rooftops data: {error}");
+                    return;
+                }
+            };
+            cx.background_spawn(async move {
+                if let Err(error) =
+                    GameData::save_if_current(&path, seconds, replay.as_deref(), generation)
+                {
+                    eprintln!("Could not save Rooftops data: {error}");
+                }
+            })
+            .detach();
+        }
+    }
+
+    fn advance(&mut self, window: &mut Window, cx: &mut Context<Self>, view_width: f32) {
         #[cfg(feature = "walkthrough-screenshots")]
         if self.preview {
             return;
@@ -797,6 +1136,8 @@ impl Rooftops {
             self.run.step();
             self.remainder -= STEP;
         }
+        self.recording.capture(self.run.ghost_frame());
+        self.record_completion(cx);
         let end = self.run.roofs.last().unwrap().x + self.run.roofs.last().unwrap().width;
         let target = (self.run.x - view_width * 0.34).clamp(0., end - view_width.min(end));
         if self.run.returns != returns || self.run.jumps == 0 {
@@ -829,6 +1170,25 @@ fn control_prompt(label: &'static str) -> gpui_kit::Div {
         .text_sm()
         .text_color(rgb(0xf3ddba))
         .child(label)
+}
+
+fn score_button(id: &'static str, label: &'static str, cx: &App) -> Button {
+    Button::new(id)
+        .custom(
+            ButtonCustomVariant::new(cx)
+                .color(rgb(SCORE_BUTTON_NORMAL).into())
+                .foreground(rgb(SKY).into())
+                .hover(rgb(SCORE_BUTTON_HOVER).into())
+                .active(rgb(SCORE_BUTTON_ACTIVE).into()),
+        )
+        .bg(rgb(SCORE_BUTTON_NORMAL))
+        .h(px(36.))
+        .px(px(18.))
+        .py(px(8.))
+        .rounded(px(6.))
+        .text_size(px(14.))
+        .line_height(px(20.))
+        .label(label)
 }
 
 // Native GPUI elements render the scene; physics stays independent of drawing.
@@ -985,7 +1345,51 @@ fn native_quad(
     quad
 }
 
-fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32) -> gpui_kit::Div {
+fn vector_art(paths: Vec<art::ArtPath>, scale: f32) -> impl IntoElement {
+    gpui_kit::canvas(
+        move |_, _, _| (),
+        move |bounds, _, window, _| {
+            for shape in &paths {
+                let Some(first) = shape.points.first() else {
+                    continue;
+                };
+                let at = |p: &[f32; 2]| {
+                    bounds.origin + gpui_kit::point(px(p[0] * scale), px(p[1] * scale))
+                };
+                let mut path = gpui_kit::PathBuilder::fill();
+                path.move_to(at(first));
+                for p in &shape.points[1..] {
+                    path.line_to(at(p));
+                }
+                path.close();
+                if let Ok(path) = path.build() {
+                    window.paint_path(
+                        path,
+                        gpui_kit::Hsla::from(rgb(shape.ink)).opacity(shape.opacity),
+                    );
+                }
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
+fn stat_counter(icon: impl IntoElement, count: usize) -> gpui_kit::Div {
+    h_flex()
+        .items_center()
+        .gap(px(6.))
+        .child(div().relative().w(px(20.)).h(px(20.)).child(icon))
+        .child(
+            div()
+                .text_size(px(12.))
+                .font_semibold()
+                .text_color(rgb(art::PURPLE))
+                .child(count.to_string()),
+        )
+}
+
+fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32, level: usize) -> gpui_kit::Div {
     let mut quads = Vec::with_capacity(600);
     for band in 0..10 {
         quads.push(native_quad(
@@ -1009,15 +1413,6 @@ fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32) -> gpui_kit::Div
         ));
     }
     let moon = w - 155.;
-    for (rect, color, opacity) in [
-        ([moon - 34., 24., 152., 152.], GOLD, 0.025),
-        ([moon - 15., 43., 114., 114.], GOLD, 0.04),
-        ([moon, 58., 84., 84.], 0xf3ddba, 1.),
-        ([moon + 13., 65., 18., 18.], 0xe5cda9, 0.35),
-        ([moon + 44., 95., 26., 26.], 0xe5cda9, 0.24),
-    ] {
-        quads.push(native_quad(rect, color, opacity, rect[2] * 0.5, scale));
-    }
     for layer in 0..3 {
         let parallax = [0.12, 0.26, 0.43][layer];
         let spacing = [112., 98., 125.][layer];
@@ -1082,7 +1477,11 @@ fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32) -> gpui_kit::Div
             }
         }
     }
-    div().absolute().child(NativeArt { quads })
+    div()
+        .absolute()
+        .size_full()
+        .child(NativeArt { quads })
+        .child(vector_art(art::moon_paths(moon, 58., 84., level), scale))
 }
 
 fn elbow(a: Joint, b: Joint, length: f32, bend: f32) -> Joint {
@@ -1522,7 +1921,8 @@ fn enemy_sprite(enemy: &Enemy, x: f32, y: f32, time: f32, scale: f32) -> impl In
     sprite
 }
 
-fn silhouette(x: f32, y: f32, facing: f32, gait: f32, squash: f32, scale: f32) -> impl IntoElement {
+fn silhouette(x: f32, y: f32, facing: f32, gait: f32, squash: f32, scale: f32) -> gpui_kit::Div {
+    let ink = 0x05070d;
     let head = if facing > 0. { 21. } else { 0. };
     let body = if facing > 0. { 3. } else { 12. };
     // In profile, the far ear peeks out beside the near ear at the back
@@ -1540,19 +1940,12 @@ fn silhouette(x: f32, y: f32, facing: f32, gait: f32, squash: f32, scale: f32) -
         .w(px(43. * scale))
         .h(px(36. * scale))
         .child(
-            block(
-                body,
-                15.,
-                27. + compression,
-                18. - compression,
-                0x05070d,
-                scale,
-            )
-            .rounded(px(9. * scale)),
+            block(body, 15., 27. + compression, 18. - compression, ink, scale)
+                .rounded(px(9. * scale)),
         )
-        .child(block(head, 7., 19., 20., 0x05070d, scale).rounded(px(7. * scale)))
-        .child(block(far_ear, 4., 3., 8., 0x05070d, scale).rounded_t(px(1.5 * scale)))
-        .child(block(near_ear, 1., 4., 11., 0x05070d, scale).rounded_t(px(2. * scale)))
+        .child(block(head, 7., 19., 20., ink, scale).rounded(px(7. * scale)))
+        .child(block(far_ear, 4., 3., 8., ink, scale).rounded_t(px(1.5 * scale)))
+        .child(block(near_ear, 1., 4., 11., ink, scale).rounded_t(px(2. * scale)))
         .child(block(near_ear + 1., 6., 2., 3., 0x71506e, scale))
         .child(
             block(
@@ -1566,30 +1959,117 @@ fn silhouette(x: f32, y: f32, facing: f32, gait: f32, squash: f32, scale: f32) -
             .rounded_full(),
         )
         .child(
-            block(body + 4., 29. - compression, 6., 6. + gait, 0x05070d, scale)
+            block(body + 4., 29. - compression, 6., 6. + gait, ink, scale)
                 .rounded_b(px(3. * scale)),
         )
         .child(
-            block(
-                body + 19.,
-                29. - compression,
-                6.,
-                6. - gait,
-                0x05070d,
-                scale,
-            )
-            .rounded_b(px(3. * scale)),
+            block(body + 19., 29. - compression, 6., 6. - gait, ink, scale)
+                .rounded_b(px(3. * scale)),
         );
     for i in 0..5 {
         cat = cat.child(circle(
             tail - facing * i as f32 * 3.,
             22. - i as f32 * 2.8 + if i == 0 { 0. } else { gait * 0.25 },
             7.,
-            0x05070d,
+            ink,
             scale,
         ));
     }
     cat
+}
+
+fn resting_cat(x: f32, y: f32, ink: u32, scale: f32) -> gpui_kit::Div {
+    div()
+        .absolute()
+        .inset_0()
+        .child(block(x - 11., y - 14., 37., 14., ink, scale).rounded_full())
+        .child(circle(x + 13., y - 19., 16., ink, scale))
+        .child(block(x + 20., y - 20., 4., 7., ink, scale))
+}
+
+fn ghost_sprite(pose: Pose, camera: f32, scale: f32) -> impl IntoElement {
+    gpui_kit::canvas(
+        move |_, _, _| (),
+        move |bounds, _, window, _| {
+            let mut parts = Vec::with_capacity(12);
+            let x = pose.x - camera;
+            let y = pose.y;
+            if pose.home {
+                parts.extend([
+                    [x - 11., y - 14., 37., 14., 7.],
+                    [x + 13., y - 19., 16., 16., 8.],
+                    [x + 20., y - 20., 4., 7., 0.],
+                ]);
+            } else {
+                let x = x - 20.;
+                let compression = pose.squash * 5.;
+                let y = y - 36. + compression;
+                let head = if pose.facing > 0. { 21. } else { 0. };
+                let body = if pose.facing > 0. { 3. } else { 12. };
+                let near = head + if pose.facing > 0. { 2. } else { 13. };
+                let far = head + if pose.facing > 0. { 5. } else { 11. };
+                parts.extend([
+                    [x + body, y + 15., 27. + compression, 18. - compression, 9.],
+                    [x + head, y + 7., 19., 20., 7.],
+                    [x + far, y + 4., 3., 8., 1.5],
+                    [x + near, y + 1., 4., 11., 2.],
+                    [x + body + 4., y + 29. - compression, 6., 6. + pose.gait, 3.],
+                    [
+                        x + body + 19.,
+                        y + 29. - compression,
+                        6.,
+                        6. - pose.gait,
+                        3.,
+                    ],
+                ]);
+                let tail = if pose.facing > 0. {
+                    body + 2.
+                } else {
+                    body + 21.
+                };
+                for i in 0..5 {
+                    parts.push([
+                        x + tail - pose.facing * i as f32 * 3.,
+                        y + 22. - i as f32 * 2.8 + if i == 0 { 0. } else { pose.gait * 0.25 },
+                        7.,
+                        7.,
+                        3.5,
+                    ]);
+                }
+            }
+            // Nonzero winding unions the overlapping parts into one translucent fill.
+            let mut path = gpui_kit::PathBuilder::fill().with_style(gpui_kit::PathStyle::Fill(
+                gpui_kit::FillOptions::default().with_fill_rule(gpui_kit::FillRule::NonZero),
+            ));
+            for [x, y, w, h, radius] in parts {
+                let r = radius.min(w * 0.5).min(h * 0.5);
+                let mut points = Vec::with_capacity(52);
+                for (cx, cy, angle) in [
+                    (x + w - r, y + r, -std::f32::consts::FRAC_PI_2),
+                    (x + w - r, y + h - r, 0.),
+                    (x + r, y + h - r, std::f32::consts::FRAC_PI_2),
+                    (x + r, y + r, std::f32::consts::PI),
+                ] {
+                    for i in 0..=12 {
+                        let a = angle + i as f32 / 12. * std::f32::consts::FRAC_PI_2;
+                        points.push(
+                            bounds.origin
+                                + gpui_kit::point(
+                                    px((cx + r * a.cos()) * scale),
+                                    px((cy + r * a.sin()) * scale),
+                                ),
+                        );
+                    }
+                }
+                path.add_polygon(&points, true);
+            }
+            if let Ok(path) = path.build() {
+                window.paint_path(path, gpui_kit::Hsla::from(rgb(0xb8abff)).opacity(0.28));
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
 }
 
 impl Render for Rooftops {
@@ -1626,7 +2106,7 @@ impl Render for Rooftops {
                 .child(self.results(cx, width, height));
         }
 
-        scene = scene.child(backdrop(w, h, camera, drift, scale));
+        scene = scene.child(backdrop(w, h, camera, drift, scale, run.level));
 
         for (i, roof) in run.roofs.iter().enumerate() {
             let x = roof.x - camera;
@@ -1767,6 +2247,18 @@ impl Render for Rooftops {
                 .child(circle(house - 13., 330., 26., 0x687d70, scale));
         }
 
+        if let Some(ghost) = self
+            .ghost_replay
+            .as_ref()
+            .and_then(|replay| replay.frame_at(run.elapsed))
+        {
+            if let Some(gap) = ghost_gap(run, ghost, camera, w) {
+                scene = scene.child(ghost_gap_indicator(gap, height));
+            } else {
+                scene = scene.child(ghost_sprite(ghost.pose, camera, scale));
+            }
+        }
+
         let airborne = run.ground.is_none();
         let gait = if airborne {
             1.5
@@ -1774,26 +2266,7 @@ impl Render for Rooftops {
             (run.time * 26.).sin() * (run.vx.abs() / SPEED) * 2.5
         };
         if run.home {
-            scene = scene
-                .child(
-                    block(run.x - camera - 11., run.y - 14., 37., 14., 0x05070d, scale)
-                        .rounded_full(),
-                )
-                .child(circle(
-                    run.x - camera + 13.,
-                    run.y - 19.,
-                    16.,
-                    0x05070d,
-                    scale,
-                ))
-                .child(block(
-                    run.x - camera + 20.,
-                    run.y - 20.,
-                    4.,
-                    7.,
-                    0x05070d,
-                    scale,
-                ));
+            scene = scene.child(resting_cat(run.x - camera, run.y, 0x05070d, scale));
         } else {
             scene = scene
                 .child(
@@ -1824,54 +2297,45 @@ impl Render for Rooftops {
                         )),
                 );
         }
-        scene = scene.child(
-            h_flex()
-                .absolute()
-                .top(px(18.))
-                .left(px(18.))
-                .gap_2()
-                .px_3()
-                .py_2()
-                .rounded_full()
-                .bg(rgb(SKY))
-                .border_1()
-                .border_color(rgb(0x343247))
-                .child(div().relative().w(px(28.)).h(px(28.)).child(cat_coin(
-                    14.,
-                    14.,
-                    1.,
-                    &self.coin_art,
-                )))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_semibold()
-                        .text_color(rgb(GOLD))
-                        .child(run.coin_count().to_string()),
-                ),
-        );
-        let mut progress = h_flex()
-            .absolute()
-            .top(px(18.))
-            .left(px(width * 0.5 - 38.))
-            .gap_3()
-            .px_4()
-            .h(px(38.))
-            .items_center()
-            .rounded_full()
-            .bg(rgb(SKY))
-            .border_1()
-            .border_color(rgb(0x343247));
-        for level in 0..LEVELS {
-            progress = progress.child(
+        let score = run.score();
+        scene = scene
+            .child(
+                h_flex()
+                    .absolute()
+                    .top(px(19.))
+                    .left(px(20.))
+                    .gap(px(18.))
+                    .child(stat_counter(
+                        vector_art(art::stat_paths(StatIcon::Coin, 0., 0., 20., SKY), 1.),
+                        score.coins,
+                    ))
+                    .child(stat_counter(
+                        vector_art(art::stat_paths(StatIcon::Deaths, 0., 0., 20., SKY), 1.),
+                        score.deaths,
+                    ))
+                    .child(stat_counter(
+                        vector_art(art::stat_paths(StatIcon::Kills, 0., 0., 20., SKY), 1.),
+                        score.kills,
+                    )),
+            )
+            .child(
                 div()
-                    .w(px(6.))
-                    .h(px(6.))
-                    .rounded_full()
-                    .bg(rgb(if level <= run.level { GOLD } else { 0x7b718e })),
+                    .absolute()
+                    .top(px(16.))
+                    .left_0()
+                    .w_full()
+                    .flex()
+                    .justify_center()
+                    .child(
+                        div()
+                            .font_family(crate::rooftops_score::POSTER_FONT)
+                            .text_size(px(70.))
+                            .line_height(px(87.5))
+                            .font_semibold()
+                            .text_color(rgb(art::PURPLE))
+                            .child(score.time_label()),
+                    ),
             );
-        }
-        scene = scene.child(progress);
         if run.home {
             scene = scene.child(
                 div()
@@ -1890,6 +2354,224 @@ impl Render for Rooftops {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn offscreen_ghost_gap_updates_in_meters_and_hides_when_visible() {
+        let mut player = Run::new();
+        player.x = 600.;
+        let mut ghost = player.ghost_frame();
+        ghost.pose.x = 1500.;
+        let gap = ghost_gap(&player, ghost, 300., 900.).unwrap();
+        assert!(!gap.ahead);
+        assert_eq!(gap.meters, 900. / WORLD_UNITS_PER_METER);
+        player.x += WORLD_UNITS_PER_METER;
+        let closer = ghost_gap(&player, ghost, 364., 900.).unwrap();
+        assert_eq!(closer.meters, gap.meters - 1.);
+        assert!(ghost_gap(&player, ghost, 600., 900.).is_none());
+        // Even a partially visible tail suppresses the edge indicator.
+        ghost.pose.x = 300. + 900. + 27.;
+        assert!(ghost_gap(&player, ghost, 300., 900.).is_none());
+        ghost.pose.x += 0.25;
+        assert!(ghost_gap(&player, ghost, 300., 900.).is_some());
+
+        player.x = 1800.;
+        ghost.pose.x = 1400.;
+        let ahead = ghost_gap(&player, ghost, 1500., 900.).unwrap();
+        assert!(ahead.ahead);
+        assert_eq!(ahead.meters, 400. / WORLD_UNITS_PER_METER);
+        ghost.pose.x += WORLD_UNITS_PER_METER;
+        assert_eq!(
+            ghost_gap(&player, ghost, 1500., 900.).unwrap().meters,
+            ahead.meters - 1.
+        );
+    }
+
+    #[test]
+    fn ghost_distance_is_continuous_across_level_boundaries_and_ignores_jumps() {
+        let mut player = Run::new();
+        player.x = player.destination() - WORLD_UNITS_PER_METER;
+        let mut ghost = Run::for_level(1).ghost_frame();
+        let gap = ghost_gap(&player, ghost, 0., 900.).unwrap();
+        assert!(!gap.ahead);
+        assert_eq!(gap.meters, 1.);
+        ghost.pose.y -= 120.;
+        player.y -= 80.;
+        assert_eq!(ghost_gap(&player, ghost, 0., 900.).unwrap().meters, 1.);
+
+        ghost = player.ghost_frame();
+        ghost.pose.x = player.destination();
+        player = Run::for_level(1);
+        player.x = START_X + WORLD_UNITS_PER_METER;
+        let gap = ghost_gap(&player, ghost, 0., 900.).unwrap();
+        assert!(
+            gap.ahead,
+            "a player in the next level is ahead despite smaller local coordinates"
+        );
+        assert_eq!(gap.meters, 1.);
+        assert_eq!(
+            course_progress(0, Run::new().destination()),
+            course_progress(1, START_X)
+        );
+        assert_eq!(
+            course_progress(1, Run::for_level(1).destination()),
+            course_progress(2, START_X)
+        );
+    }
+
+    #[gpui_kit::test]
+    fn ghost_uses_only_the_fastest_completed_run_before_the_current_run(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(Rooftops::new);
+        cx.update(|_, cx| {
+            view.update(cx, |game, cx| {
+                let finish_run = |game: &mut Rooftops, cx: &mut Context<Rooftops>, seconds: f64| {
+                    for level in 0..LEVELS {
+                        game.run.elapsed = seconds * (level + 1) as f64 / LEVELS as f64;
+                        game.run.x = game.run.destination();
+                        game.run.home = true;
+                        game.recording.capture(game.run.ghost_frame());
+                        game.record_completion(cx);
+                        if level + 1 < LEVELS {
+                            game.continue_from_home();
+                        }
+                    }
+                };
+                assert!(game.ghost_replay.is_none(), "first run has no ghost");
+                finish_run(game, cx, 30.);
+                assert_eq!(game.best_replay.as_ref().unwrap().seconds, 30.);
+                assert!(
+                    game.ghost_replay.is_none(),
+                    "current finish must not replace its own opponent"
+                );
+                game.continue_from_home();
+                let opponent = game.ghost_replay.clone().unwrap();
+                assert_eq!(opponent.seconds, 30.);
+                finish_run(game, cx, 45.);
+                assert_eq!(game.best_replay.as_ref().unwrap().seconds, 30.);
+                game.continue_from_home();
+                finish_run(game, cx, 24.);
+                assert_eq!(game.best_replay.as_ref().unwrap().seconds, 24.);
+                assert!(
+                    Arc::ptr_eq(game.ghost_replay.as_ref().unwrap(), &opponent),
+                    "a faster current run cannot swap the opponent mid-race"
+                );
+                game.continue_from_home();
+                assert_eq!(game.ghost_replay.as_ref().unwrap().seconds, 24.);
+                assert_eq!(game.run.elapsed, 0.);
+                assert!(
+                    game.recording.finish(game.run.ghost_frame()).is_none(),
+                    "a partial run cannot be saved as a replay"
+                );
+                game.reset_progress(cx);
+                assert!(!game.has_completed());
+                assert!(game.best_replay.is_none() && game.ghost_replay.is_none());
+                assert!(game.run_personal_best.is_none());
+                assert_eq!(game.run.level, 0);
+                assert_eq!(game.run.elapsed, 0.);
+                assert_eq!(game.run.coin_count(), 0);
+            });
+        });
+    }
+
+    #[gpui_kit::test]
+    fn play_again_button_and_space_restart_completed_runs(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::{Modifiers, MouseButton};
+        cx.update(gpui_kit::init);
+        let (view, cx) = cx.add_window_view(Rooftops::new);
+        for click_button in [true, false] {
+            cx.update(|window, cx| {
+                view.update(cx, |game, cx| {
+                    game.run = Run::for_level(LEVELS - 1);
+                    game.run.home = true;
+                    game.run.elapsed = 143.6;
+                    game.run.banked_coins = 41;
+                    game.personal_best = Some(138.2);
+                    game.run_personal_best = game.personal_best;
+                    game.camera = 3000.;
+                    game.save_message = Some("Saved previous score".into());
+                    window.focus(&game.focus, cx);
+                    cx.notify();
+                });
+                window.draw(cx).clear(cx);
+            });
+            if click_button {
+                let button = cx
+                    .debug_bounds("play-rooftops-again")
+                    .expect("play-again button must be visible");
+                let download = cx
+                    .debug_bounds("download-rooftops-scorecard")
+                    .expect("scorecard button must be visible");
+                let exit = cx
+                    .debug_bounds("exit-rooftops")
+                    .expect("Exit must be visible");
+                assert_eq!(button.size.height, download.size.height);
+                assert_eq!(button.size.height, exit.size.height);
+                assert_eq!(button.origin.y, download.origin.y);
+                assert_eq!(button.origin.y, exit.origin.y);
+                assert!(exit.left() > button.right());
+                assert!(exit.right() < download.left());
+                cx.simulate_mouse_down(button.center(), MouseButton::Left, Modifiers::default());
+                cx.simulate_mouse_up(button.center(), MouseButton::Left, Modifiers::default());
+            } else {
+                cx.simulate_keystrokes("space");
+            }
+            cx.update(|window, cx| {
+                let game = view.read(cx);
+                assert_eq!(game.run.level, 0);
+                assert!(!game.run.home);
+                assert_eq!(game.run.coin_count(), 0);
+                assert_eq!(game.run.elapsed, 0.);
+                assert_eq!(game.camera, 0.);
+                assert!(game.save_message.is_none());
+                assert_eq!(game.personal_best, Some(138.2));
+                assert!(game.focus.is_focused(window));
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn personal_best_requires_all_levels_and_survives_restarts(cx: &mut gpui_kit::TestAppContext) {
+        let (view, cx) = cx.add_window_view(Rooftops::new);
+        cx.update(|_, cx| {
+            view.update(cx, |game, cx| {
+                game.run.elapsed = 50.;
+                game.record_completion(cx);
+                assert_eq!(game.personal_best, None);
+                game.run.home = true;
+                game.record_completion(cx);
+                assert_eq!(game.personal_best, None);
+                game.run.level = LEVELS - 1;
+                game.record_completion(cx);
+                assert_eq!(game.personal_best, Some(50.));
+                assert!(
+                    game.score().personal_best.is_none(),
+                    "first run has no prior record"
+                );
+                game.continue_from_home();
+                assert_eq!(game.run.elapsed, 0.);
+                assert_eq!(game.personal_best, Some(50.));
+                for (seconds, expected, show_footer) in
+                    [(65., 50., true), (50., 50., false), (42., 42., false)]
+                {
+                    game.run.level = LEVELS - 1;
+                    game.run.home = true;
+                    game.run.elapsed = seconds;
+                    game.record_completion(cx);
+                    assert_eq!(game.personal_best, Some(expected));
+                    let footer = crate::rooftops_score::poster_text(game.score())
+                        .into_iter()
+                        .find(|text| text.label.starts_with("personal best:"));
+                    assert_eq!(footer.is_some(), show_footer);
+                    if let Some(footer) = footer {
+                        assert_eq!(footer.label, "personal best: 0:50");
+                    }
+                    game.continue_from_home();
+                    assert_eq!(game.run_personal_best, Some(expected));
+                }
+            });
+        });
+    }
 
     #[cfg(target_os = "macos")]
     #[gpui_kit::test]

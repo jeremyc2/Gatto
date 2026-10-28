@@ -74,6 +74,52 @@ fn generate() -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
+    if std::env::args().any(|arg| arg == "--rooftops-preferences") {
+        return render_scenario(
+            WalkthroughScenario::Preferences,
+            &output_directory.join("rooftops-preferences.png"),
+        );
+    }
+    if std::env::args().any(|arg| arg == "--rooftops-only") {
+        for level in 0..rooftops::LEVELS {
+            render_rooftops(
+                &output_directory.join(format!("rooftops-{}.png", level + 1)),
+                level,
+                level == 2,
+                None,
+            )?;
+        }
+        render_rooftops(
+            &output_directory.join("rooftops-phase-3.png"),
+            2,
+            false,
+            None,
+        )?;
+        render_rooftops(
+            &output_directory.join("rooftops-behind.png"),
+            0,
+            false,
+            Some(false),
+        )?;
+        render_rooftops(
+            &output_directory.join("rooftops-ahead.png"),
+            0,
+            false,
+            Some(true),
+        )?;
+        let score = rooftops_score::Score {
+            coins: 41,
+            deaths: 6,
+            kills: 21,
+            seconds: 143.6,
+            personal_best: Some(138.2),
+        };
+        std::fs::write(
+            output_directory.join("rooftops-score.png"),
+            rooftops_score::png_bytes(score)?,
+        )?;
+        return Ok(());
+    }
     if std::env::args().any(|arg| arg == "--markers-only") {
         return render_image_editor(&output_directory.join("image-editor.png"));
     }
@@ -115,7 +161,7 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
 
     for level in 0..rooftops::LEVELS {
         let output = output_directory.join(format!("rooftops-{}.png", level + 1));
-        render_rooftops(&output, level)?;
+        render_rooftops(&output, level, level == 2, None)?;
         println!("Wrote {}", output.display());
     }
 
@@ -134,8 +180,9 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
     let score = rooftops_score::Score {
         coins: 41,
         deaths: 6,
-        kills: 13,
+        kills: 21,
         seconds: 143.6,
+        personal_best: Some(138.2),
     };
     let output = output_directory.join("rooftops-score.png");
     std::fs::write(&output, rooftops_score::png_bytes(score)?)?;
@@ -595,7 +642,12 @@ fn check_pixelation_edges(output: &std::path::Path) -> Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn render_rooftops(output: &std::path::Path, level: usize) -> Result<()> {
+fn render_rooftops(
+    output: &std::path::Path,
+    level: usize,
+    show_results: bool,
+    gap_preview: Option<bool>,
+) -> Result<()> {
     let platform = gpui_kit::platform::current_platform(true);
     let mut cx = HeadlessAppContext::with_platform(
         platform.text_system(),
@@ -615,7 +667,12 @@ fn render_rooftops(output: &std::path::Path, level: usize) -> Result<()> {
                 ..Default::default()
             },
             cx,
-            |window, cx| cx.new(|cx| rooftops::Rooftops::for_preview(window, cx, level)),
+            |window, cx| {
+                cx.new(|cx| match gap_preview {
+                    Some(ahead) => rooftops::Rooftops::for_gap_preview(window, cx, ahead),
+                    None => rooftops::Rooftops::for_preview(window, cx, level, show_results),
+                })
+            },
         )
     })?;
     cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
@@ -631,7 +688,9 @@ fn render_rooftops(output: &std::path::Path, level: usize) -> Result<()> {
 fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> Result<()> {
     // Keep main-window examples near the app's 600px minimum height. Preferences
     // and the mixed batch need more room to keep their relevant controls visible.
+    let rooftops_preferences = std::env::args().any(|arg| arg == "--rooftops-preferences");
     let (width, height) = match scenario {
+        WalkthroughScenario::Preferences if rooftops_preferences => (900., 1750.),
         WalkthroughScenario::MixedUploadProgress => (1024., 768.),
         WalkthroughScenario::Preferences => (800., 780.),
         WalkthroughScenario::AttachmentReorder | WalkthroughScenario::SidebarCollapsed => {
@@ -668,7 +727,13 @@ fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> R
             cx,
             |window, cx| {
                 window.set_window_title("Gatto");
-                cx.new(|cx| UploaderApp::for_walkthrough(scenario, window, cx))
+                cx.new(|cx| {
+                    if rooftops_preferences {
+                        UploaderApp::for_rooftops_preferences(window, cx)
+                    } else {
+                        UploaderApp::for_walkthrough(scenario, window, cx)
+                    }
+                })
             },
         )
     })?;

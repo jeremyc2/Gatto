@@ -7,6 +7,39 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.6] - 2026-10-28
+
+### Changed
+
+- Add Reset Rooftops to App Preferences after the first completed run. It clears
+  the best time and ghost and restarts an open game immediately, then hides until
+  Rooftops is completed again. Place it before Reset app, which now removes the
+  entire local data folder, including Rooftops progress.
+
+- Show a red Behind or green Ahead distance at the screen edge while the
+  Rooftops ghost is out of view. Measure meters along the full horizontal course
+  and hide the indicator when the ghost comes back on screen.
+
+- Add a translucent Rooftops ghost that replays the fastest previous completed
+  run on the shared total-play clock, including jumps, deaths, and level changes.
+  Store the best time and replay together in one CBOR file using Ciborium.
+
+- Replace Rooftops' level dots with crescent, half, and gibbous moon phases.
+- Use optically balanced purple coin, skull, and crossed-swords counters without
+  labels or frames, and a large floating elapsed clock at the top center.
+- Center four labeled statistics on the results and saved scorecard, use a full
+  moon, and place the persistent personal best in the footer. Add a clickable
+  Play again button while retaining the Space shortcut.
+- Unify Rooftops HUD and scorecard icons with a simple coin, a smooth symmetric
+  skull, and refined crossed swords. Rename Save score to Download Scorecard.
+- Show the saved personal best in the scorecard footer when a run is slower;
+  omit it for first runs, ties, and new records. Match the Play again and
+  Download Scorecard button styling.
+- Add an Exit button immediately to the right of Play again on the Rooftops
+  results screen, using the same styling and the normal game-window cleanup.
+- Size the results buttons to their labels while keeping matching height and
+  padding.
+
 ## [0.20.5] - 2026-10-28
 
 ### Added
