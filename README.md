@@ -13,7 +13,7 @@ Paste an image or a copied Finder file, drag in media, or select a file. Upload 
 Gatto uses the GitHub CLI (prerequisite) to connect to GitHub's attachment
 service. Images and videos go directly from your Mac to GitHub; Gatto doesn't have a backend.
 
-https://github.com/user-attachments/assets/2af1f0da-92d7-48ec-b84d-cf2ff8aee2f1
+https://github.com/user-attachments/assets/8276e845-9f84-496a-a54c-285973ab07e1
 
 ## Download
 
