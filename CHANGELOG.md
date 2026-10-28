@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.5] - 2026-10-28
+
 ### Added
 
 - Clone image attachments from their individual options menu, preserving editable
