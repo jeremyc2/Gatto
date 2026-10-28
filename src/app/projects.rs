@@ -392,7 +392,7 @@ impl UploaderApp {
         } else {
             WorkspaceMetadata::default()
         };
-        metadata.description = description;
+        metadata.description = (!description.trim().is_empty()).then_some(description);
         metadata.created_at = crate::projects::timestamp();
         metadata.updated_at = metadata.created_at;
         let source = if (transferring || moving.is_some()) && !recovering {
@@ -480,7 +480,7 @@ impl UploaderApp {
             .project_state
             .summaries
             .get(&folder)
-            .map(|summary| summary.metadata.description.clone())
+            .and_then(|summary| summary.metadata.description.clone())
             .unwrap_or_default();
         let name_input = cx.new(|cx| InputState::new(window, cx).default_value(name));
         let description_input = cx.new(|cx| {
@@ -565,13 +565,14 @@ impl UploaderApp {
                 .on_ok(move |_, window, cx| {
                     let name = name_input.read(cx).value().to_string();
                     let description = description_input.read(cx).value().to_string();
+                    let description = (!description.trim().is_empty()).then_some(description);
                     match owner.update(cx, |this, cx| {
                         let directory = this.settings.project_directory()?;
                         let folder = crate::projects::project_in_directory(&directory, &folder)?;
                         let name = crate::projects::edit_metadata(
                             &folder,
                             &name,
-                            &description,
+                            description.as_deref(),
                             &this.project_state.folders,
                             &this.project_state.titles,
                         )?;
@@ -1251,7 +1252,13 @@ impl UploaderApp {
                     .unwrap_or_else(|| "None selected".into());
                 let rows = [
                     ("Name", title.clone()),
-                    ("Description", metadata.description.clone()),
+                    (
+                        "Description",
+                        metadata
+                            .description
+                            .clone()
+                            .unwrap_or_else(|| "Not set".into()),
+                    ),
                     (
                         "Total storage",
                         bytes
@@ -1653,7 +1660,10 @@ mod tests {
         assert!(Project::open(scratch.clone()).unwrap().1.is_empty());
         let (project, items) = Project::open(folder.clone()).unwrap();
         assert_eq!(items[0].persistent_id, id);
-        assert_eq!(project.metadata.description, "Notes for the review");
+        assert_eq!(
+            project.metadata.description.as_deref(),
+            Some("Notes for the review")
+        );
         cx.update(|window, cx| {
             view.update(cx, |app, cx| {
                 assert_eq!(app.project_state.folder.as_ref(), Some(&folder));
@@ -1742,7 +1752,7 @@ mod tests {
                 .0
                 .metadata
                 .description,
-            "Optional project notes"
+            Some("Optional project notes".into())
         );
         assert_eq!(Project::open(scratch).unwrap().1.len(), 1);
         assert!(
@@ -1751,6 +1761,31 @@ mod tests {
                 .1
                 .is_empty()
         );
+    }
+
+    #[gpui_kit::test]
+    fn a_new_project_with_no_description_stores_null(cx: &mut TestAppContext) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        let directory = tempfile::tempdir().unwrap();
+        scratchpad(&view, cx, directory.path());
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.create_named_project(
+                    "Undescribed",
+                    String::new(),
+                    false,
+                    theme::DialogFeedback::default(),
+                    window,
+                    cx,
+                )
+                .unwrap()
+            })
+        });
+        cx.run_until_parked();
+        let project = Project::open(directory.path().join("projects/Undescribed"))
+            .unwrap()
+            .0;
+        assert_eq!(project.metadata.description, None);
     }
 
     #[gpui_kit::test]
@@ -1901,8 +1936,9 @@ mod tests {
             crate::projects::summary(&folder)
                 .unwrap()
                 .metadata
-                .description,
-            "First line\nSecond line"
+                .description
+                .as_deref(),
+            Some("First line\nSecond line")
         );
         cx.update(|window, cx| {
             view.update(cx, |app, cx| app.remove_project(folder.clone(), window, cx))

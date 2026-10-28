@@ -20,6 +20,10 @@ pub const SCHEMA_URL: &str =
     "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json";
 const MANIFEST: &str = "gatto-project.json";
 const ASSETS: &str = "gatto-media";
+const SCRATCHPAD_DESCRIPTION: &str = r#""There are only two hard things in Computer Science: cache invalidation and naming things."
+- Phil Karlton
+
+We know naming things is hard, so we set this space up for you."#;
 
 #[derive(Deserialize, Serialize)]
 struct Manifest {
@@ -55,7 +59,7 @@ struct Attachment {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct WorkspaceMetadata {
-    pub description: String,
+    pub description: Option<String>,
     pub repository: Option<crate::model::Repository>,
     pub repository_owner: Option<String>,
     pub created_at: u64,
@@ -522,7 +526,7 @@ pub fn distinct_name(
 pub fn edit_metadata(
     folder: &Path,
     name: &str,
-    description: &str,
+    description: Option<&str>,
     projects: &[PathBuf],
     known: &HashMap<PathBuf, String>,
 ) -> Result<String> {
@@ -530,7 +534,7 @@ pub fn edit_metadata(
     let mut manifest: Manifest = serde_json::from_slice(&fs::read(folder.join(MANIFEST))?)?;
     ensure!(manifest.version == 1, "Unsupported project version");
     manifest.title = name.clone();
-    manifest.metadata.description = description.to_owned();
+    manifest.metadata.description = description.map(str::to_owned);
     manifest.metadata.updated_at = timestamp().max(manifest.metadata.updated_at.saturating_add(1));
     write_manifest(folder, &manifest)?;
     Ok(name)
@@ -702,11 +706,22 @@ pub fn project_folders(directory: &Path) -> Result<Vec<PathBuf>> {
 
 pub fn open_scratchpad(folder: PathBuf) -> Result<(Project, Vec<StagedAttachment>)> {
     if folder.join(MANIFEST).exists() {
-        return Project::open(folder);
+        let (mut project, attachments) = Project::open(folder)?;
+        if project
+            .metadata
+            .description
+            .as_deref()
+            .is_none_or(|description| description.trim().is_empty())
+        {
+            project.metadata.description = Some(SCRATCHPAD_DESCRIPTION.into());
+            project.save(&attachments)?;
+        }
+        return Ok((project, attachments));
     }
     fs::create_dir_all(&folder)?;
     let mut project = Project::create_named(folder, "Scratchpad workspace")?;
     project.title = "Scratchpad".into();
+    project.metadata.description = Some(SCRATCHPAD_DESCRIPTION.into());
     project.save(&[])?;
     Ok((project, Vec::new()))
 }
@@ -781,6 +796,43 @@ mod tests {
         fs::write(path, serde_json::to_vec(&manifest).unwrap()).unwrap();
         assert!(Project::open(project.folder.clone()).is_err());
         assert!(summary(&project.folder).is_err());
+    }
+
+    #[test]
+    fn new_projects_store_an_unset_description_as_null() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = Project::create_in_parent(directory.path(), "Project", &[]).unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(project.folder.join(MANIFEST)).unwrap()).unwrap();
+        assert_eq!(manifest["metadata"]["description"], serde_json::Value::Null);
+        assert_eq!(project.metadata.description, None);
+    }
+
+    #[test]
+    fn scratchpad_description_is_populated_and_migrates_existing_blank_value() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = directory.path().join("scratchpad");
+        let (scratch, _) = open_scratchpad(folder.clone()).unwrap();
+        assert_eq!(
+            SCRATCHPAD_DESCRIPTION,
+            r#""There are only two hard things in Computer Science: cache invalidation and naming things."
+- Phil Karlton
+
+We know naming things is hard, so we set this space up for you."#
+        );
+        assert_eq!(
+            scratch.metadata.description.as_deref(),
+            Some(SCRATCHPAD_DESCRIPTION)
+        );
+
+        let mut scratch = scratch;
+        scratch.metadata.description = None;
+        scratch.save(&[]).unwrap();
+        let (scratch, _) = open_scratchpad(folder).unwrap();
+        assert_eq!(
+            scratch.metadata.description.as_deref(),
+            Some(SCRATCHPAD_DESCRIPTION)
+        );
     }
 
     #[test]
@@ -953,7 +1005,7 @@ mod tests {
         let (mut scratch, _) = open_scratchpad(folder.clone()).unwrap();
         let created = scratch.metadata.created_at;
         let previous = scratch.metadata.updated_at;
-        scratch.metadata.description = "Notes".into();
+        scratch.metadata.description = Some("Notes".into());
         scratch.metadata.repository = Some(crate::model::Repository {
             id: 42,
             name: "images".into(),
@@ -975,7 +1027,7 @@ mod tests {
             Some("https://example.com/kept")
         );
         let info = details(&folder).unwrap();
-        assert_eq!(info.summary.metadata.description, "Notes");
+        assert_eq!(info.summary.metadata.description.as_deref(), Some("Notes"));
         let bytes = fs::metadata(folder.join(MANIFEST)).unwrap().len()
             + fs::read_dir(folder.join(ASSETS))
                 .unwrap()
@@ -1324,18 +1376,27 @@ mod tests {
             edit_metadata(
                 &project.folder,
                 " existing NAME ",
-                "Notes",
+                Some("Notes"),
                 &folders,
                 &HashMap::new()
             )
             .is_err()
         );
-        assert!(edit_metadata(&project.folder, " ", "Notes", &folders, &HashMap::new()).is_err());
+        assert!(
+            edit_metadata(
+                &project.folder,
+                " ",
+                Some("Notes"),
+                &folders,
+                &HashMap::new()
+            )
+            .is_err()
+        );
         assert!(
             edit_metadata(
                 &project.folder,
                 "Scratchpad",
-                "Notes",
+                Some("Notes"),
                 &folders,
                 &HashMap::new()
             )
@@ -1345,7 +1406,7 @@ mod tests {
             edit_metadata(
                 &project.folder,
                 " A new name ",
-                "First\nSecond",
+                Some("First\nSecond"),
                 &folders,
                 &HashMap::new()
             )
@@ -1355,7 +1416,10 @@ mod tests {
         let (renamed, items) = Project::open(project.folder.clone()).unwrap();
         assert_eq!(renamed.id, id);
         assert_eq!(renamed.folder, project.folder);
-        assert_eq!(renamed.metadata.description, "First\nSecond");
+        assert_eq!(
+            renamed.metadata.description.as_deref(),
+            Some("First\nSecond")
+        );
         assert_eq!(renamed.title, "A new name");
         assert_eq!(items[0].persistent_id, item.persistent_id);
         assert_eq!(
@@ -1365,5 +1429,15 @@ mod tests {
                 .collect::<Vec<_>>(),
             files
         );
+        edit_metadata(
+            &project.folder,
+            "A new name",
+            None,
+            &folders,
+            &HashMap::new(),
+        )
+        .unwrap();
+        let (cleared, _) = Project::open(project.folder.clone()).unwrap();
+        assert_eq!(cleared.metadata.description, None);
     }
 }

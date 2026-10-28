@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.3] - 2026-10-27
+
+### Changed
+
+- Give Scratchpad a descriptive workspace explanation and store missing project
+  descriptions as `null` instead of empty strings.
+
 ## [0.20.2] - 2026-10-27
 
 ### Changed

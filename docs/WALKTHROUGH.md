@@ -36,8 +36,8 @@ it to preview it.
 
 ### Projects and Scratchpad
 
-Scratchpad automatically saves attachments and its selected repository in
-`~/.gatto/scratchpad`. Closing the window, quitting, and updating keep that work.
+Use Scratchpad for your work, or create projects to organize long-term work into
+different categories.
 Quick Copy is separate: it uploads in the background without using Scratchpad.
 Draft from Clipboard and Side-by-Side Comparison use the project in the open main
 window, or Scratchpad when no main window is open.
