@@ -15,6 +15,10 @@ resets the run and returns to the app.
 - **Exit**, immediately beside **Play again**, closes the game window and resets
   the run while retaining your personal best.
 
+The opening message and arrow/jump hints disappear immediately on the first
+movement or jump input. At a doorway, the next-level hint stays visible until
+Space advances the level. Arrow input does not advance the level or hide its hint.
+
 ## Playing
 
 The opening reads “Out of fuel and far from home.” The jetpack engines sputter

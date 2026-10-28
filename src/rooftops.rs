@@ -742,6 +742,7 @@ impl Rooftops {
         let mut game = Self::new_with_records(window, cx, false);
         game.preview = true;
         game.arrival = None;
+        game.started = true;
         game.run = Run::for_level(level);
         let run = &mut game.run;
         match level {
@@ -2374,7 +2375,7 @@ impl Render for Rooftops {
             if self.arrival.is_none() {
                 scene = scene.child(arrival::empty_pack(camera, scale));
             }
-            if self.arrival.is_some() || (run.time < 5. && run.x < 260.) {
+            if !self.started {
                 scene = scene.child(arrival::caption());
             }
         }

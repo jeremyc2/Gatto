@@ -7,6 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.20.8] - 2026-10-28
+
+### Fixed
+
+- Dismiss Rooftops opening messages and control hints on the first gameplay
+  input. Keep the next-level prompt visible until Space advances the level.
+
+
+- Mark Rooftops gameplay screenshot scenes as started so opening instructions
+  do not appear over a run in progress. Regenerate the first game screenshot.
+
 ## [0.20.7] - 2026-10-28
 
 ### Added
