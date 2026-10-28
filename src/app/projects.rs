@@ -1405,8 +1405,9 @@ impl UploaderApp {
                                         let view = rename_view.clone();
                                         let path = rename_folder.clone();
                                         let menu = menu.item(
-                                            PopupMenuItem::new("Edit metadata").on_click(
-                                                move |_, window, cx| {
+                                            PopupMenuItem::new("Edit metadata")
+                                                .icon(AssetIconName::Tags)
+                                                .on_click(move |_, window, cx| {
                                                     let _ = view.update(cx, |this, cx| {
                                                         this.edit_project_metadata(
                                                             path.clone(),
@@ -1414,18 +1415,23 @@ impl UploaderApp {
                                                             cx,
                                                         )
                                                     });
-                                                },
-                                            ),
+                                                }),
                                         );
                                         let view = delete_view.clone();
                                         let path = delete_folder.clone();
-                                        menu.item(PopupMenuItem::new("Delete").on_click(
-                                            move |_, window, cx| {
-                                                let _ = view.update(cx, |this, cx| {
-                                                    this.remove_project(path.clone(), window, cx)
-                                                });
-                                            },
-                                        ))
+                                        menu.item(
+                                            PopupMenuItem::new("Delete")
+                                                .icon(AssetIconName::Trash)
+                                                .on_click(move |_, window, cx| {
+                                                    let _ = view.update(cx, |this, cx| {
+                                                        this.remove_project(
+                                                            path.clone(),
+                                                            window,
+                                                            cx,
+                                                        )
+                                                    });
+                                                }),
+                                        )
                                     })
                             });
                         (folder.clone(), item)

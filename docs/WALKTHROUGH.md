@@ -87,7 +87,9 @@ uses a grab cursor; there is no separate drag handle.
 
 Use the checkboxes or **Select All** to select attachments. The selection's **⋯**
 menu offers **Remove** and **Move to project**. An individual attachment's **⋯**
-menu also has **Edit metadata** for its title and description and **Annotate** for images.
+menu also has **Edit metadata** for its title and description, plus **Annotate** and
+**Clone** for images. Clone appends an independent draft with the same image,
+description, and editable annotations.
 For a PNG, JPEG, or WebP image that is not already a comparison, it also offers
 **Convert to side-by-side comparison**.
 Move opens a project picker that excludes the current project, with a **Create

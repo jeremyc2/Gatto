@@ -7,6 +7,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Clone image attachments from their individual options menu, preserving editable
+  annotations in an independent draft. Cloned images and all newly added attachments use
+  incrementing filenames such as `photo 2.png` when their names already exist.
+- Left-side action icons in all project and attachment ellipsis menus, with
+  distinct icons for editing metadata, annotation, and Scratchpad.
+
+### Changed
+
+- Wrap the comparison conversion menu label after "Convert to" instead of
+  forcing the action onto one line.
+
 ## [0.20.4] - 2026-10-27
 
 ### Changed

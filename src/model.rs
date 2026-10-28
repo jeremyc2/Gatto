@@ -138,6 +138,25 @@ impl AttachmentUploadState {
 }
 
 impl StagedAttachment {
+    pub(crate) fn clone_image(&self) -> Result<Self> {
+        let source = self.image().context("Only images can be cloned.")?;
+        let mut attachment = self.clone();
+        attachment.id = NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed);
+        attachment.persistent_id = uuid::Uuid::new_v4();
+        attachment.upload_state = AttachmentUploadState::Preview;
+        if let Media::Image(image) = &mut attachment.media {
+            image.annotation_session = Default::default();
+            image.annotation_document = source
+                .annotation_document
+                .clone()
+                .or_else(|| source.annotation_session.saved_annotations());
+            if let Some(annotations) = &image.annotation_document {
+                image.annotation_session.restore_annotations(annotations)?;
+            }
+        }
+        Ok(attachment)
+    }
+
     pub fn from_path(path: PathBuf, video_limit: VideoUploadLimit) -> Result<Self> {
         let name = path
             .file_name()
@@ -374,6 +393,45 @@ pub(crate) fn filename_for_title(title: &str, current_name: &str) -> String {
     {
         Some(extension) => format!("{title}.{extension}"),
         None => title.to_owned(),
+    }
+}
+
+pub(crate) fn unique_attachment_name<'a>(
+    name: &str,
+    existing: impl Iterator<Item = &'a str>,
+) -> String {
+    let names = existing
+        .map(str::to_lowercase)
+        .collect::<std::collections::HashSet<_>>();
+    if !names.contains(&name.to_lowercase()) {
+        return name.to_owned();
+    }
+    let path = Path::new(name);
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(name);
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| format!(".{extension}"))
+        .unwrap_or_default();
+    let (base, mut number) = stem
+        .rsplit_once(' ')
+        .and_then(|(base, suffix)| {
+            suffix
+                .parse::<u64>()
+                .ok()
+                .filter(|number| *number >= 2)
+                .map(|number| (base, u128::from(number) + 1))
+        })
+        .unwrap_or((stem, 2));
+    loop {
+        let candidate = format!("{base} {number}{extension}");
+        if !names.contains(&candidate.to_lowercase()) {
+            return candidate;
+        }
+        number += 1;
     }
 }
 
@@ -626,7 +684,42 @@ mod attachment_upload_state_tests {
 
 #[cfg(test)]
 mod filename_tests {
-    use super::filename_for_title;
+    use super::{filename_for_title, unique_attachment_name};
+
+    #[test]
+    fn attachment_name_collisions_increment_before_the_extension() {
+        for (name, existing, expected) in [
+            ("photo.png", vec![], "photo.png"),
+            ("photo.png", vec!["photo.png"], "photo 2.png"),
+            ("video.mp4", vec!["video.mp4", "video 2.mp4"], "video 3.mp4"),
+            ("video 2.mov", vec!["video 2.mov"], "video 3.mov"),
+            ("video.webm", vec!["video.webm"], "video 2.webm"),
+            (
+                "photo.png",
+                vec!["photo.png", "photo 2.png", "photo 3.png"],
+                "photo 4.png",
+            ),
+            ("photo 2.png", vec!["photo 2.png"], "photo 3.png"),
+            ("photo 9.png", vec!["photo 9.png"], "photo 10.png"),
+            (
+                "photo 18446744073709551615.png",
+                vec!["photo 18446744073709551615.png"],
+                "photo 18446744073709551616.png",
+            ),
+            ("photo.png", vec!["photo.png", "photo 3.png"], "photo 2.png"),
+            ("Photo.PNG", vec!["photo.png", "PHOTO 2.PNG"], "Photo 3.PNG"),
+            (
+                "screen.shot.png",
+                vec!["screen.shot.png"],
+                "screen.shot 2.png",
+            ),
+            ("photo", vec!["photo"], "photo 2"),
+            ("photo 1.png", vec!["photo 1.png"], "photo 1 2.png"),
+            ("猫.png", vec!["猫.png"], "猫 2.png"),
+        ] {
+            assert_eq!(unique_attachment_name(name, existing.into_iter()), expected);
+        }
+    }
 
     #[test]
     fn title_becomes_filename_while_preserving_the_extension_when_omitted() {

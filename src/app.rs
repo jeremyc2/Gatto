@@ -1407,12 +1407,24 @@ impl UploaderApp {
 
     fn append_staged_attachments(
         &mut self,
-        mut images: Vec<StagedAttachment>,
+        images: Vec<StagedAttachment>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let added = images.len();
-        self.staged_attachments.append(&mut images);
+        for mut image in images {
+            let name = crate::model::unique_attachment_name(
+                &image.name,
+                self.staged_attachments
+                    .iter()
+                    .map(|item| item.name.as_str()),
+            );
+            if name != image.name {
+                image.title = name.clone();
+                image.name = name;
+            }
+            self.staged_attachments.push(image);
+        }
         self.sync_upload_result();
         self.save_project(cx);
         self.diagnostics.info(format!(
