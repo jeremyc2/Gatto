@@ -41,15 +41,35 @@ mounts, development/image launches, and ejection failures are harmless. There
 are no cleanup dialogs, download deletions, or additional persistent settings.
 Each installed launch can retry cleanup; once ejected, later launches do nothing.
 
-Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite,
-with the app’s existing dependencies. `rooftops/arrival.rs` draws its opening
+Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite.
+`rooftops/arrival.rs` draws its opening
 flight, sputtering jetpack, and abandoned empty pack with the same native shapes.
+Neighborhood facade geometry and the scorecard's static artwork are cached per
+window/size; camera movement changes placement rather than rebuilding materials.
+The player and ghost share a union silhouette path, preventing layered opacity
+from exposing body overlaps during invulnerable respawn flashes.
 The arrival has its own active-window clock, outside gameplay physics, scoring,
 and replay recording. Movement skips it; Reduce Motion shows the landed state,
 and replaying a completed run starts directly on the roof.
 New runs hold gameplay physics and the shared score/replay clock until the first
 movement or jump input; opening, landing, focusing, and restarting alone do not
 start the clock. The first gameplay input establishes its time origin.
+
+`rooftops/options.rs` holds play while a focused options card is open. Its music,
+effects volume sliders, ghost and animation preferences share the existing
+CBOR file with best times and replays. Debounced background preference writes
+use atomic revisions and the same atomic replacement lock as completion writes;
+ticket reservation never waits on disk I/O. `rooftops/audio/` synthesizes a
+long-form stereo score and gameplay cues, feeding macOS AVAudioEngine through a
+source-node render block. A dedicated owner thread handles native graph
+startup, suspension and recovery. The UI communicates through atomic controls; the
+audio callback uses fixed voice storage and preallocated delay/waveform storage.
+Options can audition the music bus from its handle/track without advancing
+gameplay. Effects audition once after a changed adjustment is released.
+Closing clears transient option/audio state and restores game focus before the
+retained window is hidden; reopening cannot retain focus on a hidden control. The cat's selected Visual Effect death patch is implemented in
+native Rust; coin and shutter effects use independently authored transients. No music
+recordings are shipped. See the [audio and options record](design/rooftops-audio.md).
 
 ## App buttons
 

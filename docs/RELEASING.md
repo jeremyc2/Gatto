@@ -65,6 +65,9 @@ used by installed clients; key rotation requires a separate migration plan.
 `prepare-updater.sh` downloads Sparkle **2.10.0**, verifies its pinned SHA-256,
 and builds the small Swift user driver. It does not alter Keychain items.
 The SDK's license and notices are copied into the app's Resources directory.
+The sound-patch notices in `packaging/licenses/` are also copied there in both
+release and local app builds; the native game ships no Tone.js runtime or audio
+recordings.
 Review upstream release notes and the checksum when upgrading it. Sparkle is a
 permissively licensed native dependency used for signed feed/archive validation,
 macOS authorization, app replacement, and relaunch; these operations are not

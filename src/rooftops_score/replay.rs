@@ -2,17 +2,124 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{LazyLock, Mutex},
+    sync::{
+        Arc, LazyLock, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use anyhow::{Context as _, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 // Bump when either the stored schema or the authored level geometry changes.
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 const SAMPLE_INTERVAL: f64 = 1. / 30.;
-static SAVE_GENERATIONS: LazyLock<Mutex<HashMap<PathBuf, u64>>> =
+static SAVE_GENERATIONS: LazyLock<Mutex<HashMap<PathBuf, Arc<SaveState>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static SAVE_IO: Mutex<()> = Mutex::new(());
+
+#[derive(Default)]
+struct SaveState {
+    generation: AtomicU64,
+    preferences_revision: AtomicU64,
+}
+
+fn save_state(path: &Path) -> Result<Arc<SaveState>> {
+    let mut states = SAVE_GENERATIONS
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Rooftops save state unavailable"))?;
+    Ok(states.entry(path.to_path_buf()).or_default().clone())
+}
+
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct Preferences {
+    pub music_volume: u8,
+    pub effects_volume: u8,
+    pub ghost: bool,
+    pub animations: bool,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            music_volume: 75,
+            effects_volume: 55,
+            ghost: true,
+            animations: true,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Preferences {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        #[derive(Deserialize, Default)]
+        #[serde(default)]
+        struct Stored {
+            music_volume: Option<u8>,
+            effects_volume: Option<u8>,
+            music: Option<bool>,
+            effects: Option<bool>,
+            ghost: Option<bool>,
+            animations: Option<bool>,
+        }
+        let stored = Stored::deserialize(deserializer)?;
+        let defaults = Self::default();
+        Ok(Self {
+            music_volume: stored
+                .music_volume
+                .unwrap_or(if stored.music == Some(false) {
+                    0
+                } else {
+                    defaults.music_volume
+                })
+                .min(100),
+            effects_volume: stored
+                .effects_volume
+                .unwrap_or(if stored.effects == Some(false) {
+                    0
+                } else {
+                    defaults.effects_volume
+                })
+                .min(100),
+            ghost: stored.ghost.unwrap_or(true),
+            animations: stored.animations.unwrap_or(true),
+        })
+    }
+}
+
+/// Reserved before dispatch so an older background write cannot undo a newer
+/// click, resurrect a reset, or overwrite the latest best time and replay.
+pub(crate) struct PreferencesWrite {
+    path: PathBuf,
+    preferences: Preferences,
+    state: Arc<SaveState>,
+    generation: u64,
+    revision: u64,
+}
+
+impl PreferencesWrite {
+    pub fn is_current(&self) -> bool {
+        self.state.generation.load(Ordering::Acquire) == self.generation
+            && self.state.preferences_revision.load(Ordering::Acquire) == self.revision
+    }
+
+    pub fn save(self) -> Result<bool> {
+        let _io = SAVE_IO
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Rooftops save lock unavailable"))?;
+        if self.state.generation.load(Ordering::Acquire) != self.generation
+            || self.state.preferences_revision.load(Ordering::Acquire) != self.revision
+        {
+            return Ok(false);
+        }
+        let mut data = GameData::read(&self.path).unwrap_or_default();
+        data.preferences = self.preferences;
+        GameData::write(&self.path, &data).map(|_| true)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub(crate) struct Pose {
@@ -163,6 +270,8 @@ pub(crate) struct GameData {
     version: u32,
     pub personal_best: Option<f64>,
     pub replay: Option<Replay>,
+    #[serde(default)]
+    pub preferences: Preferences,
 }
 
 impl Default for GameData {
@@ -171,6 +280,7 @@ impl Default for GameData {
             version: FORMAT_VERSION,
             personal_best: None,
             replay: None,
+            preferences: Preferences::default(),
         }
     }
 }
@@ -191,7 +301,7 @@ impl GameData {
             .ok()
             .and_then(|file| ciborium::from_reader::<Header, _>(std::io::BufReader::new(file)).ok())
             .is_some_and(|header| {
-                header.version == FORMAT_VERSION
+                matches!(header.version, 1 | FORMAT_VERSION)
                     && header
                         .personal_best
                         .is_some_and(|seconds| seconds.is_finite() && seconds > 0.)
@@ -199,24 +309,37 @@ impl GameData {
     }
 
     pub fn save_generation(path: &Path) -> Result<u64> {
-        let generations = SAVE_GENERATIONS
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Rooftops save lock unavailable"))?;
-        Ok(*generations.get(path).unwrap_or(&0))
+        Ok(save_state(path)?.generation.load(Ordering::Acquire))
+    }
+
+    pub fn preferences_write(path: &Path, preferences: Preferences) -> Result<PreferencesWrite> {
+        let state = save_state(path)?;
+        let revision = state
+            .preferences_revision
+            .fetch_add(1, Ordering::AcqRel)
+            .wrapping_add(1);
+        let generation = state.generation.load(Ordering::Acquire);
+        Ok(PreferencesWrite {
+            path: path.to_path_buf(),
+            preferences,
+            state,
+            generation,
+            revision,
+        })
     }
 
     pub fn reset(path: &Path) -> Result<()> {
-        let mut generations = SAVE_GENERATIONS
+        let _io = SAVE_IO
             .lock()
             .map_err(|_| anyhow::anyhow!("Rooftops save lock unavailable"))?;
+        let state = save_state(path)?;
+        state.generation.fetch_add(1, Ordering::AcqRel);
+        state.preferences_revision.fetch_add(1, Ordering::AcqRel);
         match std::fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
         }
-        let generation = generations.entry(path.to_path_buf()).or_default();
-        *generation = generation.wrapping_add(1);
-        Ok(())
     }
 
     pub fn read(path: &Path) -> Result<Self> {
@@ -224,7 +347,13 @@ impl GameData {
             return Ok(Self::default());
         }
         let file = std::fs::File::open(path)?;
-        let data: Self = ciborium::from_reader(std::io::BufReader::new(file))?;
+        let mut data: Self = ciborium::from_reader(std::io::BufReader::new(file))?;
+        if data.version == 1 {
+            // The shared starting roofs changed geometry. Keep the achievement
+            // and saved time, but do not race a ghost on the obsolete course.
+            data.version = FORMAT_VERSION;
+            data.replay = None;
+        }
         ensure!(
             data.version == FORMAT_VERSION,
             "Unsupported Rooftops replay version"
@@ -267,10 +396,14 @@ impl GameData {
         replay: Option<&Replay>,
         expected: Option<u64>,
     ) -> Result<Option<Self>> {
-        let generations = SAVE_GENERATIONS
+        let _io = SAVE_IO
             .lock()
             .map_err(|_| anyhow::anyhow!("Rooftops save lock unavailable"))?;
-        if expected.is_some_and(|expected| expected != *generations.get(path).unwrap_or(&0)) {
+        if expected.is_some_and(|expected| {
+            expected
+                != save_state(path)
+                    .map_or(u64::MAX, |state| state.generation.load(Ordering::Acquire))
+        }) {
             return Ok(None);
         }
         ensure!(
@@ -291,19 +424,96 @@ impl GameData {
         {
             data.replay = Some(replay.clone());
         }
+        Self::write(path, &data)?;
+        Ok(Some(data))
+    }
+
+    fn write(path: &Path, data: &Self) -> Result<()> {
         let parent = path.parent().context("Missing Rooftops data directory")?;
         std::fs::create_dir_all(parent)?;
         let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        ciborium::into_writer(&data, file.as_file_mut())?;
+        ciborium::into_writer(data, file.as_file_mut())?;
         file.as_file().sync_all()?;
         file.persist(path)?;
-        Ok(Some(data))
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preferences_round_trip_without_losing_records_or_accepting_stale_clicks() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rooftops.cbor");
+        let first = Preferences {
+            music_volume: 0,
+            ..Preferences::default()
+        };
+        let latest = Preferences {
+            ghost: false,
+            animations: false,
+            ..first
+        };
+        let stale = GameData::preferences_write(&path, first).unwrap();
+        let current = GameData::preferences_write(&path, latest).unwrap();
+        current.save().unwrap();
+        stale.save().unwrap();
+        let loaded = GameData::read(&path).unwrap();
+        assert_eq!(loaded.preferences, latest);
+        assert!(!GameData::has_completed(&path));
+        GameData::save_progress(&path, 40., Some(&replay(40.))).unwrap();
+        assert_eq!(GameData::read(&path).unwrap().preferences, latest);
+        let write = GameData::preferences_write(&path, first).unwrap();
+        GameData::save_progress(&path, 30., Some(&replay(30.))).unwrap();
+        write.save().unwrap();
+        let loaded = GameData::read(&path).unwrap();
+        assert_eq!(loaded.preferences, first);
+        assert_eq!(loaded.personal_best, Some(30.));
+        assert_eq!(loaded.replay.unwrap().seconds, 30.);
+    }
+
+    #[test]
+    fn additive_preferences_read_old_records_and_cannot_resurrect_a_reset() {
+        #[derive(Serialize)]
+        struct OldData {
+            version: u32,
+            personal_best: Option<f64>,
+            replay: Option<Replay>,
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rooftops.cbor");
+        let mut bytes = Vec::new();
+        ciborium::into_writer(
+            &OldData {
+                version: FORMAT_VERSION,
+                personal_best: Some(30.),
+                replay: Some(replay(30.)),
+            },
+            &mut bytes,
+        )
+        .unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        let loaded = GameData::read(&path).unwrap();
+        assert_eq!(loaded.preferences, Preferences::default());
+        assert_eq!(loaded.replay.unwrap().seconds, 30.);
+        let pending = GameData::preferences_write(
+            &path,
+            Preferences {
+                music_volume: 0,
+                ..Preferences::default()
+            },
+        )
+        .unwrap();
+        GameData::reset(&path).unwrap();
+        pending.save().unwrap();
+        assert!(!path.exists());
+        assert_eq!(
+            GameData::read(&path).unwrap().preferences,
+            Preferences::default()
+        );
+    }
 
     fn frame(seconds: f64, level: usize, x: f32, home: bool) -> Frame {
         Frame {
@@ -447,6 +657,29 @@ mod tests {
             assert!(GameData::save_progress(&path, invalid, None).is_err());
         }
         assert_eq!(GameData::read(&path).unwrap().personal_best, Some(24.));
+    }
+
+    #[test]
+    fn legacy_records_keep_the_best_time_and_retire_the_old_course_ghost() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rooftops.cbor");
+        let legacy = GameData {
+            version: 1,
+            personal_best: Some(30.),
+            replay: Some(replay(30.)),
+            preferences: Preferences::default(),
+        };
+        let mut bytes = Vec::new();
+        ciborium::into_writer(&legacy, &mut bytes).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        assert!(GameData::has_completed(&path));
+        let migrated = GameData::read(&path).unwrap();
+        assert_eq!(migrated.version, FORMAT_VERSION);
+        assert_eq!(migrated.personal_best, Some(30.));
+        assert!(migrated.replay.is_none());
+        let updated = GameData::save_progress(&path, 35., Some(&replay(35.))).unwrap();
+        assert_eq!(updated.personal_best, Some(30.));
+        assert_eq!(updated.replay.unwrap().seconds, 35.);
     }
 
     #[test]

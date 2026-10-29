@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "gatto"
-version = "0.20.8"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2027,6 +2027,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-av-foundation",
  "objc2-avf-audio",
+ "objc2-core-audio-types",
  "objc2-core-media",
  "objc2-core-video",
  "objc2-foundation 0.3.2",
@@ -4658,7 +4659,9 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
 dependencies = [
+ "block2 0.6.2",
  "objc2 0.6.5",
+ "objc2-core-audio-types",
  "objc2-foundation 0.3.2",
 ]
 

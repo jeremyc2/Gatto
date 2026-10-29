@@ -81,29 +81,11 @@ pub(crate) fn poster_shapes() -> Vec<PosterShape> {
             }
         }
     }
-    // A black cat surveying the illuminated city from its own roof.
-    add([636., 277., 151., 78.], 0x393447, 1., 0.);
-    add([630., 270., 163., 7.], 0x967784, 1., 2.);
-    add([648., 292., 23., 42.], 0xedd0a3, 1., 2.);
-    add([683., 292., 23., 42.], 0xd9b48c, 1., 2.);
-    add([718., 292., 23., 42.], 0xedd0a3, 1., 2.);
-    add([753., 292., 23., 42.], 0xd9b48c, 1., 2.);
-    add([686., 216., 51., 54.], 0x05070d, 1., 22.);
-    add([710., 190., 35., 37.], 0x05070d, 1., 12.);
-    // Overlapping ears at the back of the head keep the seated cat in profile.
-    add([720., 183., 6., 16.], 0x05070d, 1., 2.5);
-    add([713., 177., 8., 22.], 0x05070d, 1., 3.);
-    add([730., 205., 7., 3.], 0xa8f0ce, 1., 1.5);
-    add([720., 248., 9., 22.], 0x05070d, 1., 4.);
-    for (x, y) in [
-        (691., 252.),
-        (681., 250.),
-        (672., 245.),
-        (665., 238.),
-        (663., 230.),
-        (665., 222.),
-    ] {
-        add([x, y, 13., 13.], 0x05070d, 1., 6.5);
+    // The same home and sleeping pose as the last playable rooftop.
+    add([576., 343., 248., 12.], 0x393447, 1., 0.);
+    add([570., 337., 260., 7.], 0x967784, 1., 2.);
+    for shape in art::shelter_shapes(740., 337., true, false, 1.1) {
+        add(shape.rect, shape.ink, shape.opacity, shape.radius);
     }
     // Warm hairline border and a quiet statistics panel.
     for rect in [
@@ -119,8 +101,14 @@ pub(crate) fn poster_shapes() -> Vec<PosterShape> {
     shapes
 }
 
-pub(crate) fn poster_paths() -> Vec<art::ArtPath> {
-    let mut paths = Vec::new();
+pub(crate) fn poster_paths(time: f32) -> Vec<art::ArtPath> {
+    let mut paths = poster_static_paths();
+    paths.extend(art::home_sleep_paths(740., 337., time, 1.1));
+    paths
+}
+
+pub(crate) fn poster_static_paths() -> Vec<art::ArtPath> {
+    let mut paths = art::home_roof_paths(740., 337., 1.1, false);
     for (kind, center) in [
         (art::StatIcon::Coin, 139.5),
         (art::StatIcon::Deaths, 346.5),
@@ -144,7 +132,7 @@ pub(crate) fn poster_text(score: Score) -> Vec<PosterText> {
             centered_width: None,
         },
         PosterText {
-            label: "Moonlit mischief".into(),
+            label: "Home at last".into(),
             x: 41.,
             y: 76.,
             size: 52.,
@@ -389,7 +377,7 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
     for shape in shapes {
         rect(shape);
     }
-    artwork(poster_paths());
+    artwork(poster_paths(1.2));
     for item in poster_text(score) {
         text(item);
     }

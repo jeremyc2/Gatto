@@ -2,8 +2,12 @@ use super::*;
 
 pub(super) const DURATION: f32 = 2.6;
 const FLAME_OUT: f32 = 1.;
-const LANDING: f32 = 1.7;
+pub(super) const LANDING: f32 = 1.7;
 const UNSTRAP: f32 = 1.9;
+
+pub(super) fn flames_on(time: f32) -> bool {
+    time < FLAME_OUT && (time < 0.45 || !((time * 18.) as usize).is_multiple_of(3))
+}
 
 fn pack(x: f32, y: f32, flame: f32, fuel: f32, scale: f32) -> gpui_kit::Div {
     let mut pack = div().absolute().inset_0();
@@ -53,7 +57,7 @@ pub(super) fn sequence(time: f32, camera: f32, scale: f32) -> gpui_kit::Div {
         scale,
     ));
     // Irregular bursts become shorter before the engines stop altogether.
-    let flame = if time < FLAME_OUT && (time < 0.45 || !((time * 18.) as usize).is_multiple_of(3)) {
+    let flame = if flames_on(time) {
         22. * (1. - flight) + 4.
     } else {
         0.

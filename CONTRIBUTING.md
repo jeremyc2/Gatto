@@ -228,8 +228,38 @@ red/right and green/left distance indicators.
 The examples use in-memory personal bests and ghost poses; they never read or
 write the player's record.
 
+Use `--rooftops-continuity` to capture both checkpoint handoffs: sleeping at the
+doorway, the start and midpoint of the slide, the light turning on, and the next
+level's standing cat. It also captures the grand final home before arrival.
+
 Use `--rooftops-preferences` with the same screenshot command to capture the
 preferences page with Reset Rooftops unlocked using an in-memory example.
+
+Use `--rooftops-options` to capture the in-game options card. Use
+`--rooftops-audio` with an ignored output directory such as
+`target/rooftops-audio-preview` to synthesize four 48-second stereo WAV previews (three neighborhoods and the scorecard);
+the same command writes standalone death, coin and shutter WAVs. Use
+`--rooftops-effects` to regenerate only those effect previews. These
+inspection files are never bundled with the app. `--check-rooftops-audio`
+opens the real macOS output graph briefly with silence and an inaudible
+1% preview signal, checks that its render
+callback receives valid stereo buffers, suspends and resumes playback, and
+releases the device. It also exercises the background owner through startup,
+suspension, release-beep completion, resume and drop. Normal tests and screenshot captures do not open
+audio devices.
+
+Use `--rooftops-form-edges` to render focused sliders at both endpoints and a
+half-transparent player against a flat background. It fails on an outer form
+border or darker overlap inside the flashing cat's body.
+
+Use a release build with `--audit-rooftops` to measure 300 warmed native frame
+constructions per neighborhood, results, both level slides, intro and options
+scene at 960 × 600 and 1440 × 800,
+plus three minutes of 512-frame audio blocks per score. It writes
+`rooftops-frames.json` and `rooftops-audio.json` in the output directory.
+Use `--audit-rooftops-gpu` to include Metal rendering and synchronized pixel
+readback, measuring 60 warmed frames per scene into `rooftops-metal-frames.json`.
+Neither measurement counts dropped presentations on a physical display.
 
 Check pixelation edges with the same native renderer:
 

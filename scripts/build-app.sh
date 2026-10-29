@@ -27,6 +27,7 @@ bundle="$work/Gatto.app"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 cp packaging/Info.plist "$bundle/Contents/Info.plist"
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
+cp packaging/licenses/* "$bundle/Contents/Resources/"
 cp "target/$profile/gatto" "$bundle/Contents/MacOS/"
 # Local apps do not bundle Sparkle or contact its release feed.
 plutil -remove SUFeedURL "$bundle/Contents/Info.plist"

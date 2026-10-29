@@ -16,7 +16,7 @@ async function workflow(mode: string, resume = false) {
     for (const path of [
       bin,
       join(root, "scripts"),
-      join(root, "packaging"),
+      join(root, "packaging/licenses"),
       join(root, "Casks"),
       join(root, "docs/images/walkthrough"),
     ])
@@ -33,6 +33,8 @@ async function workflow(mode: string, resume = false) {
       join(root, "Cargo.toml"),
       `[package]\nname = "gatto"\nversion = "${mode.startsWith("beta-") ? "0.17.0-beta.1" : "0.15.0"}"\n`,
     );
+    for (const name of ["Tonejs-LICENSE", "Visual-Effect-LICENSE"])
+      await Bun.write(join(root, "packaging/licenses", name), name);
     await Bun.write(join(root, "packaging/Info.plist"), "test plist");
     await Bun.write(join(root, "packaging/AppIcon.icns"), "icon");
     await Bun.write(join(root, "packaging/Assets.car"), "assets");
@@ -188,6 +190,13 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
     return {
       exit,
       calls,
+      notices: await Promise.all(
+        ["Tonejs-LICENSE", "Visual-Effect-LICENSE"].map((name) =>
+          Bun.file(join(root, "dist/release/Gatto.app/Contents/Resources", name))
+            .text()
+            .catch(() => ""),
+        ),
+      ),
       screenshot: await Bun.file(join(root, "docs/images/walkthrough/image-editor.png")).text(),
       output: (await stdout) + (await stderr),
       exposure: (await exposure.exists()) ? await exposure.text() : "",
@@ -203,6 +212,7 @@ test("release checks precede commits; uploads are verified as a draft before pub
   const result = await workflow("release");
   expect(result.exit, result.output).toBe(0);
   expect(result.exposure).toBe("");
+  expect(result.notices).toEqual(["Tonejs-LICENSE", "Visual-Effect-LICENSE"]);
   for (const command of ["lint:scripts", "test:scripts"]) {
     const check = find(result.calls, "bun", command);
     expect(check).toBeGreaterThan(-1);

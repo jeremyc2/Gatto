@@ -7,6 +7,64 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-29
+
+### Added
+
+- A top-right Rooftops gear opens options for music, sound effects, the ghost
+  cat and animations. It holds play, transitions and timers until Continue or
+  Escape, and saves choices with the existing CBOR game data.
+- A synthesized nighttime Rooftops soundtrack with soft keys, bass, light
+  percussion and pads, longer evolving arrangements, and different tempos and
+  voicings for each neighborhood. Add synthesized gameplay and arrival cues,
+  independent music/effect volume sliders, a separate celesta scorecard theme,
+  and native macOS audio output. Keep effects to the intro thruster, the cat's
+  Visual Effect death patch (a distorted stab and low rumble), synthesized coin
+  impacts/ringing modeled on the supplied reference, and apartment shutters.
+  Play shutters only when the windows below the cat open; checkpoint-house
+  relighting and level slides stay silent. Audition music while dragging
+  its handle/track, and play one volume-preview beep on final effects-slider
+  release only when the volume changed, without advancing gameplay. A zero effects volume stays silent.
+
+### Changed
+
+- Raise the Rooftops coin cue by about 3 dB relative to the other sound effects.
+- Remove outer Rooftops form borders while retaining slider-handle highlights;
+  fix endpoint borders cutting into handles. Render the respawning cat's body as
+  one translucent silhouette so overlapping parts do not appear darker.
+- Move audio device lifecycle off the drawing thread, debounce preference saves
+  without waiting on disk I/O, and cache static facade/scorecard geometry.
+- Give each Rooftops level a distinct New York neighborhood appearance:
+  brownstone and red brick, green-gray cast-iron lofts, then pale stone towers
+  with Deco details. Vary masonry, cornices, window surrounds and shutter
+  materials while keeping the large rooms, residents and difficulty progression.
+  Shared buildings retain their earlier neighborhood during level handoffs.
+- Keep Rooftops' first building dark until the cat touches down in the jetpack
+  opening; skipping the opening lights it immediately. Remove checkpoint
+  lanterns from the first roof and from the houses at level boundaries.
+- Carry each Rooftops destination into the next level as the starting building,
+  keeping its lit apartments and rooftop props. The cat settles inside the
+  doorway, the shelter lights go out, and animated Zs show it sleeping. Space
+  pans the building left to reveal the next course, then relights the shelter
+  and wakes the cat. Movement keys skip the transition; it pauses with focus
+  loss and does not count toward the race or ghost clock.
+- Give the final Rooftops destination a larger home with a pitched roof,
+  chimney, separate side door, and flowering planters. Its large, unobstructed
+  picture window shows the cat sleeping inside on a cushion in the “Home at
+  last” results screen and downloaded scorecard. Extend every rooftop doorway
+  frame down to the floor. Match checkpoint house colors to their neighborhood
+  and remove floating handles from open doorways.
+- Keep saved Rooftops best times and completion status while retiring ghosts
+  recorded on the earlier course geometry.
+
+### Fixed
+
+- Restore Rooftops game focus and clear options/audio state on close so reopening
+  after closing Options shows the cat and accepts movement again.
+- Exclude volume labels and outer padding from pointer auditions. Keep music
+  preview available over the handle ends and track; keep effects silent during
+  adjustment and on unchanged releases.
+
 ## [0.20.8] - 2026-10-28
 
 ### Fixed

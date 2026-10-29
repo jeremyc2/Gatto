@@ -211,6 +211,7 @@ for nested in "$framework/XPCServices/Downloader.xpc" \
 done
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
 cp dist/sparkle/LICENSE "$bundle/Contents/Resources/Sparkle-LICENSE"
+cp packaging/licenses/* "$bundle/Contents/Resources/"
 cp "target/$TARGET/release/gatto" "$bundle/Contents/MacOS/"
 
 # Pair the app with its installer before signing. Compression preserves this

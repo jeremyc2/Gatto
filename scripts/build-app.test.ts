@@ -6,7 +6,7 @@ import { join } from "node:path";
 async function build(failure: string, args: string[] = []) {
   const root = await mkdtemp(join(tmpdir(), "gatto-local-build-"));
   try {
-    for (const path of ["scripts", "tools", "packaging", "dist/local/Gatto.app"])
+    for (const path of ["scripts", "tools", "packaging/licenses", "dist/local/Gatto.app"])
       await mkdir(join(root, path), { recursive: true });
     await Bun.write(
       join(root, "scripts/build-app.sh"),
@@ -14,6 +14,8 @@ async function build(failure: string, args: string[] = []) {
     );
     for (const name of ["Info.plist", "AppIcon.icns", "Assets.car"])
       await Bun.write(join(root, "packaging", name), name);
+    for (const name of ["Tonejs-LICENSE", "Visual-Effect-LICENSE"])
+      await Bun.write(join(root, "packaging/licenses", name), name);
     await Bun.write(join(root, "dist/local/Gatto.app/previous"), "previous build");
     for (const tool of ["cargo", "codesign", "plutil", "git", "uname"]) {
       const path = join(root, "tools", tool);
@@ -60,6 +62,13 @@ esac
       binary: await Bun.file(join(root, "dist/local/Gatto.app/Contents/MacOS/gatto"))
         .text()
         .catch(() => ""),
+      notices: await Promise.all(
+        ["Tonejs-LICENSE", "Visual-Effect-LICENSE"].map((name) =>
+          Bun.file(join(root, "dist/local/Gatto.app/Contents/Resources", name))
+            .text()
+            .catch(() => ""),
+        ),
+      ),
       previous: await Bun.file(join(root, "dist/local/Gatto.app/previous")).exists(),
       calls: await Bun.file(join(root, "calls")).text(),
     };
@@ -73,6 +82,7 @@ test("local build works from another directory and prints the fresh bundle path"
   expect(result.exit, result.output).toBe(0);
   expect(result.binary).toBe("debug binary\n");
   expect(result.previous).toBe(false);
+  expect(result.notices).toEqual(["Tonejs-LICENSE", "Visual-Effect-LICENSE"]);
   expect(result.output).toContain(`Created ${result.root}/dist/local/Gatto.app`);
 });
 
