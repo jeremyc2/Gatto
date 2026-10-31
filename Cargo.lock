@@ -2044,7 +2044,7 @@ dependencies = [
 
 [[package]]
 name = "gatto"
-version = "0.22.2"
+version = "0.22.3"
 dependencies = [
  "anyhow",
  "async-channel",

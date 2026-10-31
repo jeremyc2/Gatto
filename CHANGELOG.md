@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.3] - 2026-10-30
+
 ### Changed
 
 - Update GPUI Kit to 0.8.1 with its compatible GPUI 0.3.10 backend, UUID to
