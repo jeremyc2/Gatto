@@ -317,7 +317,8 @@ annotation selection, and a destination picker that excludes the current project
 The toolbar uses an unlabeled select-all checkbox and icon buttons with tooltips;
 unavailable actions are omitted. Combining requires exactly two compatible images
 that are not already comparisons; the composer also rejects comparison inputs,
-and the selected/total attachment count stays at the right, followed by “selected.”
+and the selected/total attachment count appears at the right only when something
+is selected, followed by “selected.”
 The upload button counts all attachments needing upload, regardless of selection,
 and omits the count when it is zero.
 `app/upload_actions.rs` renders the joined upload control. Both its main area
@@ -328,7 +329,8 @@ chevron opens the choices above the control. Selecting an action persists
 its copy mode and attachment IDs; automatic copying includes only successful
 uploads from that batch, skips cancellation and total failure, and honors
 close-after-copy only when the whole batch succeeds. The selection toolbar shows
-copy only for entirely uploaded selections. Copy all uploaded retains Command+C in a tooltip
+copy only for entirely uploaded selections. Copy all uploaded appears only when
+more than one attachment is uploaded and retains Command+C in a tooltip
 rather than a separate keyboard hint, and matches the icon buttons' height.
 `app/attachment_drag.rs` keeps full-card drag previews,
 live sibling shifts, edge scrolling, transactional sidebar drops, and Escape

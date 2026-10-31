@@ -3365,6 +3365,7 @@ impl UploaderApp {
                         .justify_between()
                         .gap_2()
                         .pl(px(9.))
+                        .min_h(px(20.))
                         .when(!self.uploading && !self.import_busy(), |row| {
                             row.child(
                                 Checkbox::new("select-all-attachments")
@@ -3396,30 +3397,37 @@ impl UploaderApp {
                         })
                         .child(self.selection_actions(selected, cx))
                         .child(div().flex_1())
-                        .when(count > 1 && self.upload_result.is_some(), |row| {
+                        .when(
+                            self.upload_result
+                                .as_ref()
+                                .is_some_and(|result| result.attachments.len() > 1),
+                            |row| {
+                                row.child(
+                                    Button::new("copy-all-upload-markdown")
+                                        .debug_selector(|| "copy-all-staged-image-markdown".into())
+                                        .app_secondary()
+                                        .xsmall()
+                                        .min_w_0()
+                                        .px_2()
+                                        .label("Copy all uploaded")
+                                        .tooltip("Copy all uploaded attachments · ⌘C")
+                                        .on_click(cx.listener(Self::copy_all_upload_markdown)),
+                                )
+                            },
+                        )
+                        .when(selected_count > 0, |row| {
                             row.child(
-                                Button::new("copy-all-upload-markdown")
-                                    .debug_selector(|| "copy-all-staged-image-markdown".into())
-                                    .app_secondary()
-                                    .xsmall()
-                                    .min_w_0()
-                                    .px_2()
-                                    .label("Copy all uploaded")
-                                    .tooltip("Copy all uploaded attachments · ⌘C")
-                                    .on_click(cx.listener(Self::copy_all_upload_markdown)),
+                                div()
+                                    .debug_selector(|| "attachment-count".into())
+                                    .text_xs()
+                                    .font_semibold()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!(
+                                        "{selected_count}/{count} attachment{} selected",
+                                        if count == 1 { "" } else { "s" }
+                                    )),
                             )
-                        })
-                        .child(
-                            div()
-                                .debug_selector(|| "attachment-count".into())
-                                .text_xs()
-                                .font_semibold()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(format!(
-                                    "{selected_count}/{count} attachment{} selected",
-                                    if count == 1 { "" } else { "s" }
-                                )),
-                        ),
+                        }),
                 )
             })
             .children(

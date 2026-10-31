@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-30
+
+### Changed
+
+- Hide the selected/total attachment count when no attachments are selected.
+- Show **Copy all uploaded** only when more than one attachment is uploaded.
+
 ## [0.22.0] - 2026-10-30
 
 ### Changed
