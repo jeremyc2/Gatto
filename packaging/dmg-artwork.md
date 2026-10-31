@@ -1,28 +1,48 @@
 # Installer artwork
 
-Original artwork generated and refined using the built-in ImageGen tool.
-The final direction is a smooth anime young cat on dark navy, two continuous
-cyan-blue jet flames occluded by the tail, a shorter matte curved arrow, and
-loose luminous sketch marks. Floating paw doodles have been removed.
+Completely redrawn October 31, 2026 using Aseprite MCP and authored pixel/contour
+scripts. The generated original is a visual reference only. The
+[editable artwork record](../docs/design/art/installer/artwork.md) owns the new
+scene, layers, palette and construction.
 
-Final image: `dmg-artwork.png`. The app-header illustration is not reused.
-Finder supplies the real app icon and the standard Applications folder shortcut.
-`bun refresh:assets` generates the documentation preview using the compiled icon,
-macOS's shortcut icon and the same background/layout as Finder. Both renderers
-read `dmg-layout.json`; the preview omits the title bar and uses the documentation
-screenshots' rounded white frame.
-The sole instruction, “Drag and Drop,” is 28 points.
-The 840 × 520-point window leaves room for Finder's icon bounds without
-horizontal scrolling.
+A black-purple anime kitten leaps toward Applications from a slightly lower
+viewpoint. The original's tall ears, gentle closed smile, full arched tail and
+continuous body/haunch silhouette guide the redraw. The near shoulder and
+forearm lead into a rolled paw; the far limbs recede lower behind them. Both
+front soles carry lavender toe beans foreshortened along the paws, with cyan
+and violet eyes retaining the shared cat identity.
 
-The app-to-folder layout was checked against [CleanMyMac's installation
-guide](https://macpaw.com/support/cleanmymac/knowledgebase/installation-activation)
-and Firefox DMG screenshots. The artwork is original rather than a copy.
+The close silver-lavender thrusters have matching cyan sleeves and a common
+supported mount. Narrow white streams emerge from inside their rear apertures,
+with the right lips overlapping the light. The far barrel stays mostly behind
+the near barrel and head. Their parallel exhaust merges into oversized
+white/gold/orange flowing volumes with cyan/violet cooling edges and folds.
+The broad tail naturally overlaps the downstream flame.
 
-Finder draws picture-background filenames in black; see [DropDMG's layout
-notes](https://c-command.com/dropdmg/manual#layouts). The lower artwork fades to
-black, concealing native unselected names. Native names remain accessible and
-appear normally when an icon is selected.
+The arrow is a newly drawn cyan ribbon with a violet underside. Sparse orbit
+marks and glints retain the playful setting. Dark navy fades to black below
+the artwork. See the [artwork record](../docs/design/art/installer/artwork.md)
+for the editable layers, pose, nozzle construction and visual review criteria.
+
+`dmg-artwork.png` is **840 × 520**, exported at native **1×** from the
+**840 × 520** master. Contours rasterize directly on that grid; a lower-resolution
+coordinate study organizes the scene, and small pixel glyphs retain their
+cluster cadence. The original generated image was 1554 × 1012. Finder supplies
+the real app icon and Applications shortcut, outside the painted scene.
+
+`dmg-layout.json` and `render-dmg-background.swift` retain the icon positions
+and sole 28-point instruction, “Drag and Drop.” The renderer uses nearest-neighbor
+sampling for artwork at standard and Retina density; text and system icons keep
+their normal rendering. `bun refresh:assets` regenerates the rounded documentation
+preview with those same icons and layout.
+
+Finder fixes picture-background names to black. The black lower band and renderer
+fade conceal unselected native names; selected names remain accessible.
+
+## Historical generated reference
+
+The prompts below describe the superseded ImageGen artifact, not the current
+Aseprite master. They record the approved composition used as drawing guidance.
 
 ## Cat refinement prompt
 

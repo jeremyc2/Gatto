@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Typeset the sole installation instruction over the original installer artwork.
+// Typeset the sole installation instruction over the Aseprite installer scene.
 // Usage: swift packaging/render-dmg-background.swift <output-directory> [--preview]
 import AppKit
 
@@ -44,8 +44,11 @@ func render(scale: Int, includeIcons: Bool) -> NSBitmapImageRep {
     context.cgContext.scaleBy(x: 1, y: -1)
     NSGraphicsContext.current = NSGraphicsContext(cgContext: context.cgContext, flipped: true)
 
+    let artworkInterpolation = context.imageInterpolation
+    context.imageInterpolation = .none
     artwork.draw(in: NSRect(x: 0, y: 0, width: width, height: height), from: .zero,
                  operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    context.imageInterpolation = artworkInterpolation
 
     // Finder fixes picture-background labels to black. Fade the area beneath
     // the icons to black so their unselected names blend into the background.

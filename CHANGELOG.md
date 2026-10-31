@@ -7,6 +7,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Remove retired website prototypes, generated concept sheets and intermediate
+  artwork; keep current exports, all Aseprite masters and their artwork guides.
+
+- Redraw the installer scene, repeating portal paper and baby-kitten gold coin
+  in layered Aseprite masters. Keep the installer layout, give its anime cat
+  cyan/violet eyes, the original-inspired ears, smile and reaching pose, and
+  a silver-lavender jetpack with oversized merged exhaust. Export the pixel
+  artwork automatically with the other saved masters.
+
 ## [0.22.3] - 2026-10-30
 
 ### Changed

@@ -1,10 +1,10 @@
 # Pixel portal ring
 
 Created October 26, 2026 as an Aseprite pixel-art adaptation of the original
-transparent portal. The [earlier artwork record](../download-portal.md) retains
-the original generation prompt and the website's independent reveal mechanics.
-The original ring supplies the actual strand flow, glow and spark placement;
-the pixel version keeps that wispy structure and narrow luminous edge.
+transparent portal. The retired generated ring supplied the strand flow, glow
+and spark placement; the pixel version keeps that wispy structure and narrow
+luminous edge. The current reveal mechanics live in the
+[website design system](../../../../../web/DESIGN-SYSTEM.md).
 
 ## Master and geometry
 

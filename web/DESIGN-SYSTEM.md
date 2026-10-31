@@ -133,7 +133,11 @@ feathered mask edge preserve the ring's sparks without a hard angular cut.
 The section grows as the compensating spacer shrinks, keeping total scroll
 geometry constant. Its appearance, spin and floating animations remain in StyleX.
 The imported paper asset URL is passed through an inline custom property; its
-repeat size is a component style. `PortalSeam` owns the shared repeating SVG
+repeat size is a component style. The [Aseprite paper master](../docs/design/art/portal-paper/artwork.md)
+is 256 × 256, exported at 2× to a 512 × 512 PNG and lossless WebP. The existing
+512 CSS-pixel repeat stays fixed in both axes; the texture never stretches to
+fit the viewport. Its tan plaster palette follows the courtyard wall, and its
+periodic pigment and wrapped grain continue across tile boundaries. `PortalSeam` owns the shared repeating SVG
 mask; the download and footer compositions own their respective lower and upper
 edge geometry. The 768 × 48 SVG repeat has varied tear depths and a tan paper
 underside; phone masks retain its aspect ratio at 640 × 40. Both masks share the

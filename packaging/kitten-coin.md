@@ -1,8 +1,19 @@
 # Rooftops kitten coin
 
-Generated with the built-in image-generation tool using the user's gold kitten
-coin as a visual reference. The transparent master is `kitten-coin.png`.
-Rooftops prefilters it to a small texture once when the game is created.
+Redrawn October 31, 2026 in Aseprite MCP, using the earlier gold kitten coin as a
+visual reference only. The [artwork record](../docs/design/art/kitten-coin/artwork.md)
+owns the editable 64 × 64 master. No generated pixels
+were imported.
+
+`kitten-coin.png` is the transparent 2× export (128 × 128). The baby kitten has
+an oversized rounded head, two bright eye catchlights, a short muzzle and tiny
+front paws, all in gold relief against a recessed bronze field. Concentric
+milled rims and engraved sprigs retain the original coin identity. Rooftops
+keeps its existing 112 × 112 texture prefilter for the 28-point collectible.
+
+## Historical generated reference
+
+The following prompt describes the superseded ImageGen artifact.
 
 ## Generation prompt
 

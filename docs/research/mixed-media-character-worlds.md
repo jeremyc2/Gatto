@@ -1,6 +1,6 @@
 # Cats across materials: a small, coherent multiverse
 
-Research date: October 16, 2026 (America/Chicago). This note supports the [mixed-world study](../design/explorations/multiverse-study.html). It records production precedents and proposes experiments; it does not approve a cast, website layout, or final visual system.
+Research date: October 16, 2026 (America/Chicago). This note supports the mixed-world study (retired October 31, 2026). It records production precedents and proposes experiments; it does not approve a cast, website layout, or final visual system.
 
 ## Starting with the preferences we actually have
 

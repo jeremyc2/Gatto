@@ -24,6 +24,13 @@ const work = await mkdtemp(resolve(tmpdir(), "gatto-artwork-"));
 try {
   for (const [source, scale, destination] of [
     [`${brand}/brand-cat.aseprite`, 4, "docs/images/readme-cat.png"],
+    ["docs/design/art/installer/installer.aseprite", 1, "packaging/dmg-artwork.png"],
+    [
+      "docs/design/art/portal-paper/portal-paper.aseprite",
+      2,
+      "web/assets/images/portal-watercolor-paper.png",
+    ],
+    ["docs/design/art/kitten-coin/kitten-coin.aseprite", 2, "packaging/kitten-coin.png"],
     [`${brand}/favicon-16.aseprite`, 1, "web/public/favicon-16.png"],
     [`${brand}/favicon-32.aseprite`, 1, "web/public/favicon-32.png"],
     [`${brand}/favicon-32.aseprite`, 3, "web/public/favicon-96.png"],
@@ -80,14 +87,14 @@ try {
     const bytes = await new Bun.Image(Bun.file(path)).png({ compressionLevel: 9 }).bytes();
     await Bun.write(path, bytes);
   }
-  for (const name of ["download-rocket-cat-pixel", "download-portal-pixel"])
+  for (const name of [
+    "download-rocket-cat-pixel",
+    "download-portal-pixel",
+    "portal-watercolor-paper",
+  ])
     await new Bun.Image(Bun.file(resolve(root, `web/assets/images/${name}.png`)))
       .webp({ lossless: true })
       .write(resolve(root, `web/assets/images/${name}.webp`));
-  await new Bun.Image(Bun.file(resolve(root, "web/assets/images/portal-watercolor-paper.png")))
-    .resize(1024, 1024)
-    .webp({ quality: 90 })
-    .write(resolve(root, "web/assets/images/portal-watercolor-paper.webp"));
 
   const compiled = resolve(work, "compiled");
   await mkdir(compiled);
