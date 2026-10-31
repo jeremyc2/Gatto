@@ -228,7 +228,7 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
         )?;
         return Ok(());
     }
-    if std::env::args().any(|arg| arg == "--markers-only") {
+    if std::env::args().any(|arg| arg == "--markers-only" || arg == "--editor-exit-only") {
         return render_image_editor(&output_directory.join("image-editor.png"));
     }
 
@@ -972,6 +972,8 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
     );
     cx.update(|cx| {
         gpui_kit::init(cx);
+        // Capture resting dialog surfaces, independent of entrance animation time.
+        cx.set_reduce_motion(true);
         image_preview::init_keybindings(cx);
         theme::apply_dark_theme(cx);
     });
@@ -996,7 +998,9 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
     cx.capture_screenshot(handle)
         .context("GPUI's Metal screenshot renderer is unavailable")?
         .save(output)?;
-    let variants = if std::env::args().any(|arg| arg == "--markers-only") {
+    let variants = if std::env::args().any(|arg| arg == "--editor-exit-only") {
+        vec!["exit"]
+    } else if std::env::args().any(|arg| arg == "--markers-only") {
         vec!["markers"]
     } else {
         vec![
@@ -1026,9 +1030,24 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
         })?;
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
-        cx.capture_screenshot(handle)
-            .context("GPUI's Metal screenshot renderer is unavailable")?
-            .save(output.with_file_name(format!("image-editor-{variant}.png")))?;
+        let screenshot = cx
+            .capture_screenshot(handle)
+            .context("GPUI's Metal screenshot renderer is unavailable")?;
+        if variant == "exit" {
+            let (bounds, scale) = cx.update_window(handle, |_, window, _| {
+                (window.find("ok").bounds(), window.scale_factor())
+            })?;
+            // Sample the Save button away from its text and rounded corners.
+            // Semantic dialog nodes can exist before their animated surface paints.
+            let x = ((bounds.left() + px(8.)).as_f32() * scale) as u32;
+            let y = (bounds.center().y.as_f32() * scale) as u32;
+            let pixel = screenshot.get_pixel(x, y);
+            anyhow::ensure!(
+                pixel[0] > 60 && pixel[1] > 40 && pixel[2] > 200,
+                "Save-before-closing dialog is not visible in the captured frame"
+            );
+        }
+        screenshot.save(output.with_file_name(format!("image-editor-{variant}.png")))?;
     }
     Ok(())
 }

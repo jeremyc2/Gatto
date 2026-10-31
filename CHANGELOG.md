@@ -7,6 +7,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Update GPUI Kit to 0.8.1 with its compatible GPUI 0.3.10 backend, UUID to
+  1.29.0, and SHA-2 to 0.11.1.
+
+### Fixed
+
+- Keep the image editor's save-before-closing dialog visible in generated
+  screenshots by capturing it without entrance animation and checking its pixels.
+
 ## [0.22.2] - 2026-10-30
 
 ### Fixed

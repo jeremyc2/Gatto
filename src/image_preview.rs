@@ -19,7 +19,7 @@ use gpui_kit::component::{
 use gpui_kit::{
     App, Bounds, Context, Corners, CursorStyle, FocusHandle, Focusable, Image,
     InteractiveElement as _, IntoElement, KeyBinding, MouseButton, MouseDownEvent, MouseMoveEvent,
-    ParentElement as _, PinchEvent, Pixels, Point, Render, ScrollWheelEvent, SharedString,
+    ParentElement as _, PinchEvent, Pixels, Point, Render, ScrollEvent, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, actions, canvas, div, point,
     prelude::FluentBuilder as _, px, size,
 };
@@ -441,7 +441,7 @@ impl ImagePreview {
         self.select_image(self.current_index + 1, window, cx);
     }
 
-    fn scroll(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn scroll(&mut self, event: &ScrollEvent, window: &mut Window, cx: &mut Context<Self>) {
         let delta = event.delta.pixel_delta(window.line_height());
         if event.modifiers.platform || event.modifiers.control {
             let factor = (delta.y.as_f32() * 0.003).exp();
@@ -757,7 +757,7 @@ impl Render for ImagePreview {
                     }))
                     .on_mouse_up(MouseButton::Left, cx.listener(Self::editor_mouse_up))
                     .on_mouse_up_out(MouseButton::Left, cx.listener(Self::editor_mouse_up))
-                    .on_scroll_wheel(cx.listener(Self::scroll))
+                    .on_scroll(cx.listener(Self::scroll))
                     .on_pinch(cx.listener(Self::pinch))
                     .on_mouse_up(MouseButton::Middle, cx.listener(Self::editor_mouse_up))
                     .on_mouse_up_out(MouseButton::Middle, cx.listener(Self::editor_mouse_up))
@@ -789,7 +789,7 @@ impl Render for ImagePreview {
                                 .on_mouse_down(MouseButton::Middle, |_, _, cx| {
                                     cx.stop_propagation()
                                 })
-                                .on_scroll_wheel(|_, _, cx| cx.stop_propagation()),
+                                .on_scroll(|_, _, cx| cx.stop_propagation()),
                         )
                     })
                     .context_menu(move |menu, _, cx| {
