@@ -18,8 +18,10 @@ use crate::model::{AttachmentUploadState, Media, StagedAttachment, VideoUploadLi
 
 pub const SCHEMA_URL: &str =
     "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json";
-const MANIFEST: &str = "gatto-project.json";
-const ASSETS: &str = "gatto-media";
+const MANIFEST: &str = "project.json";
+const LEGACY_MANIFEST: &str = "gatto-project.json";
+const ASSETS: &str = "media";
+const LEGACY_ASSETS: &str = "gatto-media";
 const SCRATCHPAD_DESCRIPTION: &str = r#""There are only two hard things in Computer Science: cache invalidation and naming things."
 - Phil Karlton
 
@@ -34,6 +36,66 @@ struct Manifest {
     version: u32,
     metadata: WorkspaceMetadata,
     attachments: Vec<Attachment>,
+}
+
+/// Publish the new name without replacing an existing manifest. Validate the
+/// legacy record first and retain it if migration cannot finish.
+fn manifest_path(folder: &Path) -> Result<PathBuf> {
+    let current = folder.join(MANIFEST);
+    let legacy = folder.join(LEGACY_MANIFEST);
+    if current.exists() || !legacy.exists() {
+        return Ok(current);
+    }
+    ensure!(
+        fs::symlink_metadata(&legacy)?.is_file(),
+        "The project manifest must be a regular file"
+    );
+    let contents = match fs::read(&legacy) {
+        Ok(contents) => contents,
+        Err(_) if current.exists() => return Ok(current),
+        Err(error) => return Err(error.into()),
+    };
+    let manifest: Manifest = serde_json::from_slice(&contents)?;
+    ensure!(manifest.version == 1, "Unsupported project version");
+    match fs::hard_link(&legacy, &current) {
+        Ok(()) => match fs::remove_file(&legacy) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => {
+            return Err(error).context("Could not rename the project manifest to project.json");
+        }
+    }
+    Ok(current)
+}
+
+fn media_directory(folder: &Path) -> Result<PathBuf> {
+    let current = folder.join(ASSETS);
+    let legacy = folder.join(LEGACY_ASSETS);
+    if legacy.try_exists()? {
+        ensure!(
+            fs::symlink_metadata(&legacy)?.is_dir(),
+            "Project media must be a folder inside its project"
+        );
+        ensure!(
+            !current.try_exists()? || !legacy.try_exists()?,
+            "Both media and gatto-media exist. Resolve the folder conflict before opening this project; neither folder has been changed."
+        );
+        match fs::rename(&legacy, &current) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && current.is_dir() => {}
+            Err(error) => return Err(error).context("Could not rename gatto-media to media"),
+        }
+    }
+    if current.try_exists()? {
+        ensure!(
+            fs::symlink_metadata(&current)?.is_dir(),
+            "Project media must be a folder inside its project"
+        );
+    }
+    Ok(current)
 }
 
 #[derive(Deserialize, Serialize)]
@@ -68,11 +130,13 @@ pub struct WorkspaceMetadata {
 
 impl WorkspaceMetadata {
     pub fn repository_for_owner(&self, owner: Option<&str>) -> Option<&crate::model::Repository> {
-        self.repository.as_ref().filter(|_| {
-            self.repository_owner
-                .as_deref()
-                .zip(owner)
-                .is_some_and(|(saved, configured)| saved.eq_ignore_ascii_case(configured))
+        self.repository.as_ref().filter(|repository| {
+            !repository.name.trim().is_empty()
+                && self
+                    .repository_owner
+                    .as_deref()
+                    .zip(owner)
+                    .is_some_and(|(saved, configured)| saved.eq_ignore_ascii_case(configured))
         })
     }
 }
@@ -86,6 +150,7 @@ pub fn timestamp() -> u64 {
 
 #[derive(Clone, Debug)]
 pub struct ProjectSummary {
+    pub id: uuid::Uuid,
     pub title: String,
     pub metadata: WorkspaceMetadata,
 }
@@ -96,9 +161,10 @@ pub struct ProjectDetails {
 }
 
 pub fn summary(folder: &Path) -> Result<ProjectSummary> {
-    let manifest: Manifest = serde_json::from_slice(&fs::read(folder.join(MANIFEST))?)?;
+    let manifest: Manifest = serde_json::from_slice(&fs::read(manifest_path(folder)?)?)?;
     ensure!(manifest.version == 1, "Unsupported project version");
     Ok(ProjectSummary {
+        id: manifest.id,
         title: manifest.title,
         metadata: manifest.metadata,
     })
@@ -153,7 +219,7 @@ impl Project {
             .context("Could not find the parent folder")?;
         let folder = project_folder(&parent, name)?;
         fs::create_dir(&folder).context(
-            "Could not create the project subfolder. If that name already exists, choose another name.",
+            "Could not create project. If that name already exists, choose another name.",
         )?;
         let result = Self::create_named(folder.clone(), name).and_then(|mut project| {
             project.save(attachments)?;
@@ -210,7 +276,7 @@ impl Project {
             .canonicalize()
             .context("Could not find the project folder")?;
         let manifest: Manifest = serde_json::from_slice(
-            &fs::read(folder.join(MANIFEST))
+            &fs::read(manifest_path(&folder)?)
                 .context("This folder does not contain a readable Gatto project")?,
         )
         .context("Could not read the Gatto project manifest")?;
@@ -218,6 +284,7 @@ impl Project {
             manifest.version == 1,
             "This project needs a newer version of Gatto."
         );
+        media_directory(&folder)?;
         let metadata = manifest.metadata;
         let mut project = Self {
             id: manifest.id,
@@ -313,7 +380,7 @@ impl Project {
     }
 
     pub fn save(&mut self, attachments: &[StagedAttachment]) -> Result<()> {
-        let assets = self.folder.join(ASSETS);
+        let assets = media_directory(&self.folder)?;
         if !assets.exists() {
             fs::create_dir(&assets)?;
         }
@@ -461,7 +528,7 @@ fn write_manifest(folder: &Path, manifest: &Manifest) -> Result<()> {
 }
 
 pub fn title(folder: &Path) -> Result<String> {
-    let manifest: Manifest = serde_json::from_slice(&fs::read(folder.join(MANIFEST))?)?;
+    let manifest: Manifest = serde_json::from_slice(&fs::read(manifest_path(folder)?)?)?;
     ensure!(manifest.version == 1, "Unsupported project version");
     Ok(manifest.title)
 }
@@ -531,7 +598,7 @@ pub fn edit_metadata(
     known: &HashMap<PathBuf, String>,
 ) -> Result<String> {
     let name = distinct_name(name, folder, projects, known)?;
-    let mut manifest: Manifest = serde_json::from_slice(&fs::read(folder.join(MANIFEST))?)?;
+    let mut manifest: Manifest = serde_json::from_slice(&fs::read(manifest_path(folder)?)?)?;
     ensure!(manifest.version == 1, "Unsupported project version");
     manifest.title = name.clone();
     manifest.metadata.description = description.map(str::to_owned);
@@ -632,7 +699,7 @@ fn write_media_bytes(folder: &Path, name: &str, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn media_hash(item: &StagedAttachment) -> Result<String> {
+pub(crate) fn media_hash(item: &StagedAttachment) -> Result<String> {
     let mut sha256 = Sha256::new();
     let mut reader = item.reader()?;
     let mut buffer = [0; 64 * 1024];
@@ -664,7 +731,7 @@ pub fn delete_project(folder: &Path) -> Result<()> {
         .canonicalize()
         .context("Could not find the project folder")?;
     ensure!(folder.parent().is_some(), "Cannot delete a filesystem root");
-    let path = folder.join(MANIFEST).canonicalize()?;
+    let path = manifest_path(&folder)?.canonicalize()?;
     ensure!(
         path.parent() == Some(folder.as_path()),
         "The project manifest must be inside its folder"
@@ -695,8 +762,12 @@ pub fn project_folders(directory: &Path) -> Result<Vec<PathBuf>> {
     if directory.exists() {
         for child in fs::read_dir(directory)? {
             let child = child?;
-            if child.file_type()?.is_dir() && child.path().join(MANIFEST).is_file() {
-                paths.push(project_in_directory(directory, &child.path())?);
+            if child.file_type()?.is_dir()
+                && (child.path().join(MANIFEST).is_file()
+                    || child.path().join(LEGACY_MANIFEST).is_file())
+            {
+                let folder = project_in_directory(directory, &child.path())?;
+                paths.push(folder);
             }
         }
     }
@@ -705,7 +776,7 @@ pub fn project_folders(directory: &Path) -> Result<Vec<PathBuf>> {
 }
 
 pub fn open_scratchpad(folder: PathBuf) -> Result<(Project, Vec<StagedAttachment>)> {
-    if folder.join(MANIFEST).exists() {
+    if manifest_path(&folder)?.exists() {
         let (mut project, attachments) = Project::open(folder)?;
         if project
             .metadata
@@ -724,6 +795,39 @@ pub fn open_scratchpad(folder: PathBuf) -> Result<(Project, Vec<StagedAttachment
     project.metadata.description = Some(SCRATCHPAD_DESCRIPTION.into());
     project.save(&[])?;
     Ok((project, Vec::new()))
+}
+
+/// Move the legacy workspace into place, replacing a conflicting destination.
+pub fn migrate_scratchpad(
+    data: &Path,
+    legacy_repository: Option<crate::model::Repository>,
+    owner: Option<String>,
+) -> Result<()> {
+    let legacy = data.join("scratchpad");
+    let projects = data.join("projects");
+    let destination = projects.join("Scratchpad");
+    fs::create_dir_all(&projects)?;
+    if legacy.exists() {
+        ensure!(
+            fs::symlink_metadata(&legacy)?.is_dir(),
+            "Scratchpad must be a folder."
+        );
+        match fs::symlink_metadata(&destination) {
+            Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(&destination),
+            Ok(_) => fs::remove_file(&destination),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error),
+        }
+        .context("Could not replace Scratchpad")?;
+        fs::rename(&legacy, &destination).context("Could not move Scratchpad into projects")?;
+    }
+    let (mut project, attachments) = open_scratchpad(destination)?;
+    if project.metadata.repository.is_none() && legacy_repository.is_some() {
+        project.metadata.repository = legacy_repository;
+        project.metadata.repository_owner = owner;
+        project.save(&attachments)?;
+    }
+    Ok(())
 }
 
 fn same_media(a: &Media, b: &Media) -> bool {
@@ -762,6 +866,87 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn legacy_manifests_are_discovered_and_migrated_without_changing_project_data() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut project = Project::create_in_parent(directory.path(), "Review", &[]).unwrap();
+        let mut item = image();
+        item.upload_state = AttachmentUploadState::Uploaded {
+            url: "https://example.com/kept".into(),
+        };
+        project.save(std::slice::from_ref(&item)).unwrap();
+        let legacy = project.folder.join(LEGACY_MANIFEST);
+        fs::rename(project.folder.join(MANIFEST), &legacy).unwrap();
+        fs::rename(
+            project.folder.join(ASSETS),
+            project.folder.join(LEGACY_ASSETS),
+        )
+        .unwrap();
+        assert_eq!(
+            project_folders(directory.path()).unwrap(),
+            vec![project.folder.clone()]
+        );
+        assert_eq!(summary(&project.folder).unwrap().title, "Review");
+        assert!(!legacy.exists());
+        assert!(project.folder.join("project.json").is_file());
+        let (reopened, items) = Project::open(project.folder.clone()).unwrap();
+        assert!(project.folder.join("media").is_dir());
+        assert!(!project.folder.join(LEGACY_ASSETS).exists());
+        assert_eq!(reopened.id, project.id);
+        assert_eq!(items[0].persistent_id, item.persistent_id);
+        assert_eq!(
+            items[0].upload_state.uploaded_url(),
+            Some("https://example.com/kept")
+        );
+    }
+
+    #[test]
+    fn conflicting_media_folder_names_preserve_both_folders() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = Project::create_in_parent(directory.path(), "Review", &[]).unwrap();
+        let legacy = project.folder.join(LEGACY_ASSETS);
+        fs::create_dir(&legacy).unwrap();
+        fs::write(legacy.join("legacy.txt"), b"keep legacy").unwrap();
+        let current = project.folder.join(ASSETS);
+        fs::write(current.join("current.txt"), b"keep current").unwrap();
+        assert!(Project::open(project.folder).is_err());
+        assert_eq!(fs::read(legacy.join("legacy.txt")).unwrap(), b"keep legacy");
+        assert_eq!(
+            fs::read(current.join("current.txt")).unwrap(),
+            b"keep current"
+        );
+    }
+
+    #[test]
+    fn existing_project_json_is_authoritative_and_legacy_files_are_not_overwritten() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut project = Project::create_in_parent(directory.path(), "Review", &[]).unwrap();
+        let legacy = project.folder.join(LEGACY_MANIFEST);
+        fs::copy(project.folder.join(MANIFEST), &legacy).unwrap();
+        let original = fs::read(&legacy).unwrap();
+        project.title = "Current".into();
+        project.save(&[]).unwrap();
+        assert_eq!(summary(&project.folder).unwrap().title, "Current");
+        assert_eq!(fs::read(legacy).unwrap(), original);
+    }
+
+    #[test]
+    fn unsupported_legacy_manifest_is_left_untouched() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = Project::create_in_parent(directory.path(), "Review", &[]).unwrap();
+        let path = project.folder.join(MANIFEST);
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        manifest["version"] = serde_json::json!(2);
+        let contents = serde_json::to_vec(&manifest).unwrap();
+        fs::write(&path, &contents).unwrap();
+        let legacy = project.folder.join(LEGACY_MANIFEST);
+        fs::rename(path, &legacy).unwrap();
+        assert!(summary(&project.folder).is_err());
+        assert!(!project.folder.join(MANIFEST).exists());
+        assert_eq!(fs::read(legacy).unwrap(), contents);
     }
 
     #[test]
@@ -1037,7 +1222,7 @@ We know naming things is hard, so we set this space up for you."#
     }
 
     #[test]
-    fn annotations_remain_editable_after_project_reopen_without_undo_history() {
+    fn annotations_remain_editable_after_media_folder_migration_without_undo_history() {
         let directory = tempfile::tempdir().unwrap();
         let mut project = Project::create_in_parent(directory.path(), "Annotations", &[]).unwrap();
         let item = image();
@@ -1056,7 +1241,13 @@ We know naming things is hard, so we set this space up for you."#
         data.annotation_session
             .retain(retained.document, retained.image, saved);
         project.save(&[item]).unwrap();
+        fs::rename(
+            project.folder.join(ASSETS),
+            project.folder.join(LEGACY_ASSETS),
+        )
+        .unwrap();
         let (_, items) = Project::open(project.folder.clone()).unwrap();
+        assert!(!project.folder.join(LEGACY_ASSETS).exists());
         let data = items[0].image().unwrap();
         let reopened = data
             .annotation_session
@@ -1439,5 +1630,97 @@ We know naming things is hard, so we set this space up for you."#
         .unwrap();
         let (cleared, _) = Project::open(project.folder.clone()).unwrap();
         assert_eq!(cleared.metadata.description, None);
+    }
+
+    #[test]
+    fn scratchpad_migration_preserves_media_repository_and_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let legacy = directory.path().join("scratchpad");
+        let (mut project, _) = open_scratchpad(legacy.clone()).unwrap();
+        let id = project.id;
+        let mut item = image();
+        item.upload_state = AttachmentUploadState::Uploaded {
+            url: "https://example.com/kept".into(),
+        };
+        project.metadata.repository = Some(crate::model::Repository {
+            id: 42,
+            name: "project-repo".into(),
+        });
+        project.metadata.repository_owner = Some("acme".into());
+        project.save(std::slice::from_ref(&item)).unwrap();
+        migrate_scratchpad(
+            directory.path(),
+            Some(crate::model::Repository {
+                id: 9,
+                name: "stale-global".into(),
+            }),
+            Some("acme".into()),
+        )
+        .unwrap();
+        assert!(!legacy.exists());
+        let destination = directory.path().join("projects/Scratchpad");
+        let (migrated, items) = Project::open(destination).unwrap();
+        assert_eq!(migrated.id, id);
+        assert_eq!(migrated.metadata.repository.unwrap().name, "project-repo");
+        assert_eq!(items[0].persistent_id, item.persistent_id);
+        assert_eq!(
+            items[0].upload_state.uploaded_url(),
+            Some("https://example.com/kept")
+        );
+        migrate_scratchpad(directory.path(), None, None).unwrap();
+    }
+
+    #[test]
+    fn scratchpad_migration_overwrites_destination_and_recovers_repository_selection() {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut legacy, _) = open_scratchpad(directory.path().join("scratchpad")).unwrap();
+        let item = image();
+        legacy.save(std::slice::from_ref(&item)).unwrap();
+        let projects = directory.path().join("projects");
+        std::fs::create_dir_all(&projects).unwrap();
+        let collision = projects.join("Scratchpad");
+        let mut existing = Project::create_named(collision, "Existing project").unwrap();
+        let existing_id = existing.id;
+        existing.save(&[image()]).unwrap();
+        migrate_scratchpad(
+            directory.path(),
+            Some(crate::model::Repository {
+                id: 42,
+                name: "images".into(),
+            }),
+            Some("acme".into()),
+        )
+        .unwrap();
+        let (scratchpad, items) = Project::open(projects.join("Scratchpad")).unwrap();
+        assert_eq!(scratchpad.id, legacy.id);
+        assert_ne!(scratchpad.id, existing_id);
+        assert_eq!(scratchpad.metadata.repository.unwrap().id, 42);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].persistent_id, item.persistent_id);
+        assert_eq!(
+            project_folders(&projects).unwrap(),
+            vec![projects.join("Scratchpad").canonicalize().unwrap()]
+        );
+        migrate_scratchpad(directory.path(), None, None).unwrap();
+        let (reopened, items) = Project::open(projects.join("Scratchpad")).unwrap();
+        assert_eq!(reopened.id, legacy.id);
+        assert_eq!(items[0].persistent_id, item.persistent_id);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scratchpad_migration_replaces_a_destination_symlink_without_deleting_its_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let (legacy, _) = open_scratchpad(directory.path().join("scratchpad")).unwrap();
+        let projects = directory.path().join("projects");
+        fs::create_dir_all(&projects).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("keep.txt"), b"keep").unwrap();
+        let destination = projects.join("Scratchpad");
+        std::os::unix::fs::symlink(outside.path(), &destination).unwrap();
+        migrate_scratchpad(directory.path(), None, None).unwrap();
+        assert_eq!(fs::read(outside.path().join("keep.txt")).unwrap(), b"keep");
+        assert!(!fs::symlink_metadata(&destination).unwrap().is_symlink());
+        assert_eq!(Project::open(destination).unwrap().0.id, legacy.id);
     }
 }

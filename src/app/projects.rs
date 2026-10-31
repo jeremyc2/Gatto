@@ -1,5 +1,6 @@
 use super::*;
 use crate::projects::{Project, ProjectSummary, WorkspaceMetadata};
+use anyhow::Context as _;
 use gpui_kit::component::{
     Collapsible,
     menu::{DropdownMenu as _, PopupMenuItem},
@@ -22,6 +23,7 @@ struct ProjectRows {
     rows: Vec<(PathBuf, SidebarMenuItem)>,
     bounds: Rc<RefCell<HashMap<PathBuf, Bounds<gpui_kit::Pixels>>>>,
     active: Option<PathBuf>,
+    pinned_count: usize,
 }
 impl Collapsible for ProjectRows {
     fn is_collapsed(&self) -> bool {
@@ -50,32 +52,60 @@ impl SidebarItem for ProjectRows {
                         let layout = self.bounds.clone();
                         let selected = self.active.as_ref() == Some(&folder);
                         let can_drop = !selected;
-                        div()
-                            .id(format!("{id}-project-drop-{index}"))
-                            .relative()
+                        v_flex()
                             .w_full()
-                            .rounded_lg()
-                            .border_1()
-                            .border_color(cx.theme().border.opacity(0.))
-                            .when(can_drop, |row| {
-                                row.drag_over::<attachment_drag::AttachmentDrag>(
-                                    |style, _, _, cx| {
-                                        style
-                                            .border_color(cx.theme().primary)
-                                            .bg(cx.theme().primary.opacity(0.12))
-                                    },
+                            .when(index == 0 && self.pinned_count > 0, |group| {
+                                group.child(
+                                    div()
+                                        .px_2()
+                                        .pb_2()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child("Primary"),
                                 )
                             })
-                            .child(item.render(format!("{id}-project-item-{index}"), window, cx))
-                            .child(
-                                gpui_kit::canvas(
-                                    move |bounds, _, _| {
-                                        layout.borrow_mut().insert(folder, bounds);
-                                    },
-                                    |_, _, _, _| {},
+                            .when(index == self.pinned_count && index > 0, |group| {
+                                group.child(
+                                    div()
+                                        .w_full()
+                                        .h(px(2.))
+                                        .my_3()
+                                        .rounded_full()
+                                        .bg(cx.theme().muted_foreground.opacity(0.5)),
                                 )
-                                .absolute()
-                                .inset_0(),
+                            })
+                            .child(
+                                div()
+                                    .id(format!("{id}-project-drop-{index}"))
+                                    .relative()
+                                    .w_full()
+                                    .rounded_lg()
+                                    .border_1()
+                                    .border_color(cx.theme().border.opacity(0.))
+                                    .when(can_drop, |row| {
+                                        row.drag_over::<attachment_drag::AttachmentDrag>(
+                                            |style, _, _, cx| {
+                                                style
+                                                    .border_color(cx.theme().primary)
+                                                    .bg(cx.theme().primary.opacity(0.12))
+                                            },
+                                        )
+                                    })
+                                    .child(item.render(
+                                        format!("{id}-project-item-{index}"),
+                                        window,
+                                        cx,
+                                    ))
+                                    .child(
+                                        gpui_kit::canvas(
+                                            move |bounds, _, _| {
+                                                layout.borrow_mut().insert(folder, bounds);
+                                            },
+                                            |_, _, _, _| {},
+                                        )
+                                        .absolute()
+                                        .inset_0(),
+                                    ),
                             )
                     }),
             )
@@ -84,6 +114,7 @@ impl SidebarItem for ProjectRows {
 
 #[derive(Default)]
 pub(super) struct ProjectState {
+    id: Option<uuid::Uuid>,
     pub folders: Vec<PathBuf>,
     pub folder: Option<PathBuf>,
     pub title: Option<String>,
@@ -100,17 +131,76 @@ pub(super) struct ProjectState {
     pub loading: bool,
     pub saving: bool,
     pub error: Option<String>,
+    deferred_initial_load: bool,
+    catalog_generation: Cell<u64>,
 }
 
 impl UploaderApp {
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(super) fn prepare_walkthrough_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.project_state
+            .catalog_generation
+            .set(self.project_state.catalog_generation.get().wrapping_add(1));
+        let scratchpad = PathBuf::from("/Users/example/.gatto/projects/Scratchpad");
+        self.project_state.scratchpad_folder = Some(scratchpad.clone());
+        self.project_state.storage_folder = self
+            .project_state
+            .folder
+            .clone()
+            .or(Some(scratchpad.clone()));
+        self.remember_project(scratchpad);
+        if let Some(folder) = self.project_state.folder.clone() {
+            self.settings.add_from_clipboard_project = folder
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned);
+            let pinned = PathBuf::from("/Users/example/.gatto/projects/Release notes");
+            self.remember_project(pinned);
+            self.remember_project(PathBuf::from("/Users/example/.gatto/projects/Screenshots"));
+            self.settings.pinned_projects.insert("Release notes".into());
+        }
+        for folder in &self.project_state.folders {
+            let title = folder.file_name().unwrap().to_string_lossy().into_owned();
+            self.project_state
+                .titles
+                .insert(folder.clone(), title.clone());
+            self.project_state.summaries.insert(
+                folder.clone(),
+                ProjectSummary {
+                    id: uuid::Uuid::new_v4(),
+                    title,
+                    metadata: WorkspaceMetadata::default(),
+                },
+            );
+        }
+        self.sort_projects(cx);
+    }
+
     pub(super) fn initialize_workspaces(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu_bar.add_from_clipboard_busy() {
+            self.project_state.loading = true;
+            self.project_state.deferred_initial_load = true;
+            let busy = self.menu_bar.add_from_clipboard_busy_flag();
+            let executor = cx.background_executor().clone();
+            cx.spawn_in(window, async move |this, window| {
+                while busy.get() {
+                    executor.timer(std::time::Duration::from_millis(10)).await;
+                }
+                let _ = this.update_in(window, |this, window, cx| {
+                    this.project_state.deferred_initial_load = false;
+                    this.initialize_workspaces(window, cx);
+                });
+            })
+            .detach();
+            return;
+        }
         let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search projects"));
         cx.subscribe(&search, |_, _, _: &InputEvent, cx| cx.notify())
             .detach();
         self.project_state.search = Some(search);
         self.refresh_project_names(cx);
         if self.persist_preferences {
-            match crate::settings::scratchpad_directory() {
+            match self.settings.scratchpad_directory() {
                 Ok(path) => self.load_workspace(path, true, window, cx),
                 Err(error) => self.project_state.error = Some(error.to_string()),
             }
@@ -118,6 +208,8 @@ impl UploaderApp {
     }
 
     pub(super) fn refresh_project_names(&self, cx: &mut Context<Self>) {
+        let generation = self.project_state.catalog_generation.get().wrapping_add(1);
+        self.project_state.catalog_generation.set(generation);
         let folders = self.project_state.folders.clone();
         let directory = self
             .persist_preferences
@@ -141,6 +233,9 @@ impl UploaderApp {
             let summaries = task.await;
             let _ =
                 this.update(cx, |this, cx| {
+                    if this.project_state.catalog_generation.get() != generation {
+                        return;
+                    }
                     this.project_state.folders = summaries.keys().cloned().collect();
                     this.project_state
                         .titles
@@ -159,6 +254,7 @@ impl UploaderApp {
                         }
                     }
                     this.sort_projects(cx);
+                    this.sync_add_from_clipboard_enabled();
                     cx.notify();
                 });
         })
@@ -166,6 +262,12 @@ impl UploaderApp {
     }
 
     fn sort_projects(&mut self, cx: &mut Context<Self>) {
+        let add_from_clipboard = self
+            .settings
+            .add_from_clipboard_project
+            .as_deref()
+            .unwrap_or("Scratchpad");
+        let pins = &self.settings.pinned_projects;
         self.project_state.folders.sort_by(|a, b| {
             let updated = |path| {
                 self.project_state
@@ -173,11 +275,35 @@ impl UploaderApp {
                     .get(path)
                     .map_or(0, |s| s.metadata.updated_at)
             };
-            updated(b).cmp(&updated(a)).then_with(|| a.cmp(b))
+            let rank = |path: &PathBuf| {
+                let key = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default();
+                if key == add_from_clipboard {
+                    0
+                } else if pins.contains(key) {
+                    1
+                } else {
+                    2
+                }
+            };
+            rank(a)
+                .cmp(&rank(b))
+                .then_with(|| updated(b).cmp(&updated(a)))
+                .then_with(|| a.cmp(b))
+        });
+        let mut recent = self.project_state.folders.clone();
+        recent.sort_by_key(|path| {
+            std::cmp::Reverse(
+                self.project_state
+                    .summaries
+                    .get(path)
+                    .map_or(0, |summary| summary.metadata.updated_at),
+            )
         });
         crate::application_menu::set_recent_projects(
-            self.project_state
-                .folders
+            recent
                 .iter()
                 .take(5)
                 .map(|path| (self.project_label(path), path.clone()))
@@ -217,7 +343,11 @@ impl UploaderApp {
     }
 
     fn creation_busy(&self) -> bool {
-        self.uploading || self.import_busy() || self.project_state.saving || self.preview_open
+        self.uploading
+            || self.import_busy()
+            || self.project_state.saving
+            || self.preview_open
+            || self.menu_bar.add_from_clipboard_busy()
     }
 
     pub(super) fn create_project(
@@ -567,6 +697,10 @@ impl UploaderApp {
                     let description = description_input.read(cx).value().to_string();
                     let description = (!description.trim().is_empty()).then_some(description);
                     match owner.update(cx, |this, cx| {
+                        anyhow::ensure!(
+                            !this.menu_bar.add_from_clipboard_busy(),
+                            "Wait for Add from Clipboard to finish."
+                        );
                         let directory = this.settings.project_directory()?;
                         let folder = crate::projects::project_in_directory(&directory, &folder)?;
                         let name = crate::projects::edit_metadata(
@@ -622,7 +756,9 @@ impl UploaderApp {
             return;
         };
         self.close_clean_preview(cx);
-        if self.project_navigation_busy() || self.project_state.folder.as_ref() == Some(&target) {
+        if self.project_navigation_busy()
+            || self.project_state.storage_folder.as_ref() == Some(&target)
+        {
             return;
         }
         let attachments = self
@@ -675,7 +811,8 @@ impl UploaderApp {
     }
 
     fn project_navigation_busy(&self) -> bool {
-        self.uploading
+        self.menu_bar.add_from_clipboard_busy()
+            || self.uploading
             || self.import_busy()
             || self.project_state.saving
             || self.project_state.error.is_some()
@@ -690,15 +827,19 @@ impl UploaderApp {
     ) {
         let saving = self.project_state.saving
             || self.project_state.loading
-            || self.project_state.error.is_some();
+            || self.project_state.error.is_some()
+            || self.menu_bar.add_from_clipboard_busy();
         let preview = self.preview_open;
+        let add_from_clipboard_busy = self.menu_bar.add_from_clipboard_busy();
         let owner = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let owner = owner.clone();
             let target = target.clone();
             alert
                 .title("Work in progress")
-                .description(if saving {
+                .description(if add_from_clipboard_busy {
+                    "Add from Clipboard is in progress. Try again when it finishes."
+                } else if saving {
                     "Saving changes. Try again shortly."
                 } else if preview {
                     "Discard unsaved edits?"
@@ -792,7 +933,7 @@ impl UploaderApp {
             .scratchpad_folder
             .clone()
             .map(Ok)
-            .unwrap_or_else(crate::settings::scratchpad_directory)
+            .unwrap_or_else(|| self.settings.scratchpad_directory())
     }
 
     fn resolve_project_folder(
@@ -829,7 +970,11 @@ impl UploaderApp {
             let Some(folder) = self.resolve_project_folder(folder, window, cx) else {
                 return;
             };
-            Some(folder)
+            if self.scratchpad_path().ok().as_ref() == Some(&folder) {
+                None
+            } else {
+                Some(folder)
+            }
         } else {
             None
         };
@@ -865,24 +1010,13 @@ impl UploaderApp {
         self.invalidate_project_callbacks();
         let folders = self.project_state.folders.clone();
         let known = self.project_state.titles.clone();
-        let fallback_repository = self.settings.preferred_repository().map(|name| Repository {
-            name: name.to_owned(),
-            id: self.settings.last_repository_id.unwrap_or_default(),
-        });
-        let fallback_owner = self.settings.owner.clone();
         let missing_folder = folder.clone();
         let task = cx.background_spawn(async move {
-            let initial = scratchpad && !folder.join("gatto-project.json").exists();
-            let (mut project, attachments) = if scratchpad {
+            let (project, attachments) = if scratchpad {
                 crate::projects::open_scratchpad(folder)?
             } else {
                 Project::open(folder)?
             };
-            if initial {
-                project.metadata.repository = fallback_repository;
-                project.metadata.repository_owner = fallback_owner;
-                project.save(&attachments)?;
-            }
             if !scratchpad {
                 crate::projects::distinct_name(&project.title, &project.folder, &folders, &known)?;
             }
@@ -933,13 +1067,12 @@ impl UploaderApp {
         self.project_state.folder = (!scratchpad).then(|| project.folder.clone());
         self.project_state.storage_folder = Some(project.folder.clone());
         self.project_state.title = (!scratchpad).then(|| project.title.clone());
+        self.project_state.id = Some(project.id);
         self.project_state.metadata = project.metadata.clone();
         self.project_state.loading = false;
         self.project_state.saving = false;
         self.project_state.error = None;
-        if !scratchpad {
-            self.remember_project(project.folder.clone());
-        }
+        self.remember_project(project.folder.clone());
         self.staged_attachments = attachments;
         self.selected_attachments.clear();
         self.selected_repository = self
@@ -953,6 +1086,7 @@ impl UploaderApp {
         }
         self.refresh_repository_picker(window, cx);
         self.start_project_writer(project, cx);
+        self.sync_add_from_clipboard_enabled();
         self.sync_upload_result();
         self.refresh_project_names(cx);
         if let Some(target) = self.project_state.pending_destination.take() {
@@ -962,9 +1096,6 @@ impl UploaderApp {
             self.stage_opened_files(paths, window, cx);
         } else if let Some(images) = self.pending_comparison.take() {
             let _ = self.begin_comparison(images, window, cx);
-        } else if self.pending_menu_paste {
-            self.pending_menu_paste = false;
-            self.on_paste(&PasteImage, window, cx);
         }
         cx.notify();
     }
@@ -974,7 +1105,6 @@ impl UploaderApp {
         self.upload_generation = self.upload_generation.wrapping_add(1);
         self.loading_token = false;
         self.loading_repository = false;
-        self.pending_menu_paste = false;
     }
 
     fn start_project_writer(&mut self, mut project: Project, cx: &mut Context<Self>) {
@@ -1020,6 +1150,7 @@ impl UploaderApp {
                                 this.project_state.error = None;
                                 this.project_state.metadata.updated_at = updated;
                                 this.refresh_project_names(cx);
+                                this.sync_add_from_clipboard_enabled();
                             }
                             Err(error) => {
                                 this.project_state.error =
@@ -1083,6 +1214,9 @@ impl UploaderApp {
     }
 
     fn remove_project(&mut self, folder: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if self.scratchpad_path().ok().as_ref() == Some(&folder) {
+            return;
+        }
         if self.project_navigation_busy() {
             self.pending_work_dialog(None, window, cx);
             return;
@@ -1099,6 +1233,18 @@ impl UploaderApp {
                 this.project_state.loading = false;
                 match result {
                     Ok(()) => {
+                        let key = folder
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_default();
+                        this.settings.pinned_projects.remove(key);
+                        if this.settings.add_from_clipboard_project.as_deref() == Some(key) {
+                            this.settings.add_from_clipboard_project = None;
+                        }
+                        if this.persist_preferences {
+                            let _ = this.settings.save();
+                        }
+                        this.sync_add_from_clipboard_enabled();
                         this.project_state.folders.retain(|path| path != &folder);
                         this.project_state.titles.remove(&folder);
                         this.project_state.summaries.remove(&folder);
@@ -1133,6 +1279,7 @@ impl UploaderApp {
             }
         };
         self.project_state.loading = true;
+        let scratchpad = self.scratchpad_path().ok();
         let task = cx.background_spawn(async move {
             let paths = match crate::projects::project_folders(&directory) {
                 Ok(paths) => paths,
@@ -1140,6 +1287,7 @@ impl UploaderApp {
             };
             paths
                 .into_iter()
+                .filter(|path| Some(path) != scratchpad.as_ref())
                 .map(|path| {
                     let result = crate::projects::delete_project(&path);
                     (path, result)
@@ -1164,6 +1312,27 @@ impl UploaderApp {
                     }
                 }
                 this.project_state.folders.retain(|path| path.exists());
+                let remaining = this
+                    .project_state
+                    .folders
+                    .iter()
+                    .filter_map(|path| path.file_name().and_then(|name| name.to_str()))
+                    .collect::<HashSet<_>>();
+                this.settings
+                    .pinned_projects
+                    .retain(|key| remaining.contains(key.as_str()));
+                if this
+                    .settings
+                    .add_from_clipboard_project
+                    .as_ref()
+                    .is_some_and(|key| !remaining.contains(key.as_str()))
+                {
+                    this.settings.add_from_clipboard_project = None;
+                }
+                if this.persist_preferences {
+                    let _ = this.settings.save();
+                }
+                this.sync_add_from_clipboard_enabled();
                 if this
                     .project_state
                     .folder
@@ -1191,7 +1360,7 @@ impl UploaderApp {
             "Finish the current work first."
         );
         let directory = self.settings.project_directory()?;
-        let scratchpad = crate::settings::scratchpad_directory()?;
+        let scratchpad = self.settings.scratchpad_directory()?;
         self.project_state.active = None;
         self.project_state.loading = true;
         let task = cx.background_spawn(async move {
@@ -1301,6 +1470,306 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn project_uses_add_from_clipboard(&self, folder: &std::path::Path) -> bool {
+        folder.file_name().and_then(|name| name.to_str())
+            == Some(
+                self.settings
+                    .add_from_clipboard_project
+                    .as_deref()
+                    .unwrap_or("Scratchpad"),
+            )
+    }
+
+    fn project_is_pinned(&self, folder: &std::path::Path) -> bool {
+        self.scratchpad_path().ok().as_deref() != Some(folder)
+            && (self.project_uses_add_from_clipboard(folder)
+                || folder
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|key| self.settings.pinned_projects.contains(key)))
+    }
+
+    pub(super) fn sync_add_from_clipboard_enabled(&self) {
+        let available = self.settings.add_from_clipboard_available();
+        self.menu_bar.set_add_from_clipboard_enabled(available);
+        let shortcut = (available
+            && self.settings.global_add_from_clipboard_shortcut_enabled
+            && !self.recording_global_shortcut)
+            .then_some(self.settings.global_add_from_clipboard_shortcut.as_str());
+        if let Err(error) = self.global_shortcut.set_shortcut(shortcut) {
+            self.diagnostics.error(format!(
+                "Could not update Add from Clipboard shortcut availability: {error}"
+            ));
+        }
+    }
+
+    pub(crate) fn add_from_clipboard_waiting_for_workspace(&self) -> bool {
+        self.project_state.loading && !self.project_state.deferred_initial_load
+    }
+
+    pub(crate) fn add_from_clipboard_save_barrier(
+        &self,
+    ) -> Option<async_channel::Receiver<Result<(), String>>> {
+        let writer = self.project_state.active.as_ref()?;
+        let (done, completed) = async_channel::bounded(1);
+        let _ = writer.try_send(ProjectWrite::Flush(done));
+        Some(completed)
+    }
+
+    pub(crate) fn add_from_clipboard_upload_barrier(
+        &self,
+        item: &crate::add_from_clipboard::SavedClipboardItem,
+    ) -> Option<async_channel::Receiver<Result<(), String>>> {
+        if self.project_state.id == Some(item.project_id)
+            && self.staged_attachments.iter().any(|attachment| {
+                attachment.persistent_id == item.attachment_id
+                    && matches!(
+                        attachment.upload_state,
+                        AttachmentUploadState::Queued | AttachmentUploadState::Uploading { .. }
+                    )
+            })
+        {
+            let (done, completed) = async_channel::bounded(1);
+            let _ = done.try_send(Err(
+                "This attachment is already uploading. Wait for it to finish, then copy it.".into(),
+            ));
+            Some(completed)
+        } else {
+            self.add_from_clipboard_save_barrier()
+        }
+    }
+
+    pub(crate) fn store_add_from_clipboard(
+        &mut self,
+        update: crate::add_from_clipboard::ClipboardUpdate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Task<anyhow::Result<crate::add_from_clipboard::ClipboardReceipt>> {
+        use crate::add_from_clipboard::ClipboardUpdate;
+        if self.project_state.storage_folder.as_ref() != Some(&update.folder) {
+            let task = cx.background_spawn(async move { update.persist() });
+            return cx.spawn(async move |this, cx| {
+                let result = task.await;
+                let _ = this.update(cx, |this, cx| this.refresh_project_names(cx));
+                result
+            });
+        }
+        if self.project_state.id != Some(update.project_id) {
+            return gpui_kit::Task::ready(Err(anyhow::anyhow!(
+                "The original project is no longer available."
+            )));
+        }
+        if self.attachment_drag.is_some() {
+            self.cancel_attachment_reorder(window, cx);
+        }
+        if update.original.is_none() {
+            let receipt = update.receipt(&update.attachment);
+            self.staged_attachments.push(update.attachment);
+            self.sync_upload_result();
+            self.save_project(cx);
+            let saved = self.add_from_clipboard_save_barrier();
+            return cx.background_spawn(async move {
+                let saved = saved.context("Project saving stopped")?;
+                saved.recv().await?.map_err(anyhow::Error::msg)?;
+                Ok(receipt)
+            });
+        }
+        let snapshot = self
+            .staged_attachments
+            .iter()
+            .find(|item| item.persistent_id == update.attachment.persistent_id)
+            .cloned();
+        let validation = cx.background_spawn(async move {
+            let snapshot = snapshot.context("The attachment was removed from its project.")?;
+            update.validate_original(&snapshot)?;
+            Ok::<_, anyhow::Error>((update, snapshot))
+        });
+        cx.spawn_in(window, async move |this, window| {
+            let (update, snapshot) = validation.await?;
+            let (receipt, saved) = this.update_in(window, |this, window, cx| {
+                anyhow::ensure!(
+                    this.project_state.id == Some(update.project_id),
+                    "The original project is no longer available."
+                );
+                if this.attachment_drag.is_some() {
+                    this.cancel_attachment_reorder(window, cx);
+                }
+                let current = this
+                    .staged_attachments
+                    .iter_mut()
+                    .find(|item| item.persistent_id == snapshot.persistent_id)
+                    .context("The attachment was removed from its project.")?;
+                anyhow::ensure!(
+                    ClipboardUpdate::same_instance(current, &snapshot),
+                    "The attachment changed while uploading. Its latest edits have been kept."
+                );
+                let receipt = update.apply_uploaded(current);
+                this.sync_upload_result();
+                this.save_project(cx);
+                Ok::<_, anyhow::Error>((receipt, this.add_from_clipboard_save_barrier()))
+            })??;
+            saved
+                .context("Project saving stopped")?
+                .recv()
+                .await?
+                .map_err(anyhow::Error::msg)?;
+            Ok(receipt)
+        })
+    }
+
+    fn change_project_preference(
+        &mut self,
+        folder: &std::path::Path,
+        add_from_clipboard: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.menu_bar.add_from_clipboard_busy() {
+            self.pending_work_dialog(None, window, cx);
+            return;
+        }
+        let Some(key) = folder.file_name().and_then(|name| name.to_str()) else {
+            return;
+        };
+        let previous = self.settings.clone();
+        if add_from_clipboard {
+            self.settings.add_from_clipboard_project =
+                if self.project_uses_add_from_clipboard(folder) || key == "Scratchpad" {
+                    None
+                } else {
+                    Some(key.to_owned())
+                };
+        } else if !self.settings.pinned_projects.remove(key) {
+            self.settings.pinned_projects.insert(key.to_owned());
+        }
+        if self.persist_preferences
+            && let Err(error) = self.settings.save()
+        {
+            self.settings = previous;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+            return;
+        }
+        self.sort_projects(cx);
+        self.sync_add_from_clipboard_enabled();
+        cx.notify();
+    }
+
+    fn project_sidebar_row(
+        &self,
+        folder: &PathBuf,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> SidebarMenuItem {
+        let label = self.project_label(folder);
+        let path = folder.clone();
+        let menu_path = folder.clone();
+        let view = cx.entity().downgrade();
+        let add_from_clipboard = self.project_uses_add_from_clipboard(folder);
+        let pinned = folder
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|key| self.settings.pinned_projects.contains(key));
+        let scratchpad = self.scratchpad_path().ok().as_ref() == Some(folder);
+        SidebarMenuItem::new(label.clone())
+            .accessibility_label(if add_from_clipboard {
+                format!(r#"{label}, used for "Add from Clipboard""#)
+            } else if pinned {
+                format!("{label}, pinned")
+            } else {
+                label
+            })
+            .icon(if add_from_clipboard {
+                AssetIconName::Star
+            } else {
+                AssetIconName::Folder
+            })
+            .active(self.project_state.storage_folder.as_ref() == Some(folder))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.request_workspace(Some(path.clone()), window, cx)
+            }))
+            .suffix(move |_, _| {
+                let view = view.clone();
+                let menu_path = menu_path.clone();
+                h_flex().items_center().gap_1().child(
+                    Button::new(format!("project-menu-{index}"))
+                        .debug_selector(move || format!("project-options-{index}"))
+                        .app_icon()
+                        .icon(AssetIconName::Ellipsis)
+                        .accessibility_label("Project options")
+                        .dropdown_menu(move |mut menu, _, _| {
+                            if !scratchpad || !add_from_clipboard {
+                                let view = view.clone();
+                                let path = menu_path.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new(if add_from_clipboard {
+                                        r#"Stop using for "Add from Clipboard""#
+                                    } else {
+                                        r#"Use for "Add from Clipboard""#
+                                    })
+                                    .icon(AssetIconName::Star)
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = view.update(cx, |this, cx| {
+                                                this.change_project_preference(
+                                                    &path, true, window, cx,
+                                                )
+                                            });
+                                        },
+                                    ),
+                                );
+                            }
+                            let pin_view = view.clone();
+                            let pin_path = menu_path.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(if pinned {
+                                    "Unpin project"
+                                } else {
+                                    "Pin project"
+                                })
+                                .icon(AssetIconName::Pin)
+                                .on_click(move |_, window, cx| {
+                                    let _ = pin_view.update(cx, |this, cx| {
+                                        this.change_project_preference(&pin_path, false, window, cx)
+                                    });
+                                }),
+                            );
+                            if !scratchpad {
+                                let edit_view = view.clone();
+                                let edit_path = menu_path.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new("Edit metadata")
+                                        .icon(AssetIconName::Tags)
+                                        .on_click(move |_, window, cx| {
+                                            let _ = edit_view.update(cx, |this, cx| {
+                                                this.edit_project_metadata(
+                                                    edit_path.clone(),
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        }),
+                                );
+                                let delete_view = view.clone();
+                                let delete_path = menu_path.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new("Delete")
+                                        .icon(AssetIconName::Trash)
+                                        .on_click(move |_, window, cx| {
+                                            let _ = delete_view.update(cx, |this, cx| {
+                                                this.remove_project(delete_path.clone(), window, cx)
+                                            });
+                                        }),
+                                );
+                            }
+                            menu
+                        }),
+                )
+            })
+    }
+
     pub(super) fn render_project_sidebar(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         if self.settings.sidebar_collapsed {
             return div().w(px(0.)).h_full().into_any_element();
@@ -1311,6 +1780,13 @@ impl UploaderApp {
             .as_ref()
             .map(|s| s.read(cx).value().to_lowercase())
             .unwrap_or_default();
+        let scratchpad = self.scratchpad_path().ok();
+        let projects = self
+            .project_state
+            .folders
+            .iter()
+            .filter(|path| Some(*path) != scratchpad.as_ref())
+            .collect::<Vec<_>>();
         Sidebar::new("projects-sidebar")
             .w(px(220.))
             .collapsible(false)
@@ -1371,74 +1847,24 @@ impl UploaderApp {
                     ),
             )
             .child(ProjectRows {
-                rows: self
-                    .project_state
-                    .folders
+                rows: projects
                     .iter()
+                    .copied()
                     .enumerate()
                     .filter(|(_, path)| self.project_label(path).to_lowercase().contains(&query))
                     .map(|(index, folder)| {
-                        let label = self.project_label(folder);
-                        let path = folder.clone();
-                        let rename_folder = folder.clone();
-                        let delete_folder = folder.clone();
-                        let rename_view = cx.entity().downgrade();
-                        let delete_view = rename_view.clone();
-                        let item = SidebarMenuItem::new(label.clone())
-                            .accessibility_label(label)
-                            .icon(AssetIconName::Folder)
-                            .active(self.project_state.folder.as_ref() == Some(folder))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.request_workspace(Some(path.clone()), window, cx)
-                            }))
-                            .suffix(move |_, _| {
-                                let rename_view = rename_view.clone();
-                                let delete_view = delete_view.clone();
-                                let rename_folder = rename_folder.clone();
-                                let delete_folder = delete_folder.clone();
-                                Button::new(format!("project-menu-{index}"))
-                                    .debug_selector(move || format!("project-options-{index}"))
-                                    .app_icon()
-                                    .icon(AssetIconName::Ellipsis)
-                                    .accessibility_label("Project options")
-                                    .dropdown_menu(move |menu, _, _| {
-                                        let view = rename_view.clone();
-                                        let path = rename_folder.clone();
-                                        let menu = menu.item(
-                                            PopupMenuItem::new("Edit metadata")
-                                                .icon(AssetIconName::Tags)
-                                                .on_click(move |_, window, cx| {
-                                                    let _ = view.update(cx, |this, cx| {
-                                                        this.edit_project_metadata(
-                                                            path.clone(),
-                                                            window,
-                                                            cx,
-                                                        )
-                                                    });
-                                                }),
-                                        );
-                                        let view = delete_view.clone();
-                                        let path = delete_folder.clone();
-                                        menu.item(
-                                            PopupMenuItem::new("Delete")
-                                                .icon(AssetIconName::Trash)
-                                                .on_click(move |_, window, cx| {
-                                                    let _ = view.update(cx, |this, cx| {
-                                                        this.remove_project(
-                                                            path.clone(),
-                                                            window,
-                                                            cx,
-                                                        )
-                                                    });
-                                                }),
-                                        )
-                                    })
-                            });
-                        (folder.clone(), item)
+                        (folder.clone(), self.project_sidebar_row(folder, index, cx))
                     })
                     .collect(),
+                pinned_count: projects
+                    .iter()
+                    .filter(|path| {
+                        self.project_label(path).to_lowercase().contains(&query)
+                            && self.project_is_pinned(path)
+                    })
+                    .count(),
                 bounds: self.project_bounds.clone(),
-                active: self.project_state.folder.clone(),
+                active: self.project_state.storage_folder.clone(),
             })
             .into_any_element()
     }
@@ -1485,8 +1911,9 @@ mod tests {
         cx: &mut gpui_kit::VisualTestContext,
         parent: &std::path::Path,
     ) -> PathBuf {
-        let path = parent.join("scratchpad");
-        let (project, items) = crate::projects::open_scratchpad(path.clone()).unwrap();
+        let path = parent.join("projects/Scratchpad");
+        let (project, items) = crate::projects::open_scratchpad(path).unwrap();
+        let path = project.folder.clone();
         cx.update(|window, cx| {
             view.update(cx, |app, cx| {
                 app.settings.project_directory_override = Some(parent.join("projects"));
@@ -1495,6 +1922,226 @@ mod tests {
         });
         cx.run_until_parked();
         path
+    }
+
+    #[gpui_kit::test]
+    fn sidebar_menu_uses_project_for_add_from_clipboard_and_can_stop_using_it(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        let directory = tempfile::tempdir().unwrap();
+        scratchpad(&view, cx, directory.path());
+        let project = project(directory.path(), "Review", &[]);
+        cx.update(|_, cx| {
+            view.update(cx, |app, cx| {
+                app.remember_project(project.folder.clone());
+                app.refresh_project_names(cx);
+            })
+        });
+        cx.run_until_parked();
+        for (selector, expected) in [
+            ("project-options-0", Some("Review")),
+            ("project-options-0", None),
+        ] {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            let menu = cx.debug_bounds(selector).unwrap().center();
+            cx.simulate_mouse_down(menu, MouseButton::Left, Modifiers::default());
+            cx.simulate_mouse_up(menu, MouseButton::Left, Modifiers::default());
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.simulate_keystrokes("down enter");
+            cx.run_until_parked();
+            cx.update(|_, cx| {
+                assert_eq!(
+                    view.read(cx).settings.add_from_clipboard_project.as_deref(),
+                    expected
+                )
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn add_from_clipboard_and_pins_sort_ahead_of_recent_projects_and_unmark_falls_back(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        let directory = tempfile::tempdir().unwrap();
+        let scratch = scratchpad(&view, cx, directory.path());
+        let pinned = project(directory.path(), "Pinned", &[]);
+        let quick = project(directory.path(), "Quick", &[]);
+        let recent = project(directory.path(), "Recent", &[]);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.project_state.folders.extend([
+                    pinned.folder.clone(),
+                    quick.folder.clone(),
+                    recent.folder.clone(),
+                ]);
+                app.change_project_preference(&pinned.folder, false, window, cx);
+                app.change_project_preference(&quick.folder, true, window, cx);
+                assert_eq!(
+                    &app.project_state.folders[..2],
+                    &[quick.folder.clone(), pinned.folder.clone()]
+                );
+                assert!(app.project_uses_add_from_clipboard(&quick.folder));
+                assert!(!app.settings.pinned_projects.contains("Quick"));
+                app.change_project_preference(&quick.folder, true, window, cx);
+                assert!(app.project_uses_add_from_clipboard(&scratch));
+                assert!(!app.project_is_pinned(&scratch));
+                assert_eq!(
+                    &app.project_state.folders[..2],
+                    &[scratch.clone(), pinned.folder.clone()]
+                );
+                assert!(app.settings.add_from_clipboard_project.is_none());
+                app.change_project_preference(&pinned.folder, false, window, cx);
+                assert!(app.settings.pinned_projects.is_empty());
+            });
+        });
+    }
+
+    #[gpui_kit::test]
+    async fn add_from_clipboard_shares_the_open_projects_writer_and_preserves_later_edits(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        let directory = tempfile::tempdir().unwrap();
+        let scratch = scratchpad(&view, cx, directory.path());
+        let mut uploaded = image();
+        uploaded.upload_state = AttachmentUploadState::Uploaded {
+            url: "https://example.com/copied".into(),
+        };
+        let uploaded_id = uploaded.persistent_id;
+        let task = cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.staged_attachments.push(image());
+                app.save_project(cx);
+                let task = app.store_add_from_clipboard(
+                    crate::add_from_clipboard::ClipboardUpdate {
+                        folder: scratch.canonicalize().unwrap(),
+                        attachment: uploaded,
+                        project_id: app.project_state.id.unwrap(),
+                        project_title: "Scratchpad".into(),
+                        original: None,
+                        copy_format: app.settings.image_copy_format(),
+                    },
+                    window,
+                    cx,
+                );
+                app.staged_attachments.push(image());
+                app.project_state.metadata.description = Some("Latest edit".into());
+                app.save_project(cx);
+                task
+            })
+        });
+        cx.run_until_parked();
+        assert!(
+            task.await
+                .unwrap()
+                .snippet
+                .unwrap()
+                .contains("https://example.com/copied")
+        );
+        let (saved, items) = Project::open(scratch).unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[1].persistent_id, uploaded_id);
+        assert!(items[1].upload_state.is_uploaded());
+        assert_eq!(saved.metadata.description.as_deref(), Some("Latest edit"));
+    }
+
+    #[gpui_kit::test]
+    async fn notification_upload_updates_the_open_item_and_preserves_new_metadata(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        let directory = tempfile::tempdir().unwrap();
+        let scratch = scratchpad(&view, cx, directory.path());
+        let task = cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                let original = image();
+                let mut uploaded = original.clone();
+                uploaded.upload_state = AttachmentUploadState::Uploaded {
+                    url: "https://example.com/notification".into(),
+                };
+                app.staged_attachments.push(original.clone());
+                app.save_project(cx);
+                let task = app.store_add_from_clipboard(
+                    crate::add_from_clipboard::ClipboardUpdate {
+                        folder: scratch.clone(),
+                        project_id: app.project_state.id.unwrap(),
+                        project_title: "Scratchpad".into(),
+                        attachment: uploaded,
+                        original: Some(original),
+                        copy_format: app.settings.image_copy_format(),
+                    },
+                    window,
+                    cx,
+                );
+                app.staged_attachments[0].title = "Latest title".into();
+                app.save_project(cx);
+                task
+            })
+        });
+        cx.run_until_parked();
+        assert!(
+            task.await
+                .unwrap()
+                .snippet
+                .unwrap()
+                .contains("Latest title")
+        );
+        let (_, items) = Project::open(scratch).unwrap();
+        assert_eq!(items.len(), 1);
+        assert!(items[0].upload_state.is_uploaded());
+        assert_eq!(items[0].title, "Latest title");
+    }
+
+    #[gpui_kit::test]
+    fn repository_refresh_tracks_renames_by_id_and_does_not_follow_reused_names(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.project_state.metadata.repository_owner = app.settings.owner.clone();
+                app.project_state.metadata.repository = Some(Repository {
+                    id: 42,
+                    name: "old-name".into(),
+                });
+                app.accept_repository_session(
+                    github::GithubSession {
+                        token: "test".into(),
+                        repositories: vec![
+                            Repository {
+                                id: 99,
+                                name: "old-name".into(),
+                            },
+                            Repository {
+                                id: 42,
+                                name: "renamed".into(),
+                            },
+                        ],
+                    },
+                    window,
+                    cx,
+                );
+                assert_eq!(app.selected_repository.as_ref().unwrap().name, "renamed");
+                assert_eq!(
+                    app.project_state.metadata.repository.as_ref().unwrap().id,
+                    42
+                );
+                app.accept_repository_session(
+                    github::GithubSession {
+                        token: "test".into(),
+                        repositories: vec![Repository {
+                            id: 99,
+                            name: "renamed".into(),
+                        }],
+                    },
+                    window,
+                    cx,
+                );
+                assert!(app.selected_repository.is_none());
+            })
+        });
     }
 
     #[gpui_kit::test]
@@ -1618,6 +2265,7 @@ mod tests {
                     .owner
                     .as_ref()
                     .map(|owner| owner.to_uppercase());
+                app.project_state.metadata.repository.as_mut().unwrap().id = 20;
                 app.accept_repository_session(session, window, cx);
                 assert_eq!(app.selected_repository.as_ref().unwrap().id, 20);
             });
@@ -1837,10 +2485,32 @@ mod tests {
             window.draw(cx).clear(cx);
             assert_eq!(view.read(cx).selected_attachments.len(), 2);
         });
-        let options = cx.debug_bounds("selected-attachment-options").unwrap();
+        let combine = cx.debug_bounds("combine-selected-attachments").unwrap();
+        let move_button = cx.debug_bounds("move-selected-attachments").unwrap();
+        let remove = cx.debug_bounds("remove-selected-attachments").unwrap();
         let selection = cx.debug_bounds("select-all-attachments").unwrap();
-        assert_eq!(options.size.height, selection.size.height);
-        assert_eq!(options.size.width, options.size.height);
+        let count = cx.debug_bounds("attachment-count").unwrap();
+        assert!(selection.right() <= combine.left());
+        assert!(combine.right() <= move_button.left());
+        assert!(move_button.right() <= remove.left());
+        assert!(remove.right() < count.left());
+        assert_eq!(combine.size.width, combine.size.height);
+        // A checked checkbox clears the whole selection, then selects all again.
+        cx.simulate_mouse_down(all, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(all, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(view.read(cx).selected_attachments.is_empty());
+        });
+        assert!(cx.debug_bounds("combine-selected-attachments").is_none());
+        assert!(cx.debug_bounds("move-selected-attachments").is_none());
+        assert!(cx.debug_bounds("remove-selected-attachments").is_none());
+        cx.simulate_mouse_down(all, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(all, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert_eq!(view.read(cx).selected_attachments.len(), 2);
+        });
         cx.update(|window, cx| {
             crate::app::init_keybindings(cx);
             view.update(cx, |app, cx| app.focus_handle.focus(window, cx));
@@ -1864,7 +2534,7 @@ mod tests {
             })
         });
         cx.run_until_parked();
-        assert!(scratch.join("gatto-project.json").exists());
+        assert!(scratch.join("project.json").exists());
         assert!(!project.folder.exists());
         assert_eq!(
             std::fs::read_to_string(directory.path().join("keep.txt")).unwrap(),
@@ -1915,7 +2585,7 @@ mod tests {
         cx.simulate_mouse_down(menu, MouseButton::Left, Modifiers::default());
         cx.simulate_mouse_up(menu, MouseButton::Left, Modifiers::default());
         cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.simulate_keystrokes("down enter");
+        cx.simulate_keystrokes("down down down enter");
         cx.run_until_parked();
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);

@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::global_shortcut::DEFAULT_QUICK_COPY_SHORTCUT;
+use crate::global_shortcut::DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT;
 
 pub const LOGIN_ARGUMENT: &str = "--login";
 
@@ -45,11 +45,37 @@ impl ReleaseChannel {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UploadAction {
+    #[default]
+    Upload,
+    UploadAndCopy,
+}
+
+impl UploadAction {
+    pub fn label(self, count: usize) -> String {
+        let action = match self {
+            Self::Upload => "Upload",
+            Self::UploadAndCopy => "Upload and copy",
+        };
+        if count == 0 {
+            action.into()
+        } else {
+            format!(
+                "{action} {count} attachment{}",
+                if count == 1 { "" } else { "s" }
+            )
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct AppSettings {
     #[serde(rename = "$schema", default = "settings_schema")]
     pub schema: String,
+    pub version: u32,
     pub release_channel: ReleaseChannel,
     #[cfg(test)]
     #[serde(skip)]
@@ -58,35 +84,45 @@ pub struct AppSettings {
     #[serde(alias = "organization")]
     pub owner: Option<String>,
     pub pinned_repositories: BTreeSet<String>,
-    pub last_repository: Option<String>,
-    pub last_repository_id: Option<u64>,
-    #[serde(default = "default_quick_copy_shortcut")]
-    pub global_quick_copy_shortcut: String,
-    pub global_quick_copy_shortcut_enabled: bool,
+    #[serde(alias = "quick_copy_project")]
+    pub add_from_clipboard_project: Option<String>,
+    pub pinned_projects: BTreeSet<String>,
+    #[serde(
+        default = "default_add_from_clipboard_shortcut",
+        alias = "global_quick_copy_shortcut"
+    )]
+    pub global_add_from_clipboard_shortcut: String,
+    #[serde(alias = "global_quick_copy_shortcut_enabled")]
+    pub global_add_from_clipboard_shortcut_enabled: bool,
+    pub automatically_copy_add_from_clipboard: bool,
+    pub upload_action: UploadAction,
     pub close_window_after_copy: bool,
     pub allow_large_videos: bool,
     pub copy_images_as_markdown: bool,
     pub start_at_login: bool,
 }
 
-fn default_quick_copy_shortcut() -> String {
-    DEFAULT_QUICK_COPY_SHORTCUT.to_owned()
+fn default_add_from_clipboard_shortcut() -> String {
+    DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT.to_owned()
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             schema: settings_schema(),
+            version: 1,
             release_channel: ReleaseChannel::Stable,
             #[cfg(test)]
             project_directory_override: None,
             sidebar_collapsed: false,
             owner: None,
             pinned_repositories: BTreeSet::new(),
-            last_repository: None,
-            last_repository_id: None,
-            global_quick_copy_shortcut: default_quick_copy_shortcut(),
-            global_quick_copy_shortcut_enabled: false,
+            add_from_clipboard_project: None,
+            pinned_projects: BTreeSet::new(),
+            global_add_from_clipboard_shortcut: default_add_from_clipboard_shortcut(),
+            global_add_from_clipboard_shortcut_enabled: false,
+            automatically_copy_add_from_clipboard: false,
+            upload_action: UploadAction::Upload,
             close_window_after_copy: false,
             allow_large_videos: false,
             copy_images_as_markdown: false,
@@ -129,18 +165,38 @@ impl AppSettings {
         self.owner = Some(owner);
         if changed {
             self.pinned_repositories.clear();
-            self.last_repository = None;
-            self.last_repository_id = None;
         }
         changed
     }
 
-    /// Returns the repository to restore at launch. A pinned repository is the
-    /// stable fallback for preferences saved before an explicit last selection.
-    pub fn preferred_repository(&self) -> Option<&str> {
-        self.last_repository
+    pub fn scratchpad_directory(&self) -> Result<PathBuf> {
+        Ok(self.project_directory()?.join("Scratchpad"))
+    }
+
+    pub fn add_from_clipboard_directory(&self) -> Result<PathBuf> {
+        let directory = self.project_directory()?;
+        let name = self
+            .add_from_clipboard_project
             .as_deref()
-            .or_else(|| self.pinned_repositories.first().map(String::as_str))
+            .unwrap_or("Scratchpad");
+        let folder = Path::new(name);
+        anyhow::ensure!(
+            folder.components().count() == 1
+                && matches!(
+                    folder.components().next(),
+                    Some(std::path::Component::Normal(_))
+                ),
+            "The Add from Clipboard project must be inside the projects folder."
+        );
+        crate::projects::project_in_directory(&directory, &directory.join(folder))
+    }
+
+    pub fn add_from_clipboard_available(&self) -> bool {
+        self.add_from_clipboard_project.is_none()
+            || self
+                .add_from_clipboard_directory()
+                .and_then(|folder| crate::projects::summary(&folder))
+                .is_ok()
     }
 
     pub fn load() -> Result<Self> {
@@ -150,14 +206,42 @@ impl AppSettings {
             .join(APPLICATION_SUPPORT_DIRECTORY)
             .join("settings.json");
         let source = if path.exists() { &path } else { &legacy };
+        let mut legacy_selection = None;
+        let mut cleanup_legacy = false;
+        let mut rewrite_clipboard_names = false;
         let mut settings: Self = if source.exists() {
             let contents = fs::read_to_string(source)
                 .with_context(|| format!("Could not read {}", source.display()))?;
-            serde_json::from_str(&contents)
+            let json: serde_json::Value = serde_json::from_str(&contents)?;
+            rewrite_clipboard_names = [
+                "quick_copy_project",
+                "global_quick_copy_shortcut",
+                "global_quick_copy_shortcut_enabled",
+            ]
+            .iter()
+            .any(|key| json.get(*key).is_some());
+            cleanup_legacy = json.get("version").is_none()
+                || json.get("last_repository").is_some()
+                || json.get("last_repository_id").is_some();
+            if let Some(name) = json.get("last_repository").and_then(|name| name.as_str()) {
+                legacy_selection = Some(crate::model::Repository {
+                    name: name.to_owned(),
+                    id: json
+                        .get("last_repository_id")
+                        .and_then(|id| id.as_u64())
+                        .unwrap_or(0),
+                });
+            }
+            Self::parse(&contents)
                 .with_context(|| format!("Could not parse {}", source.display()))?
         } else {
             Self::default()
         };
+        let data = data_directory()?;
+        if cleanup_legacy || data.join("scratchpad").exists() {
+            crate::projects::migrate_scratchpad(&data, legacy_selection, settings.owner.clone())?;
+            settings.save()?;
+        }
         if source == &legacy && legacy.exists() {
             settings.start_at_login = launch_agent_path()?.exists();
             if legacy.exists() {
@@ -170,11 +254,20 @@ impl AppSettings {
             install_launch_agent()?;
         }
 
+        if rewrite_clipboard_names && !cleanup_legacy {
+            settings.save()?;
+        }
         Ok(settings)
     }
 
     pub fn save(&self) -> Result<()> {
         write_settings(self, &settings_path()?)
+    }
+
+    fn parse(contents: &str) -> Result<Self> {
+        let settings: Self = serde_json::from_str(contents)?;
+        anyhow::ensure!(settings.version == 1, "Unsupported settings version");
+        Ok(settings)
     }
 
     pub fn set_start_at_login(&mut self, enabled: bool) -> Result<()> {
@@ -204,9 +297,6 @@ impl AppSettings {
 
 pub fn data_directory() -> Result<PathBuf> {
     Ok(home_directory()?.join(".gatto"))
-}
-pub fn scratchpad_directory() -> Result<PathBuf> {
-    Ok(data_directory()?.join("scratchpad"))
 }
 fn settings_path() -> Result<PathBuf> {
     Ok(data_directory()?.join("settings.json"))
@@ -351,7 +441,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use super::{AppSettings, clear_persistence, write_settings};
+    use super::{AppSettings, UploadAction, clear_persistence, write_settings};
 
     #[test]
     fn workspace_settings_write_schema_and_login_preference() {
@@ -442,32 +532,17 @@ mod tests {
         let mut settings = AppSettings {
             owner: Some("acme".into()),
             pinned_repositories: ["images".into()].into(),
-            last_repository: Some("images".into()),
-            last_repository_id: Some(42),
             ..AppSettings::default()
         };
         assert!(!settings.set_owner("ACME".into()));
         assert!(settings.pinned_repositories.contains("images"));
-        assert_eq!(settings.last_repository_id, Some(42));
         assert!(settings.set_owner("octocat".into()));
         assert!(settings.pinned_repositories.is_empty());
-        assert!(settings.last_repository.is_none());
-        assert!(settings.last_repository_id.is_none());
         let json = serde_json::to_string(&settings).unwrap();
         assert!(json.contains("\"owner\":\"octocat\""));
         assert!(!json.contains("organization"));
         let restored: AppSettings = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.owner.as_deref(), Some("octocat"));
-    }
-
-    #[test]
-    fn restores_a_pinned_repository_when_no_last_repository_is_saved() {
-        let mut settings = AppSettings::default();
-        settings
-            .pinned_repositories
-            .insert("owner/repository".into());
-
-        assert_eq!(settings.preferred_repository(), Some("owner/repository"));
     }
 
     #[test]
@@ -479,7 +554,7 @@ mod tests {
         let directory = std::env::temp_dir().join(format!("gatto-settings-test-{unique_id}"));
         fs::create_dir_all(&directory).expect("test directory can be created");
         let data_directory = directory.join(".gatto");
-        fs::create_dir_all(data_directory.join("projects/Example/gatto-media")).unwrap();
+        fs::create_dir_all(data_directory.join("projects/Example/media")).unwrap();
         fs::create_dir_all(data_directory.join("scratchpad")).unwrap();
         fs::create_dir_all(data_directory.join("other-state/nested")).unwrap();
         let settings_path = data_directory.join("settings.json");
@@ -488,11 +563,11 @@ mod tests {
         fs::write(&launch_agent_path, "plist").expect("launch agent can be created");
         fs::write(data_directory.join("rooftops.cbor"), b"game data").unwrap();
         fs::write(
-            data_directory.join("projects/Example/gatto-media/photo.png"),
+            data_directory.join("projects/Example/media/photo.png"),
             b"media",
         )
         .unwrap();
-        fs::write(data_directory.join("scratchpad/gatto-project.json"), b"{}").unwrap();
+        fs::write(data_directory.join("scratchpad/project.json"), b"{}").unwrap();
         fs::write(
             data_directory.join("other-state/nested/data.bin"),
             b"extra state",
@@ -513,7 +588,7 @@ mod tests {
 
     #[test]
     fn older_settings_receive_safe_defaults_for_new_preferences() {
-        let settings: AppSettings = serde_json::from_str(
+        let settings = AppSettings::parse(
             r#"{
                 "organization": "acme",
                 "pinned_repositories": ["images"],
@@ -525,18 +600,73 @@ mod tests {
 
         assert_eq!(settings.owner.as_deref(), Some("acme"));
         assert!(settings.pinned_repositories.contains("images"));
-        assert_eq!(settings.last_repository.as_deref(), Some("images"));
-        assert_eq!(settings.last_repository_id, Some(42));
-        assert_eq!(settings.global_quick_copy_shortcut, "Command+Shift+G");
-        assert!(!settings.global_quick_copy_shortcut_enabled);
+        let saved = serde_json::to_value(&settings).unwrap();
+        assert_eq!(saved["version"], 1);
+        assert!(saved.get("last_repository").is_none());
+        assert!(saved.get("last_repository_id").is_none());
+        assert_eq!(
+            settings.global_add_from_clipboard_shortcut,
+            "Command+Shift+G"
+        );
+        assert!(!settings.global_add_from_clipboard_shortcut_enabled);
         assert!(!settings.close_window_after_copy);
         assert!(!settings.allow_large_videos);
         assert!(!settings.copy_images_as_markdown);
+        assert_eq!(settings.upload_action, UploadAction::Upload);
         assert_eq!(
             settings.image_copy_format(),
             crate::model::ImageCopyFormat::Html
         );
         assert_eq!(settings.video_upload_limit().bytes(), 10_000_000);
+    }
+
+    #[test]
+    fn remembered_upload_action_survives_saving_and_reloading() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        for upload_action in [UploadAction::UploadAndCopy, UploadAction::Upload] {
+            let settings = AppSettings {
+                upload_action,
+                ..Default::default()
+            };
+            write_settings(&settings, &path).unwrap();
+            let loaded = AppSettings::parse(&fs::read_to_string(&path).unwrap()).unwrap();
+            assert_eq!(loaded.upload_action, upload_action);
+        }
+    }
+
+    #[test]
+    fn renamed_clipboard_preferences_preserve_selection_and_shortcut_without_opt_in() {
+        let settings = AppSettings::parse(
+            r#"{
+            "version": 1,
+            "quick_copy_project": "Review",
+            "global_quick_copy_shortcut": "Command+Shift+U",
+            "global_quick_copy_shortcut_enabled": true
+        }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            settings.add_from_clipboard_project.as_deref(),
+            Some("Review")
+        );
+        assert_eq!(
+            settings.global_add_from_clipboard_shortcut,
+            "Command+Shift+U"
+        );
+        assert!(settings.global_add_from_clipboard_shortcut_enabled);
+        assert!(!settings.automatically_copy_add_from_clipboard);
+        let saved = serde_json::to_value(settings).unwrap();
+        assert!(saved.get("quick_copy_project").is_none());
+        assert!(saved.get("global_quick_copy_shortcut").is_none());
+        assert!(saved.get("global_quick_copy_shortcut_enabled").is_none());
+    }
+
+    #[test]
+    fn unsupported_settings_versions_are_rejected() {
+        assert!(AppSettings::parse(r#"{"version":2}"#).is_err());
+        assert!(AppSettings::parse(r#"{"version":0}"#).is_err());
+        assert_eq!(AppSettings::parse("{}").unwrap().version, 1);
     }
 
     #[test]

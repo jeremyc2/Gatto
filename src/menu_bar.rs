@@ -8,8 +8,7 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuAction {
     Open,
-    StageFromClipboard,
-    QuickCopy,
+    AddFromClipboard,
     Settings,
     CreateComposition,
     Update,
@@ -22,13 +21,14 @@ pub struct MenuBar {
 
 impl MenuBar {
     pub fn install(
-        paste_actions_visible: bool,
-        quick_copy_shortcut: Option<&str>,
+        add_from_clipboard_enabled: bool,
+        add_from_clipboard_shortcut: Option<&str>,
     ) -> Result<(Self, async_channel::Receiver<u32>)> {
         let (menu, events) = Menu::new()?;
         let bar = Self { menu };
-        bar.menu.paste_visible(paste_actions_visible);
-        bar.set_shortcut(quick_copy_shortcut)?;
+        bar.menu
+            .add_from_clipboard_enabled(add_from_clipboard_enabled);
+        bar.set_shortcut(add_from_clipboard_shortcut)?;
         Ok((bar, events))
     }
     fn set_shortcut(&self, shortcut: Option<&str>) -> Result<()> {
@@ -46,9 +46,16 @@ impl MenuBar {
 pub struct MenuBarController {
     menu_bar: Rc<RefCell<Option<MenuBar>>>,
     update_generation: Rc<Cell<u32>>,
+    add_from_clipboard_busy: Rc<Cell<bool>>,
 }
 impl MenuBarController {
-    pub fn set_quick_copy_shortcut(&self, shortcut: Option<&str>) -> Result<()> {
+    pub fn add_from_clipboard_busy(&self) -> bool {
+        self.add_from_clipboard_busy.get()
+    }
+    pub fn add_from_clipboard_busy_flag(&self) -> Rc<Cell<bool>> {
+        self.add_from_clipboard_busy.clone()
+    }
+    pub fn set_add_from_clipboard_shortcut(&self, shortcut: Option<&str>) -> Result<()> {
         if let Some(bar) = self.menu_bar.borrow().as_ref() {
             bar.set_shortcut(shortcut)?;
         }
@@ -63,8 +70,7 @@ impl MenuBarController {
         }
         match event {
             1 => Some(MenuAction::Open),
-            2 => Some(MenuAction::StageFromClipboard),
-            3 => Some(MenuAction::QuickCopy),
+            3 => Some(MenuAction::AddFromClipboard),
             4 => Some(MenuAction::Settings),
             id if *id == self.update_identifier() => Some(MenuAction::Update),
             6 => Some(MenuAction::Quit),
@@ -93,9 +99,9 @@ impl MenuBarController {
             .set(self.update_generation.get().wrapping_add(1) & 0x00ff_ffff);
         self.set_update_state(UpdateState::Idle);
     }
-    pub fn set_paste_actions_visible(&self, visible: bool) {
+    pub fn set_add_from_clipboard_enabled(&self, visible: bool) {
         if let Some(bar) = self.menu_bar.borrow().as_ref() {
-            bar.menu.paste_visible(visible);
+            bar.menu.add_from_clipboard_enabled(visible);
         }
     }
 }

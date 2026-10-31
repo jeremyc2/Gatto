@@ -1,6 +1,6 @@
 [package]
 name = "gatto"
-version = "0.21.0"
+version = "0.22.0"
 edition = "2024"
 default-run = "gatto"
 rust-version = "1.90"
@@ -151,6 +151,7 @@ raw-window-handle = "0.6"
 
 [dev-dependencies]
 gpui-kit = { version = "=0.8.0", features = ["test-support"] }
+jsonschema = { version = "0.60.2", default-features = false }
 
 [profile.release]
 lto = "thin"

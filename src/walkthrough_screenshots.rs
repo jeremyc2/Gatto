@@ -1,6 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(dead_code)]
 
+mod add_from_clipboard;
 mod annotation;
 mod app;
 mod application_menu;
@@ -74,6 +75,53 @@ fn generate() -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
+    if std::env::args().any(|arg| arg == "--upload-button-hover") {
+        for (name, hover) in [
+            ("idle", None),
+            ("main", Some("send-image")),
+            ("chevron", Some("upload-options-chevron")),
+        ] {
+            render_scenario_with_hover(
+                WalkthroughScenario::ImageStaged,
+                &output_directory.join(format!("upload-button-{name}.png")),
+                hover,
+            )?;
+        }
+        return Ok(());
+    }
+    if std::env::args().any(|arg| arg == "--control-hover") {
+        for (name, scenario, hover) in [
+            ("unchecked-idle", WalkthroughScenario::ImageStaged, None),
+            (
+                "unchecked-hover",
+                WalkthroughScenario::ImageStaged,
+                Some("select-all-attachments"),
+            ),
+            ("checked-idle", WalkthroughScenario::AttachmentReorder, None),
+            (
+                "checked-hover",
+                WalkthroughScenario::AttachmentReorder,
+                Some("select-all-attachments"),
+            ),
+            (
+                "settings-hover",
+                WalkthroughScenario::Preferences,
+                Some("automatically-copy-add-from-clipboard"),
+            ),
+            (
+                "button-hover",
+                WalkthroughScenario::ImageStaged,
+                Some("open-settings"),
+            ),
+        ] {
+            render_scenario_with_hover(
+                scenario,
+                &output_directory.join(format!("control-{name}.png")),
+                hover,
+            )?;
+        }
+        return Ok(());
+    }
     if std::env::args().any(|arg| arg == "--audit-rooftops" || arg == "--audit-rooftops-gpu") {
         return audit_rooftops(output_directory);
     }
@@ -208,6 +256,10 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
         println!("Wrote {}", output.display());
     }
 
+    if std::env::args().any(|arg| arg == "--app-only") {
+        return Ok(());
+    }
+
     for level in 0..rooftops::LEVELS {
         let output = output_directory.join(format!("rooftops-{}.png", level + 1));
         render_rooftops(&output, RooftopsCapture::Level(level, level == 2))?;
@@ -314,6 +366,24 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
                 "comparison-empty.png"
             }))?;
     }
+    for side in [0, 1] {
+        cx.update_window(picker, |_, window, cx| {
+            view.update(cx, |view, cx| view.convert_walkthrough(side, cx));
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(picker, |_, window, cx| window.render_frame(cx))?;
+        cx.capture_screenshot(picker)?.save(
+            diagnostic_output.join(format!("comparison-new-{}.png", ["left", "right"][side])),
+        )?;
+    }
+    cx.update_window(picker, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.reset(cx);
+            view.load_walkthrough(0, window, cx);
+        })
+    })?;
+    cx.run_until_parked();
     let (main, main_view) = cx.update(|cx| {
         crate::theme::open_window(
             WindowOptions {
@@ -775,6 +845,15 @@ fn render_rooftops(output: &std::path::Path, capture: RooftopsCapture) -> Result
 
 #[cfg(target_os = "macos")]
 fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> Result<()> {
+    render_scenario_with_hover(scenario, output, None)
+}
+
+#[cfg(target_os = "macos")]
+fn render_scenario_with_hover(
+    scenario: WalkthroughScenario,
+    output: &std::path::Path,
+    hover: Option<&str>,
+) -> Result<()> {
     // Keep main-window examples near the app's 600px minimum height. Preferences
     // and the mixed batch need more room to keep their relevant controls visible.
     let rooftops_preferences = std::env::args().any(|arg| arg == "--rooftops-preferences");
@@ -830,6 +909,21 @@ fn render_scenario(scenario: WalkthroughScenario, output: &std::path::Path) -> R
     cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
     cx.run_until_parked();
     cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
+    if let Some(selector) = hover {
+        cx.update_window(window_handle, |_, window, cx| {
+            let position = window.find(selector.to_owned()).bounds().center();
+            window.dispatch_event(
+                gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent {
+                    position,
+                    ..Default::default()
+                }),
+                cx,
+            );
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
+    }
     let image = cx
         .capture_screenshot(window_handle)
         .context("GPUI's Metal screenshot renderer is unavailable")?;

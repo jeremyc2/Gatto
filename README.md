@@ -8,7 +8,7 @@ A macOS app for adding images and videos to GitHub pull requests, issues, commen
 and discussions.
 
 Paste an image or a copied Finder file, drag in media, or select a file. Upload it and copy the Markdown. For fewer steps,
-**Quick Copy** uploads your clipboard image or copied media file in the background and copies the result.
+**Add from Clipboard** saves your clipboard image or copied media file to its project in the background. Optionally upload and copy automatically, or use **Upload and copy** in its notification.
 
 Gatto uses the GitHub CLI (prerequisite) to connect to GitHub's attachment
 service. Images and videos go directly from your Mac to GitHub; Gatto doesn't have a backend.
@@ -42,26 +42,26 @@ then the [walkthrough](docs/WALKTHROUGH.md) for your first upload.
 - Choose repositories owned by a personal GitHub account or an organization.
 - Upload mixed batches with progress, cancel uploads, retry failures, and copy results.
 - Preview images and animated GIFs with zoom and pan; open videos in your macOS video app.
-- Use Quick Copy from the menu bar, a global shortcut, or a custom URL.
+- Use Add from Clipboard from the menu bar, a global shortcut, or a custom URL.
 
 Gatto is obstinately dark-mode only.
 
 ## Automate
 
-Use these URLs in Shortcuts or a launcher, or run `open "gatto://quick-copy"`
+Use these URLs in Shortcuts or a launcher, or run `open "gatto://add-from-clipboard"`
 from Terminal:
 
 | URL                               | Action                                                                 |
 | --------------------------------- | ---------------------------------------------------------------------- |
 | `gatto://open`                    | Open Gatto.                                                            |
-| `gatto://draft-from-clipboard`    | Create a draft from the clipboard image or copied media file.          |
-| `gatto://quick-copy`              | Upload the clipboard image or copied media file and copy its Markdown. |
+| `gatto://add-from-clipboard`      | Save the clipboard image or copied media file to its project in the background. |
 | `gatto://app-preferences`         | Open App Preferences.                                                  |
 | `gatto://side-by-side-comparison` | Open Side-by-Side Comparison to combine two images into one draft.     |
 
-Quick Copy requires a pinned repository. See the
-[walkthrough](docs/WALKTHROUGH.md#automate-gatto-with-custom-urls) for automation
-requirements and repository selection.
+Add from Clipboard uses Scratchpad by default. A repository selection is needed only
+when uploading. See the
+[walkthrough](docs/WALKTHROUGH.md#add-from-clipboard) for choosing a project and
+using Add from Clipboard.
 
 ## Guides and project
 

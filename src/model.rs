@@ -63,7 +63,7 @@ pub fn parse_owner(value: &str) -> Result<String> {
 
 #[derive(Debug, thiserror::Error)]
 #[error(
-    "This video exceeds {limit_mb} MB. Open it in Gatto to choose Compress, or trim it before using Quick Copy."
+    "This video exceeds {limit_mb} MB. Open it in Gatto to choose Compress, or trim it before using Add from Clipboard."
 )]
 pub struct OversizedVideo {
     pub path: PathBuf,

@@ -18,7 +18,9 @@
       "const": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-annotations.schema.json"
     },
     "version": {
-      "const": 1
+      "type": "integer",
+      "const": 1,
+      "description": "Annotation format version, independent of project, settings, and application release versions."
     },
     "next_marker": {
       "type": "integer",

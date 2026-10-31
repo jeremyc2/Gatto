@@ -38,13 +38,12 @@ pub struct Menu {
     menu: Retained<NSMenu>,
     _target: Retained<MenuTarget>,
     open: Retained<NSMenuItem>,
-    preview: Retained<NSMenuItem>,
     quick: Retained<NSMenuItem>,
     preferences: Retained<NSMenuItem>,
     composition: Retained<NSMenuItem>,
     update: Retained<NSMenuItem>,
     quit: Retained<NSMenuItem>,
-    paste_visible: Cell<bool>,
+    add_from_clipboard_enabled: Cell<bool>,
     update_visible: Cell<bool>,
 }
 
@@ -94,8 +93,7 @@ impl Menu {
         };
         let this = Self {
             open: item("Open App", "", 1),
-            preview: item("Draft from Clipboard", "v", 2),
-            quick: item("Quick Copy", "", 3),
+            quick: item("Add from Clipboard", "", 3),
             preferences: item("App Preferences", ",", 4),
             composition: item("Side-by-Side Comparison", "", 7),
             update: item("↑ Update", "", 5),
@@ -104,7 +102,7 @@ impl Menu {
             status,
             menu,
             _target: target,
-            paste_visible: Cell::new(false),
+            add_from_clipboard_enabled: Cell::new(false),
             update_visible: Cell::new(false),
         };
         this.rebuild();
@@ -112,10 +110,9 @@ impl Menu {
         Ok((this, events))
     }
 
-    fn items(&self) -> [&NSMenuItem; 7] {
+    fn items(&self) -> [&NSMenuItem; 6] {
         [
             &self.open,
-            &self.preview,
             &self.quick,
             &self.preferences,
             &self.composition,
@@ -133,10 +130,8 @@ impl Menu {
         }
         self.menu
             .addItem(&NSMenuItem::separatorItem(self.main_thread));
-        self.menu.addItem(&self.preview);
-        if self.paste_visible.get() {
-            self.menu.addItem(&self.quick);
-        }
+        self.quick.setEnabled(self.add_from_clipboard_enabled.get());
+        self.menu.addItem(&self.quick);
         self.menu
             .addItem(&NSMenuItem::separatorItem(self.main_thread));
         self.menu.addItem(&self.preferences);
@@ -144,8 +139,8 @@ impl Menu {
             .addItem(&NSMenuItem::separatorItem(self.main_thread));
         self.menu.addItem(&self.quit);
     }
-    pub fn paste_visible(&self, visible: bool) {
-        self.paste_visible.set(visible);
+    pub fn add_from_clipboard_enabled(&self, visible: bool) {
+        self.add_from_clipboard_enabled.set(visible);
         self.rebuild();
     }
     pub fn update_state(&self, state: u32, identifier: u32) {
@@ -193,9 +188,9 @@ impl Menu {
             });
         self.quick.setTitle(&NSString::from_str(
             &if !canonical.is_empty() && equivalent.is_empty() {
-                format!("Quick Copy ({canonical})")
+                format!("Add from Clipboard ({canonical})")
             } else {
-                "Quick Copy".into()
+                "Add from Clipboard".into()
             },
         ));
         Ok(())
@@ -230,10 +225,11 @@ pub(super) fn verify() -> Result<()> {
                 .isTemplate()
         );
         assert_eq!(menu.menu.numberOfItems(), 8);
-        menu.paste_visible(true);
-        assert_eq!(menu.menu.numberOfItems(), 9);
-        assert_eq!(menu.preview.title().to_string(), "Draft from Clipboard");
-        assert_eq!(menu.preview.keyEquivalent().to_string(), "v");
+        assert_eq!(menu.quick.title().to_string(), "Add from Clipboard");
+        assert!(!menu.quick.isEnabled());
+        menu.add_from_clipboard_enabled(true);
+        assert!(menu.quick.isEnabled());
+        assert_eq!(menu.menu.numberOfItems(), 8);
         menu.shortcut("Command+Shift+Numpad1", "1", 9, true)?;
         assert!(
             menu.quick
@@ -248,8 +244,9 @@ pub(super) fn verify() -> Result<()> {
         menu.update_state(2, 261);
         assert_eq!(menu.update.tag(), 261);
         assert!(!menu.update.isEnabled());
-        assert_eq!(menu.menu.numberOfItems(), 10);
-        menu.paste_visible(false);
+        assert_eq!(menu.menu.numberOfItems(), 9);
+        menu.add_from_clipboard_enabled(false);
+        assert!(!menu.quick.isEnabled());
         assert_eq!(menu.menu.numberOfItems(), 9);
         assert_eq!(menu.menu.itemAtIndex(2).as_deref(), Some(&*menu.update));
         menu.menu.performActionForItemAtIndex(1);

@@ -37,7 +37,7 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | GIF does not animate                                             | Animation plays in the separate image preview while active. macOS Reduce Motion holds the first frame.                                                                                                                                                                                                                                             |
 | Clipboard action finds no image                                  | Copy actual image data or an image/video file in Finder; a text URL or Markdown snippet is not media data.                                                                                                                                                                                                                                         |
 | A normal upload fails                                            | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Scratchpad and projects persist drafts and completed URLs.                                                                                                                                                                                          |
-| Quick Copy fails                                                 | Configure an account or organization and pin an accessible repository. Copy the image or Finder file again and invoke Quick Copy again; this action clears its failed draft.                                                                                                                                                                       |
+| Add from Clipboard fails                                                 | Check that the project is accessible and the clipboard contains an image or copied media file. Uploading additionally requires an account and project repository. Failed uploads retain the saved draft; use the notification’s Upload and copy button or upload it in Gatto.                                                                                                                                                                       |
 | Global shortcut will not register                                | Use at least two modifiers and a supported key. If another app owns the chord, record a different shortcut. No Accessibility permission is required.                                                                                                                                                                                               |
 | Shortcut recorder keeps waiting or retains the previous shortcut | Quit any other Gatto copies, including source builds and local bundles, then retry with one copy running. A second copy can intercept the chord before the recorder receives it; each copy also retains its own preferences in memory.                                                                                                             |
 | A window still opens at login after upgrading                    | Open the updated app once to refresh its existing login item, or toggle Start at Login off and on.                                                                                                                                                                                                                                                 |
@@ -52,27 +52,37 @@ rejects a larger upload, verify the repository owner's plan and your membership,
 collaborator status, or personal paid plan. Otherwise disable the option and
 remove/reimport the video to compress below 10 MB.
 Transfer progress can reach 100% while waiting for GitHub's
-response. See [uploads, cancellation, and retries](docs/WALKTHROUGH.md#uploads-and-retries)
-for timeout behavior and recovery; canceling cannot remove a remote attachment
+response. See [retrying an upload](docs/WALKTHROUGH.md#uploads-and-retries)
+for next steps. Canceling cannot remove a remote attachment
 GitHub already accepted.
 
 ## Local data and recovery
 
 Gatto writes these per-user files:
 
-- `~/.gatto/settings.json`: account or organization, pinned and
-  last-selected repositories, shortcut, copy preferences, and large-video opt-in.
+- `~/.gatto/settings.json`: account or organization, repository favorites, pinned
+  project folders, the project used for Add from Clipboard, shortcut, copy preferences,
+  and large-video opt-in. Repository selections live only in project manifests.
 - `~/.gatto/rooftops.cbor`: Rooftops' lowest completion time and fastest completed
   ghost replay. Delete this file to clear both.
 - `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at Login executable path.
 
-Scratchpad saves to `~/.gatto/scratchpad`. New projects use named subfolders in
-`~/.gatto/projects`. Each workspace contains `gatto-project.json` and
-`gatto-media/`; back them up together. Annotated images include original image
-sources and editable annotation JSON alongside rendered images. Removing an
+Scratchpad saves to `~/.gatto/projects/Scratchpad`. New projects use named subfolders in
+`~/.gatto/projects`. Each workspace contains `project.json` and
+`media/`; back them up together. Annotated images include original image
+sources and editable annotation JSON alongside rendered images. Existing
+`gatto-media` folders migrate to `media` when opened. If both folder names exist,
+opening stops without changing either folder so their contents can be reconciled.
+Existing `gatto-project.json` manifests migrate to `project.json` when loaded. If both
+names exist, `project.json` is used and the older file is preserved. Removing an
 attachment cleans up its associated files. Workspace manifests store the repository, description,
 timestamps, media references, and reusable upload URLs. Previous settings from
-`~/Library/Application Support/Gatto/settings.json` migrate on launch.
+`~/Library/Application Support/Gatto/settings.json` migrate on launch. The former
+`~/.gatto/scratchpad` folder moves into `projects/Scratchpad` with its media and
+manifest intact. If that destination already exists, the old Scratchpad replaces
+it and its previous contents are discarded. No recovery project is created.
+Legacy global repository fields are removed after
+migration; an existing Scratchpad selection takes precedence.
 
 **Retry save** retries a failed write; **Create Project** in the sidebar can
 preserve the current attachments in a new project. Project menu **Delete** removes

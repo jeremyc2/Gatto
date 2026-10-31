@@ -147,6 +147,10 @@ bun test:scripts
 cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
 ```
 
+The Rust test suite validates real saved settings, project manifests, and
+annotation sidecars against the schemas in `schemas/`, using an offline, test-only
+JSON Schema validator. Update the owning schema whenever a persisted format changes.
+
 Apply formatting with `cargo fmt --all`. Please resolve warnings rather than
 silencing them unless there is a documented reason.
 
@@ -214,6 +218,12 @@ text editing, shape choices, grouped selections, pixelation brush, and save/clos
 dialogs. Each editor capture starts with a fresh scene and at most two feedback
 items; the pixelation example covers a local path. Source crops, framing, and
 attribution are recorded in [walkthrough captures](docs/design/walkthrough-captures.md).
+For only the numbered application captures, run
+`cargo run --locked --features walkthrough-screenshots --bin walkthrough-screenshots -- <output-directory> --app-only`.
+Use `--upload-button-hover` instead of `--app-only` to capture the upload control
+at rest and with each half hovered independently.
+Use `--control-hover` for checked and unchecked checkbox states, a labeled settings
+checkbox, and an outlined button with the app's shared hover treatment.
 Use these alongside the matching tasks in the walkthrough. Game captures show an
 early coin jump, a mid-level owl encounter, and the results screen in `rooftops-1.png` through
 `rooftops-3.png`; the scorecard is `rooftops-score.png`.

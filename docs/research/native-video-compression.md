@@ -6,7 +6,7 @@ outside this scope. Findings describe an implementation architecture, not a
 tested encoder integration.
 
 The implementation is now in [compression.rs](../../src/compression.rs); see
-[current usage](../WALKTHROUGH.md#compress-a-larger-video) and
+[current usage](../WALKTHROUGH.md#uploads-and-retries) and
 [architecture](../ARCHITECTURE.md) for the shipped policy and verification.
 The findings below preserve the investigation that preceded implementation.
 

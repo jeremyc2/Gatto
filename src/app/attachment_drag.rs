@@ -163,15 +163,20 @@ impl UploaderApp {
             return;
         };
         let center = drag.pointer.y - drag.grab_y + source.size.height / 2.;
-        let Some(from) = self
-            .staged_attachments
-            .iter()
-            .position(|item| item.id == id)
-        else {
+        let visible = self.ordered_attachments().collect::<Vec<_>>();
+        let Some(from) = visible.iter().position(|item| item.id == id) else {
             return;
         };
-        let to = self
-            .staged_attachments
+        let uploaded = visible[from].upload_state.is_uploaded();
+        let group_start = visible
+            .iter()
+            .position(|item| item.upload_state.is_uploaded() == uploaded)
+            .unwrap();
+        let group_end = visible
+            .iter()
+            .rposition(|item| item.upload_state.is_uploaded() == uploaded)
+            .unwrap();
+        let to = visible
             .iter()
             .filter(|item| item.id != id)
             .filter(|item| {
@@ -179,27 +184,26 @@ impl UploaderApp {
                     .get(&item.id)
                     .is_some_and(|rect| center > rect.center().y)
             })
-            .count();
+            .count()
+            .clamp(group_start, group_end);
         drop(bounds);
         if from == to {
             return;
         }
-        let before: HashMap<_, _> = self
-            .staged_attachments
+        let before: HashMap<_, _> = visible
             .iter()
             .enumerate()
             .map(|(index, item)| (item.id, index))
             .collect();
-        let target = self.staged_attachments[to].id;
+        let target = visible[to].id;
         crate::projects::reorder(&mut self.staged_attachments, id, target);
-        let drag = self.attachment_drag.as_mut().unwrap();
-        drag.shifts = self
-            .staged_attachments
-            .iter()
+        let shifts = self
+            .ordered_attachments()
             .enumerate()
             .filter(|(_, item)| item.id != id)
             .map(|(index, item)| (item.id, (before[&item.id] as f32 - index as f32) * 72.))
             .collect();
+        self.attachment_drag.as_mut().unwrap().shifts = shifts;
         self.reorder_revision = self.reorder_revision.wrapping_add(1);
         self.sync_upload_result();
         cx.notify();
@@ -260,7 +264,7 @@ impl UploaderApp {
         };
         if let Some(folder) = target {
             self.cancel_attachment_reorder(window, cx);
-            if self.project_state.folder.as_ref() != Some(&folder) {
+            if self.project_state.storage_folder.as_ref() != Some(&folder) {
                 self.move_attachment_to_project(id, folder, window, cx);
             }
         } else if !self.main_scroll.bounds().contains(&window.mouse_position()) {

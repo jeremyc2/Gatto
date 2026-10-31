@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{Context as _, Result, bail};
 use gpui_kit::assets::IconName;
-use gpui_kit::base::TestSupportExt as _;
+use gpui_kit::base::{ElementExt as _, TestSupportExt as _};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _,
     attachment::{
@@ -27,13 +27,16 @@ use gpui_kit::{
     PathPromptOptions, Render, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{cell::Cell, path::PathBuf, rc::Rc, sync::Arc};
 
 pub(crate) const TITLE: &str = "Side-by-Side Comparison";
 pub(crate) const WINDOW_WIDTH: f32 = 540.;
 pub(crate) const WINDOW_HEIGHT: f32 = 500.;
-pub(crate) const CONVERSION_WINDOW_HEIGHT: f32 = 580.;
+const DROP_ZONE_HEIGHT: f32 = 160.;
+const ATTACHMENT_HEIGHT: f32 = 64.;
+const CONVERSION_CONTROLS_HEIGHT: f32 = 80.;
+pub(crate) const CONVERSION_WINDOW_HEIGHT: f32 =
+    WINDOW_HEIGHT + CONVERSION_CONTROLS_HEIGHT - (DROP_ZONE_HEIGHT - ATTACHMENT_HEIGHT);
 const PADDING: u32 = 16;
 const GAP: u32 = 24;
 const MIN_PANEL_WIDTH: u32 = 400;
@@ -84,6 +87,9 @@ fn layout(dimensions: [(u32, u32); 2]) -> (u32, u32, [(u32, u32); 2], Comparison
 }
 
 pub(crate) fn combine(sources: [StagedAttachment; 2]) -> Result<StagedAttachment> {
+    for source in &sources {
+        validate_source(source)?;
+    }
     let dimensions = sources.each_ref().map(|source| {
         source
             .image()
@@ -95,7 +101,6 @@ pub(crate) fn combine(sources: [StagedAttachment; 2]) -> Result<StagedAttachment
     let mut canvas =
         image::RgbaImage::from_pixel(width, height, image::Rgba(comparison::BACKGROUND));
     for (index, source) in sources.iter().enumerate() {
-        validate_source(source)?;
         let pixels = image::load_from_memory(&source.image().unwrap().bytes)?
             .resize_exact(
                 sizes[index].0,
@@ -136,6 +141,9 @@ fn validate_source(source: &StagedAttachment) -> Result<()> {
     if source.image().is_none() || source.mime_type == "image/gif" {
         bail!("Choose PNG, JPEG, or WebP images for the comparison.");
     }
+    if source.image().is_some_and(|image| image.is_comparison) {
+        bail!("Choose images that aren't already side-by-side comparisons.");
+    }
     Ok(())
 }
 fn load_source(path: PathBuf) -> Result<StagedAttachment> {
@@ -162,6 +170,7 @@ pub(crate) struct ImageComposer {
     loading: [bool; 2],
     combining: bool,
     generation: u64,
+    layout_height: Rc<Cell<Option<gpui_kit::Pixels>>>,
     focus_handle: FocusHandle,
 }
 impl ImageComposer {
@@ -173,6 +182,7 @@ impl ImageComposer {
             loading: [false; 2],
             combining: false,
             generation: 0,
+            layout_height: Rc::new(Cell::new(None)),
             focus_handle: cx.focus_handle(),
         }
     }
@@ -393,7 +403,7 @@ impl ImageComposer {
                     .font_medium()
                     .child(["Left side", "Right side"][index]),
             )
-            .child(v_flex().min_h(px(160.)).justify_center().map(|body| {
+            .child(v_flex().map(|body| {
                 if let Some(source) = &self.sources[index] {
                     body.child(
                         div()
@@ -445,7 +455,7 @@ impl ImageComposer {
                             .id(("comparison-drop-zone", index))
                             .test_support()
                             .debug_selector(move || format!("comparison-drop-zone-{index}"))
-                            .h(px(160.))
+                            .h(px(DROP_ZONE_HEIGHT))
                             .w_full()
                             .rounded_xl()
                             .border_2()
@@ -512,10 +522,26 @@ impl Focusable for ImageComposer {
 }
 impl Render for ImageComposer {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout_height = self.layout_height.clone();
         v_flex()
-            .size_full()
+            .w_full()
+            .flex_none()
             .p_6()
             .gap_5()
+            .on_prepaint(move |bounds, window, cx| {
+                let height = px(f32::from(bounds.size.height).ceil());
+                if layout_height.get() != Some(height) {
+                    layout_height.set(Some(height));
+                    window.defer(cx, move |window, _| {
+                        window_limits::set_minimum_content_size(
+                            window,
+                            WINDOW_WIDTH.into(),
+                            f64::from(height),
+                        );
+                        window.resize(gpui_kit::size(window.viewport_size().width, height));
+                    });
+                }
+            })
             .key_context("ImageComparison")
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -556,6 +582,18 @@ impl Render for ImageComposer {
 #[cfg(feature = "walkthrough-screenshots")]
 #[allow(dead_code)]
 impl ImageComposer {
+    pub(crate) fn convert_walkthrough(&mut self, new_side: usize, cx: &mut Context<Self>) {
+        let source = self
+            .sources
+            .iter()
+            .flatten()
+            .next()
+            .expect("loaded comparison fixture")
+            .clone();
+        self.convert(source, cx);
+        self.set_new_image_side(new_side, cx);
+    }
+
     pub(crate) fn load_walkthrough(
         &mut self,
         index: usize,
@@ -664,6 +702,25 @@ mod tests {
         );
     }
     #[test]
+    fn comparisons_cannot_be_used_as_either_input_to_another_comparison() {
+        let image = fixture(80, 60, [255, 0, 0, 255]);
+        let comparison = combine([image.clone(), image.clone()]).unwrap();
+        for sources in [
+            [comparison.clone(), image.clone()],
+            [image, comparison.clone()],
+            [comparison.clone(), comparison],
+        ] {
+            assert!(
+                combine(sources)
+                    .err()
+                    .expect("comparison inputs must be rejected")
+                    .to_string()
+                    .contains("already side-by-side comparisons")
+            );
+        }
+    }
+
+    #[test]
     fn gifs_are_rejected_by_content_even_with_a_png_name() {
         let mut bytes = Vec::new();
         image::codecs::gif::GifEncoder::new(&mut bytes)
@@ -692,6 +749,35 @@ mod tests {
         let picker = captured.borrow().clone().unwrap();
         (picker, window_cx)
     }
+    #[gpui_kit::test]
+    fn populated_slots_fit_the_card_and_the_window_shrinks_and_grows(cx: &mut TestAppContext) {
+        let (picker, cx) = picker_window(cx);
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+        let empty_height = cx.update(|window, _| window.bounds().size.height);
+        cx.update(|window, cx| {
+            picker.update(cx, |picker, cx| {
+                picker.load(1, || Ok(fixture(80, 60, [0, 0, 255, 255])), window, cx);
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.bounds().size.height < empty_height);
+            let label = window.find(("comparison-slot-label", 1_usize)).bounds();
+            let attachment = window.find(("comparison-attachment", 1_usize)).bounds();
+            assert_eq!(attachment.top() - label.bottom(), px(8.));
+            assert_eq!(attachment.size.height, px(ATTACHMENT_HEIGHT));
+            window.click(("remove-comparison-image", 1_usize), cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+        cx.update(|window, _| assert_eq!(window.bounds().size.height, empty_height));
+    }
+
     #[gpui_kit::test]
     fn conversion_keeps_original_fixed_and_picks_new_image_side(cx: &mut TestAppContext) {
         let (picker, cx) = picker_window(cx);

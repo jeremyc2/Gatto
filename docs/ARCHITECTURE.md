@@ -124,7 +124,7 @@ the next update session before Sparkle schedules another check.
 The header and menu bar menu show a compact Update control. Clicking initiates a
 fresh Sparkle check, then authorizes download, verified installation, and relaunch
 without another app confirmation. macOS can still request authorization. Uploads
-already in progress prevent starting an update; new uploads and Quick Copy are
+already in progress prevent starting an update; new uploads and Add from Clipboard are
 blocked during installation. The user driver never consents to install without
 the click. Information-only releases and installation failures leave a retry
 control and actionable tooltip; background-check errors enter diagnostics and,
@@ -209,9 +209,14 @@ Markdown copy control.
 
 ### Filesystem projects and attachment metadata
 
-`projects.rs` owns portable `gatto-project.json` manifests and immutable copied
-media in `gatto-media/`. Scratchpad uses the same storage and ordered writer as a
-project, at `~/.gatto/scratchpad`; inactive workspaces are unloaded. Settings live
+`projects.rs` owns portable `project.json` manifests and immutable copied
+media in `media/`. Opening a project renames a legacy `gatto-media` directory
+as a whole, including annotation sidecars. Conflicting old and new folders are
+preserved and reported as an error. Legacy `gatto-project.json` files migrate on load after
+version validation. Migration publishes the new name without replacing an existing
+`project.json`; when both exist, the current name is authoritative and the old file
+is preserved. Scratchpad uses the same storage and ordered writer as a
+project, at `~/.gatto/projects/Scratchpad`; inactive workspaces are unloaded. Settings live
 at `~/.gatto/settings.json`. New projects exclusively create named child folders
 under `~/.gatto/projects`. Creation never reuses an existing folder. Initial-save
 failures clean up only the new child folder.
@@ -226,6 +231,22 @@ time zone.
 The schema reference points to
 `https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json`.
 Settings reference `schemas/gatto-settings.schema.json` at the same repository URL.
+All three JSON formats (settings, projects, annotations) carry `version: 1`.
+These are independent file-format versions, not application release numbers.
+Readers reject unsupported explicit versions before changing files. Legacy settings
+without a version use version 1 and are rewritten on load. Settings may omit
+preferences and receive defaults; project and annotation schemas describe complete
+current records. `$schema` identifies the editor schema and does not replace the
+format version. The test-only `jsonschema` dependency validates actual saved
+settings, manifests, and annotation sidecars using Draft 2020-12, with format
+checks enabled and network reference resolution disabled.
+
+Startup moves an existing `~/.gatto/scratchpad` into `projects/Scratchpad` as one
+folder. If the destination exists, the legacy Scratchpad replaces it and its
+previous contents are discarded; migration does not create recovery projects.
+Legacy global repository fields only seed a missing Scratchpad selection; the
+project's saved repository wins. The settings rewrite removes `last_repository`
+and `last_repository_id`. New Scratchpads have no repository selected.
 
 SHA-256 fingerprints bind URLs to saved bytes. Metadata edits and reordering
 preserve URLs; pixel edits or external media changes invalidate only the affected
@@ -260,29 +281,65 @@ the same destination-first transaction with rollback if the source save fails;
 bulk moves commit the selected group together. UUIDs and cached URLs survive moves.
 Scratchpad and each project restore their own repository selection only when its
 saved owner matches the configured owner without regard to case, including after
-repository loading. Repository pins remain application preferences. Quick Copy
-never opens a workspace.
+repository loading. Repository name and GitHub database ID are one saved record.
+Repository-list refresh matches a known ID before its name, updating renamed
+repositories without following a reused name to a different ID. Repository pins
+remain application preferences. Add from Clipboard never creates a window.
 Clipboard drafting and comparison target the presented main workspace, or
 Scratchpad when there is no presented main window; startup requests wait for the
 initial Scratchpad load.
 
 The slate GPUI Kit sidebar has a fixed Projects/search header, a scrolling project
-list sorted by update time, and fixed Scratchpad/Create Project controls at the
-bottom. Search has only a placeholder. Command+B hides the sidebar entirely;
+list containing named projects, and fixed Scratchpad and Create Project controls
+at the bottom. Scratchpad is excluded from the list and Primary section, including
+when used for Add from Clipboard; its button keeps its notebook icon. Named projects
+keep folder icons when pinned, with pin icons only in the Pin/Unpin menu actions.
+The named project used for
+Add from Clipboard shows a star and ranks first in the
+Primary section, followed by explicitly pinned projects, then a two-point divider
+using half-opacity muted foreground with extra vertical spacing, and the
+remaining projects. Both latter groups sort by update time. Project pins and the
+optional Add from Clipboard project folder name are application preferences. Null means
+Scratchpad; unmarking a named project restores that default. Search has only a placeholder. Command+B hides the sidebar entirely;
 the expand control appears beside Logs. The sidebar state persists in settings.
-Project menus contain Edit metadata and Delete. Editing changes the manifest title
+Project menus offer Use for "Add from Clipboard" / Stop using for "Add from Clipboard" and Pin project /
+Unpin project. Named projects also offer Edit metadata and Delete; Scratchpad's
+name and deletion remain reserved. The heading displays only the project name.
+Editing changes the manifest title
 and description without moving the folder. Refresh discovers project folders in
 `~/.gatto/projects` and drops missing folders. Delete validates the manifest
 and removes the folder. Recursive removal never follows child symlinks. Delete All
 Projects removes project folders in `~/.gatto/projects` and preserves Scratchpad.
 Reset additionally clears Scratchpad and preferences.
 
-`app/attachment_actions.rs` supplies per-item and selected-item menus, annotation
-selection, and a destination picker that excludes the current project.
+`app/attachment_actions.rs` supplies per-item menus and selection toolbar actions,
+annotation selection, and a destination picker that excludes the current project.
+The toolbar uses an unlabeled select-all checkbox and icon buttons with tooltips;
+unavailable actions are omitted. Combining requires exactly two compatible images
+that are not already comparisons; the composer also rejects comparison inputs,
+and the selected/total attachment count stays at the right, followed by “selected.”
+The upload button counts all attachments needing upload, regardless of selection,
+and omits the count when it is zero.
+`app/upload_actions.rs` renders the joined upload control. Both its main area
+and shaded chevron are separate buttons with independent hover, focus, and
+pressed feedback. The main button runs the remembered action directly; the
+chevron opens the choices above the control. Selecting an action persists
+`upload_action` in global settings before starting the batch. The batch captures
+its copy mode and attachment IDs; automatic copying includes only successful
+uploads from that batch, skips cancellation and total failure, and honors
+close-after-copy only when the whole batch succeeds. The selection toolbar shows
+copy only for entirely uploaded selections. Copy all uploaded retains Command+C in a tooltip
+rather than a separate keyboard hint, and matches the icon buttons' height.
 `app/attachment_drag.rs` keeps full-card drag previews,
 live sibling shifts, edge scrolling, transactional sidebar drops, and Escape
 rollback; preview order is not saved before release. Interactive card controls
 consume pointer events so they cannot start a reorder.
+
+`theme/button.rs` and `theme/checkbox.rs` add shared lighter hover fills and brighter
+borders while retaining the component library's input, focus, and accessibility
+behavior. Button borders are painted without adding a layout node; disabled
+controls keep their ordinary appearance. Attachment copy actions say “Copy” in
+either output format.
 
 The main question mark opens workspace information: name, description, total
 storage, repository, and dates. The native Help menu opens documentation links.
@@ -304,13 +361,13 @@ title-bar transparency after GPUI's fullscreen transitions; the divider is hidde
 while fullscreen.
 
 Opening the main window loads Scratchpad and restores its repository without a
-GitHub request. A new Scratchpad uses the remembered repository from settings.
+GitHub request. A new Scratchpad starts without a repository selection.
 Opening the repository picker loads the account or organization's paginated
 repository list via GraphQL `repositoryOwner` (owned repositories only) and token
 through `gh`; uploading can instead resolve just the remembered repository ID
 and token when needed. The token is cached in process
 memory for the uploader view's lifetime. Restart Gatto after changing the active
-GitHub CLI account to avoid using a previously loaded session. Quick Copy
+GitHub CLI account to avoid using a previously loaded session. Add from Clipboard
 reads the current CLI token for each background job.
 
 Media validation and CLI calls run on background tasks. Each HTTP upload uses
@@ -385,7 +442,7 @@ Markdown, with `width` and `height` from the validated pixel dimensions and
 escaped `alt` and `src` attributes. The saved `copy_images_as_markdown` preference
 defaults to false, including for older settings. Enabling it selects
 `ImageCopyFormat::Markdown`, producing escaped `![title](URL)` snippets
-without dimensions. Individual copy, batch copy, and Quick Copy use the same
+without dimensions. Individual copy, batch copy, and Add from Clipboard use the same
 format selection; preference changes rebuild completed copy results without
 uploading again. Image titles supply alt text; optional descriptions appear only
 in an escaped HTML `data-description` attribute. Video snippets remain bare URLs
@@ -403,7 +460,7 @@ that GitHub has already accepted.
 Images are limited to 10,000,000 bytes. `allow_large_videos` defaults to false,
 including for older saved settings; `video_upload_limit()` maps it to a typed
 10,000,000- or 100,000,000-byte video policy. Selection, drop, Finder paste,
-Quick Copy, bounded snapshots, and compression share that policy. Gatto does
+Add from Clipboard, bounded snapshots, and compression share that policy. Gatto does
 not query billing eligibility. The checkbox is disabled while uploading or
 importing; changes invalidate pending input jobs. Uploads recheck current limits
 so disabling the option cannot send an already staged larger video.
@@ -433,7 +490,7 @@ updates the generated text. Returned URLs must use HTTPS,
 hard-coded for GitHub.com; GitHub Enterprise Server hosts are not configurable.
 
 Oversized video imports carry a typed `OversizedVideo` result into an ordered
-import batch. The main window offers Cancel / Compress per file; Quick Copy
+import batch. The main window offers Cancel / Compress per file; Add from Clipboard
 instead returns a main-window recovery hint. The batch waits for each choice
 and compression result before staging the accepted items in their input order.
 A separate cancellation flag and generation guard prevent stale native jobs
@@ -511,7 +568,10 @@ upload or modify either original file.
 
 An individual PNG, JPEG, or WebP attachment can open the same composer with its
 image fixed in one slot. A segmented control chooses the new image's side. The
-result replaces the original attachment in its current position and keeps its
+populated slot wraps its 64-point attachment card; only an empty slot reserves
+160 points for dropping an image. Source changes resize the window and update
+its native minimum height after rendering, preserving its width. Switching sides
+keeps the same compact window height. The result replaces the original attachment in its current position and keeps its
 identity, title, and description. The new PNG clears the previous upload URL.
 Project manifests record `is_comparison` for each attachment; reopening a
 workspace uses that flag to determine whether conversion is available.
@@ -900,7 +960,7 @@ The Dock icon hides when no windows are presented. Quit ends the process.
 `application_menu` installs native App Preferences, Check for Updates, Close
 Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
 Command+Q bindings for every app window. The cat icon's menu also shows the
-preferences, quit and clipboard staging shortcuts. Successful global Quick Copy
+preferences, quit and the Add from Clipboard shortcut. Successful global Add from Clipboard
 registrations notify the menu controller, which refreshes its shortcut hint;
 disabling or temporarily unregistering during recording clears that hint.
 The menu bar uses the favicon's front-facing kitten as a monochrome AppKit
@@ -924,27 +984,66 @@ run before raw key listeners, so the global action must handle main-window
 navigation as well as closing extra windows. Regression tests use the full app
 keyboard setup and the same Root wrapper as native windows.
 
-Quick Copy runs through a process-lifetime background service with no window or
-view dependency. Menu, shortcut, and URL actions all invoke that service. It
-snapshots the clipboard, loads saved preferences, requires an account or organization and a
-pinned repository, validates the clipboard image (or first copied image/video file),
-and uses the same streamed GitHub upload client and media snippet formatter as normal uploads.
-It prefers the last selected repository when pinned, otherwise the first pinned
-repository alphabetically. Success writes Markdown to the clipboard and sends a
-macOS notification. Failure sends a notification and preserves the clipboard.
-Concurrent Quick Copy requests are rejected while a job is running. Open windows
-and staged attachments are untouched, and closing a window cannot stop its job.
+Add from Clipboard runs through a process-lifetime background service with no
+window requirement. Menu, global shortcut, and `gatto://add-from-clipboard` invoke
+that service. It snapshots the clipboard, waits for pending workspace writes,
+loads preferences, and saves a new draft to the chosen project as a direct child
+of the projects directory. Null `add_from_clipboard_project` uses Scratchpad and
+creates it if necessary. Staging needs no account or repository selection and
+never changes the clipboard. Opening the app shows the saved draft, including
+before account setup. The separate Draft from Clipboard menu and URL action are
+retired; focused Command+V still dispatches the normal paste action.
+
+`automatically_copy_add_from_clipboard` defaults to false. The default completion
+posts a native system notification with **Upload and copy**. With the preference
+on, staging commits first, then the service uploads the saved item, commits its URL,
+and copies its snippet. Upload failures retain the saved draft. Upload and copy
+requires a matching owner and project repository, resolves the repository name,
+and rejects a different database ID. An already uploaded item reuses its URL.
+Every attempt posts a system notification, regardless of window focus, including
+busy, updating, unsupported clipboard, and failure results. The native delegate
+requests foreground banners as well as notification-center delivery.
+
+Notification tags contain the project folder, immutable project UUID, and
+attachment UUID. The button loads that saved item with current preferences;
+later clipboard contents or a different chosen project cannot redirect it.
+Removed items, replaced project folders, and paths outside project storage are
+rejected. The button carries no foreground activation option and creates no window.
+Gatto owns the app-global notification response handler for these raw system
+notifications; GPUI component toasts remain in-app.
+
+Open destinations share their ordered writer with the main view. Upload completion
+updates the existing UUID, rather than appending another attachment. Background
+content checks and a final in-memory snapshot check preserve edits made during an
+upload; metadata-only image changes survive and use the latest copy text. Closed
+destinations reopen, update, and save in the background. Repeated clicks reuse the
+saved URL; requests for an item already queued in the open uploader are refused.
+Concurrent service requests are rejected. Project navigation, deletion, metadata
+editing, and transfer wait until the service finishes. Windows created during a
+job defer their initial workspace load until it commits. Closing a window cannot
+stop the job. Clipboard writes follow successful persistence only.
+
+Attachment presentation uses a stable partition: items needing upload first, then
+completed uploads, with a divider and no category labels. Edited images return to
+the first group. The saved/manual order is retained within each group, and drag
+reordering stays within its group. Batch upload/copy ordering therefore remains
+stable even as individual uploads finish.
 
 ## App Preferences and local state
 
-The repository owner (personal account or organization), repository selections,
-shortcut configuration, and general preferences are saved as JSON in
-`~/.gatto/settings.json`. The GitHub token and image bytes are never written there.
+The repository owner (personal account or organization), repository favorites,
+project pins, the project folder used for Add from Clipboard, shortcut configuration,
+and general preferences are saved as JSON in
+`~/.gatto/settings.json`. Previous `quick_copy_project` and global Quick Copy
+shortcut keys are accepted on read and rewritten under the new names; automatic
+upload remains off unless explicitly enabled. The GitHub token and image bytes
+are never written there.
 Until an account or organization is set, the main screen points the user to
 App Preferences. The `owner` setting accepts the former
 `organization` key when reading existing preferences. Changing owners clears
-the active repository selection, remembered repository IDs, and pins after
-successfully saving settings.
+the active repository selection and repository favorites after successfully saving
+settings. Project repository records retain their owner and are inactive while
+another owner is configured. Global settings do not store repository selections.
 
 Start at Login is recorded in settings and synchronized with the macOS-required file
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the
@@ -963,7 +1062,7 @@ and the login LaunchAgent, then returns the UI to first-run setup. Delete All
 Projects preserves Scratchpad and preferences. Neither operation modifies GitHub
 CLI authentication, which is managed outside of Gatto.
 
-The global Quick Copy shortcut uses macOS hotkey registration rather than global keyboard event
+The global Add from Clipboard shortcut uses macOS hotkey registration rather than global keyboard event
 monitoring, so it does not require Accessibility permission. The shortcut is opt-in, must contain
 at least two modifiers, and is unregistered when disabled or when the app resets.
 
@@ -988,7 +1087,7 @@ pair and upgrade rules.
   Staged videos use private temporary snapshots, shared with the configured macOS
   player for preview.
 - Custom action URLs do not accept parameters.
-- Upload results are copied after an explicit copy action or a user-configured Quick Copy action.
+- Upload results are copied after an explicit copy action or a user-configured Add from Clipboard action.
 - Persistent settings contain repository names and app preferences, never tokens or image bytes;
   Start at Login stores the executable path in a per-user LaunchAgent.
 - Logs and errors should never include tokens or raw image bytes.

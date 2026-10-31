@@ -193,17 +193,25 @@ Rust dependency audits do not audit the separately bundled native Sparkle SDK.
 
 ## Local settings and clipboard behavior
 
-- Normal uploads do not change the clipboard. **Copy Markdown**, **Copy all**,
-  and **Command+C** explicitly copy completed results. **Quick Copy**, invoked
-  through the menu bar, custom URL, or enabled global shortcut, uploads a
-  clipboard image or copied Finder media file and automatically copies its Markdown on success.
-- Preferences persist repository names and app settings in
-  `~/.gatto/settings.json`; Gatto does not persist GitHub tokens.
+- **Upload** does not change the clipboard. **Upload and copy** explicitly copies
+  successful items from the new batch and is remembered globally. Canceled batches
+  and batches with no successful uploads leave the clipboard unchanged.
+  **Copy**, **Copy selected attachments**, **Copy all uploaded**,
+  and **Command+C** explicitly copy completed results. **Add from Clipboard**, invoked
+  through the menu bar, custom URL, or enabled global shortcut, saves a clipboard
+  image or copied Finder media file in its project. It uploads and changes the
+  clipboard only after the user clicks the notification's **Upload and copy**
+  button or enables **Automatically copy "Add from clipboard"** (off by default).
+  Every attempt posts a system notification. Notification actions refer to the
+  saved project and attachment, not to later clipboard contents.
+- Preferences persist repository favorites, project pins, the project used for
+  Add from Clipboard, and app settings in `~/.gatto/settings.json`. Repository selections
+  belong only to project manifests; Gatto does not persist GitHub tokens.
 - Scratchpad automatically persists media, metadata, repository selection, and
-  completed upload URLs in `~/.gatto/scratchpad`. Named projects use subfolders of
+  completed upload URLs in `~/.gatto/projects/Scratchpad`. Named projects use subfolders of
   `~/.gatto/projects` and are discovered there. Creation never reuses an existing
   subfolder. Annotated images retain original PNG sources and editable annotation JSON
-  beside the rendered image in `gatto-media/`. Local copies therefore include
+  beside the rendered image in `media/`. Local copies therefore include
   pixels underneath pixelation or other annotations; uploads contain only the
   rendered image. Undo/redo history is not persisted.
 - Project deletion removes the project folder and its contents. Reset removes

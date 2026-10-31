@@ -9,6 +9,7 @@ use std::{
 mod attachment_actions;
 mod attachment_drag;
 mod projects;
+mod upload_actions;
 
 use gpui_kit::assets::IconName as AssetIconName;
 use gpui_kit::base::TestSupportExt as _;
@@ -20,7 +21,6 @@ use gpui_kit::component::{
         AttachmentStatus, AttachmentTitle,
     },
     button::Button,
-    checkbox::Checkbox,
     combobox::{Combobox, ComboboxEvent, ComboboxState},
     h_flex,
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
@@ -54,8 +54,8 @@ use crate::{
         AttachmentUploadState, Media, OversizedVideo, Repository, StagedAttachment,
         UNSUPPORTED_MEDIA_MESSAGE, parse_owner,
     },
-    settings::{AppSettings, ReleaseChannel},
-    theme::{self, AppButtonStyle as _},
+    settings::{AppSettings, ReleaseChannel, UploadAction},
+    theme::{self, AppButtonStyle as _, AppCheckbox as Checkbox},
     updater::{UpdateState, Updater},
     window_limits,
 };
@@ -64,7 +64,6 @@ actions!(
     gatto,
     [
         PasteImage,
-        StageFromClipboard,
         CopyUploadMarkdown,
         SelectStableChannel,
         SelectBetaChannel,
@@ -245,7 +244,6 @@ pub struct UploaderApp {
     settings: AppSettings,
     settings_open: bool,
     recording_global_shortcut: bool,
-    pending_menu_paste: bool,
     log_window: Option<(AnyWindowHandle, Entity<LogViewer>)>,
     preview_open: bool,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
@@ -311,7 +309,7 @@ impl UploaderApp {
         cx: &mut Context<Self>,
     ) -> Self {
         let initial_owner = settings.owner.clone().unwrap_or_default();
-        let initial_shortcut = settings.global_quick_copy_shortcut.clone();
+        let initial_shortcut = settings.global_add_from_clipboard_shortcut.clone();
         let owner_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("account or organization")
@@ -355,15 +353,6 @@ impl UploaderApp {
                         .cloned();
                     this.project_state.metadata.repository = this.selected_repository.clone();
                     this.project_state.metadata.repository_owner = this.settings.owner.clone();
-                    if this.project_state.folder.is_none() {
-                        this.settings.last_repository =
-                            this.selected_repository.as_ref().map(|r| r.name.clone());
-                        this.settings.last_repository_id =
-                            this.selected_repository.as_ref().map(|r| r.id);
-                        if persist_repository_selection {
-                            let _ = this.settings.save();
-                        }
-                    }
                     this.save_project(cx);
                     cx.notify();
                 }
@@ -417,7 +406,6 @@ impl UploaderApp {
             settings,
             settings_open: false,
             recording_global_shortcut: false,
-            pending_menu_paste: false,
             log_window: None,
             preview_open: false,
             preview_window: None,
@@ -464,8 +452,6 @@ impl UploaderApp {
         if !matches!(scenario, WalkthroughScenario::FirstRun) {
             settings.owner = Some("field-notes".into());
             settings.pinned_repositories.insert("pixel-tools".into());
-            settings.last_repository = Some("pixel-tools".into());
-            settings.last_repository_id = Some(1001);
         }
 
         let mut this = Self::with_settings(
@@ -479,6 +465,7 @@ impl UploaderApp {
         );
 
         if matches!(scenario, WalkthroughScenario::FirstRun) {
+            this.prepare_walkthrough_sidebar(cx);
             return this;
         }
 
@@ -580,6 +567,8 @@ impl UploaderApp {
                 .expect("valid timeline fixture");
             image.title = "Timeline feedback".into();
             this.staged_attachments.push(image);
+            this.selected_attachments =
+                this.staged_attachments.iter().map(|item| item.id).collect();
             this.project_state.folders.push(PathBuf::from(
                 "/Users/example/.gatto/projects/Interface review",
             ));
@@ -649,6 +638,7 @@ impl UploaderApp {
                 });
             }
         }
+        this.prepare_walkthrough_sidebar(cx);
         this.refresh_repository_picker(window, cx);
         if matches!(scenario, WalkthroughScenario::ProjectRename)
             && let Some(folder) = this.project_state.folder.clone()
@@ -687,54 +677,38 @@ impl UploaderApp {
     }
 
     fn restore_global_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.settings.global_quick_copy_shortcut_enabled {
+        if !self.settings.global_add_from_clipboard_shortcut_enabled
+            || !self.settings.add_from_clipboard_available()
+        {
             return;
         }
         match self
             .global_shortcut
-            .set_shortcut(Some(&self.settings.global_quick_copy_shortcut))
+            .set_shortcut(Some(&self.settings.global_add_from_clipboard_shortcut))
         {
             Ok(Some(canonical)) => {
-                self.settings.global_quick_copy_shortcut = canonical.clone();
+                self.settings.global_add_from_clipboard_shortcut = canonical.clone();
                 self.global_shortcut_input.update(cx, |input, cx| {
                     input.set_value(canonical, window, cx);
                 });
                 self.diagnostics
-                    .info("Registered the global Quick Copy shortcut.");
+                    .info("Registered the global Add from Clipboard shortcut.");
             }
             Ok(None) => {}
             Err(error) => {
-                self.settings.global_quick_copy_shortcut_enabled = false;
+                self.settings.global_add_from_clipboard_shortcut_enabled = false;
                 let _ = self.settings.save();
                 self.diagnostics.error(format!(
-                    "Could not restore the global Quick Copy shortcut: {error}"
+                    "Could not restore the global Add from Clipboard shortcut: {error}"
                 ));
                 window.push_notification(
-                    Notification::error(format!("Global Quick Copy shortcut disabled: {error}")),
+                    Notification::error(format!(
+                        "Global Add from Clipboard shortcut disabled: {error}"
+                    )),
                     cx,
                 );
             }
         }
-    }
-
-    fn stage_from_clipboard_menu(
-        &mut self,
-        _: &StageFromClipboard,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.paste_from_menu(window, cx);
-    }
-
-    /// Stages the current clipboard image and prefers the last selected repository
-    /// when it is pinned, otherwise the first pinned repository alphabetically.
-    fn paste_from_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.settings_open = false;
-        if self.project_state.loading {
-            self.pending_menu_paste = true;
-            return;
-        }
-        self.on_paste(&PasteImage, window, cx);
     }
 
     /// Clears a pasted image when the main window is closed, or when the user
@@ -754,7 +728,6 @@ impl UploaderApp {
         self.loading_attachment_paths = false;
         self.combining_comparison = false;
         self.uploading = false;
-        self.pending_menu_paste = false;
         if !self.staged_attachments.is_empty() {
             self.staged_attachments.clear();
             self.upload_result = None;
@@ -835,7 +808,6 @@ impl UploaderApp {
                         this.diagnostics
                             .error(format!("Repository loading failed: {error}"));
                         this.load_state = LoadState::Failed;
-                        this.pending_menu_paste = false;
                         window.push_notification(Notification::error(error.to_string()), cx);
                     }
                 }
@@ -866,20 +838,31 @@ impl UploaderApp {
         self.repository_picker.update(cx, |picker, cx| {
             picker.set_items(SearchableVec::new(groups), window, cx);
         });
-        if let Some(repository_name) = self
+        if let Some(repository) = self
             .project_state
             .metadata
             .repository_for_owner(self.settings.owner.as_deref())
-            .map(|repository| repository.name.clone())
-            .filter(|name| self.repositories.contains_key(name))
+            .and_then(|saved| {
+                if saved.id == 0 {
+                    self.repositories.get(&saved.name)
+                } else {
+                    self.repositories
+                        .values()
+                        .find(|repository| repository.id == saved.id)
+                }
+            })
+            .cloned()
         {
-            self.select_repository(&repository_name, window, cx);
+            self.select_repository(&repository.name, window, cx);
+            if self.project_state.metadata.repository.as_ref() != Some(&repository) {
+                self.project_state.metadata.repository = Some(repository);
+                self.save_project(cx);
+            }
         } else {
             self.selected_repository = None;
             self.repository_picker
                 .update(cx, |picker, cx| picker.set_selected_indices([], window, cx));
         }
-        self.try_complete_menu_paste(cx);
     }
 
     fn load_repositories_when_opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1042,9 +1025,6 @@ impl UploaderApp {
     }
 
     fn on_paste(&mut self, _: &PasteImage, window: &mut Window, cx: &mut Context<Self>) {
-        if self.load_state == LoadState::NeedsSetup {
-            return;
-        }
         if self.uploading || self.import_busy() {
             self.warn(
                 "Finish the current upload or compression before adding attachments.",
@@ -1055,7 +1035,6 @@ impl UploaderApp {
         }
         let Some(clipboard) = cx.read_from_clipboard() else {
             self.warn(UNSUPPORTED_MEDIA_MESSAGE, window, cx);
-            self.pending_menu_paste = false;
             return;
         };
 
@@ -1084,7 +1063,6 @@ impl UploaderApp {
         }
 
         self.warn(UNSUPPORTED_MEDIA_MESSAGE, window, cx);
-        self.pending_menu_paste = false;
     }
 
     fn load_attachment_paths(
@@ -1390,7 +1368,6 @@ impl UploaderApp {
             if let Some(error) = errors.first() {
                 self.warn(error.clone(), window, cx);
             }
-            self.pending_menu_paste = false;
             return;
         }
         if !errors.is_empty() {
@@ -1445,7 +1422,6 @@ impl UploaderApp {
             "Staged {added} attachment{} for upload.",
             if added == 1 { "" } else { "s" }
         ));
-        self.try_complete_menu_paste(cx);
         cx.notify();
     }
 
@@ -1593,25 +1569,6 @@ impl UploaderApp {
         window.push_notification(Notification::warning(message), cx);
     }
 
-    fn send(&mut self, _: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        self.send_attachments(window, cx);
-    }
-
-    fn try_complete_menu_paste(&mut self, cx: &mut Context<Self>) {
-        if !self.pending_menu_paste {
-            return;
-        }
-        if self.staged_attachments.is_empty()
-            || !matches!(self.load_state, LoadState::Idle | LoadState::Ready)
-            || self.selected_repository.is_none()
-        {
-            return;
-        }
-
-        self.pending_menu_paste = false;
-        cx.notify();
-    }
-
     fn sync_upload_result(&mut self) {
         let images = self
             .staged_attachments
@@ -1701,6 +1658,11 @@ impl UploaderApp {
         if attachments.is_empty() {
             return;
         }
+        let batch_ids = attachments
+            .iter()
+            .map(|item| item.id)
+            .collect::<HashSet<_>>();
+        let copy_after_upload = self.settings.upload_action == UploadAction::UploadAndCopy;
         let control = github::UploadControl::default();
         self.upload_control = Some(control.clone());
         self.uploading = true;
@@ -1773,8 +1735,23 @@ impl UploaderApp {
                             } else if failures > 0 {
                                 format!("{uploaded} uploaded; {failures} failed. See each attachment for details, then retry.")
                             } else { format!("{uploaded} attachment(s) uploaded successfully.") };
+                            let copied = if copy_after_upload && !canceled {
+                                let snippets = this.staged_attachments.iter()
+                                    .filter(|item| batch_ids.contains(&item.id))
+                                    .filter_map(|item| item.upload_state.uploaded_url().map(|url| item.snippet(url, this.settings.image_copy_format())))
+                                    .collect::<Vec<_>>();
+                                if snippets.is_empty() { false } else {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(snippets.join("\n\n")));
+                                    true
+                                }
+                            } else { false };
+                            let message = if copied { format!("{message} Successful uploads copied to the clipboard.") } else { message };
                             this.diagnostics.info(&message);
-                            window.push_notification(if canceled || failures > 0 { Notification::warning(message) } else { Notification::success(message) }, cx);
+                            if copied && failures == 0 {
+                                this.finish_copy(&message, window, cx);
+                            } else {
+                                window.push_notification(if canceled || failures > 0 { Notification::warning(message) } else { Notification::success(message) }, cx);
+                            }
                         }
                     }
                     cx.notify();
@@ -1918,9 +1895,6 @@ impl UploaderApp {
                     self.repositories
                         .insert(repository.name.clone(), repository.clone());
                     self.project_state.metadata.repository = Some(repository.clone());
-                    if self.project_state.folder.is_none() {
-                        self.settings.last_repository_id = Some(id);
-                    }
                     self.save_project(cx);
                     if let Err(error) = self.settings.save() {
                         self.diagnostics.error(format!(
@@ -1953,12 +1927,8 @@ impl UploaderApp {
         };
         cx.write_to_clipboard(ClipboardItem::new_string(result.markdown()));
         self.diagnostics
-            .info("Copied uploaded Markdown image snippets to the clipboard.");
-        self.finish_copy(
-            "Markdown image snippets copied to the clipboard.",
-            window,
-            cx,
-        );
+            .info("Copied uploaded attachments to the clipboard.");
+        self.finish_copy("Uploaded attachments copied to the clipboard.", window, cx);
     }
 
     fn copy_all_upload_markdown(
@@ -1972,12 +1942,8 @@ impl UploaderApp {
         };
         cx.write_to_clipboard(ClipboardItem::new_string(result.markdown()));
         self.diagnostics
-            .info("Copied uploaded image Markdown snippets to the clipboard.");
-        self.finish_copy(
-            "Uploaded Markdown snippets copied to the clipboard.",
-            window,
-            cx,
-        );
+            .info("Copied uploaded attachments to the clipboard.");
+        self.finish_copy("Uploaded attachments copied to the clipboard.", window, cx);
     }
 
     fn finish_copy(&mut self, message: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -2056,7 +2022,6 @@ impl UploaderApp {
             );
         } else {
             self.refresh_repository_picker(window, cx);
-            self.menu_bar.set_paste_actions_visible(true);
         }
         cx.notify();
     }
@@ -2073,8 +2038,6 @@ impl UploaderApp {
             );
         } else {
             self.refresh_repository_picker(window, cx);
-            self.menu_bar
-                .set_paste_actions_visible(!self.settings.pinned_repositories.is_empty());
         }
         cx.notify();
     }
@@ -2107,8 +2070,7 @@ impl UploaderApp {
         if owner_changed {
             self.selected_repository = None;
             self.loading_repository = false;
-            self.pending_menu_paste = false;
-            self.menu_bar.set_paste_actions_visible(false);
+            self.sync_add_from_clipboard_enabled();
             self.repository_picker.update(cx, |picker, cx| {
                 picker.set_selected_indices([], window, cx);
             });
@@ -2138,7 +2100,7 @@ impl UploaderApp {
             return;
         }
 
-        if self.settings.global_quick_copy_shortcut_enabled
+        if self.settings.global_add_from_clipboard_shortcut_enabled
             && let Err(error) = self.global_shortcut.set_shortcut(None)
         {
             window.push_notification(Notification::error(error.to_string()), cx);
@@ -2196,9 +2158,9 @@ impl UploaderApp {
                 return;
             }
         };
-        let previous = self.settings.global_quick_copy_shortcut.clone();
+        let previous = self.settings.global_add_from_clipboard_shortcut.clone();
 
-        if self.settings.global_quick_copy_shortcut_enabled
+        if self.settings.global_add_from_clipboard_shortcut_enabled
             && let Err(error) = self.global_shortcut.set_shortcut(Some(&canonical))
         {
             let _ = self.global_shortcut.set_shortcut(Some(&previous));
@@ -2208,12 +2170,12 @@ impl UploaderApp {
             return;
         }
 
-        self.settings.global_quick_copy_shortcut = canonical.clone();
+        self.settings.global_add_from_clipboard_shortcut = canonical.clone();
         if let Err(error) = self.settings.save() {
-            if self.settings.global_quick_copy_shortcut_enabled {
+            if self.settings.global_add_from_clipboard_shortcut_enabled {
                 let _ = self.global_shortcut.set_shortcut(Some(&previous));
             }
-            self.settings.global_quick_copy_shortcut = previous;
+            self.settings.global_add_from_clipboard_shortcut = previous;
             self.recording_global_shortcut = false;
             window.push_notification(
                 Notification::error(format!("Could not save preferences: {error}")),
@@ -2227,9 +2189,10 @@ impl UploaderApp {
             input.set_value(canonical, window, cx);
         });
         self.diagnostics
-            .info("Saved the global Quick Copy shortcut.");
+            .info("Saved the global Add from Clipboard shortcut.");
         window.push_notification(Notification::success("Global shortcut saved."), cx);
         self.recording_global_shortcut = false;
+        self.sync_add_from_clipboard_enabled();
         cx.notify();
     }
 
@@ -2239,18 +2202,21 @@ impl UploaderApp {
         }
 
         self.recording_global_shortcut = false;
-        if self.settings.global_quick_copy_shortcut_enabled
+        if self.settings.global_add_from_clipboard_shortcut_enabled
+            && self.settings.add_from_clipboard_available()
             && let Err(error) = self
                 .global_shortcut
-                .set_shortcut(Some(&self.settings.global_quick_copy_shortcut))
+                .set_shortcut(Some(&self.settings.global_add_from_clipboard_shortcut))
         {
-            self.settings.global_quick_copy_shortcut_enabled = false;
+            self.settings.global_add_from_clipboard_shortcut_enabled = false;
             let _ = self.settings.save();
             self.diagnostics.error(format!(
-                "Could not restore the global Quick Copy shortcut: {error}"
+                "Could not restore the global Add from Clipboard shortcut: {error}"
             ));
             window.push_notification(
-                Notification::error(format!("Global Quick Copy shortcut disabled: {error}")),
+                Notification::error(format!(
+                    "Global Add from Clipboard shortcut disabled: {error}"
+                )),
                 cx,
             );
         }
@@ -2301,7 +2267,7 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if enabled == self.settings.global_quick_copy_shortcut_enabled {
+        if enabled == self.settings.global_add_from_clipboard_shortcut_enabled {
             return;
         }
 
@@ -2315,11 +2281,11 @@ impl UploaderApp {
                 }
             }
         } else {
-            self.settings.global_quick_copy_shortcut.clone()
+            self.settings.global_add_from_clipboard_shortcut.clone()
         };
-        let previous_shortcut = self.settings.global_quick_copy_shortcut.clone();
+        let previous_shortcut = self.settings.global_add_from_clipboard_shortcut.clone();
 
-        let update = if enabled {
+        let update = if enabled && self.settings.add_from_clipboard_available() {
             self.global_shortcut.set_shortcut(Some(&canonical))
         } else {
             self.global_shortcut.set_shortcut(None)
@@ -2329,8 +2295,8 @@ impl UploaderApp {
             return;
         }
 
-        self.settings.global_quick_copy_shortcut_enabled = enabled;
-        self.settings.global_quick_copy_shortcut = canonical.clone();
+        self.settings.global_add_from_clipboard_shortcut_enabled = enabled;
+        self.settings.global_add_from_clipboard_shortcut = canonical.clone();
         if let Err(error) = self.settings.save() {
             let rollback = if enabled {
                 self.global_shortcut.set_shortcut(None)
@@ -2342,8 +2308,8 @@ impl UploaderApp {
                     "Could not restore the previous global shortcut: {rollback_error}"
                 ));
             }
-            self.settings.global_quick_copy_shortcut_enabled = !enabled;
-            self.settings.global_quick_copy_shortcut = previous_shortcut;
+            self.settings.global_add_from_clipboard_shortcut_enabled = !enabled;
+            self.settings.global_add_from_clipboard_shortcut = previous_shortcut;
             window.push_notification(
                 Notification::error(format!("Could not save preferences: {error}")),
                 cx,
@@ -2355,10 +2321,31 @@ impl UploaderApp {
             input.set_value(canonical, window, cx);
         });
         self.diagnostics.info(if enabled {
-            "Enabled the global Quick Copy shortcut."
+            "Enabled the global Add from Clipboard shortcut."
         } else {
-            "Disabled the global Quick Copy shortcut."
+            "Disabled the global Add from Clipboard shortcut."
         });
+        self.sync_add_from_clipboard_enabled();
+        cx.notify();
+    }
+
+    fn set_automatically_copy_add_from_clipboard(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous = self.settings.automatically_copy_add_from_clipboard;
+        self.settings.automatically_copy_add_from_clipboard = enabled;
+        if self.persist_preferences
+            && let Err(error) = self.settings.save()
+        {
+            self.settings.automatically_copy_add_from_clipboard = previous;
+            window.push_notification(
+                Notification::error(format!("Could not save preferences: {error}")),
+                cx,
+            );
+        }
         cx.notify();
     }
 
@@ -2565,7 +2552,7 @@ impl UploaderApp {
         self.owner_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
-        let default_shortcut = self.settings.global_quick_copy_shortcut.clone();
+        let default_shortcut = self.settings.global_add_from_clipboard_shortcut.clone();
         self.global_shortcut_input.update(cx, |input, cx| {
             input.set_value(default_shortcut, window, cx);
         });
@@ -2587,7 +2574,6 @@ impl UploaderApp {
         self.loading_attachment_paths = false;
         self.combining_comparison = false;
         self.staged_attachments.clear();
-        self.pending_menu_paste = false;
         self.upload_result = None;
         self.uploading = false;
         self.recording_global_shortcut = false;
@@ -2599,7 +2585,7 @@ impl UploaderApp {
                 cx,
             );
         });
-        self.menu_bar.set_paste_actions_visible(false);
+        self.menu_bar.set_add_from_clipboard_enabled(false);
         self.diagnostics
             .info("Reset app state and cleared saved preferences.");
         window.push_notification(
@@ -2878,7 +2864,7 @@ impl UploaderApp {
 
     pub fn install_update(
         &mut self,
-        quick_copy_busy: bool,
+        add_from_clipboard_busy: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2886,7 +2872,7 @@ impl UploaderApp {
             || self.import_busy()
             || self.project_state.saving
             || self.project_state.error.is_some()
-            || quick_copy_busy
+            || add_from_clipboard_busy
         {
             window.push_notification(
                 Notification::info("Finish the current upload before updating."),
@@ -3208,19 +3194,19 @@ impl UploaderApp {
                                 .accessibility_label("Attachment upload progress")
                         )),
                 )
-                .when(!self.uploading && !self.project_state.loading, |attachment| {
+                .when(!self.uploading && !self.import_busy(), |attachment| {
                     attachment.actions(AttachmentActions::new().child(
                         h_flex().gap_1().id(format!("attachment-action-controls-{image_id}"))
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .child(self.attachment_options(vec![image_id], true, cx))
+                            .child(self.attachment_options(image_id, cx))
                             .when_some(markdown, |actions, markdown| {
                                 actions.child(
                                     Button::new(format!("copy-staged-image-markdown-{image_id}"))
                                         .debug_selector(move || format!("copy-staged-image-markdown-{image_id}"))
                                         .app_icon()
                                         .icon(AssetIconName::Copy)
-                                        .accessibility_label("Copy Markdown")
-                                        .tooltip("Copy Markdown")
+                                        .accessibility_label("Copy")
+                                        .tooltip("Copy")
                                         .on_click(move |_, window, cx| {
                                             cx.stop_propagation();
                                             cx.write_to_clipboard(ClipboardItem::new_string(
@@ -3228,10 +3214,10 @@ impl UploaderApp {
                                             ));
                                             let _ = copy_view.update(cx, |this, cx| {
                                                 this.diagnostics.info(
-                                                    "Copied an uploaded attachment's Markdown to the clipboard.",
+                                                    "Copied an uploaded attachment to the clipboard.",
                                                 );
                                                 this.finish_copy(
-                                                    "Markdown copied to the clipboard.",
+                                                    "Copied to the clipboard.",
                                                     window,
                                                     cx,
                                                 );
@@ -3344,15 +3330,31 @@ impl UploaderApp {
             .into_any_element()
     }
 
+    fn ordered_attachments(&self) -> impl Iterator<Item = &StagedAttachment> {
+        self.staged_attachments
+            .iter()
+            .filter(|item| !item.upload_state.is_uploaded())
+            .chain(
+                self.staged_attachments
+                    .iter()
+                    .filter(|item| item.upload_state.is_uploaded()),
+            )
+    }
+
     fn render_attachments(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let count = self.staged_attachments.len();
         let selected = self
-            .staged_attachments
-            .iter()
+            .ordered_attachments()
             .filter(|item| self.selected_attachments.contains(&item.id))
             .map(|item| item.id)
             .collect::<Vec<_>>();
-        let all_selected = count > 0 && selected.len() == count;
+        let pending_count = self
+            .staged_attachments
+            .iter()
+            .filter(|item| !item.upload_state.is_uploaded())
+            .count();
+        let selected_count = selected.len();
+        let all_selected = count > 0 && selected_count == count;
         v_flex()
             .debug_selector(|| "staged-attachments".into())
             .gap_2()
@@ -3362,81 +3364,84 @@ impl UploaderApp {
                         .items_center()
                         .justify_between()
                         .gap_2()
-                        .child(
-                            h_flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_semibold()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!(
-                                            "{count} attachment{}",
-                                            if count == 1 { "" } else { "s" }
-                                        )),
-                                )
-                                .child(
-                                    Button::new("select-all-attachments")
-                                        .debug_selector(|| "select-all-attachments".into())
-                                        .app_secondary()
-                                        .small()
-                                        .min_w_0()
-                                        .px_2()
-                                        .h(px(28.))
-                                        .label(if all_selected {
-                                            "Deselect All"
+                        .pl(px(9.))
+                        .when(!self.uploading && !self.import_busy(), |row| {
+                            row.child(
+                                Checkbox::new("select-all-attachments")
+                                    .debug_selector(|| "select-all-attachments".into())
+                                    .checked(all_selected)
+                                    .accessibility_label(if all_selected {
+                                        "Deselect all"
+                                    } else {
+                                        "Select all"
+                                    })
+                                    .tooltip(if all_selected {
+                                        "Deselect all"
+                                    } else {
+                                        "Select all"
+                                    })
+                                    .on_click(cx.listener(move |this, checked, _, cx| {
+                                        if *checked {
+                                            this.selected_attachments = this
+                                                .staged_attachments
+                                                .iter()
+                                                .map(|item| item.id)
+                                                .collect();
                                         } else {
-                                            "Select All"
-                                        })
-                                        .disabled(self.uploading || self.import_busy())
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            if all_selected {
-                                                this.selected_attachments.clear();
-                                            } else {
-                                                this.selected_attachments = this
-                                                    .staged_attachments
-                                                    .iter()
-                                                    .map(|item| item.id)
-                                                    .collect();
-                                            }
-                                            cx.notify();
-                                        })),
-                                )
-                                .when(
-                                    !selected.is_empty() && !self.uploading && !self.import_busy(),
-                                    |row| row.child(self.attachment_options(selected, false, cx)),
-                                ),
-                        )
+                                            this.selected_attachments.clear();
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                        })
+                        .child(self.selection_actions(selected, cx))
+                        .child(div().flex_1())
                         .when(count > 1 && self.upload_result.is_some(), |row| {
                             row.child(
                                 Button::new("copy-all-upload-markdown")
                                     .debug_selector(|| "copy-all-staged-image-markdown".into())
                                     .app_secondary()
-                                    .label("Copy all")
+                                    .xsmall()
+                                    .min_w_0()
+                                    .px_2()
+                                    .label("Copy all uploaded")
+                                    .tooltip("Copy all uploaded attachments · ⌘C")
                                     .on_click(cx.listener(Self::copy_all_upload_markdown)),
                             )
-                        }),
-                )
-            })
-            .when_some(self.upload_result.as_ref(), |list, _result| {
-                list.child(
-                    h_flex()
-                        .id("upload-markdown-copy-hint")
-                        .debug_selector(|| "upload-markdown-copy-hint".into())
-                        .items_center()
-                        .gap_1()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("Press")
-                        .child(Kbd::new(Keystroke::parse("cmd-c").expect("valid shortcut")))
-                        .child("to copy all attachments."),
+                        })
+                        .child(
+                            div()
+                                .debug_selector(|| "attachment-count".into())
+                                .text_xs()
+                                .font_semibold()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(format!(
+                                    "{selected_count}/{count} attachment{} selected",
+                                    if count == 1 { "" } else { "s" }
+                                )),
+                        ),
                 )
             })
             .children(
-                self.staged_attachments
-                    .iter()
-                    .map(|image| self.render_reorder_row(image, cx))
+                self.ordered_attachments()
+                    .enumerate()
+                    .map(|(index, image)| {
+                        v_flex()
+                            .w_full()
+                            .when(index == pending_count && index > 0, |row| {
+                                row.child(
+                                    div()
+                                        .id("attachment-upload-divider")
+                                        .debug_selector(|| "attachment-upload-divider".into())
+                                        .w_full()
+                                        .h(px(2.))
+                                        .my_3()
+                                        .rounded_full()
+                                        .bg(cx.theme().muted_foreground.opacity(0.5)),
+                                )
+                            })
+                            .child(self.render_reorder_row(image, cx))
+                    })
                     .collect::<Vec<_>>(),
             )
     }
@@ -3575,11 +3580,18 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("Quick Copy shortcut"))
+                    .child(div().font_semibold().text_sm().child("Add to clipboard shortcut"))
+                    .child(Checkbox::new("automatically-copy-add-from-clipboard")
+                        .label(r#"Automatically copy "Add from clipboard""#)
+                        .checked(self.settings.automatically_copy_add_from_clipboard)
+                        .on_click(cx.listener(|this, checked, window, cx| this.set_automatically_copy_add_from_clipboard(*checked, window, cx))))
+                    .child(div().text_xs().text_color(cx.theme().muted_foreground)
+                        .child(r#"Allow "Add from clipboard" to automatically upload the latest item on your clipboard to GitHub and copy the resulting output."#))
+                    .child(div().font_semibold().text_sm().child("Global shortcut"))
                     .child(
-                        Checkbox::new("enable-global-quick-copy-shortcut")
+                        Checkbox::new("enable-global-add-from-clipboard-shortcut")
                             .label("Enable")
-                            .checked(self.settings.global_quick_copy_shortcut_enabled)
+                            .checked(self.settings.global_add_from_clipboard_shortcut_enabled)
                             .on_click(cx.listener(|this, checked, window, cx| {
                                 this.set_global_shortcut_enabled(*checked, window, cx);
                             })),
@@ -3595,7 +3607,7 @@ impl UploaderApp {
                                     .child(Input::new(&self.global_shortcut_input).readonly(true)),
                             )
                             .child(
-                                Button::new("record-global-quick-copy-shortcut")
+                                Button::new("record-global-add-from-clipboard-shortcut")
                                     .app_secondary()
                                     .label(if self.recording_global_shortcut {
                                         "Press shortcut…"
@@ -3630,7 +3642,7 @@ impl UploaderApp {
                     )
                     .child(
                         div().text_xs().text_color(cx.theme().muted_foreground)
-                            .child("Use ![title](URL) instead of an image tag. Markdown images do not include width or height. Applies to individual copy, bulk copy, and Quick Copy."),
+                            .child("Use ![title](URL) instead of an image tag. Markdown images do not include width or height. Applies to individual copy, bulk copy, and Add from Clipboard."),
                     ),
             )
             .child(
@@ -3779,11 +3791,13 @@ impl Focusable for UploaderApp {
 
 impl Render for UploaderApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let upload_count = self
+            .staged_attachments
+            .iter()
+            .filter(|attachment| !attachment.upload_state.is_uploaded())
+            .count();
         let can_send = self.selected_repository.is_some()
-            && self
-                .staged_attachments
-                .iter()
-                .any(|image| !image.upload_state.is_uploaded())
+            && upload_count > 0
             && !self.uploading
             && !self.import_busy()
             && !self.loading_token
@@ -3812,7 +3826,6 @@ impl Render for UploaderApp {
                 }
             }))
             .on_action(cx.listener(Self::on_paste))
-            .on_action(cx.listener(Self::stage_from_clipboard_menu))
             .on_action(
                 cx.listener(|this, _: &ToggleProjectSidebar, _, cx| {
                     this.toggle_project_sidebar(cx)
@@ -3896,7 +3909,7 @@ impl Render for UploaderApp {
                                         .flex_1()
                                         .min_w_0()
                                         .gap_3()
-                                        .child(div().text_2xl().font_semibold().child(if self.project_state.folder.is_some() { format!("Project: {workspace_title}") } else { workspace_title }))
+                                        .child(div().text_2xl().font_semibold().child(workspace_title))
                                         .child(
                                             h_flex()
                                                 .w_full()
@@ -3956,7 +3969,8 @@ impl Render for UploaderApp {
                                         ),
                                 ),
                         )
-                        .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
+                        .when(needs_setup, |root| root.child(self.render_setup_prompt(cx))
+                            .when(!self.staged_attachments.is_empty(), |root| root.child(self.render_attachments(cx))))
                         .when(!needs_setup, |root| {
                             root.child(self.render_repository_picker("Repository", cx))
                                 .child(self.render_drop_zone(cx))
@@ -4003,24 +4017,7 @@ impl Render for UploaderApp {
                                 .on_click(cx.listener(Self::cancel_upload)),
                         )
                     })
-                    .child(
-                        Button::new("send-image")
-                            .app_primary()
-                            .label(if self.uploading {
-                                "Uploading…".to_owned()
-                            } else {
-                                "Upload".to_owned()
-                            })
-                            .icon(AssetIconName::Upload)
-                            .min_w(px(112.))
-                            .loading(self.uploading)
-                            .disabled(!can_send)
-                            .when(!can_send, |button| button.cursor_not_allowed())
-                            .when(self.staged_attachments.is_empty(), |button| {
-                                button.tooltip("Add an image or video first")
-                            })
-                            .on_click(cx.listener(Self::send)),
-                    ),
+                    .child(self.render_upload_button(upload_count, can_send, cx)),
             );
             root.child(
                 h_flex()
@@ -4311,6 +4308,102 @@ mod tests {
             .set_len(file.as_file().metadata().unwrap().len() + crate::model::MAX_ATTACHMENT_BYTES)
             .unwrap();
         file
+    }
+
+    #[gpui_kit::test]
+    fn clipboard_drafts_remain_visible_before_account_setup(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            init_keybindings(cx);
+            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_image(
+                &gpui_kit::Image::from_bytes(
+                    gpui_kit::ImageFormat::Png,
+                    include_bytes!("../packaging/app-cat-pixel.png").to_vec(),
+                ),
+            ));
+            view.update(cx, |app, cx| {
+                app.settings.owner = None;
+                app.load_state = LoadState::NeedsSetup;
+                app.focus_handle.focus(window, cx);
+            });
+        });
+        cx.simulate_keystrokes("cmd-v");
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert_eq!(view.read(cx).staged_attachments.len(), 1);
+            let id = view.read(cx).staged_attachments[0].id;
+            window.draw(cx).clear(cx);
+            assert!(view.read(cx).attachment_bounds.borrow().contains_key(&id));
+        });
+    }
+
+    #[gpui_kit::test]
+    fn attachments_group_pending_and_edited_images_above_uploaded_items_without_labels(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        let ids = cx.update(|window, cx| {
+            let ids = view.update(cx, |app, cx| {
+                let mut items = (0..4)
+                    .map(|_| mixed_attachments().remove(0))
+                    .collect::<Vec<_>>();
+                for index in [0, 2] {
+                    items[index].upload_state = AttachmentUploadState::Uploaded {
+                        url: format!("https://example.com/{index}"),
+                    };
+                }
+                let ids = items.iter().map(|item| item.id).collect::<Vec<_>>();
+                app.staged_attachments = items;
+                app.sync_upload_result();
+                cx.notify();
+                ids
+            });
+            window.draw(cx).clear(cx);
+            ids
+        });
+        let divider = cx.debug_bounds("attachment-upload-divider").unwrap();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert_eq!(
+                app.ordered_attachments()
+                    .map(|item| item.id)
+                    .collect::<Vec<_>>(),
+                vec![ids[1], ids[3], ids[0], ids[2]]
+            );
+            let bounds = app.attachment_bounds.borrow();
+            assert!(bounds[&ids[3]].bottom() <= divider.top());
+            assert!(bounds[&ids[0]].top() >= divider.bottom());
+        });
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                let edited = StagedAttachment::from_bytes(
+                    "edited.png".into(),
+                    include_bytes!("../packaging/menu-bar-icon.png").to_vec(),
+                    None,
+                )
+                .unwrap();
+                app.apply_annotations(&crate::image_preview::AppliedAnnotation {
+                    id: ids[0],
+                    attachment: edited,
+                })
+                .unwrap();
+                assert_eq!(
+                    app.ordered_attachments()
+                        .map(|item| item.id)
+                        .collect::<Vec<_>>(),
+                    vec![ids[0], ids[1], ids[3], ids[2]]
+                );
+                for item in &mut app.staged_attachments {
+                    item.upload_state = AttachmentUploadState::Uploaded {
+                        url: "https://example.com/done".into(),
+                    };
+                }
+                app.sync_upload_result();
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        assert!(cx.debug_bounds("attachment-upload-divider").is_none());
     }
 
     #[gpui_kit::test]
@@ -4822,6 +4915,62 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn upload_and_copy_copies_only_successful_new_items_and_preserves_clipboard_on_failure_or_cancel(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        for outcome in ["success", "partial", "failure", "cancel"] {
+            cx.update(|window, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string("Keep this clipboard".into()));
+                view.update(cx, |app, cx| {
+                    let mut old = mixed_attachments().remove(0);
+                    old.id = 100;
+                    old.upload_state = AttachmentUploadState::Uploaded {
+                        url: "https://example.com/old".into(),
+                    };
+                    app.staged_attachments = vec![old];
+                    for (index, mut item) in mixed_attachments().into_iter().enumerate() {
+                        item.id = index as u64 + 1;
+                        item.title = format!("New {index}");
+                        app.staged_attachments.push(item);
+                    }
+                    // Selection and previous uploads must not determine this batch's output.
+                    app.selected_attachments = [100].into();
+                    app.settings.copy_images_as_markdown = true;
+                    app.settings.upload_action = UploadAction::UploadAndCopy;
+                    app.start_upload(window, cx, move |item, control, _| {
+                        if outcome == "cancel" {
+                            control.cancel();
+                        }
+                        if outcome == "failure" || (outcome == "partial" && item.id == 2) {
+                            Err(github::GithubError::Upload("try again".into()))
+                        } else {
+                            Ok(format!("https://example.com/new-{}", item.id))
+                        }
+                    });
+                    // The action belongs to the batch, even if preferences later change.
+                    app.settings.upload_action = UploadAction::Upload;
+                });
+            });
+            cx.run_until_parked();
+            cx.update(|_, cx| {
+                let expected = match outcome {
+                    "success" => "![New 0](https://example.com/new-1)\n\nhttps://example.com/new-2",
+                    "partial" => "![New 0](https://example.com/new-1)",
+                    _ => "Keep this clipboard",
+                };
+                assert_eq!(
+                    cx.read_from_clipboard()
+                        .and_then(|item| item.text())
+                        .as_deref(),
+                    Some(expected)
+                );
+                assert!(!view.read(cx).uploading);
+            });
+        }
+    }
+
+    #[gpui_kit::test]
     fn mixed_batch_keeps_successes_and_retries_only_failed_attachments(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
         cx.update(|window, cx| {
@@ -5043,8 +5192,8 @@ mod tests {
             window.activate_window();
             view.update(cx, |app, cx| {
                 app.show_settings(cx);
-                app.settings.global_quick_copy_shortcut = "Command+Shift+U".into();
-                app.settings.global_quick_copy_shortcut_enabled = true;
+                app.settings.global_add_from_clipboard_shortcut = "Command+Shift+U".into();
+                app.settings.global_add_from_clipboard_shortcut_enabled = true;
                 // No native service is installed in a GPUI test. Receiving the
                 // key ends recording at registration failure, before saving.
                 app.recording_global_shortcut = true;
@@ -5149,7 +5298,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn markdown_copy_hint_and_shortcut_work_for_single_and_bulk_uploads(cx: &mut TestAppContext) {
+    fn copy_buttons_and_shortcut_work_for_single_and_bulk_uploads(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
             init_keybindings(cx);
@@ -5256,7 +5405,7 @@ mod tests {
                 });
                 window.draw(cx).clear(cx);
             });
-            assert!(cx.debug_bounds("upload-markdown-copy-hint").is_some());
+            assert!(cx.debug_bounds("upload-markdown-copy-hint").is_none());
             assert!(cx.debug_bounds("marker-descriptions-1").is_some());
             if bulk_upload {
                 assert!(
@@ -5286,6 +5435,7 @@ mod tests {
                 let copy_all = cx
                     .debug_bounds("copy-all-staged-image-markdown")
                     .expect("bulk copy button is visible");
+                assert_eq!(copy_all.size.height, copy.size.height);
                 cx.simulate_mouse_down(copy_all.center(), MouseButton::Left, Modifiers::default());
                 cx.simulate_mouse_up(copy_all.center(), MouseButton::Left, Modifiers::default());
                 cx.update(|_, cx| {

@@ -42,8 +42,8 @@ You can also choose **Send to Gatto** in Finder's context menu (macOS may place 
 under **Services**). This service ships inside the app; there is no separate
 workflow to install. macOS controls service visibility. If you previously disabled
 it, enable **Send to Gatto** in **System Settings → Keyboard → Keyboard Shortcuts →
-Services**. See the [Finder workflow](WALKTHROUGH.md#send-files-from-finder) for
-staging behavior and [Support](../SUPPORT.md#finder-integration) for troubleshooting.
+Services**. Continue with [your first upload](WALKTHROUGH.md#your-first-upload),
+or see [Support](../SUPPORT.md#finder-integration) for troubleshooting.
 
 ### Updates
 
@@ -126,16 +126,18 @@ repositories when permitted. GitHub.com is the supported host.
 Changing to a different account or organization clears the previous repository
 selection and pins. Choose and pin repositories for the new owner.
 
-Pin repositories you use often. Pins put them first in the repository picker
-and enable Quick Copy.
+Pin repositories you use often to put them first in the repository picker.
+Add from Clipboard saves to Scratchpad by default. Choose
+**Use for "Add from Clipboard"** from another project’s sidebar menu to save there.
+Select a repository in that project when you are ready to upload.
 
-<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, Quick Copy shortcut, and an unchecked Copy images as Markdown option" width="800">
+<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, automatic Add from Clipboard uploading turned off, and global shortcut controls" width="800">
 
 ## 4. Set your preferences
 
 - **Copy images as Markdown** is unchecked by default. Enable it to copy
   `![title](URL)` instead of a sized HTML image tag. It applies to
-  individual copy, bulk copy, and Quick Copy, including images already uploaded
+  individual copy, bulk copy, and Add from Clipboard, including images already uploaded
   in the current window. Markdown image snippets have no width or height;
   video links keep their existing format. The optional Description field is
   included only on HTML images as a `data-description` attribute.
@@ -144,17 +146,21 @@ and enable Quick Copy.
   you qualify to upload larger videos: you are an organization member, outside
   collaborator, or personally on a paid plan. Gatto does not check your plan or
   grant upload access. The preference applies to file selection, drag/drop,
-  Finder paste, Quick Copy, and the compression target. Images and GIFs remain
+  Finder paste, Add from Clipboard, and the compression target. Images and GIFs remain
   limited to 10 MB. See [GitHub's attachment limits](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files).
 - **Start at Login** starts Gatto quietly in the menu bar, without opening a
-  window or showing a Dock icon. Quick Copy and update checks work in the background.
+  window or showing a Dock icon. Add from Clipboard and update checks work in the background.
   Choose **Open App** from the menu bar to show the window. Existing login items
   are refreshed when you next open the updated app. If you move the app later,
   toggle this off and on to refresh its saved location.
-- **Quick Copy shortcut** enables a global shortcut, initially
+- **Automatically copy "Add from clipboard"** is off by default. It lets the
+  background action upload the saved item and copy its output automatically.
+  With it off, the item is saved as a draft and the notification offers
+  **Upload and copy**. Both modes always post a system notification.
+- **Add from Clipboard shortcut** enables a global shortcut, initially
   **Command+Shift+G**. It is off by default and requires no Accessibility
-  permission. See the [walkthrough](WALKTHROUGH.md#faster-clipboard-uploads) to
-  record a different shortcut.
+  permission. Saving drafts does not require a repository selection. Use
+  **Record shortcut** to choose a different combination.
 - **Close the window after copy** closes the main window after copying uploaded
   Markdown. Attachments and completed upload URLs stay saved in the workspace.
 
@@ -164,8 +170,10 @@ For reset, uninstall, or unreadable settings, see
 
 ### Project storage
 
-Scratchpad persists in `~/.gatto/scratchpad`. Projects live under
-`~/.gatto/projects` and are discovered there automatically.
+Scratchpad persists in the reserved `~/.gatto/projects/Scratchpad` folder. All
+projects live under `~/.gatto/projects` and save their own repository selections.
+An existing `~/.gatto/scratchpad` folder moves there automatically on launch,
+replacing the destination if it already exists.
 Preferences live in `~/.gatto/settings.json`, with a repository-hosted JSON Schema
 reference for code editors. Existing Application Support settings migrate on launch.
 Start at Login is also recorded there; macOS still requires its LaunchAgent in

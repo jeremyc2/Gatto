@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+mod add_from_clipboard;
 mod annotation;
 mod app;
 mod application_menu;
@@ -19,9 +20,10 @@ mod open_request;
 #[cfg(all(test, target_os = "macos"))]
 mod performance;
 mod projects;
-mod quick_copy;
 mod rooftops;
 mod rooftops_score;
+#[cfg(test)]
+mod schema_tests;
 mod settings;
 mod theme;
 mod updater;
@@ -104,7 +106,7 @@ fn main() {
         let shortcut_menu = menu_bar_controller.clone();
         let shortcut_diagnostics = diagnostics.clone();
         let global_shortcut_controller = GlobalShortcutController::new(move |shortcut| {
-            if let Err(error) = shortcut_menu.set_quick_copy_shortcut(shortcut) {
+            if let Err(error) = shortcut_menu.set_add_from_clipboard_shortcut(shortcut) {
                 shortcut_diagnostics.error(format!("Could not refresh menu shortcuts: {error:#}"));
             }
         });
@@ -116,12 +118,13 @@ fn main() {
             }
         };
 
-        if startup_settings.global_quick_copy_shortcut_enabled
+        if startup_settings.global_add_from_clipboard_shortcut_enabled
+            && startup_settings.add_from_clipboard_available()
             && let Err(error) = global_shortcut_controller
-                .set_shortcut(Some(&startup_settings.global_quick_copy_shortcut))
+                .set_shortcut(Some(&startup_settings.global_add_from_clipboard_shortcut))
         {
             diagnostics.error(format!(
-                "Could not restore the global Quick Copy shortcut: {error:#}"
+                "Could not restore the global Add from Clipboard shortcut: {error:#}"
             ));
         }
 
@@ -172,6 +175,17 @@ fn main() {
                 let _ = handle.update(cx, |_, window, cx| view.update(cx, |this, cx| this.request_workspace(Some(path), window, cx)));
             });
         });
+        // Component toasts remain in-app. This handler serves Gatto's windowless
+        // clipboard notifications without activating or creating a window.
+        let notification_main = controller.clone();
+        cx.on_system_notification_response(move |response, cx| {
+            if let Some(item) = add_from_clipboard::SavedClipboardItem::from_notification(&response) {
+                let service = notification_main.0.borrow().add_from_clipboard.clone();
+                let saved = notification_main.0.borrow().current.as_ref()
+                    .and_then(|(_, view)| view.read(cx).add_from_clipboard_upload_barrier(&item));
+                service.upload_saved(item, cx, saved, notification_main.clipboard_store());
+            }
+        });
         controller.start(login_launch, cx);
         let composition_main = controller.clone();
         cx.on_action(move |_: &application_menu::CreateComposition, cx| {
@@ -197,16 +211,16 @@ fn main() {
             cx.spawn(async move |cx| {
                 while let Ok(id) = shortcut_events.recv().await {
                     if shortcut_controller.is_registered_event(id) {
-                        cx.update(|cx| perform_action(MenuAction::QuickCopy, &shortcut_main, cx));
+                        cx.update(|cx| perform_action(MenuAction::AddFromClipboard, &shortcut_main, cx));
                     }
                 }
             })
             .detach();
         }
 
-        let paste_actions_visible = !startup_settings.pinned_repositories.is_empty();
+        let add_from_clipboard_enabled = startup_settings.add_from_clipboard_available();
         let (menu_bar, menu_events) = match MenuBar::install(
-            paste_actions_visible,
+            add_from_clipboard_enabled,
             global_shortcut_controller.registered_shortcut().as_deref(),
         ) {
             Ok(menu_bar) => menu_bar,
@@ -266,8 +280,7 @@ impl From<CustomUrlAction> for MenuAction {
     fn from(action: CustomUrlAction) -> Self {
         match action {
             CustomUrlAction::Open => Self::Open,
-            CustomUrlAction::DraftFromClipboard => Self::StageFromClipboard,
-            CustomUrlAction::QuickCopy => Self::QuickCopy,
+            CustomUrlAction::AddFromClipboard => Self::AddFromClipboard,
             CustomUrlAction::AppPreferences => Self::Settings,
             CustomUrlAction::SideBySideComparison => Self::CreateComposition,
         }
@@ -283,7 +296,7 @@ struct MainWindowState {
     diagnostics: Diagnostics,
     menu_bar: MenuBarController,
     shortcut: GlobalShortcutController,
-    quick_copy: quick_copy::QuickCopy,
+    add_from_clipboard: add_from_clipboard::AddFromClipboard,
 }
 
 impl MainWindow {
@@ -295,11 +308,67 @@ impl MainWindow {
         Self(Rc::new(RefCell::new(MainWindowState {
             current: None,
             composer: None,
-            quick_copy: quick_copy::QuickCopy::new(diagnostics.clone()),
+            add_from_clipboard: add_from_clipboard::AddFromClipboard::new(
+                diagnostics.clone(),
+                menu_bar.add_from_clipboard_busy_flag(),
+            ),
             diagnostics,
             menu_bar,
             shortcut,
         })))
+    }
+
+    fn clipboard_store(&self) -> add_from_clipboard::Store {
+        let controller = self.clone();
+        Rc::new(move |upload, cx| {
+            let controller = controller.clone();
+            cx.spawn(async move |cx| {
+                // A window opened during Add from Clipboard defers its initial load.
+                // Existing workspace transitions finish before we choose its writer.
+                loop {
+                    let waiting = cx.update(|cx| {
+                        controller
+                            .0
+                            .borrow()
+                            .current
+                            .as_ref()
+                            .is_some_and(|(_, view)| {
+                                view.read(cx).add_from_clipboard_waiting_for_workspace()
+                            })
+                    });
+                    if !waiting {
+                        break;
+                    }
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(10))
+                        .await;
+                }
+                let task = cx.update(|cx| {
+                    let current = controller.0.borrow().current.clone();
+                    if let Some((handle, view)) = current {
+                        handle.update(cx, |_, window, cx| {
+                            view.update(cx, |view, cx| {
+                                view.store_add_from_clipboard(upload, window, cx)
+                            })
+                        })
+                    } else {
+                        Ok(cx.background_spawn(async move { upload.persist() }))
+                    }
+                })?;
+                task.await
+            })
+        })
+    }
+
+    fn clipboard_save_barrier(
+        &self,
+        cx: &App,
+    ) -> Option<async_channel::Receiver<Result<(), String>>> {
+        self.0
+            .borrow()
+            .current
+            .as_ref()
+            .and_then(|(_, view)| view.read(cx).add_from_clipboard_save_barrier())
     }
 
     fn start(&self, login_launch: bool, cx: &mut App) {
@@ -517,19 +586,9 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
         MenuAction::Open => {
             main.show(cx);
         }
-        MenuAction::StageFromClipboard => {
-            let main_was_open = main.is_presented(cx);
-            let (handle, view) = main.show(cx);
-            let _ = handle.update(cx, |_, window, cx| {
-                if !main_was_open {
-                    view.update(cx, |this, cx| this.request_workspace(None, window, cx));
-                }
-                window.dispatch_action(Box::new(app::StageFromClipboard), cx);
-            });
-        }
-        MenuAction::QuickCopy => {
-            let quick_copy = main.0.borrow().quick_copy.clone();
-            quick_copy.start(cx);
+        MenuAction::AddFromClipboard => {
+            let service = main.0.borrow().add_from_clipboard.clone();
+            service.start(cx, main.clipboard_save_barrier(cx), main.clipboard_store());
         }
         MenuAction::Settings => {
             let (_, view) = main.show(cx);
@@ -538,10 +597,10 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
         MenuAction::CreateComposition => main.show_composer(None, cx),
         MenuAction::Update => {
             let (handle, view) = main.show(cx);
-            let quick_copy_busy = main.0.borrow().quick_copy.is_busy();
+            let add_from_clipboard_busy = main.0.borrow().add_from_clipboard.is_busy();
             let _ = handle.update(cx, |_, window, cx| {
                 view.update(cx, |this, cx| {
-                    this.install_update(quick_copy_busy, window, cx)
+                    this.install_update(add_from_clipboard_busy, window, cx)
                 });
             });
         }
@@ -557,11 +616,7 @@ mod startup_tests {
     fn custom_urls_dispatch_matching_menu_actions() {
         for (url, expected) in [
             ("gatto://open", MenuAction::Open),
-            (
-                "gatto://draft-from-clipboard",
-                MenuAction::StageFromClipboard,
-            ),
-            ("gatto://quick-copy", MenuAction::QuickCopy),
+            ("gatto://add-from-clipboard", MenuAction::AddFromClipboard),
             ("gatto://app-preferences", MenuAction::Settings),
             (
                 "gatto://side-by-side-comparison",

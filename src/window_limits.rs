@@ -153,6 +153,16 @@ pub fn set_maximum_content_size(window: &Window, width: f64, height: f64) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_maximum_content_size(_: &Window, _: f64, _: f64) {}
 
+#[cfg(target_os = "macos")]
+pub fn set_minimum_content_size(window: &Window, width: f64, height: f64) {
+    if let Some(native_window) = native_window(window) {
+        native_window.setContentMinSize(objc2_foundation::NSSize::new(width, height));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_minimum_content_size(_: &Window, _: f64, _: f64) {}
+
 /// Shows the Dock icon while the window is open; the menu bar item always stays.
 #[cfg(target_os = "macos")]
 pub fn set_dock_visible(visible: bool) {

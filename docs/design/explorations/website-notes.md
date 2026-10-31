@@ -7,7 +7,7 @@ Design approved October 16, 2026; implementation moved October 17, 2026. The app
 - Coconat headings and Apfel Grotezk text, both free open-source fonts with licenses embedded in the file.
 - The three black cats and the three developing encounters, with the GitHub label painted into the upload box.
 - Product copy stays outside the illustrations: one heading and one short paragraph per scene. No image captions, appearance controls, repeated narrative explanations, or questionnaire UI.
-- The first view names the job and offers a download. The next views explain uploading to GitHub and copying Markdown. Three brief feature descriptions cover batches, preview/descriptions and Quick Copy.
+- The first view names the job and offers a download. The next views explain uploading to GitHub and copying Markdown. Three brief feature descriptions cover batches, preview/descriptions and Add from Clipboard.
 - The opening and bottom download links use the exact macOS badge image from the README, embedded unchanged. There is no header download button. Supporting destinations appear once: the walkthrough in the header, setup beside requirements, and source/support/license in the footer.
 - The upload explanation follows the actual order: choose a repository, paste or drop an image, then upload. Small scrolling hints are omitted.
 - Download and setup links lead to the project's real GitHub pages. Compatibility and setup requirements come from the repository's current setup and support guides; no release version, download size, testimonial or performance figure is invented.

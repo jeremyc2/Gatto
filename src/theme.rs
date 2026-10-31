@@ -8,6 +8,17 @@ use gpui_kit::{
     div, px, rgb,
 };
 
+mod button;
+mod checkbox;
+pub use button::AppButton;
+pub use checkbox::AppCheckbox;
+
+pub(super) const HOVER_BACKGROUND: u32 = 0x2b3345;
+pub(super) const HOVER_BORDER: u32 = 0xb0a6f7;
+
+#[cfg(test)]
+mod tests;
+
 /// Opens every app window with shared native title-bar colors and a sidebar-style divider.
 pub fn open_window<V: gpui_kit::Render>(
     options: gpui_kit::WindowOptions,
@@ -24,26 +35,35 @@ pub fn open_window<V: gpui_kit::Render>(
 /// App actions share the landing page's geometry and outlined secondary style.
 /// Annotation tools keep their own compact, selectable treatment.
 pub trait AppButtonStyle {
-    fn app_primary(self) -> Self;
-    fn app_secondary(self) -> Self;
-    fn app_icon(self) -> Self;
+    fn app_primary(self) -> AppButton;
+    fn app_secondary(self) -> AppButton;
+    fn app_icon(self) -> AppButton;
 }
 
 impl AppButtonStyle for Button {
-    fn app_primary(self) -> Self {
-        self.primary().with_size(Size::Medium).min_w(px(80.)).px_3()
+    fn app_primary(self) -> AppButton {
+        AppButton::new(
+            self.primary().with_size(Size::Medium).min_w(px(80.)).px_3(),
+            true,
+        )
     }
 
-    fn app_secondary(self) -> Self {
-        self.with_variant(ButtonVariant::Default)
-            .outline()
-            .with_size(Size::Medium)
-            .min_w(px(80.))
-            .px_3()
+    fn app_secondary(self) -> AppButton {
+        AppButton::new(
+            self.with_variant(ButtonVariant::Default)
+                .outline()
+                .with_size(Size::Medium)
+                .min_w(px(80.))
+                .px_3(),
+            false,
+        )
     }
 
-    fn app_icon(self) -> Self {
-        self.with_variant(ButtonVariant::Default).outline().xsmall()
+    fn app_icon(self) -> AppButton {
+        AppButton::new(
+            self.with_variant(ButtonVariant::Default).outline().xsmall(),
+            false,
+        )
     }
 }
 
@@ -123,6 +143,8 @@ pub fn apply_dark_theme(cx: &mut gpui_kit::App) {
         theme.primary_foreground = color(0xffffff);
         theme.button_primary = color(0x6c63ff);
         theme.button_primary_hover = color(0x8279ff);
+        theme.button_hover = color(HOVER_BACKGROUND);
+        theme.secondary_hover = color(HOVER_BACKGROUND);
         theme.button_primary_active = color(0x574edb);
         theme.button_primary_foreground = color(0xffffff);
         theme.ring = color(0x8b7bff);

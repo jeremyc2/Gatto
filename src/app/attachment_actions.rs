@@ -4,38 +4,32 @@ use gpui_kit::component::menu::PopupMenuItem;
 impl UploaderApp {
     pub(super) fn attachment_options(
         &self,
-        ids: Vec<u64>,
-        individual: bool,
+        attachment_id: u64,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let owner = cx.entity().downgrade();
-        let can_annotate = individual
-            && self
-                .staged_attachments
-                .iter()
-                .any(|item| ids.contains(&item.id) && item.image().is_some());
-        let can_convert = individual
-            && self.staged_attachments.iter().any(|item| {
-                item.id == ids[0]
-                    && item.image().is_some_and(|image| !image.is_comparison)
-                    && item.mime_type != "image/gif"
-            });
-        let id = if individual {
-            format!("attachment-options-{}", ids[0])
-        } else {
-            "selected-attachment-options".into()
-        };
+        let saving = self.project_state.saving;
+        let can_annotate = self
+            .staged_attachments
+            .iter()
+            .any(|item| item.id == attachment_id && item.image().is_some());
+        let can_convert = self.staged_attachments.iter().any(|item| {
+            item.id == attachment_id
+                && item.image().is_some_and(|image| !image.is_comparison)
+                && item.mime_type != "image/gif"
+        });
+        let id = format!("attachment-options-{}", attachment_id);
         Button::new(id.clone())
             .debug_selector(move || id)
             .app_icon()
-            .when(!individual, |button| button.small().w(px(28.)).h(px(28.)))
             .icon(AssetIconName::Ellipsis)
             .accessibility_label("Attachment options")
+            .tooltip("Attachment options")
             .dropdown_menu(move |menu, _, _| {
                 let mut menu = menu;
-                if individual {
+                {
                     let view = owner.clone();
-                    let selected = ids[0];
+                    let selected = attachment_id;
                     menu = menu.item(
                         PopupMenuItem::new("Edit metadata")
                             .icon(AssetIconName::Tags)
@@ -49,10 +43,10 @@ impl UploaderApp {
 
                 if can_annotate {
                     let view = owner.clone();
-                    let selected = ids[0];
+                    let selected = attachment_id;
                     menu = menu.item(
                         PopupMenuItem::new("Clone")
-                            .icon(AssetIconName::Copy)
+                            .icon(AssetIconName::ImagePlus)
                             .on_click(move |_, window, cx| {
                                 let _ = view.update(cx, |this, cx| {
                                     if let Err(error) = this.clone_attachment(selected, window, cx)
@@ -65,7 +59,7 @@ impl UploaderApp {
                             }),
                     );
                     let view = owner.clone();
-                    let selected = ids.clone();
+                    let selected = vec![attachment_id];
                     menu = menu.item(
                         PopupMenuItem::new("Annotate")
                             .icon(AssetIconName::Paintbrush)
@@ -89,7 +83,7 @@ impl UploaderApp {
                 }
                 if can_convert {
                     let view = owner.clone();
-                    let selected = ids[0];
+                    let selected = attachment_id;
                     menu = menu.item(
                         PopupMenuItem::element(|_, _| {
                             div()
@@ -124,18 +118,20 @@ impl UploaderApp {
                     );
                 }
                 let view = owner.clone();
-                let selected = ids.clone();
-                menu = menu.item(
-                    PopupMenuItem::new("Move to project")
-                        .icon(AssetIconName::FolderInput)
-                        .on_click(move |_, window, cx| {
-                            let _ = view.update(cx, |this, cx| {
-                                this.open_move_dialog(selected.clone(), window, cx)
-                            });
-                        }),
-                );
+                let selected = vec![attachment_id];
+                if !saving {
+                    menu = menu.item(
+                        PopupMenuItem::new("Move to project")
+                            .icon(AssetIconName::FolderInput)
+                            .on_click(move |_, window, cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    this.open_move_dialog(selected.clone(), window, cx)
+                                });
+                            }),
+                    );
+                }
                 let view = owner.clone();
-                let selected = ids.clone();
+                let selected = vec![attachment_id];
                 menu.item(
                     PopupMenuItem::new("Remove")
                         .icon(AssetIconName::Trash)
@@ -145,6 +141,135 @@ impl UploaderApp {
                         }),
                 )
             })
+    }
+
+    pub(super) fn selection_actions(
+        &self,
+        ids: Vec<u64>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let available = !ids.is_empty() && !self.uploading && !self.import_busy();
+        let can_combine = available && self.selected_comparison_sources(&ids).is_some();
+        let selected_copy = available
+            .then(|| self.selected_upload_snippets(&ids))
+            .flatten();
+        h_flex()
+            .items_center()
+            .gap_2()
+            .when(can_combine, |row| {
+                let selected = ids.clone();
+                row.child(
+                    Button::new("combine-selected-attachments")
+                        .debug_selector(|| "combine-selected-attachments".into())
+                        .app_icon()
+                        .icon(AssetIconName::Columns2)
+                        .accessibility_label("Combine into side-by-side comparison")
+                        .tooltip("Combine into side-by-side comparison")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if let Err(error) =
+                                this.combine_selected_attachments(&selected, window, cx)
+                            {
+                                this.warn(error, window, cx);
+                            }
+                        })),
+                )
+            })
+            .when_some(selected_copy, |row, snippet| {
+                row.child(
+                    Button::new("copy-selected-attachments")
+                        .debug_selector(|| "copy-selected-attachments".into())
+                        .app_icon()
+                        .icon(AssetIconName::Copy)
+                        .accessibility_label("Copy selected attachments")
+                        .tooltip("Copy selected attachments")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(snippet.clone()));
+                            this.finish_copy(
+                                "Selected attachments copied to the clipboard.",
+                                window,
+                                cx,
+                            );
+                        })),
+                )
+            })
+            .when(available && !self.project_state.saving, |row| {
+                let selected = ids.clone();
+                row.child(
+                    Button::new("move-selected-attachments")
+                        .debug_selector(|| "move-selected-attachments".into())
+                        .app_icon()
+                        .icon(AssetIconName::FolderInput)
+                        .accessibility_label("Move into project")
+                        .tooltip("Move into project")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_move_dialog(selected.clone(), window, cx);
+                        })),
+                )
+            })
+            .when(available, |row| {
+                row.child(
+                    Button::new("remove-selected-attachments")
+                        .debug_selector(|| "remove-selected-attachments".into())
+                        .app_icon()
+                        .icon(AssetIconName::Trash)
+                        .accessibility_label("Remove")
+                        .tooltip("Remove")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.remove_attachments(&ids, cx);
+                        })),
+                )
+            })
+    }
+
+    fn selected_upload_snippets(&self, ids: &[u64]) -> Option<String> {
+        if ids.is_empty() {
+            return None;
+        }
+        let selected = self
+            .ordered_attachments()
+            .filter(|item| ids.contains(&item.id))
+            .collect::<Vec<_>>();
+        if selected.len() != ids.len() {
+            return None;
+        }
+        let snippets = selected
+            .into_iter()
+            .map(|item| {
+                item.upload_state
+                    .uploaded_url()
+                    .map(|url| item.snippet(url, self.settings.image_copy_format()))
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(snippets.join("\n\n"))
+    }
+
+    fn selected_comparison_sources(&self, ids: &[u64]) -> Option<[StagedAttachment; 2]> {
+        if ids.len() != 2 || ids[0] == ids[1] {
+            return None;
+        }
+        let mut selected = self
+            .ordered_attachments()
+            .filter(|item| ids.contains(&item.id));
+        let sources = [selected.next()?, selected.next()?];
+        sources
+            .iter()
+            .all(|item| {
+                item.image().is_some_and(|image| !image.is_comparison)
+                    && item.mime_type != "image/gif"
+            })
+            .then(|| sources.map(Clone::clone))
+    }
+
+    fn combine_selected_attachments(
+        &mut self,
+        ids: &[u64],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), &'static str> {
+        let sources = self
+            .selected_comparison_sources(ids)
+            .ok_or("Select exactly two PNG, JPEG, or WebP images that aren't already side-by-side comparisons.")?;
+        self.begin_comparison(sources, window, cx)
     }
 
     fn clone_attachment(
@@ -192,7 +317,7 @@ impl UploaderApp {
             .project_state
             .folders
             .iter()
-            .filter(|folder| self.project_state.folder.as_ref() != Some(*folder))
+            .filter(|folder| self.project_state.storage_folder.as_ref() != Some(*folder))
             .map(|folder| {
                 let name = crate::projects::title(folder).unwrap_or_else(|_| {
                     folder
@@ -317,6 +442,318 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    fn solid_image(color: [u8; 4], format: image::ImageFormat) -> StagedAttachment {
+        let pixels = image::RgbaImage::from_pixel(8, 8, image::Rgba(color));
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        pixels.write_to(&mut bytes, format).unwrap();
+        StagedAttachment::from_bytes("solid.png".into(), bytes.into_inner(), None).unwrap()
+    }
+
+    #[gpui_kit::test]
+    fn selection_toolbar_combines_two_images_in_display_order(cx: &mut TestAppContext) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        let originals = cx.update(|window, cx| {
+            let originals = view.update(cx, |app, cx| {
+                app.append_staged_attachments(
+                    vec![
+                        solid_image([255, 0, 0, 255], image::ImageFormat::Png),
+                        image(),
+                        solid_image([0, 0, 255, 255], image::ImageFormat::Png),
+                    ],
+                    window,
+                    cx,
+                );
+                let originals = app
+                    .staged_attachments
+                    .iter()
+                    .map(|item| item.persistent_id)
+                    .collect::<Vec<_>>();
+                // Selection order must not change which image appears on the left.
+                app.selected_attachments =
+                    [app.staged_attachments[2].id, app.staged_attachments[0].id].into();
+                cx.notify();
+                originals
+            });
+            window.render_frame(cx);
+            window.click("combine-selected-attachments", cx);
+            assert!(view.read(cx).combining_comparison);
+            originals
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert_eq!(app.staged_attachments.len(), 4);
+            assert_eq!(
+                app.staged_attachments[..3]
+                    .iter()
+                    .map(|item| item.persistent_id)
+                    .collect::<Vec<_>>(),
+                originals
+            );
+            let comparison = app.staged_attachments[3].image().unwrap();
+            assert!(comparison.is_comparison);
+            let document = comparison.annotation_document.as_ref().unwrap().document();
+            for (panel, color) in document
+                .comparison
+                .as_ref()
+                .unwrap()
+                .panels
+                .iter()
+                .zip([[255, 0, 0, 255], [0, 0, 255, 255]])
+            {
+                let point = panel.center();
+                assert_eq!(
+                    document.base.get_pixel(point.x as u32, point.y as u32).0,
+                    color
+                );
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn selection_toolbar_hides_unavailable_actions_and_removes_only_selected_items(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        cx.update(|window, cx| {
+            let ids = view.update(cx, |app, cx| {
+                let video = StagedAttachment::from_path(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4"),
+                    Default::default(),
+                )
+                .unwrap();
+                app.append_staged_attachments(
+                    vec![
+                        image(),
+                        image(),
+                        image(),
+                        video,
+                        solid_image([0, 0, 0, 255], image::ImageFormat::Gif),
+                    ],
+                    window,
+                    cx,
+                );
+                app.staged_attachments
+                    .iter()
+                    .map(|item| item.id)
+                    .collect::<Vec<_>>()
+            });
+            for (selection, can_combine) in [
+                (vec![], false),
+                (vec![ids[0]], false),
+                (vec![ids[0], ids[1]], true),
+                (vec![ids[0], ids[1], ids[2]], false),
+                (vec![ids[0], ids[3]], false),
+                (vec![ids[0], ids[4]], false),
+            ] {
+                let has_selection = !selection.is_empty();
+                view.update(cx, |app, cx| {
+                    app.selected_attachments = selection.into_iter().collect();
+                    cx.notify();
+                });
+                window.render_frame(cx);
+                assert_eq!(
+                    window.try_find("combine-selected-attachments").is_some(),
+                    can_combine
+                );
+                assert_eq!(
+                    window.try_find("move-selected-attachments").is_some(),
+                    has_selection
+                );
+                assert_eq!(
+                    window.try_find("remove-selected-attachments").is_some(),
+                    has_selection
+                );
+            }
+            for uploading in [true, false] {
+                view.update(cx, |app, cx| {
+                    app.selected_attachments = ids[..2].iter().copied().collect();
+                    app.uploading = uploading;
+                    app.loading_attachment_paths = !uploading;
+                    cx.notify();
+                });
+                window.render_frame(cx);
+                for action in [
+                    "combine-selected-attachments",
+                    "move-selected-attachments",
+                    "remove-selected-attachments",
+                    "select-all-attachments",
+                ] {
+                    assert!(window.try_find(action).is_none());
+                }
+            }
+            view.update(cx, |app, cx| {
+                app.loading_attachment_paths = false;
+                app.project_state.saving = true;
+                cx.notify();
+            });
+            window.render_frame(cx);
+            assert!(window.try_find("move-selected-attachments").is_none());
+            assert!(window.try_find("combine-selected-attachments").is_some());
+            view.update(cx, |app, cx| {
+                app.project_state.saving = false;
+                cx.notify();
+            });
+            window.render_frame(cx);
+            window.click("remove-selected-attachments", cx);
+            let app = view.read(cx);
+            assert_eq!(
+                app.staged_attachments
+                    .iter()
+                    .map(|item| item.id)
+                    .collect::<Vec<_>>(),
+                ids[2..]
+            );
+            assert!(app.selected_attachments.is_empty());
+        });
+    }
+
+    #[gpui_kit::test]
+    fn existing_comparisons_hide_combine_and_cannot_be_combined_again(cx: &mut TestAppContext) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        cx.update(|window, cx| {
+            let ids = view.update(cx, |app, cx| {
+                let mut images = vec![image(), image(), image(), image()];
+                for index in [0, 3] {
+                    if let Media::Image(image) = &mut images[index].media {
+                        image.is_comparison = true;
+                    }
+                }
+                app.append_staged_attachments(images, window, cx);
+                app.staged_attachments
+                    .iter()
+                    .map(|item| item.id)
+                    .collect::<Vec<_>>()
+            });
+            for selection in [[ids[0], ids[1]], [ids[2], ids[3]], [ids[0], ids[3]]] {
+                view.update(cx, |app, cx| {
+                    app.selected_attachments = selection.into();
+                    cx.notify();
+                });
+                window.render_frame(cx);
+                assert!(window.try_find("combine-selected-attachments").is_none());
+                view.update(cx, |app, cx| {
+                    assert!(
+                        app.combine_selected_attachments(&selection, window, cx)
+                            .is_err()
+                    );
+                    assert!(!app.combining_comparison);
+                    assert_eq!(app.staged_attachments.len(), 4);
+                });
+            }
+            view.update(cx, |app, cx| {
+                app.selected_attachments = [ids[1], ids[2]].into();
+                cx.notify();
+            });
+            window.render_frame(cx);
+            assert!(window.try_find("combine-selected-attachments").is_some());
+        });
+    }
+
+    #[gpui_kit::test]
+    fn selected_copy_requires_only_uploaded_items_and_copies_only_the_selection(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        cx.update(|window, cx| {
+            let ids = view.update(cx, |app, cx| {
+                app.settings.copy_images_as_markdown = true;
+                app.append_staged_attachments(vec![image(), image(), image(), image()], window, cx);
+                for (index, item) in app.staged_attachments.iter_mut().take(3).enumerate() {
+                    item.title = format!("Image {index}");
+                    item.upload_state = AttachmentUploadState::Uploaded {
+                        url: format!("https://example.com/{index}"),
+                    };
+                }
+                app.sync_upload_result();
+                app.staged_attachments
+                    .iter()
+                    .map(|item| item.id)
+                    .collect::<Vec<_>>()
+            });
+            for selection in [vec![], vec![ids[3]], vec![ids[0], ids[3]]] {
+                view.update(cx, |app, cx| {
+                    app.selected_attachments = selection.into_iter().collect();
+                    cx.notify();
+                });
+                window.render_frame(cx);
+                assert!(window.try_find("copy-selected-attachments").is_none());
+            }
+            view.update(cx, |app, cx| {
+                app.selected_attachments = [ids[1], ids[0]].into();
+                cx.notify();
+            });
+            window.render_frame(cx);
+            window.click("copy-selected-attachments", cx);
+            assert_eq!(
+                cx.read_from_clipboard()
+                    .and_then(|item| item.text())
+                    .as_deref(),
+                Some("![Image 0](https://example.com/0)\n\n![Image 1](https://example.com/1)")
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn combining_selection_rejects_wrong_counts_unsupported_media_and_busy_work(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                let video = StagedAttachment::from_path(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4"),
+                    Default::default(),
+                )
+                .unwrap();
+                app.append_staged_attachments(
+                    vec![
+                        image(),
+                        image(),
+                        image(),
+                        video,
+                        solid_image([255, 0, 0, 255], image::ImageFormat::Gif),
+                    ],
+                    window,
+                    cx,
+                );
+                let ids = app
+                    .staged_attachments
+                    .iter()
+                    .map(|item| item.id)
+                    .collect::<Vec<_>>();
+                for selected in [
+                    vec![],
+                    vec![ids[0]],
+                    vec![ids[0], ids[1], ids[2]],
+                    vec![ids[0], ids[0]],
+                    vec![ids[0], ids[3]],
+                    vec![ids[0], ids[4]],
+                    vec![ids[0], u64::MAX],
+                ] {
+                    assert!(
+                        app.combine_selected_attachments(&selected, window, cx)
+                            .is_err()
+                    );
+                    assert!(!app.combining_comparison);
+                }
+                app.uploading = true;
+                assert!(
+                    app.combine_selected_attachments(&ids[..2], window, cx)
+                        .is_err()
+                );
+                app.uploading = false;
+                app.loading_attachment_paths = true;
+                assert!(
+                    app.combine_selected_attachments(&ids[..2], window, cx)
+                        .is_err()
+                );
+                app.loading_attachment_paths = false;
+                assert_eq!(app.staged_attachments.len(), 5);
+            })
+        });
     }
 
     #[gpui_kit::test]

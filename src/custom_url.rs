@@ -6,8 +6,7 @@ pub const SCHEME: &str = "gatto";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CustomUrlAction {
     Open,
-    DraftFromClipboard,
-    QuickCopy,
+    AddFromClipboard,
     AppPreferences,
     SideBySideComparison,
 }
@@ -44,8 +43,7 @@ impl CustomUrlAction {
 
         match action {
             "open" => Ok(Self::Open),
-            "draft-from-clipboard" => Ok(Self::DraftFromClipboard),
-            "quick-copy" => Ok(Self::QuickCopy),
+            "add-from-clipboard" => Ok(Self::AddFromClipboard),
             "app-preferences" => Ok(Self::AppPreferences),
             "side-by-side-comparison" => Ok(Self::SideBySideComparison),
             _ => Err(CustomUrlError::UnsupportedAction),
@@ -78,12 +76,8 @@ mod tests {
             Ok(CustomUrlAction::Open)
         );
         assert_eq!(
-            CustomUrlAction::parse("gatto://draft-from-clipboard"),
-            Ok(CustomUrlAction::DraftFromClipboard)
-        );
-        assert_eq!(
-            CustomUrlAction::parse("gatto://quick-copy"),
-            Ok(CustomUrlAction::QuickCopy)
+            CustomUrlAction::parse("gatto://add-from-clipboard"),
+            Ok(CustomUrlAction::AddFromClipboard)
         );
         assert_eq!(
             CustomUrlAction::parse("gatto://app-preferences"),
@@ -101,7 +95,7 @@ mod tests {
 
     #[test]
     fn rejects_retired_action_names() {
-        for name in ["preview", "settings"] {
+        for name in ["preview", "settings", "draft-from-clipboard", "quick-copy"] {
             assert_eq!(
                 CustomUrlAction::parse(&format!("gatto://{name}")),
                 Err(CustomUrlError::UnsupportedAction)
@@ -112,19 +106,15 @@ mod tests {
     #[test]
     fn accepts_path_style_urls_from_automation_tools() {
         assert_eq!(
-            CustomUrlAction::parse("gatto:quick-copy"),
-            Ok(CustomUrlAction::QuickCopy)
-        );
-        assert_eq!(
-            CustomUrlAction::parse("gatto:///draft-from-clipboard"),
-            Ok(CustomUrlAction::DraftFromClipboard)
+            CustomUrlAction::parse("gatto:add-from-clipboard"),
+            Ok(CustomUrlAction::AddFromClipboard)
         );
     }
 
     #[test]
     fn rejects_unknown_or_ambiguous_urls() {
         assert_eq!(
-            CustomUrlAction::parse("https://quick-copy"),
+            CustomUrlAction::parse("https://add-from-clipboard"),
             Err(CustomUrlError::UnsupportedScheme)
         );
         assert_eq!(
@@ -136,11 +126,11 @@ mod tests {
             Err(CustomUrlError::UnsupportedAction)
         );
         assert_eq!(
-            CustomUrlAction::parse("gatto://quick-copy?repository=other"),
+            CustomUrlAction::parse("gatto://add-from-clipboard?repository=other"),
             Err(CustomUrlError::UnexpectedComponents)
         );
         assert_eq!(
-            CustomUrlAction::parse("gatto://quick-copy/again"),
+            CustomUrlAction::parse("gatto://add-from-clipboard/again"),
             Err(CustomUrlError::UnexpectedComponents)
         );
     }

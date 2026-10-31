@@ -33,7 +33,7 @@ The draft-clearing behavior below predates persistent workspaces. See the
 - Dock reopening focuses presented windows without changing their pages. If none
   are presented, it opens the main page, even if the retained main window last
   showed Preferences. Minimized and occluded windows count as presented.
-- Quick Copy remains a background service and must never create a visible or
+- Add from Clipboard remains a background service and must never create a visible or
   hidden window. This workaround applies to windows opened for the UI.
 - Other platforms continue to use native window destruction.
 
@@ -50,5 +50,5 @@ build appears stable. Revisit this decision when a GPUI/AppKit fix or another
 supported approach is available, and verify the signed, bundled app on a Touch
 Bar Mac. Exercise repeated closing and reopening of Logs, Rooftops, previews, and
 the main window, sibling-window survival, last-window Dock reopening from
-Preferences, and windowless Quick Copy before replacing the workaround. Record
+Preferences, and windowless Add from Clipboard before replacing the workaround. Record
 the replacement in a superseding ADR.

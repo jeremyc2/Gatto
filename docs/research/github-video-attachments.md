@@ -152,7 +152,7 @@ validation, metadata, snippet generation, and preview paths. Accept video file
 paths through drop, chooser, or clipboard file entries. The present clipboard
 image entry represents raster image data, not an arbitrary video payload.
 Retain failed-item retry and uploaded URL recovery. Source: [current app input
-and upload flows](../../src/app.rs), [Quick Copy](../../src/quick_copy.rs).
+and upload flows](../../src/app.rs), [Add from Clipboard](../../src/add_from_clipboard.rs).
 
 For native playback on macOS, Apple's `AVPlayer` with an `AVPlayerView` is a
 feasible integration path: Apple provides the media player and controls, while

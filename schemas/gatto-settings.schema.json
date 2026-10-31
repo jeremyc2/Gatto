@@ -8,59 +8,103 @@
     "$schema": {
       "const": "https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-settings.schema.json"
     },
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "default": 1,
+      "description": "Settings format version, independent of the application release version."
+    },
     "release_channel": {
       "enum": [
         "stable",
         "beta"
-      ]
+      ],
+      "default": "stable"
     },
     "owner": {
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "default": null,
+      "description": "GitHub account or organization. Changing it clears repository pins; projects retain selections scoped to their saved owner."
     },
     "pinned_repositories": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "uniqueItems": true
+      "uniqueItems": true,
+      "default": [],
+      "description": "Repository picker favorites for the configured owner. They do not select the Add from Clipboard destination."
     },
-    "last_repository": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Last Scratchpad repository selection, used by Quick Copy when pinned."
-    },
-    "last_repository_id": {
-      "type": [
-        "integer",
-        "null"
-      ],
-      "minimum": 0
-    },
-    "global_quick_copy_shortcut": {
-      "type": "string"
+    "global_add_from_clipboard_shortcut": {
+      "type": "string",
+      "default": "Command+Shift+G"
     },
     "sidebar_collapsed": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     },
-    "global_quick_copy_shortcut_enabled": {
-      "type": "boolean"
+    "global_add_from_clipboard_shortcut_enabled": {
+      "type": "boolean",
+      "default": false
     },
     "close_window_after_copy": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
+    },
+    "upload_action": {
+      "enum": ["upload", "upload_and_copy"],
+      "default": "upload",
+      "description": "Globally remembered action for the upload menu. Upload and copy copies successful attachments from the new batch."
     },
     "allow_large_videos": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     },
     "copy_images_as_markdown": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     },
     "start_at_login": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
+    },
+    "add_from_clipboard_project": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/projectFolder"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Project folder used for Add from Clipboard. Null uses Scratchpad. Repository selection is not required to save a draft."
+    },
+    "pinned_projects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/projectFolder"
+      },
+      "uniqueItems": true,
+      "default": [],
+      "description": "Project folders kept above unpinned projects. The Add from Clipboard project always comes first."
+    },
+    "automatically_copy_add_from_clipboard": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow Add from Clipboard to upload the saved clipboard item to GitHub and copy the resulting output automatically. Disabled by default; manual upload is available from the notification."
+    }
+  },
+  "description": "Per-user application preferences. Repository selections belong only in project manifests. Omitted preferences use application defaults; unversioned legacy settings are migrated when loaded.",
+  "$defs": {
+    "projectFolder": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\.{1,2}$)[^/\\x00-\\x1F\\x7F]+$",
+      "description": "One direct folder name inside ~/.gatto/projects; never an absolute or relative path."
     }
   }
 }

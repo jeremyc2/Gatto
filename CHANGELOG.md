@@ -7,6 +7,62 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-30
+
+### Changed
+
+- Rewrite the walkthrough as a short guide to the main workflows, leaving
+  implementation details and exhaustive control descriptions out.
+- Replace a conflicting Scratchpad destination during migration instead of
+  creating a recovered project folder.
+- Use an image-with-a-plus icon for **Clone** to distinguish it from **Copy**.
+- Simplify project creation errors to say **Could not create project**, retaining
+  the guidance to choose another name if it already exists.
+- Make populated comparison slots fit their attachment cards and resize the window
+  to fit. Brighten backgrounds and borders on button and checkbox hover. Rename
+  attachment copy tooltips to **Copy**, regardless of output format.
+- Rename **Copy all** to **Copy all uploaded**, match it to the compact icon buttons,
+  and show Command+C in its tooltip.
+  Add a copy icon for selections containing only uploaded items. Replace the upload
+  button with a divided control whose main area runs the remembered action and
+  whose shaded chevron opens an upward menu. Both respond independently to hover.
+  Menu choices run immediately and remember **Upload** or **Upload and copy** globally; the latter copies only
+  the new batch's successful uploads.
+- Rename Quick Copy to **Add from Clipboard**. It saves a draft in the background
+  and always shows a system notification. The notification's **Upload and copy**
+  button operates on that saved item. **Automatically copy "Add from clipboard"**
+  opts into uploading and copying automatically; it is off by default.
+- Remove the separate Draft from Clipboard menu action and URL. Keep focused
+  Command+V paste, and rename the background URL to `gatto://add-from-clipboard`.
+- Group attachments that need uploading (including edited images) above completed
+  uploads, separated by a divider without section labels. Keep manual order within groups.
+- Rename attachment folders to `media`, migrating existing `gatto-media` folders
+  when projects are opened.
+- Replace the selection overflow menu with combine, move, and remove icon buttons
+  and tooltips. Use an unlabeled select-all checkbox and put the selected/total attachment count
+  at the right with “selected.” Show the number of pending attachments in the
+  upload button, independently of selection. Hide unavailable actions. **Combine into side-by-side comparison**
+  appears for exactly two selected PNG, JPEG, or WebP images that are not already
+  comparisons, combines them in
+  attachment order, and keeps the originals.
+- Rename project manifests to `project.json`, automatically migrating existing
+  `gatto-project.json` files when projects are loaded.
+- Select **Use for "Add from Clipboard"** from a project's sidebar menu to save clipboard
+  items there. A star marks that project and keeps it first, above other pinned
+  projects. **Stop using for "Add from Clipboard"** falls back to Scratchpad. Add from Clipboard is
+  available without a repository selection; uploading requires a repository.
+- Add project pinning and a Primary section for pinned projects and the project
+  used for Add from Clipboard, with a divider in the sidebar. Show
+  project names without the “Project:” heading prefix. Keep pinned projects'
+  folder icons, pin icons in menu actions, and Scratchpad's fixed footer button
+  outside the project list. Use a stronger divider between pinned and unpinned projects.
+- Move Scratchpad into the reserved `projects/Scratchpad` folder, preserving its
+  media and metadata. Store repository selections only in project manifests and
+  migrate away from global `last_repository` and `last_repository_id` preferences.
+- Add a settings format version and validate persisted settings, project manifests,
+  and annotation sidecars against their JSON schemas in tests. Tighten UUID-based
+  media paths and document defaults and format version compatibility.
+
 ## [0.21.0] - 2026-10-29
 
 ### Added
