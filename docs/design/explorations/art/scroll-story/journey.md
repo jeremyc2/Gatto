@@ -152,15 +152,18 @@ the master keeps the complete uncropped scene.
 
 ## Export and check
 
-Configure [Aseprite](../../../../agents/aseprite.md), install FFmpeg and libwebp’s
-`cwebp`, and run **`bun export:story`**. It reads this saved master directly,
+Configure [Aseprite](../../../../agents/aseprite.md), install FFmpeg, and run
+**`bun export:story`**. Bun encodes the lossless WebP stills without a separate
+image converter. It reads this saved master directly,
 checks its dimensions/frame count and hidden references, applies the delivery
 camera with nearest-neighbor sampling, and writes one MP4 plus three WebP stills.
 Intermediate PNGs use an automatically removed system temporary directory.
 
 H.264 uses CRF 24, the veryslow preset, YUV 4:2:0, no audio/B frames, one-second
 keyframes and a front-loaded index. The current MP4 is **7,317,894 bytes**;
-stills are **385,804 / 402,374 / 305,400 bytes**. Reproduce with the export command.
+stills are **613,552 / 646,770 / 498,620 bytes** using Bun's lossless WebP encoder.
+Reproduce with the export command. The encoder changes compressed sizes while
+preserving the source pixels.
 The page loads the video only for the enhanced motion-enabled story. Reduced
 motion, normal flow, unavailable video and disabled JavaScript use the stills.
 The muted video autoplays once on page load and holds its final frame;

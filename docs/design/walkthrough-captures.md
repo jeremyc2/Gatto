@@ -12,8 +12,10 @@ were regenerated through the same native renderer; the illustrated editor
 fixtures and their source crops remain independent.
 
 Main-window captures show the current interface at 800 logical pixels wide,
-including the 220-pixel project sidebar. Most use a 600px height; Preferences uses
-780px, compression uses 640px, and reorder/collapsed-sidebar examples use 760px.
+including the 220-pixel project sidebar. Most use a 600px height; Preferences
+fits the full settings page, compression uses 640px, and reorder/collapsed-sidebar
+examples use 760px. Preferences height is measured from the rendered content,
+and capture generation fails if any part of that content is clipped.
 The batch example uses a 1024 × 768 window so the sidebar and three attachment
 rows fit a compact 4:3 landscape frame. Editor and game captures use their own
 window sizes. Decorative motion is disabled while capturing.
@@ -24,6 +26,14 @@ the production interface. The native renderer exports at 2×. Raw PNGs live in
 Markdown guides use the generated `framed/` copies, with transparent rounded
 corners and a thin white edge (16-point radius and 1-point border). The frame is
 rendered into the PNG because [GitHub removes inline styles](https://github.com/github/markup#github-markup).
+
+All screenshots embedded in Markdown use the rounded frame, including the
+scorecard. `bun refresh:assets` also exports the editable artwork, compiles app
+icons and generates the [installer preview](../images/dmg-install.png) from the
+DMG's shared layout/background and actual macOS icons. It omits the title bar and
+uses the same frame. The release and web deployment commands run this complete
+refresh automatically; the standalone walkthrough command refreshes only app captures.
+See the [release guide](../RELEASING.md#preview-the-installation-window).
 
 Refresh only the project examples with
 `cargo run --features walkthrough-screenshots --bin walkthrough-screenshots -- docs/images/walkthrough --projects-only`.

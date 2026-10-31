@@ -128,9 +128,8 @@ reserves its own space around the artwork.
 
 ## Exports
 
-From the repository root with libwebp installed:
+From the repository root, regenerate the saved masters and Bun image exports:
 
 ```sh
-cwebp -quiet -lossless -z 9 web/assets/images/download-portal-pixel.png -o web/assets/images/download-portal-pixel.webp
-cwebp -quiet -q 90 -m 6 -resize 1024 1024 web/assets/images/portal-watercolor-paper.png -o web/assets/images/portal-watercolor-paper.webp
+bun --no-env-file scripts/export-artwork.ts
 ```

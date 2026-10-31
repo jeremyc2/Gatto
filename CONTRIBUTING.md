@@ -67,6 +67,24 @@ For pixel art and sprite animation, follow [Aseprite MCP setup](docs/agents/asep
 to install the optional local server and verify it. The repository includes an
 Aseprite agent skill with the upstream drawing and animation guidance.
 
+## Artwork refresh requirements
+
+`bun refresh:assets`, app releases and `bun deploy:web` require these tools:
+
+| Tool | Purpose | Installation |
+| ---- | ------- | ------------ |
+| Full Xcode, including Icon Composer, `actool`, Swift and the macOS SDK | Compile app icons and render native screenshots/previews | Install [Xcode](https://developer.apple.com/xcode/). Command Line Tools alone do not include everything this refresh needs. |
+| [Aseprite](https://www.aseprite.org/) | Export the saved pixel-art masters and animation frames | Install separately and set `ASEPRITE_PATH` in your environment or `.env.aseprite`; see [configuration](docs/agents/aseprite.md#setup). The MCP server is optional for refreshing assets. |
+| [FFmpeg](https://ffmpeg.org/download.html) (`ffmpeg` and `ffprobe`) | Encode and verify the story video | Install separately: `brew install ffmpeg`. |
+| Bun and Rust/Cargo | Run the exporters and compile the screenshot renderer | Install separately; see [development setup](#development-setup) and [website setup](web/README.md). |
+| AppKit, Metal, Finder and system image/disk utilities | Native rendering and DMG packaging | Included with macOS; the development SDK is supplied by Xcode. |
+
+With [Homebrew](https://brew.sh/) installed, `brew install ffmpeg` supplies both
+`ffmpeg` and `ffprobe`. Xcode supplies Icon Composer. Image resizing and WebP
+encoding use `Bun.Image`; favicon assembly and canvas composition use macOS's
+Core Graphics/ImageIO frameworks. No ImageMagick, Sharp or separate WebP tools
+are required.
+
 ## Local app bundle
 
 To test Finder integration, URL handling, or installation without publishing:
@@ -199,17 +217,28 @@ to validate without uploading.
 
 ## Documentation and manual verification
 
+Run `bun check:docs` after editing Markdown to check local file/image references
+and heading anchors. The same check runs in the script tests during a release;
+external website availability is not checked.
+
 Follow [documentation upkeep](docs/agents/documentation.md) for each guide’s scope,
 release-size updates, and link checks. Record user-visible changes under
 **Unreleased** in [CHANGELOG.md](CHANGELOG.md).
 
 ### Walkthrough screenshots
 
-Run `./scripts/update-walkthrough-screenshots.sh` on macOS and inspect the PNGs.
-The all-in-one release script also runs this before its commit review, so the
-release includes screenshots of the current app.
+Run `bun refresh:assets` on macOS to export the approved artwork, compile the app
+icons, regenerate documentation screenshots and the installer preview, and export
+the website screenshots. Both the release script and `bun deploy:web` run this
+before building and checking their outputs. An export failure stops either workflow.
+Install the [artwork refresh requirements](#artwork-refresh-requirements) first.
+It runs the existing `export:story` command for the saved animation and its stills.
+Inspect the generated images before committing.
+
+For app screenshots alone, run `./scripts/update-walkthrough-screenshots.sh`.
 The script renders the production GPUI interface through its off-screen Metal
-renderer with fixed in-memory examples and committed source captures. It does not
+renderer with fixed in-memory examples and committed source captures. Preferences
+captures fit the full settings page and check for clipping. The script does not
 contact GitHub, read or modify saved preferences, use UI automation, or require Screen Recording
 permission. It overwrites `docs/images/walkthrough/`, including the Rooftops game,
 results, and exported scorecard images, and generates rounded white frames in
@@ -218,6 +247,9 @@ text editing, shape choices, grouped selections, pixelation brush, and save/clos
 dialogs. Each editor capture starts with a fresh scene and at most two feedback
 items; the pixelation example covers a local path. Source crops, framing, and
 attribution are recorded in [walkthrough captures](docs/design/walkthrough-captures.md).
+The installer preview uses the same layout/background as the DMG, the compiled
+app icon, and macOS's Applications shortcut icon. It omits window chrome and uses
+the same rounded white frame. See [installer previews](docs/RELEASING.md#preview-the-installation-window).
 For only the numbered application captures, run
 `cargo run --locked --features walkthrough-screenshots --bin walkthrough-screenshots -- <output-directory> --app-only`.
 Use `--upload-button-hover` instead of `--app-only` to capture the upload control

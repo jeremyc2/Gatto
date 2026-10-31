@@ -11,7 +11,7 @@ const aseprite =
   Bun.env.ASEPRITE_PATH ||
   ((await localEnv.exists()) ? parseEnv(await localEnv.text()).ASEPRITE_PATH : undefined);
 if (!aseprite) throw new Error("Set ASEPRITE_PATH in .env.aseprite or your environment.");
-for (const command of [aseprite, "ffmpeg", "ffprobe", "cwebp"])
+for (const command of [aseprite, "ffmpeg", "ffprobe"])
   if (!Bun.which(command)) throw new Error(`Install the artwork export tool: ${command}`);
 
 const environment = Object.fromEntries(
@@ -86,16 +86,9 @@ try {
     [47, "upload"],
     [storyVideo.frames, "copy"],
   ] as const)
-    await run([
-      "cwebp",
-      "-quiet",
-      "-lossless",
-      "-z",
-      "9",
-      resolve(output, `frame-${String(frame).padStart(3, "0")}.png`),
-      "-o",
-      resolve(root, `web/assets/images/story-${name}.webp`),
-    ]);
+    await new Bun.Image(Bun.file(resolve(output, `frame-${String(frame).padStart(3, "0")}.png`)))
+      .webp({ lossless: true })
+      .write(resolve(root, `web/assets/images/story-${name}.webp`));
   await run([
     "ffprobe",
     "-v",

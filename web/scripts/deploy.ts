@@ -22,6 +22,7 @@ const buildEnv = Object.fromEntries(
 const run = $.cwd(root.pathname).env(buildEnv);
 const output = new URL(".cloudflare/output/v0/", root);
 
+await run`bun --no-env-file scripts/refresh-assets.ts`;
 await run`bun run build:web`;
 await run`rm -rf .cloudflare/output/v0`;
 await run`mkdir -p .cloudflare/output/v0/workers/default/bundle`;

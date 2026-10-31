@@ -14,6 +14,9 @@ There is no active release workflow in GitHub Actions.
   `swift`, `tiffutil`, and `osascript`.
 - Bun and `cargo-deny` 0.20.2 installed for release checks (`cargo install --locked
 cargo-deny --version 0.20.2` is one-time setup).
+- The [artwork refresh tools](../CONTRIBUTING.md#artwork-refresh-requirements): full
+  Xcode/Icon Composer, configured Aseprite, and FFmpeg/ffprobe. Image exports use
+  the existing Bun installation and macOS frameworks.
 - A logged-in macOS desktop session. Finder saves the disk image's window layout;
   allow your terminal to control Finder if macOS asks on the first build.
 - A **Developer ID Application** certificate and its private key in the login
@@ -101,12 +104,14 @@ The script guides the release in this order:
    The lockfile update changes only Gatto's package version, preserving dependency
    pins and checksums. Reusing a prepared version also repairs a stale lockfile.
 3. Install locked Bun dependencies without lifecycle scripts, run the JavaScript
-   dependency audit, and run Rust formatting, compilation, lint,
+   dependency audit, and run `bun refresh:assets`: export artwork and animation,
+   compile app icons, render current app screenshots and the framed installer
+   preview, then export website screenshots. Run Rust formatting, compilation, lint,
    tests, and dependency policy checks; script type checks/tests; native updater
    tests; native menu/hotkey checks; a disposable install/relaunch test; cask syntax; and website build,
    lint, type checks, and tests.
-4. Regenerate walkthrough screenshots from the current app using the off-screen
-   Metal renderer. A capture failure stops the release. Show the changed-file summary and ask before committing all pending code and
+4. An artwork or capture failure stops the release. Show the changed-file summary
+   and ask before committing all pending code and
    release preparation changes and pushing `main`. A concurrent remote change
    makes a normal push fail; the script never force-pushes.
 5. Build the unsigned binary, then verify GitHub authentication, signing identity,
@@ -331,6 +336,19 @@ local fixture verifies replacement and relaunch without testing notarization.
 See the [installation screenshot in Setup](SETUP.md#1-install-the-app) for the
 expected window layout.
 
+`bun refresh:assets` regenerates `docs/images/dmg-install.png` before the release
+commit. It renders the installer contents from the shared `packaging/dmg-layout.json`,
+the actual DMG background renderer, the freshly compiled app icon and macOS's
+Applications shortcut icon. No Finder window or Screen Recording permission is
+needed. The title bar is omitted; the native screenshot framer applies the same
+16-point rounded corners and 1-point white edge used by the Markdown screenshots.
+This preview represents the installation layout rather than a screen capture.
+The release and web deploy workflows both refresh assets; only the app release
+publishes app artifacts, and only `bun deploy:web` deploys the website.
+
+See [refresh prerequisites](../CONTRIBUTING.md#artwork-refresh-requirements) for the
+artwork tools and Aseprite configuration.
+
 Compile a fresh local app first, then package it into a preview DMG:
 
 ```sh
@@ -361,7 +379,7 @@ dark anime-cat artwork in `packaging/dmg-artwork.png`. The generation prompts ar
 recorded in [the artwork notes](../packaging/dmg-artwork.md).
 The Applications shortcut uses the system's actual folder icon.
 `packaging/configure-dmg.applescript` positions the real Finder icons over the
-artwork; keep those coordinates aligned if you change the design. The background
+artwork using the same `dmg-layout.json` as the preview renderer. The background
 includes both standard and Retina resolutions. Finder's black unselected icon
 names blend into the lower black band; native names remain accessible and appear
 when an icon is selected.

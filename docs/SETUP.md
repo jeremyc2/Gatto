@@ -131,7 +131,7 @@ Add from Clipboard saves to Scratchpad by default. Choose
 **Use for "Add from Clipboard"** from another project’s sidebar menu to save there.
 Select a repository in that project when you are ready to upload.
 
-<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App Preferences with an account/organization, pinned repository, automatic Add from Clipboard uploading turned off, and global shortcut controls" width="800">
+<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App Preferences showing account and repository choices, clipboard shortcuts, image copying, video uploads, release channel, and general settings" width="800">
 
 ## 4. Set your preferences
 

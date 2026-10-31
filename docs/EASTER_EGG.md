@@ -201,7 +201,7 @@ Moon geometry and icon references are recorded in
 
 The saved scorecard:
 
-![The downloadable Rooftops scorecard](images/walkthrough/rooftops-score.png)
+![The downloadable Rooftops scorecard](images/walkthrough/framed/rooftops-score.png)
 
 ## Screenshots
 

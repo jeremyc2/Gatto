@@ -89,7 +89,7 @@ if [[ -n "$template" ]]; then
   rm -rf "$mount/Gatto.app"
   ditto "$work/staging/Gatto.app" "$mount/Gatto.app"
 fi
-osascript "$repo_root/packaging/configure-dmg.applescript" "$mount"
+osascript "$repo_root/packaging/configure-dmg.applescript" "$mount" "$repo_root/packaging/dmg-layout.json"
 [[ -s "$mount/.DS_Store" ]] || fail "Finder did not save the installation window layout"
 sync
 diskutil eject "$mount" > /dev/null

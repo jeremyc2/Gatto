@@ -14,15 +14,18 @@ pub(super) fn write_documentation_images(directory: &Path) -> Result<()> {
         let screenshot = name.starts_with(|c: char| c.is_ascii_digit())
             || name.starts_with("image-editor")
             || name == "comparison-editor.png"
-            || (name.starts_with("rooftops-") && name != "rooftops-score.png");
+            || name.starts_with("rooftops-");
         if entry.file_type()?.is_file() && name.ends_with(".png") && screenshot {
-            let source = image::open(entry.path())?.to_rgba8();
-            rounded_frame(&source)
-                .save(destination.join(name.as_ref()))
-                .with_context(|| format!("Could not frame {}", entry.path().display()))?;
+            write_documentation_image(&entry.path(), &destination.join(name.as_ref()))?;
         }
     }
     Ok(())
+}
+
+pub(super) fn write_documentation_image(source: &Path, destination: &Path) -> Result<()> {
+    rounded_frame(&image::open(source)?.to_rgba8())
+        .save(destination)
+        .with_context(|| format!("Could not frame {}", source.display()))
 }
 
 fn rounded_frame(source: &RgbaImage) -> RgbaImage {

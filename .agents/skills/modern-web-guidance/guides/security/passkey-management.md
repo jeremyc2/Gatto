@@ -151,7 +151,9 @@ async function performUserRename(rpId, userId, updatedName, updatedDisplayName) 
 window.addEventListener("DOMContentLoaded", loadManagementPanel);
 ```
 
-## Determine the passkey provider from AAGUID {: #aaguid }
+<a id="aaguid"></a>
+
+## Determine the passkey provider from AAGUID
 
 An AAGUID (Authenticator Attestation Globally Unique Identifier) is a 128-bit identifier that represents the model of the authenticator, not a specific instance. It is included in the authenticator data during passkey registration and can be used to determine which passkey provider (e.g. Google Password Manager, iCloud Keychain, 1Password) created a credential.
 

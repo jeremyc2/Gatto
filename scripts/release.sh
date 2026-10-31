@@ -137,6 +137,9 @@ fi
 # Run required checks here so releasing does not rely on a remembered checklist.
 build bun --no-env-file install --frozen-lockfile --ignore-scripts
 build bun --no-env-file audit:dependencies
+# Regenerate embedded art before compilation and all derived captures before the
+# website checks and commit review. This also compiles the app's icon resources.
+build bun --no-env-file scripts/refresh-assets.ts
 build cargo check --locked --all-targets
 bun scripts/prepare-release.ts --check
 plutil -lint packaging/Info.plist
@@ -155,9 +158,6 @@ build bun --no-env-file build:web
 build bun --no-env-file lint:web
 build bun --no-env-file typecheck:web
 build bun --no-env-file test:web
-
-# Refresh documentation from this checkout before reviewing the release commit.
-build ./scripts/update-walkthrough-screenshots.sh
 
 git status --short
 git diff --stat HEAD

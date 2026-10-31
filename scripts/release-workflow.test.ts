@@ -25,6 +25,10 @@ async function workflow(mode: string, resume = false) {
       join(root, "scripts/release.sh"),
       await Bun.file(new URL("./release.sh", import.meta.url)).text(),
     );
+    await Bun.write(
+      join(root, "scripts/refresh-assets.ts"),
+      await Bun.file(new URL("./refresh-assets.ts", import.meta.url)).text(),
+    );
     await writeExecutable(
       join(root, "scripts/update-walkthrough-screenshots.sh"),
       await Bun.file(new URL("./update-walkthrough-screenshots.sh", import.meta.url)).text(),
@@ -50,7 +54,7 @@ const args = process.argv.slice(2);
 if (tool === 'bun' && args[0] === '--no-env-file') args.shift();
 appendFileSync(join(root, 'calls'), JSON.stringify([tool, ...args]) + '\\n');
 const dirty = join(root, 'dirty');
-if ((tool === 'cargo' && ['check','clippy','test','build','run'].includes(args[0]!)) || (tool === 'bun' && ['install','audit:dependencies','typecheck:scripts','lint:scripts','test:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
+if ((tool === 'cargo' && ['check','clippy','test','build','run'].includes(args[0]!)) || (tool === 'bun' && ['scripts/refresh-assets.ts','scripts/export-artwork.ts','export:story','export:features','install','audit:dependencies','typecheck:scripts','lint:scripts','test:scripts','build:web','lint:web','typecheck:web','test:web','test'].includes(args[0]!))) {
  if (process.env.GH_TOKEN || process.env.CLOUDFLARE_API_TOKEN || process.env.APPLE_PASSWORD) appendFileSync(join(root,'build-exposures'), tool+' '+args.join(' ')+'\\n');
 }
 const draft = join(root, 'draft');
@@ -80,6 +84,13 @@ if (tool === 'git') {
  if (args[1] === 'create') writeFileSync(draft, 'draft');
  if (args[1] === 'edit' && !existsSync(draft) && !['draft-resume','beta-draft-resume'].includes(mode)) throw new Error('Published without a verified draft');
 } else if (tool === 'bun') {
+ if (args[0] === 'scripts/refresh-assets.ts') {
+  const child = Bun.spawnSync([process.execPath, join(root, args[0])], {env: process.env, stdout:'inherit', stderr:'inherit'});
+  process.exit(child.exitCode);
+ }
+ if (args[0] === 'scripts/export-artwork.ts' && mode === 'artwork-failure') process.exit(1);
+ if (args[0] === 'export:story' && mode === 'story-failure') process.exit(1);
+ if (args[0] === 'export:features' && mode === 'feature-export-failure') process.exit(1);
  if (args[0] === 'scripts/prepare-release.ts' && args.includes('--print-notes')) console.log('### Added\\n\\n- Test release.');
  if (args[0] === 'scripts/verify-release.ts' && mode === 'verify-failure') process.exit(1);
  if (args[0] === 'typecheck:scripts' && mode === 'check-failure') process.exit(1);
@@ -89,6 +100,11 @@ if (tool === 'git') {
  if (args[0] === 'scripts/update-homebrew-cask.ts' && mode === 'metadata-failure') process.exit(1);
  if (['scripts/update-readme-size.ts','scripts/update-homebrew-cask.ts'].includes(args[0]) && !args.includes('--check')) writeFileSync(dirty, 'metadata');
 } else if (tool === 'cargo' && args[0] === 'run') {
+ if (args.includes('--frame-image')) {
+  if (mode === 'installer-preview-failure') process.exit(1);
+  writeFileSync(args.at(-1)!, 'framed installer');
+  process.exit(0);
+ }
  if (mode === 'screenshot-failure') process.exit(1);
  mkdirSync(args.at(-1)!, {recursive:true});
  writeFileSync(join(args.at(-1)!, 'image-editor.png'), 'fresh screenshot');
@@ -116,6 +132,7 @@ if (tool === 'git') {
       "plutil",
       "hdiutil",
       "diskutil",
+      "swift",
     ]) {
       await writeExecutable(
         join(bin, tool),
@@ -361,8 +378,27 @@ test("release regenerates walkthrough screenshots before committing", async () =
   expect(capture).toBeGreaterThan(-1);
   expect(result.calls[capture]).toContain("walkthrough-screenshots");
   expect(capture).toBeLessThan(find(result.calls, "git", "add", "--all"));
+  expect(find(result.calls, "bun", "scripts/export-artwork.ts")).toBeLessThan(capture);
+  expect(find(result.calls, "bun", "export:features")).toBeGreaterThan(capture);
+  expect(find(result.calls, "bun", "export:features")).toBeLessThan(
+    find(result.calls, "bun", "build:web"),
+  );
   expect(result.exposure).toBe("");
 });
+for (const mode of [
+  "artwork-failure",
+  "story-failure",
+  "installer-preview-failure",
+  "feature-export-failure",
+]) {
+  test(`${mode} prevents committing, signing and publishing`, async () => {
+    const result = await workflow(mode);
+    expect(result.exit).not.toBe(0);
+    expect(find(result.calls, "git", "commit")).toBe(-1);
+    expect(find(result.calls, "codesign")).toBe(-1);
+    expect(find(result.calls, "gh", "release", "create")).toBe(-1);
+  });
+}
 test("screenshot failure prevents committing, signing and publishing", async () => {
   const result = await workflow("screenshot-failure");
   expect(result.exit).not.toBe(0);

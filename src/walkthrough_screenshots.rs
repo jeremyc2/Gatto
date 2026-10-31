@@ -58,6 +58,17 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn generate() -> Result<()> {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments.first().is_some_and(|arg| arg == "--frame-image") {
+        anyhow::ensure!(
+            arguments.len() == 3,
+            "Use --frame-image <source> <destination>"
+        );
+        return frame::write_documentation_image(
+            std::path::Path::new(&arguments[1]),
+            std::path::Path::new(&arguments[2]),
+        );
+    }
     let output_directory = std::env::args_os()
         .nth(1)
         .map(PathBuf::from)
@@ -909,6 +920,24 @@ fn render_scenario_with_hover(
     cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
     cx.run_until_parked();
     cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
+    if matches!(scenario, WalkthroughScenario::Preferences) {
+        cx.update_window(window_handle, |_, window, cx| {
+            let content = window.find("settings-content").bounds();
+            window.resize(size(px(width), px(f32::from(content.size.height).ceil())));
+            window.bounds_changed(cx);
+            window.render_frame(cx);
+        })?;
+        cx.run_until_parked();
+        cx.update_window(window_handle, |_, window, cx| {
+            window.render_frame(cx);
+            let content = window.find("settings-content").bounds();
+            anyhow::ensure!(
+                content.bottom() <= window.viewport_size().height + px(1.),
+                "Preferences screenshot clips settings content"
+            );
+            Ok::<_, anyhow::Error>(())
+        })??;
+    }
     if let Some(selector) = hover {
         cx.update_window(window_handle, |_, window, cx| {
             let position = window.find(selector.to_owned()).bounds().center();

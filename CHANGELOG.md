@@ -7,6 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-10-30
+
+### Fixed
+
+- Use Bun's image API and native macOS image tools for artwork exports, removing
+  the ImageMagick and separate WebP-tool installation requirements.
+- Automatically export artwork, compile app icons, regenerate documentation and
+  website screenshots, and render a framed installer preview before releases and
+  website deployments. Stop either workflow if refreshing assets fails.
+- Give every screenshot embedded in Markdown the same rounded white frame,
+  including the installer preview and scorecard.
+- Fit the preferences screenshot to the full settings page and check for clipping
+  when generating captures.
+
 ## [0.22.1] - 2026-10-30
 
 ### Changed

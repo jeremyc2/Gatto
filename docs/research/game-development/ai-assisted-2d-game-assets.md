@@ -185,7 +185,7 @@ Before using it for a substantial game, extend or wrap its process with:
 5. Style-specific resampling and alpha rules, including soft watercolor edges.
 6. Automated structural checks followed by human visual review; normalization must never be mistaken for acceptance.
 
-The local `imagegen` skill handles generation/edit execution and reference-directed iteration; it does not itself define engine atlases or multidirectional animation acceptance. See the [installed imagegen skill](/Users/jeremy/.codex/skills/.system/imagegen/SKILL.md). No skill was installed or changed for this research.
+The local `imagegen` skill handles generation/edit execution and reference-directed iteration; it does not itself define engine atlases or multidirectional animation acceptance. The research used the installed skill at `/Users/jeremy/.codex/skills/.system/imagegen/SKILL.md` on the research machine. No skill was installed or changed for this research.
 
 For **pixel art**, include PixelLab in the first specialist pilot against ChatGPT. Its current API lists eight-direction generation from a south-facing reference, text-guided animation from a start/optional end image, and a beta skeleton-guided route with a skeleton per frame. The listed v3 limits are 256 × 256 pixels, with up to 16 frames for text animation and 3–15 for skeleton animation. These are vendor-documented capabilities, not independently verified consistency or quality. Its older endpoints have different limits; do not generalize those to every tool. [PixelLab API model listing](https://www.pixellab.ai/pixellab-api)
 

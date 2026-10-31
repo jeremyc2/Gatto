@@ -30,7 +30,9 @@ that serves MP4 byte ranges; other files use direct static asset serving.
 
 For deployment, put `CLOUDFLARE_ACCOUNT_ID` and any API token in the ignored root
 `.env.cloudflare`, then run `bun deploy:web`. Deployment reads that file explicitly
-and supplies Cloudflare settings only to `cf`, after building. Keep credentials
+and supplies Cloudflare settings only to `cf`, after refreshing artwork/screenshots
+with `bun refresh:assets` and building. The refresh requires macOS and the
+[artwork refresh requirements](../CONTRIBUTING.md#artwork-refresh-requirements). Keep credentials
 out of root `.env` so regular Bun commands do not automatically load them.
 
 Validate deployment without uploading with `bun deploy:web --dry-run`. After a
@@ -56,6 +58,6 @@ the build and story logic; they do not measure browser layout.
 CSS budget and measurements.
 
 For story artwork exports, configure [Aseprite](../docs/agents/aseprite.md), install
-FFmpeg and libwebp's `cwebp`, then run `bun export:story` after editing the saved
+FFmpeg, then run `bun export:story` after editing the saved
 animation. The [artwork record](../docs/design/explorations/art/scroll-story/journey.md)
 owns the master, references and export workflow; visual behavior belongs in the design system.

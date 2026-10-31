@@ -3478,6 +3478,8 @@ impl UploaderApp {
             .is_ok_and(|owner| self.settings.owner.as_deref() == Some(owner.as_str()));
         let channel = self.settings.release_channel;
         v_flex()
+            .id("settings-content")
+            .test_support()
             .flex_none()
             .p_6()
             .gap_5()

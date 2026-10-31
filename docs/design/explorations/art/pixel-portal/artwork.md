@@ -40,10 +40,11 @@ orphan pixels are intentional ember texture, not detached stray pixels.
 
 Use Aseprite MCP `export_frame`, frame 1, scale 2, to write
 `web/assets/images/download-portal-pixel.png` (768 × 768). Pass absolute paths
-to MCP. From the repository root with libwebp installed:
+to MCP. The automated exporter reads the saved master and uses Bun to encode
+the lossless WebP; run it from the repository root:
 
 ```sh
-cwebp -quiet -lossless -z 9 web/assets/images/download-portal-pixel.png -o web/assets/images/download-portal-pixel.webp
+bun --no-env-file scripts/export-artwork.ts
 ```
 
 `PortalCat.tsx` imports the WebP into the existing SVG reveal mask, with

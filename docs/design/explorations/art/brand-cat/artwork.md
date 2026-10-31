@@ -47,6 +47,12 @@ icon sizes ([MDN link metadata](https://developer.mozilla.org/en-US/docs/Web/HTM
 
 ## Exports
 
+`bun refresh:assets`, also run by app releases and website deployments, automates
+the export settings below. `scripts/export-artwork.ts` reads the saved masters,
+keeps the favicon's warm-paper layer out of the app glyph, and recompiles both
+`AppIcon.icns` and `Assets.car` with Icon Composer's preview. The editable sprites
+are never saved by this process. The settings below record the approved rendering sizes.
+
 ### macOS menu bar
 
 Added October 26, 2026. The menu bar adapts the favicon's front-facing head,
@@ -69,20 +75,11 @@ rounded macOS silhouette, edge lighting and shadow come from Apple's Icon
 Composer document at `packaging/AppIcon.icon`. The glyph has glass and
 translucency disabled to preserve the charcoal coat and cyan/violet eyes.
 
-To regenerate the glyph, use Aseprite MCP `copy_sprite` to make a temporary copy
-of `favicon-32.aseprite`, hide its `Warm paper` layer with `set_layer_visibility`,
-and `export_frame` frame 1 at scale 32 to `/tmp/gatto-app-portrait.png`.
-Leave the original favicon master unchanged. Then run from the repository root
-with Xcode and ImageMagick installed:
-
-```sh
-magick /tmp/gatto-app-portrait.png -background none -gravity center -extent 1024x1024 -depth 8 packaging/AppIcon.icon/Assets/glyph.png
-mkdir -p /tmp/gatto-compiled-icon
-xcrun actool packaging/AppIcon.icon --compile /tmp/gatto-compiled-icon --platform macosx --minimum-deployment-target 13.0 --app-icon AppIcon --output-partial-info-plist /tmp/gatto-icon-info.plist
-cp /tmp/gatto-compiled-icon/AppIcon.icns packaging/AppIcon.icns
-cp /tmp/gatto-compiled-icon/Assets.car packaging/Assets.car
-"$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool" packaging/AppIcon.icon --export-image --output-file packaging/app-icon.png --platform macOS --rendition Default --width 256 --height 256 --scale 1
-```
+Run `bun --no-env-file scripts/export-artwork.ts` from the repository root with
+Aseprite and full Xcode installed. The exporter reads frame 1 of
+`favicon-32.aseprite`, excludes `Warm paper` from the app glyph, scales it at 32×,
+compiles `AppIcon.icon` through `actool`, and exports the Icon Composer preview.
+It never changes the editable sprite.
 
 The glyph fills a transparent 1024 px canvas, using 32× nearest-neighbor scaling
 from the 32 px master. This gives the cat more of the icon's area while retaining
@@ -108,13 +105,10 @@ Resolve paths against the repository root and pass absolute paths to MCP.
 | `favicon-32.aseprite` | `/tmp/gatto-favicon-64.png`  |     2 |
 | `favicon-32.aseprite` | `/tmp/gatto-apple-160.png`   |     5 |
 
-Then assemble the ICO and opaque Apple touch canvas with ImageMagick:
-
-```sh
-magick web/public/favicon-16.png web/public/favicon-32.png /tmp/gatto-favicon-64.png -strip web/public/favicon.ico
-magick /tmp/gatto-apple-160.png -background '#f7f3e9' -alpha remove -alpha off -gravity center -extent 180x180 -depth 8 -strip web/public/apple-touch-icon.png
-magick web/public/favicon-96.png -filter point -resize 480x480 -background '#f7f3e9' -alpha remove -gravity center -extent 1200x630 -depth 8 -strip PNG24:web/public/social-image-pixel.png
-```
+The same export command assembles the ICO and opaque Apple touch/social
+canvases using macOS's Core Graphics and ImageIO frameworks. `Bun.Image` performs
+the social image's nearest-neighbor enlargement and the website's WebP exports.
+No additional image-processing package or command-line converter is required.
 
 The README displays its 256 px export at 256 CSS pixels, preserving a 4× native
 grid. The ICO contains 16, 32 and 64 px entries. The Apple touch export centers

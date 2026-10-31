@@ -25,7 +25,9 @@ Do NOT use `@supports at-rule()` to conditionally apply the at-rule being detect
 }
 ```
 
-## Detecting support for at-rules when `@supports at-rule()` isn’t appropriate { #detecting-at-rules-without-supports-at-rule }
+<a id="detecting-at-rules-without-supports-at-rule"></a>
+
+## Detecting support for at-rules when `@supports at-rule()` isn’t appropriate
 
 When `at-rule()` is not an option, either due to browser support or because deeper detection is needed, you can use the guidance below.
 
@@ -38,7 +40,9 @@ For example, instead of `@supports at-rule(@function)` to detect supports for cu
 
 In other cases there may be pseudo-classes or pseudo-elements that are only available when a certain at-rule is supported, which can be used to detect support.
 
-### Detecting container query types { #supports-container-types }
+<a id="supports-container-types"></a>
+
+### Detecting container query types
 
 `at-rule()` ONLY allows detection of at-rules by **name**.
 It does NOT allow detection of other syntax or descriptors.
@@ -66,7 +70,9 @@ Instead, you can try a style query that is always true:
 
 This will match in any browser that supports style queries, regardless of what property name or value you use, provided they are the same across both.
 
-### Registered custom properties (`@property`) { #supports-atproperty }
+<a id="supports-atproperty"></a>
+
+### Registered custom properties (`@property`)
 
 In some cases, if the conditional CSS to apply can be reduced to a single property, you can use a dedicated custom property registered for this purpose:
 

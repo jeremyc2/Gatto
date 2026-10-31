@@ -256,12 +256,18 @@ wide. Verify the row and stacked layouts, the visible batch rows, both compariso
 panels and captions, and the editor tools after changing screenshots or spacing.
 
 After regenerating walkthrough PNGs with `./scripts/update-walkthrough-screenshots.sh`,
-run `bun export:features` (requires libwebp’s `cwebp`). The Bun script exports
+run `bun export:features`. It uses the pinned Bun runtime's `Bun.Image` API to export
 620px and 1240px WebPs from the committed unframed PNGs; documentation's `framed/`
 copies are separate. The website's `MediaFrame` supplies its own edge treatment.
 The page uses `srcset` with matching `sizes`, native lazy loading, asynchronous
 decoding and explicit image dimensions. Asset exports are committed; ordinary
-website builds do not need Rust or image converters.
+website builds do not need Rust or separate image converters. Lossless WebP
+encoding and aspect-preserving screenshot resizing use Bun's bundled codecs.
+
+`bun deploy:web` and app releases run the complete `bun refresh:assets` pipeline:
+artwork/icon exports, story video and stills, native captures, framed installer
+preview, then feature WebPs. Deployment builds only after these exports finish;
+failures prevent deployment. Ordinary `bun build:web` still uses committed exports.
 
 ## Download badge
 

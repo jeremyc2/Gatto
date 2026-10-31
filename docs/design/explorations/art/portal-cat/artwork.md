@@ -81,10 +81,11 @@ transparent pinholes or a black gap between the visible nozzle and hot core.
 
 Use Aseprite MCP `export_frame`, frame 1, scale 2, with absolute paths to write
 [`web/assets/images/download-rocket-cat-pixel.png`](../../../../../web/assets/images/download-rocket-cat-pixel.png)
-at **512 × 512**, then run from the repository root:
+at **512 × 512**. The automated exporter reads the saved master and uses Bun to
+encode its lossless WebP; run it from the repository root:
 
 ```sh
-cwebp -quiet -lossless -z 9 web/assets/images/download-rocket-cat-pixel.png -o web/assets/images/download-rocket-cat-pixel.webp
+bun --no-env-file scripts/export-artwork.ts
 ```
 
 `PortalCat.tsx` imports the lossless WebP at intrinsic size 512 × 512 with

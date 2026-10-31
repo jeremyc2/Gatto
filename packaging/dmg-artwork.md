@@ -7,6 +7,10 @@ loose luminous sketch marks. Floating paw doodles have been removed.
 
 Final image: `dmg-artwork.png`. The app-header illustration is not reused.
 Finder supplies the real app icon and the standard Applications folder shortcut.
+`bun refresh:assets` generates the documentation preview using the compiled icon,
+macOS's shortcut icon and the same background/layout as Finder. Both renderers
+read `dmg-layout.json`; the preview omits the title bar and uses the documentation
+screenshots' rounded white frame.
 The sole instruction, “Drag and Drop,” is 28 points.
 The 840 × 520-point window leaves room for Finder's icon bounds without
 horizontal scrolling.

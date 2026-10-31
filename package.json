@@ -10,6 +10,7 @@
     "aseprite:mcp": "bun --no-env-file scripts/aseprite-mcp.ts --stdio",
     "aseprite:check": "bun --no-env-file scripts/aseprite-mcp.ts --check",
     "audit:dependencies": "bun --no-env-file scripts/audit-dependencies.ts",
+    "check:docs": "bun --no-env-file scripts/check-markdown-links.ts",
     "build:web": "bun --no-env-file web/scripts/build-portal-seam.ts && bunx --no-env-file --no-install --bun vite build --config web/vite.config.ts && bun --no-env-file web/scripts/prerender.ts",
     "dev:web": "bunx --no-env-file --no-install --bun vite --config web/vite.config.ts",
     "lint:web": "bunx --no-env-file --no-install --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bun --no-env-file fmt --check web package.json",
@@ -23,6 +24,7 @@
     "preview:web": "bunx --no-env-file --no-install --bun vite preview --config web/vite.config.ts",
     "size:web": "bun --no-env-file web/scripts/css-size.ts",
     "export:story": "bun --no-env-file web/scripts/export-story.ts",
+    "refresh:assets": "bun --no-env-file scripts/refresh-assets.ts",
     "export:features": "bun --no-env-file web/scripts/export-features.ts",
     "deploy:web": "bun --no-env-file web/scripts/deploy.ts"
   },

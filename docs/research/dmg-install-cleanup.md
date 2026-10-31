@@ -36,7 +36,7 @@ ejecting the mounted disk leaves the file on disk. An installed app is another
 copy, outside that image. Apple describes disk images as files containing files
 and folders and distinguishes their saved filename from the mounted name.
 Sources: [Apple Disk Utility guide](https://support.apple.com/guide/disk-utility/dskutl11888/mac)
-and Apple's local [hdiutil manual](/usr/share/man/man1/hdiutil.1),
+and Apple's installed `hdiutil` manual (`man hdiutil`),
 `BACKGROUND` and `detach` sections.
 
 The Applications icon inside Gatto's DMG is a symlink to `/Applications`; it does
@@ -76,7 +76,7 @@ Apple's `hdiutil detach` uses Disk Arbitration to unmount filesystems and detach
 the image; `-force` ignores open files. The public Disk Arbitration APIs also
 provide unmount and eject operations and callbacks that report failure. The
 force-unmount option explicitly allows unmounting while files are active.
-Sources: Apple's local [hdiutil manual](/usr/share/man/man1/hdiutil.1),
+Sources: Apple's installed `hdiutil` manual (`man hdiutil`),
 [DADiskUnmount](<https://developer.apple.com/documentation/diskarbitration/dadiskunmount(_:_:_:_:)>),
 [DADiskEject](<https://developer.apple.com/documentation/diskarbitration/dadiskeject(_:_:_:_:)>),
 [unmount options](https://developer.apple.com/documentation/diskarbitration/dadiskunmountoptions),
@@ -146,7 +146,7 @@ attached images. On the investigated Mac, its output includes `image-path`,
 This schema observation is local evidence, not a permanent API contract. The
 same manual now prefers `diskutil` replacements for multiple image operations;
 the exact command availability must be checked against Gatto's macOS 13 minimum.
-Sources: Apple's local [hdiutil manual](/usr/share/man/man1/hdiutil.1),
+Sources: Apple's installed `hdiutil` manual (`man hdiutil`),
 read-only `hdiutil info -plist` inspection, and
 [minimum version](../../packaging/Info.plist).
 
