@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.4] - 2026-10-31
+
 ### Changed
 
 - Remove retired website prototypes, generated concept sheets and intermediate
