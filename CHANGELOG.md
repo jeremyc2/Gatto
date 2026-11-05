@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.7] - 2026-11-05
+
 ### Fixed
 
 - Keep recent projects available in the Dock menu after closing the last window.
