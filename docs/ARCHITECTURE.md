@@ -972,10 +972,12 @@ because AppKit's synchronous close callback otherwise re-borrows the application
 Closing windows leaves the Dock icon and recent projects menu available. Quit
 ends the process.
 
-`application_menu` installs native App Preferences, Check for Updates, Close
-Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
-Command+Q bindings for every app window. The cat icon's menu also shows the
-preferences, quit and the Add from Clipboard shortcut. Successful global Add from Clipboard
+`application_menu` installs native About Gato, Check for Updates, App Preferences,
+Close Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
+Command+Q bindings for every app window. About presents an icon-free AppKit
+sheet outside the GPUI update and can copy the build details to the clipboard.
+The cat icon's menu also shows preferences, quit and the Add from Clipboard
+shortcut. Successful global Add from Clipboard
 registrations notify the menu controller, which refreshes its shortcut hint;
 disabling or temporarily unregistering during recording clears that hint.
 The menu bar uses the favicon's front-facing kitten as a monochrome AppKit

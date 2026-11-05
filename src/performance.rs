@@ -67,7 +67,7 @@ fn annotated() -> Document {
 }
 
 #[test]
-#[ignore = "opt-in: cargo test --release --bin gatto performance::measure_workflows -- --ignored --exact --nocapture"]
+#[ignore = "opt-in: cargo test --release --bin Gatto performance::measure_workflows -- --ignored --exact --nocapture"]
 fn measure_workflows() {
     if cfg!(debug_assertions) {
         panic!("measure the optimized app with --release");

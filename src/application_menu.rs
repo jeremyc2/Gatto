@@ -1,6 +1,10 @@
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, Window, actions};
 
+const ABOUT_TITLE: &str = "About Gato";
+const APP_NAME: &str = "Gatto";
+const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
+
 actions!(
     gatto,
     [
@@ -9,6 +13,7 @@ actions!(
         Quit,
         InstallUpdate,
         CheckForUpdates,
+        OpenAbout,
         OpenPreferences,
         CreateComposition,
         HelpRepository,
@@ -58,7 +63,14 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| request_quit(cx));
     cx.on_action(|_: &CloseWindow, cx| close_focused_window(false, cx));
     cx.on_action(|_: &DismissWindow, cx| close_focused_window(true, cx));
-    cx.on_action(|_: &HelpRepository, cx| cx.open_url("https://github.com/jeremyc2/Gatto"));
+    #[cfg(target_os = "macos")]
+    cx.on_action(|_: &OpenAbout, cx| {
+        // Present the native sheet outside GPUI's current update.
+        cx.foreground_executor()
+            .spawn(async { show_about() })
+            .detach();
+    });
+    cx.on_action(|_: &HelpRepository, cx| cx.open_url(REPOSITORY_URL));
     cx.on_action(|_: &HelpWalkthrough, cx| {
         cx.open_url("https://github.com/jeremyc2/Gatto/blob/main/docs/WALKTHROUGH.md")
     });
@@ -69,10 +81,11 @@ pub fn init(cx: &mut App) {
         cx.open_url("https://github.com/jeremyc2/Gatto/blob/main/SUPPORT.md")
     });
     cx.set_menus([
-        Menu::new("Gatto").items([
-            MenuItem::action("App Preferences", OpenPreferences),
-            MenuItem::separator(),
+        Menu::new(APP_NAME).items([
+            MenuItem::action(ABOUT_TITLE, OpenAbout),
             MenuItem::action("Check for Updates…", CheckForUpdates),
+            MenuItem::separator(),
+            MenuItem::action("App Preferences", OpenPreferences),
             MenuItem::separator(),
             MenuItem::action("Quit Gatto", Quit),
         ]),
@@ -88,6 +101,108 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Support", HelpSupport),
         ]),
     ]);
+}
+
+#[cfg(target_os = "macos")]
+fn show_about() {
+    use objc2::{AnyThread as _, MainThreadMarker, MainThreadOnly as _, runtime::AnyObject};
+    use objc2_app_kit::{
+        NSAlert, NSAlertFirstButtonReturn, NSAlertStyle, NSApplication, NSBackingStoreType,
+        NSColor, NSLinkAttributeName, NSPasteboard, NSPasteboardTypeString, NSTextAlignment,
+        NSTextField, NSWindow, NSWindowStyleMask,
+    };
+    use objc2_foundation::{
+        NSMutableAttributedString, NSPoint, NSRange, NSRect, NSSize, NSString, NSURL, ns_string,
+    };
+
+    let mtm = MainThreadMarker::new().expect("About must run on the main thread");
+    let app = NSApplication::sharedApplication(mtm);
+    let window = app
+        .keyWindow()
+        .or_else(|| app.mainWindow())
+        .map(|window| window.sheetParent().unwrap_or(window))
+        .filter(|window| window.isVisible() && !window.isMiniaturized());
+    if window
+        .as_ref()
+        .is_some_and(|window| window.attachedSheet().is_some())
+    {
+        return;
+    }
+
+    let version = env!("CARGO_PKG_VERSION");
+    let commit = env!("GIT_COMMIT_HASH");
+    let details = format!(
+        "Version: {version}\nCommit: {commit}\nLead Developer: Jeremy Chandler\nRepository: {REPOSITORY_URL}"
+    );
+    let alert = NSAlert::new(mtm);
+    alert.setAlertStyle(NSAlertStyle::Informational);
+    alert.setMessageText(&NSString::from_str(APP_NAME));
+    alert.addButtonWithTitle(ns_string!("Copy"));
+    alert
+        .addButtonWithTitle(ns_string!("OK"))
+        .setKeyEquivalent(ns_string!("\u{1b}"));
+
+    let display = NSString::from_str(&format!("\n{details}"));
+    let url_text = NSString::from_str(REPOSITORY_URL);
+    let repository = NSURL::URLWithString(&url_text).expect("The repository URL is valid");
+    let attributed =
+        NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &display);
+    let url_range = NSRange::new(display.length() - url_text.length(), url_text.length());
+    // SAFETY: The URL is the suffix of display, and AppKit's link key accepts an NSURL.
+    unsafe {
+        attributed.addAttribute_value_range(
+            NSLinkAttributeName,
+            &*repository as &AnyObject,
+            url_range,
+        )
+    };
+    let field = NSTextField::wrappingLabelWithString(&display, mtm);
+    field.setAttributedStringValue(&attributed);
+    field.setAlignment(NSTextAlignment::Left);
+    field.setSelectable(true);
+    field.setAllowsEditingTextAttributes(true);
+    // Allow the full repository URL to fit on one line at the standard size.
+    let text_width = 288.0;
+    field.setPreferredMaxLayoutWidth(text_width);
+    field.setFrameSize(NSSize::new(text_width, field.fittingSize().height));
+    alert.setAccessoryView(Some(&field));
+
+    // AppKit omits the icon for informational sheets. A transparent host
+    // keeps the same presentation available when all app windows are closed.
+    let needs_host = window.is_none();
+    let window = window.unwrap_or_else(|| {
+        // SAFETY: The window is created on the main thread and owned by Retained.
+        let host = unsafe {
+            let host = NSWindow::initWithContentRect_styleMask_backing_defer(
+                NSWindow::alloc(mtm),
+                NSRect::new(NSPoint::ZERO, NSSize::new(1.0, 1.0)),
+                NSWindowStyleMask::Borderless,
+                NSBackingStoreType::Buffered,
+                false,
+            );
+            host.setReleasedWhenClosed(false);
+            host
+        };
+        host.setOpaque(false);
+        host.setBackgroundColor(Some(&NSColor::clearColor()));
+        host.center();
+        host.orderFront(None);
+        host
+    });
+    let host = needs_host.then(|| window.clone());
+    let text = NSString::from_str(&details);
+    let completion = block2::RcBlock::new(move |response| {
+        if response == NSAlertFirstButtonReturn {
+            let pasteboard = NSPasteboard::generalPasteboard();
+            pasteboard.clearContents();
+            // SAFETY: AppKit exports this immutable plain-text pasteboard type.
+            unsafe { pasteboard.setString_forType(&text, NSPasteboardTypeString) };
+        }
+        if let Some(host) = &host {
+            host.close();
+        }
+    });
+    alert.beginSheetModalForWindow_completionHandler(&window, Some(&completion));
 }
 
 /// User-requested quits must not cut off a project write. The platform quit

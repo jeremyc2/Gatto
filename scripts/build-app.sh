@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 fail() { echo "error: $*" >&2; exit 1; }
 profile=debug
-build_flags=(--locked --bin gatto --target-dir target)
+build_flags=(--locked --bin Gatto --target-dir target)
 case "${1:-}" in
   "") ;;
   --release) profile=release; build_flags+=(--release) ;;
@@ -28,7 +28,7 @@ mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 cp packaging/Info.plist "$bundle/Contents/Info.plist"
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
 cp packaging/licenses/* "$bundle/Contents/Resources/"
-cp "target/$profile/gatto" "$bundle/Contents/MacOS/"
+cp "target/$profile/Gatto" "$bundle/Contents/MacOS/gatto"
 # Local apps do not bundle Sparkle or contact its release feed.
 plutil -remove SUFeedURL "$bundle/Contents/Info.plist"
 codesign --force --sign - "$bundle"

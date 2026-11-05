@@ -47,6 +47,9 @@ or see [Support](../SUPPORT.md#finder-integration) for troubleshooting.
 
 ### Updates
 
+Open **Gatto → Check for Updates…** to check manually. If you’re up to date,
+the dialog shows your installed version.
+
 Choose **Stable** or **Beta** in **App Preferences → Release channel**.
 Stable is the default, including when no preference was previously saved. Beta
 receives preview releases and newer stable releases. The preference survives

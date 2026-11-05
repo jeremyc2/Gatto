@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Move About from App Preferences to the Gatto menu. The native dialog shows
+  the version, commit, lead developer, and repository, with Copy as the default
+  button.
+- Show the installed version when a manual update check finds no update.
+
 ## [0.22.7] - 2026-11-05
 
 ### Fixed

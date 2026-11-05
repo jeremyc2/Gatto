@@ -32,7 +32,7 @@ case '${tool}' in
     profile=debug
     for arg in "$@"; do [[ "$arg" != --release ]] || profile=release; done
     mkdir -p "target/$profile"
-    echo "$profile binary" > "target/$profile/gatto"
+    echo "$profile binary" > "target/$profile/Gatto"
     ;;
 esac
 `,

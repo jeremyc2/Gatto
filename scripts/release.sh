@@ -230,7 +230,7 @@ done
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
 cp dist/sparkle/LICENSE "$bundle/Contents/Resources/Sparkle-LICENSE"
 cp packaging/licenses/* "$bundle/Contents/Resources/"
-cp "target/$TARGET/release/gatto" "$bundle/Contents/MacOS/"
+cp "target/$TARGET/release/Gatto" "$bundle/Contents/MacOS/gatto"
 
 # Pair the app with its installer before signing. Compression preserves this
 # volume's UUID, letting the installed app identify it without reading its files.

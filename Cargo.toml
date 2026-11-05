@@ -2,7 +2,7 @@
 name = "gatto"
 version = "0.22.7"
 edition = "2024"
-default-run = "gatto"
+default-run = "Gatto"
 rust-version = "1.90"
 description = "A lightweight GPUI menu bar app for uploading GitHub image and video attachments"
 license = "MIT"
@@ -10,6 +10,10 @@ readme = "README.md"
 
 [features]
 walkthrough-screenshots = ["gpui-kit/test-support"]
+
+[[bin]]
+name = "Gatto"
+path = "src/main.rs"
 
 [[bin]]
 name = "walkthrough-screenshots"
@@ -49,6 +53,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSBundle",
   "NSDictionary",
   "NSString",
+  "NSAttributedString",
   "NSURL",
   "NSError",
   "NSPropertyList",
@@ -78,6 +83,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
   "NSApplication",
+  "NSAlert",
   "NSAppearance",
   "NSImage",
   "NSBitmapImageRep",
@@ -99,6 +105,8 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSStatusItem",
   "NSStatusBarButton",
   "NSButton",
+  "NSControl",
+  "NSTextField",
   "NSMenu",
   "NSMenuItem",
   "NSEvent",

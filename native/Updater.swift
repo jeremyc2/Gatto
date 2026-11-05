@@ -261,8 +261,12 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         }
         if manualRequested && !manualResultShown, let error = error as NSError? {
             let noUpdate = error.domain == SUSparkleErrorDomain && error.code == SUError.noUpdateError.rawValue
-            showManualMessage(title: noUpdate ? "No update available" : "Could not check for updates",
-                              detail: waitingForStable ?? error.localizedDescription)
+            if noUpdate {
+                showManualNoUpdate()
+            } else {
+                showManualMessage(title: "Could not check for updates",
+                                  detail: waitingForStable ?? error.localizedDescription)
+            }
         }
         installRequested = false
         manualRequested = false
@@ -290,6 +294,17 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
                                    acknowledgement: @escaping () -> Void = {}) {
         manualResultShown = true
         present(UpdatePrompt(title: title, detail: detail)) { _ in acknowledgement() }
+    }
+
+    private func showManualNoUpdate(acknowledgement: @escaping () -> Void = {}) {
+        if let waitingForStable {
+            showManualMessage(title: "Waiting for Stable", detail: waitingForStable,
+                              acknowledgement: acknowledgement)
+        } else {
+            showManualMessage(title: "You're up to date.",
+                              detail: "You are on version \(Self.displayVersion(installedVersion))",
+                              acknowledgement: acknowledgement)
+        }
     }
 
     // Kept independent of Sparkle's item type so consent and cancellation are
@@ -349,8 +364,7 @@ final class UpdaterBridge: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         version = nil
         emit(0, waitingForStable ?? "")
         if manualRequested && !manualPending {
-            showManualMessage(title: waitingForStable == nil ? "No update available" : "Waiting for Stable", detail: waitingForStable ?? error.localizedDescription,
-                              acknowledgement: acknowledgement)
+            showManualNoUpdate(acknowledgement: acknowledgement)
         } else {
             acknowledgement()
         }

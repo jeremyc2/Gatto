@@ -26,7 +26,6 @@ use gpui_kit::component::{
     h_flex,
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
     kbd::Kbd,
-    link::Link,
     menu::DropdownMenu as _,
     notification::Notification,
     progress::Progress,
@@ -75,7 +74,6 @@ actions!(
 );
 
 const KEY_CONTEXT: &str = "Gatto";
-const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
 const WORKSPACE_GUTTER: Pixels = px(8.);
 const WORKSPACE_PADDING: Pixels = px(12.);
 // Leave room for the native buttons and the draggable title bar above GPUI controls.
@@ -3671,50 +3669,6 @@ impl UploaderApp {
                         .child(Button::new("reset-app").debug_selector(|| "reset-app".into())
                             .app_secondary().label("Reset app").on_click(cx.listener(Self::confirm_reset)))),
 
-            )
-            .child(
-                v_flex()
-                    .gap_2()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .p_4()
-                    .child(div().font_semibold().text_sm().child("About"))
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .text_xs()
-                            .child("Version")
-                            .child(env!("CARGO_PKG_VERSION")),
-                    )
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .text_xs()
-                            .child("Commit")
-                            .child(option_env!("GIT_COMMIT_HASH").unwrap_or("unknown")),
-                    )
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .items_start()
-                            .text_xs()
-                            .child("Repository")
-                            .child(
-                                v_flex()
-                                    .items_end()
-                                    .child(
-                                        Link::new("repository-link")
-                                            .href(REPOSITORY_URL)
-                                            .child("GitHub"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Jeremy Chandler"),
-                                    ),
-                            ),
-                    ),
             )
     }
 }

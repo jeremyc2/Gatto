@@ -62,7 +62,7 @@ struct UpdaterTests {
         let client = FakeClient()
         var prompts: [UpdatePrompt] = []
         var respond: ((Bool) -> Void)?
-        let bridge = UpdaterBridge(client: client, defaults: defaults) { prompt, reply in
+        let bridge = UpdaterBridge(client: client, defaults: defaults, installedVersion: "0.22.7") { prompt, reply in
             prompts.append(prompt)
             respond = reply
         }
@@ -103,7 +103,8 @@ struct UpdaterTests {
         bridge.checkForUpdates()
         var acknowledged = false
         bridge.showUpdateNotFoundWithError(error) { acknowledged = true }
-        assert(prompts.last?.title == "No update available" && !acknowledged)
+        assert(prompts.last?.title == "You're up to date." && !acknowledged)
+        assert(prompts.last?.detail == "You are on version 0.22.7")
         respond?(false)
         assert(acknowledged)
         bridge.finishCycle(error: error)
@@ -131,7 +132,7 @@ struct UpdaterTests {
         bridge.finishCycle(error: nil)
         assert(client.installationChecks == checks + 1)
         bridge.showUpdateNotFoundWithError(error, acknowledgement: {})
-        assert(prompts.last?.title == "No update available")
+        assert(prompts.last?.title == "You're up to date.")
         respond?(false)
         bridge.finishCycle(error: nil)
 
@@ -152,13 +153,14 @@ struct UpdaterTests {
         assert(prompts.last?.title == "Update checking is unavailable")
         assert(unavailable.installationChecks == 0)
 
-        let fallback = UpdaterBridge(client: client, defaults: defaults) { prompt, reply in
+        let fallback = UpdaterBridge(client: client, defaults: defaults, installedVersion: "0.23.0b1") { prompt, reply in
             prompts.append(prompt)
             reply(false)
         }
         fallback.checkForUpdates()
         fallback.finishCycle(error: NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue)))
-        assert(prompts.last?.title == "No update available")
+        assert(prompts.last?.title == "You're up to date.")
+        assert(prompts.last?.detail == "You are on version 0.23.0-beta.1")
     }
 
     @MainActor static func testChannels(defaults: UserDefaults) {

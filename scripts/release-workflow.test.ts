@@ -115,7 +115,7 @@ if (tool === 'git') {
 } else if (tool === 'cargo' && args[0] === 'build') {
  if (mode === 'build-failure') process.exit(1);
  mkdirSync(join(root,'target/aarch64-apple-darwin/release'),{recursive:true});
- writeFileSync(join(root,'target/aarch64-apple-darwin/release/gatto'),'binary');
+ writeFileSync(join(root,'target/aarch64-apple-darwin/release/Gatto'),'binary');
 } else if (tool === 'ditto') {
  if (args[0] === '-c') writeFileSync(args.at(-1)!, 'archive');
  else cpSync(args[0]!, args[1]!, {recursive:true});

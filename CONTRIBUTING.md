@@ -357,7 +357,7 @@ See [historical profiling notes](docs/research/side-by-side-composition-profile.
 Run the opt-in macOS benchmarks in an optimized build:
 
 ```sh
-GATTO_PERF_OUTPUT=target/performance.json cargo test --release --locked --bin gatto performance::measure_workflows -- --ignored --exact --nocapture
+GATTO_PERF_OUTPUT=target/performance.json cargo test --release --locked --bin Gatto performance::measure_workflows -- --ignored --exact --nocapture
 ```
 
 These exercise production image import, editor decoding and session reopening,
