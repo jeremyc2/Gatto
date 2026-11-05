@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Place the native window controls above the Projects sidebar. The workspace
+  sits in a rounded panel with the sidebar open and fills the window when it
+  closes. Use even padding around the workspace content, Upload button, and
+  sidebar.
+
 ## [0.22.5] - 2026-11-05
 
 ### Changed

@@ -19,15 +19,19 @@ pub(super) const HOVER_BORDER: u32 = 0xb0a6f7;
 #[cfg(test)]
 mod tests;
 
-/// Opens every app window with shared native title-bar colors and a sidebar-style divider.
+/// Opens app windows with shared native title-bar styling.
 pub fn open_window<V: gpui_kit::Render>(
     options: gpui_kit::WindowOptions,
     cx: &mut App,
     build: impl FnOnce(&mut Window, &mut App) -> gpui_kit::Entity<V>,
 ) -> anyhow::Result<(gpui_kit::AnyWindowHandle, gpui_kit::Entity<V>)> {
+    let full_size_content = options
+        .titlebar
+        .as_ref()
+        .is_some_and(|titlebar| titlebar.appears_transparent);
     gpui_kit::open_window(options, cx, |window, cx| {
         let view = build(window, cx);
-        crate::window_limits::style_window(&view, window, cx);
+        crate::window_limits::style_window(&view, window, full_size_content, cx);
         view
     })
 }

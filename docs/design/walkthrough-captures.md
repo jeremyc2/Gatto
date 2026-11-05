@@ -19,6 +19,9 @@ and capture generation fails if any part of that content is clipped.
 The batch example uses a 1024 × 768 window so the sidebar and three attachment
 rows fit a compact 4:3 landscape frame. Editor and game captures use their own
 window sizes. Decorative motion is disabled while capturing.
+Captures with the sidebar open show the inset workspace and its gutter. The
+collapsed-sidebar capture shows the edge-to-edge workspace. The off-screen
+renderer draws GPUI content and omits the native window controls.
 
 Run `./scripts/update-walkthrough-screenshots.sh` to regenerate all captures from
 the production interface. The native renderer exports at 2×. Raw PNGs live in

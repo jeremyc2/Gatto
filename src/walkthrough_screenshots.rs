@@ -402,6 +402,7 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
                     Default::default(),
                     size(px(620.), px(780.)),
                 ))),
+                titlebar: Some(app::uploader_titlebar()),
                 show: false,
                 focus: false,
                 ..Default::default()
@@ -899,13 +900,13 @@ fn render_scenario_with_hover(
                     origin: Default::default(),
                     size: size(px(width), px(height)),
                 })),
+                titlebar: Some(app::uploader_titlebar()),
                 focus: false,
                 show: false,
                 ..Default::default()
             },
             cx,
             |window, cx| {
-                window.set_window_title("Gatto");
                 cx.new(|cx| {
                     if rooftops_preferences {
                         UploaderApp::for_rooftops_preferences(window, cx)
@@ -923,7 +924,7 @@ fn render_scenario_with_hover(
     if matches!(scenario, WalkthroughScenario::Preferences) {
         cx.update_window(window_handle, |_, window, cx| {
             let content = window.find("settings-content").bounds();
-            window.resize(size(px(width), px(f32::from(content.size.height).ceil())));
+            window.resize(size(px(width), px(f32::from(content.bottom()).ceil())));
             window.bounds_changed(cx);
             window.render_frame(cx);
         })?;

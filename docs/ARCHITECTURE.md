@@ -291,7 +291,15 @@ Clipboard drafting and comparison target the presented main workspace, or
 Scratchpad when there is no presented main window; startup requests wait for the
 initial Scratchpad load.
 
-The slate GPUI Kit sidebar has a fixed Projects/search header, a scrolling project
+The Projects sidebar shares the window's slate background and has equal left
+and right insets. The workspace sits in a rounded GPUI panel with an eight-point
+gutter along the top, right, and bottom, a thin outline, and a soft shadow. The
+workspace uses the same twelve-point inset around its scrollable content and
+Upload footer. A one-point divider separates the footer from the scrollable
+content in both sidebar states. The layout takes its cues from Hex and Rex in the
+[Syntax Weekly design segment](https://www.youtube.com/watch?v=feteUGx5020&t=622s).
+
+The sidebar has a fixed Projects/search header, a scrolling project
 list containing named projects, and fixed Scratchpad and Create Project controls
 at the bottom. Scratchpad is excluded from the list and Primary section, including
 when used for Add from Clipboard; its button keeps its notebook icon. Named projects
@@ -355,12 +363,13 @@ actions open the main window and select the corresponding project.
 
 All app windows open through `theme::open_window`, which keeps GPUI's Root and
 view identity while installing shared native macOS styling in `window_limits.rs`.
-Title bars use the theme's sidebar background, with a one-point bottom divider
-using `sidebar_border`, matching the sidebar's right border. The native divider
-sits at the top of the content view without changing content layout or the native
-title and traffic-light controls. Bounds observers keep it full-width and restore
-title-bar transparency after GPUI's fullscreen transitions; the divider is hidden
-while fullscreen.
+The main window extends its content into a transparent native title bar. Close,
+minimize, and zoom sit above the Projects sidebar. Hiding the sidebar gives the
+workspace a single edge-to-edge background behind the window controls,
+scrolling content, and upload footer. Preferences also reserves space for the
+controls at the top of its page. Fullscreen uses the available height. Utility
+windows use a native title bar with a one-point divider below it. A bounds
+observer restores title-bar styling after GPUI's fullscreen transitions.
 
 Opening the main window loads Scratchpad and restores its repository without a
 GitHub request. A new Scratchpad starts without a repository selection.

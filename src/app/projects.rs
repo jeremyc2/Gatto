@@ -1774,10 +1774,11 @@ impl UploaderApp {
             })
     }
 
-    pub(super) fn render_project_sidebar(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
-        if self.settings.sidebar_collapsed {
-            return div().w(px(0.)).h_full().into_any_element();
-        }
+    pub(super) fn render_project_sidebar(
+        &self,
+        titlebar_clearance: Pixels,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let query = self
             .project_state
             .search
@@ -1793,10 +1794,12 @@ impl UploaderApp {
             .collect::<Vec<_>>();
         Sidebar::new("projects-sidebar")
             .w(px(220.))
+            .border_0()
             .collapsible(false)
             .header(
                 v_flex()
                     .w_full()
+                    .pt(titlebar_clearance)
                     .gap_3()
                     .child(
                         h_flex()
@@ -1870,7 +1873,6 @@ impl UploaderApp {
                 bounds: self.project_bounds.clone(),
                 active: self.project_state.storage_folder.clone(),
             })
-            .into_any_element()
     }
 }
 

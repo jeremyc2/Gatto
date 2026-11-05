@@ -504,10 +504,10 @@ impl MainWindow {
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(800.), px(780.)), cx)),
             window_min_size: Some(size(px(700.), px(600.))),
+            titlebar: Some(app::uploader_titlebar()),
             ..Default::default()
         };
         let result = crate::theme::open_window(options, cx, move |window, cx| {
-            window.set_window_title("Gatto");
             window_limits::set_maximum_content_size(window, 1100., 1040.);
             let view = cx.new(|cx| UploaderApp::new(window, diagnostics, menu_bar, shortcut, cx));
             let close_view = view.downgrade();

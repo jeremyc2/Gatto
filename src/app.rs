@@ -38,9 +38,10 @@ use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, Bounds, BoxShadow, ClipboardEntry, ClipboardItem,
     Context, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, Image, ImageFormat,
     InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton,
-    ObjectFit, ParentElement as _, PathPromptOptions, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Window,
-    WindowBounds, WindowOptions, actions, div, img, prelude::FluentBuilder as _, px, size,
+    ObjectFit, ParentElement as _, PathPromptOptions, Pixels, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, TitlebarOptions,
+    Window, WindowBounds, WindowOptions, actions, div, img, point, prelude::FluentBuilder as _, px,
+    size,
 };
 
 use crate::{
@@ -75,6 +76,18 @@ actions!(
 
 const KEY_CONTEXT: &str = "Gatto";
 const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
+const WORKSPACE_GUTTER: Pixels = px(8.);
+const WORKSPACE_PADDING: Pixels = px(12.);
+// Leave room for the native buttons and the draggable title bar above GPUI controls.
+const TITLEBAR_HEIGHT: Pixels = px(40.);
+
+pub(crate) fn uploader_titlebar() -> TitlebarOptions {
+    TitlebarOptions {
+        title: Some("Gatto".into()),
+        appears_transparent: cfg!(target_os = "macos"),
+        traffic_light_position: Some(point(px(14.), px(12.))),
+    }
+}
 
 type RepositoryPicker = ComboboxState<SearchableVec<SearchableGroup<String>>>;
 
@@ -3027,7 +3040,7 @@ impl UploaderApp {
             .child(
                 v_flex()
                     .w_full()
-                    .px_4()
+                    .px(WORKSPACE_PADDING)
                     .items_center()
                     .gap_3()
                     .child(
@@ -3716,7 +3729,12 @@ impl Focusable for UploaderApp {
 }
 
 impl Render for UploaderApp {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let titlebar_height = if cfg!(target_os = "macos") && !window.is_fullscreen() {
+            TITLEBAR_HEIGHT
+        } else {
+            px(0.)
+        };
         let upload_count = self
             .staged_attachments
             .iter()
@@ -3764,8 +3782,11 @@ impl Render for UploaderApp {
             .bg(cx.theme().background);
 
         if self.settings_open {
-            root.child(self.render_settings(cx)).into_any_element()
+            root.pt(titlebar_height)
+                .child(self.render_settings(cx))
+                .into_any_element()
         } else {
+            let sidebar_collapsed = self.settings.sidebar_collapsed;
             let needs_setup = self.load_state == LoadState::NeedsSetup;
             let workspace_title = self.project_state.title.clone().unwrap_or_else(|| {
                 self.project_state.folder.as_ref().map_or_else(
@@ -3789,10 +3810,8 @@ impl Render for UploaderApp {
                 .child(
                     v_flex()
                         .flex_none()
-                        .gap_5()
-                        .px_6()
-                        .pt_6()
-                        .pb_5()
+                        .gap(WORKSPACE_PADDING)
+                        .p(WORKSPACE_PADDING)
                         .when_some(self.project_state.error.clone(), |content, error| content.child(
                             v_flex().gap_2().child(div().text_sm().text_color(cx.theme().danger).child(error))
                                 .child(Button::new("retry-project-save").app_secondary().label("Retry save").disabled(self.project_state.saving)
@@ -3919,36 +3938,58 @@ impl Render for UploaderApp {
                                 .child(self.render_attachments(cx))
                         }),
                 );
-            let main = v_flex().flex_1().min_w_0().h_full().child(content).child(
-                h_flex()
-                    .w_full()
-                    .flex_none()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .justify_end()
-                    .items_center()
-                    .gap_2()
-                    .px_6()
-                    .py_3()
-                    .when(self.uploading, |footer| {
-                        footer.child(
-                            Button::new("cancel-upload")
-                                .app_secondary()
-                                .label("Cancel upload")
-                                .disabled(
-                                    self.upload_control
-                                        .as_ref()
-                                        .is_some_and(|control| control.is_canceled()),
-                                )
-                                .on_click(cx.listener(Self::cancel_upload)),
-                        )
-                    })
-                    .child(self.render_upload_button(upload_count, can_send, cx)),
-            );
+            let main = v_flex()
+                .flex_1()
+                .min_w_0()
+                .when(sidebar_collapsed, |main| main.pt(titlebar_height))
+                .when(!sidebar_collapsed, |main| {
+                    main.my(WORKSPACE_GUTTER)
+                        .mr(WORKSPACE_GUTTER)
+                        .rounded(px(14.))
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .bg(cx.theme().background)
+                        .shadow(vec![
+                            BoxShadow::new(px(0.), px(2.), gpui_kit::black().opacity(0.28))
+                                .blur_radius(px(8.)),
+                        ])
+                        .overflow_hidden()
+                })
+                .child(content)
+                .child(
+                    h_flex()
+                        .w_full()
+                        .flex_none()
+                        .border_t_1()
+                        .border_color(cx.theme().border)
+                        .justify_end()
+                        .items_center()
+                        .gap_2()
+                        .p(WORKSPACE_PADDING)
+                        .when(self.uploading, |footer| {
+                            footer.child(
+                                Button::new("cancel-upload")
+                                    .app_secondary()
+                                    .label("Cancel upload")
+                                    .disabled(
+                                        self.upload_control
+                                            .as_ref()
+                                            .is_some_and(|control| control.is_canceled()),
+                                    )
+                                    .on_click(cx.listener(Self::cancel_upload)),
+                            )
+                        })
+                        .child(self.render_upload_button(upload_count, can_send, cx)),
+                );
             root.child(
                 h_flex()
                     .size_full()
-                    .child(self.render_project_sidebar(cx))
+                    .items_stretch()
+                    .when(!sidebar_collapsed, |shell| {
+                        shell
+                            .bg(cx.theme().sidebar)
+                            .child(self.render_project_sidebar(titlebar_height, cx))
+                    })
                     .child(main),
             )
             .into_any_element()
@@ -4818,7 +4859,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn idle_attachment_preview_keeps_original_spacing_below_drop_zone(cx: &mut TestAppContext) {
+    fn idle_attachment_preview_has_one_section_gap_below_drop_zone(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
         for item in mixed_attachments() {
             cx.update(|window, cx| {
@@ -4833,8 +4874,7 @@ mod tests {
             let previews = cx.debug_bounds("staged-attachments").unwrap();
             let gap = previews.origin.y - drop_zone.bottom();
             assert_eq!(
-                gap,
-                px(20.),
+                gap, WORKSPACE_PADDING,
                 "idle preview should have one section gap below the drop zone"
             );
         }

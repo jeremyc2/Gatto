@@ -18,10 +18,15 @@ fn native_window(window: &Window) -> Option<objc2::rc::Retained<objc2_app_kit::N
 
 /// Installs native window styling once and restores it after fullscreen transitions.
 #[cfg(target_os = "macos")]
-pub fn style_window<V: 'static>(view: &gpui_kit::Entity<V>, window: &mut Window, cx: &mut App) {
+pub fn style_window<V: 'static>(
+    view: &gpui_kit::Entity<V>,
+    window: &mut Window,
+    full_size_content: bool,
+    cx: &mut App,
+) {
     use gpui_kit::component::ActiveTheme as _;
     use objc2::MainThreadOnly as _;
-    use objc2_app_kit::{NSBox, NSBoxType, NSTitlePosition};
+    use objc2_app_kit::{NSBox, NSBoxType, NSTitlePosition, NSTitlebarSeparatorStyle};
 
     let Some(main_thread) = objc2::MainThreadMarker::new() else {
         return;
@@ -32,20 +37,29 @@ pub fn style_window<V: 'static>(view: &gpui_kit::Entity<V>, window: &mut Window,
     let Some(content) = native_window.contentView() else {
         return;
     };
-    let border = NSBox::initWithFrame(NSBox::alloc(main_thread), content.bounds());
-    border.setBoxType(NSBoxType::Custom);
-    border.setTitlePosition(NSTitlePosition::NoTitle);
-    border.setBorderWidth(0.);
-    border.setCornerRadius(0.);
-    content.addSubview(&border);
+    let border = (!full_size_content).then(|| {
+        let border = NSBox::initWithFrame(NSBox::alloc(main_thread), content.bounds());
+        border.setBoxType(NSBoxType::Custom);
+        border.setTitlePosition(NSTitlePosition::NoTitle);
+        border.setBorderWidth(0.);
+        border.setCornerRadius(0.);
+        content.addSubview(&border);
+        border
+    });
 
     let update = move |window: &Window, cx: &App| {
-        border.setHidden(window.is_fullscreen());
+        if let Some(border) = &border {
+            border.setHidden(window.is_fullscreen());
+        }
         if window.is_fullscreen() {
             return;
         }
         native_window.setBackgroundColor(Some(&native_color(cx.theme().sidebar)));
         native_window.setTitlebarAppearsTransparent(true);
+        let Some(border) = &border else {
+            native_window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
+            return;
+        };
         border.setFillColor(&native_color(cx.theme().sidebar_border));
         let bounds = content.bounds();
         let y = if content.isFlipped() {
@@ -77,7 +91,7 @@ fn native_color(color: gpui_kit::Hsla) -> objc2::rc::Retained<objc2_app_kit::NSC
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn style_window<V: 'static>(_: &gpui_kit::Entity<V>, _: &mut Window, _: &mut App) {}
+pub fn style_window<V: 'static>(_: &gpui_kit::Entity<V>, _: &mut Window, _: bool, _: &mut App) {}
 
 /// Counts minimized and occluded windows as open. GPUI visibility tracks
 /// occlusion and can
