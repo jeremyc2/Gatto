@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.5] - 2026-11-05
+
 ### Changed
 
 - Pin and unpin multiple repositories from one searchable Preferences picker.
