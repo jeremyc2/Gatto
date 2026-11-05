@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.8] - 2026-11-05
+
 ### Changed
 
 - Move About from App Preferences to the Gatto menu. The native dialog shows
