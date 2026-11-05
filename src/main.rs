@@ -77,12 +77,6 @@ fn main() {
         application_menu::init(cx);
         let file_service = desktop::install_file_service();
         set_dock_visible(!login_launch);
-        cx.on_window_closed(|cx, _| {
-            if cx.windows().is_empty() {
-                set_dock_visible(false);
-            }
-        })
-        .detach();
         let diagnostics = Diagnostics::new();
         if let Err(error) = file_service {
             diagnostics.error(format!("Could not install the Finder service: {error:#}"));
@@ -101,7 +95,7 @@ fn main() {
         });
         let mut recent = startup_settings.project_directory().and_then(|directory| crate::projects::project_folders(&directory)).unwrap_or_default().into_iter().filter_map(|path| crate::projects::summary(&path).ok().map(|summary| (path, summary))).collect::<Vec<_>>();
         recent.sort_by_key(|(_, summary)| std::cmp::Reverse(summary.metadata.updated_at));
-        application_menu::set_recent_projects(recent.into_iter().map(|(path, summary)| (summary.title, path)).collect(), cx);
+        application_menu::set_recent_projects(recent.into_iter().map(|(path, summary)| (summary.title, path)), cx);
         let menu_bar_controller = MenuBarController::default();
         let shortcut_menu = menu_bar_controller.clone();
         let shortcut_diagnostics = diagnostics.clone();
@@ -442,7 +436,7 @@ impl MainWindow {
                     {
                         return false;
                     }
-                    let closed = window_limits::close(window, cx);
+                    let closed = window_limits::close(window);
                     if closed {
                         controller.0.borrow_mut().composer = None;
                     }
@@ -524,7 +518,7 @@ impl MainWindow {
                     return false;
                 }
                 gpui_kit::component::WindowExt::close_dialog(window, cx);
-                let should_close = window_limits::close(window, cx);
+                let should_close = window_limits::close(window);
                 if should_close {
                     controller.0.borrow_mut().current = None;
                 }

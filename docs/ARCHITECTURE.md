@@ -312,6 +312,8 @@ remaining projects. Both latter groups sort by update time. Project pins and the
 optional Add from Clipboard project folder name are application preferences. Null means
 Scratchpad; unmarking a named project restores that default. Search has only a placeholder. Command+B hides the sidebar entirely;
 the expand control appears beside Logs. The sidebar state persists in settings.
+The Dock menu ranks borrowed project paths by update time and owns only the five
+entries it displays.
 Project menus offer Use for "Add from Clipboard" / Stop using for "Add from Clipboard" and Pin project /
 Unpin project. Named projects also offer Edit metadata and Delete; Scratchpad's
 name and deletion remain reserved. The heading displays only the project name.
@@ -475,9 +477,10 @@ Add from Clipboard, bounded snapshots, and compression share that policy. Gatto 
 not query billing eligibility. The checkbox is disabled while uploading or
 importing; changes invalidate pending input jobs. Uploads recheck current limits
 so disabling the option cannot send an already staged larger video.
-Images retain shared immutable
-encoded bytes; videos use a private `tempfile` snapshot, copied with a bounded
-reader before container validation. Snapshotting preserves a stable retry source
+Staged images share one encoded buffer across previews, project writes, and
+uploads. Clipboard staging moves the selected GPUI image into that shared
+storage after validation. Videos use a private `tempfile` snapshot, copied with a
+bounded reader before container validation. Snapshotting preserves a stable retry source
 if the original moves or changes. MP4/MOV validation checks box bounds, a video
 handler, and media payload; WebM checks EBML/DocType, a video track, and a cluster.
 These are container checks, not codec decoding or transcoding.
@@ -966,7 +969,8 @@ codec/playback errors are handled by the external player.
 
 Native programmatic close requests run on the foreground executor outside a GPUI update,
 because AppKit's synchronous close callback otherwise re-borrows the application.
-The Dock icon hides when no windows are presented. Quit ends the process.
+Closing windows leaves the Dock icon and recent projects menu available. Quit
+ends the process.
 
 `application_menu` installs native App Preferences, Check for Updates, Close
 Window and Quit Gatto menu items, with unscoped Command+, / Command+W /

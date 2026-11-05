@@ -846,8 +846,8 @@ mod tests {
                 assert_eq!(cloned.description, original.description);
                 assert_eq!(cloned.upload_state, AttachmentUploadState::Preview);
                 assert_eq!(
-                    cloned.image().unwrap().bytes,
-                    original.image().unwrap().bytes
+                    cloned.image().unwrap().bytes(),
+                    original.image().unwrap().bytes()
                 );
                 assert!(original.upload_state.is_uploaded());
                 assert_eq!(app.upload_result.as_ref().unwrap().attachments.len(), 1);
@@ -905,7 +905,7 @@ mod tests {
                 let data = source.image().unwrap();
                 let mut retained = data
                     .annotation_session
-                    .open(&data.bytes, data.preview.clone())
+                    .open(data.bytes(), data.preview.clone())
                     .unwrap();
                 retained.document.marks.push(crate::annotation::Mark::new(
                     crate::annotation::Tool::Rectangle,
@@ -922,7 +922,7 @@ mod tests {
                 let clone = app.staged_attachments[1].image().unwrap();
                 let mut retained = clone
                     .annotation_session
-                    .open(&clone.bytes, clone.preview.clone())
+                    .open(clone.bytes(), clone.preview.clone())
                     .unwrap();
                 assert_eq!(retained.document.marks.len(), 1);
                 retained.document.marks.clear();
@@ -933,7 +933,7 @@ mod tests {
                 let original = app.staged_attachments[0].image().unwrap();
                 let retained = original
                     .annotation_session
-                    .open(&original.bytes, original.preview.clone())
+                    .open(original.bytes(), original.preview.clone())
                     .unwrap();
                 assert_eq!(
                     retained.document.marks.len(),
@@ -955,7 +955,7 @@ mod tests {
         let data = items[1].image().unwrap();
         let retained = data
             .annotation_session
-            .open(&data.bytes, data.preview.clone())
+            .open(data.bytes(), data.preview.clone())
             .unwrap();
         assert_eq!(retained.document.marks.len(), 1);
     }

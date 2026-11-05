@@ -981,7 +981,7 @@ impl UploaderApp {
             .and_then(StagedAttachment::image)
             .zip(original.image())
             .is_some_and(|(source, current)| {
-                !current.is_comparison && source.bytes == current.bytes
+                !current.is_comparison && source.has_same_bytes(current)
             })
         {
             return Err("The original image has changed. Open conversion again.");
@@ -1059,17 +1059,14 @@ impl UploaderApp {
             );
             return;
         }
-        let Some(clipboard) = cx.read_from_clipboard() else {
+        let Some(mut clipboard) = cx.read_from_clipboard() else {
             self.warn(UNSUPPORTED_MEDIA_MESSAGE, window, cx);
             return;
         };
 
-        if let Some(image) = clipboard.entries().iter().find_map(|entry| match entry {
-            ClipboardEntry::Image(image) => Some(image.clone()),
-            _ => None,
-        }) {
+        if let Some(image) = crate::model::take_clipboard_image(&mut clipboard) {
             let paste_generation = self.paste_generation;
-            let task = cx.background_spawn(async move { StagedAttachment::from_clipboard(&image) });
+            let task = cx.background_spawn(async move { StagedAttachment::from_clipboard(image) });
             cx.spawn_in(window, async move |this, window| {
                 let result = task.await;
                 let _ = this.update_in(window, |this, window, cx| {
@@ -2653,7 +2650,7 @@ impl UploaderApp {
             window.set_window_title("Gatto Logs");
             window_limits::set_maximum_content_size(window, 1200., 1000.);
             window.on_window_should_close(cx, move |window, cx| {
-                let should_close = window_limits::close(window, cx);
+                let should_close = window_limits::close(window);
                 let _ = uploader.update(cx, |this, _| {
                     if should_close {
                         this.log_window = None;
@@ -2765,7 +2762,7 @@ impl UploaderApp {
                 {
                     return false;
                 }
-                let should_close = window_limits::close(window, cx);
+                let should_close = window_limits::close(window);
                 let _ = uploader.update(cx, |this, cx| this.note_preview_closed(should_close, cx));
                 should_close
             });
@@ -2839,7 +2836,7 @@ impl UploaderApp {
         {
             replacement.is_comparison = original.is_comparison;
             replacement.annotation_session = original.annotation_session.clone();
-            if replacement.bytes == original.bytes {
+            if replacement.has_same_bytes(original) {
                 edited.upload_state = attachment.upload_state.clone();
             }
         }
@@ -4391,7 +4388,7 @@ mod tests {
                 let original = attachments[0].image().unwrap();
                 let mut history = original
                     .annotation_session
-                    .open(&original.bytes, original.preview.clone())
+                    .open(original.bytes(), original.preview.clone())
                     .unwrap();
                 history.document.checkpoint();
                 history.document.marks.push(crate::annotation::Mark::new(
@@ -4435,7 +4432,7 @@ mod tests {
                 let image = attachment.image().unwrap();
                 let history = image
                     .annotation_session
-                    .open(&image.bytes, image.preview.clone())
+                    .open(image.bytes(), image.preview.clone())
                     .unwrap();
                 assert_eq!(history.document.marks.len(), 1);
                 assert!(

@@ -8,6 +8,7 @@ use crate::{
 
 const CASES: &[&str] = &[
     "import",
+    "clipboard_image",
     "open_editor",
     "reopen_editor",
     "export",
@@ -15,6 +16,18 @@ const CASES: &[&str] = &[
     "preview",
     "comparison",
 ];
+
+fn clipboard_fixture() -> image::RgbaImage {
+    let mut noise = 0x4cb21df3u32;
+    image::RgbaImage::from_fn(1600, 1400, |_, _| {
+        // A reproducible, poorly compressible screenshot-sized image.
+        noise ^= noise << 13;
+        noise ^= noise >> 17;
+        noise ^= noise << 5;
+        let [r, g, b, _] = noise.to_le_bytes();
+        image::Rgba([r, g, b, 255])
+    })
+}
 
 fn fixture() -> image::RgbaImage {
     // 4K screenshot-like content, with flat panels, fine detail and alpha edges.
@@ -118,12 +131,12 @@ fn measure_workflows() {
         if let Ok(path) = std::env::var("GATTO_PERF_BASELINE") {
             let baseline: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-            for current in report["cases"].as_array().unwrap() {
-                let previous = baseline["cases"]
+            for previous in baseline["cases"].as_array().unwrap() {
+                let current = report["cases"]
                     .as_array()
                     .unwrap()
                     .iter()
-                    .find(|p| p["case"] == current["case"])
+                    .find(|current| current["case"] == previous["case"])
                     .unwrap();
                 assert_eq!(
                     current["fingerprint"], previous["fingerprint"],
@@ -146,15 +159,20 @@ fn measure_workflows() {
     };
     assert!(CASES.contains(&case.as_str()));
     let mut encoded = std::io::Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgba8(fixture())
+    let source = if case == "clipboard_image" {
+        clipboard_fixture()
+    } else {
+        fixture()
+    };
+    image::DynamicImage::ImageRgba8(source)
         .write_to(&mut encoded, image::ImageFormat::Png)
         .unwrap();
     let encoded = encoded.into_inner();
-    let attachment =
-        StagedAttachment::from_bytes("fixture.png".into(), encoded.clone(), None).unwrap();
+    let attachment = matches!(case.as_str(), "reopen_editor" | "comparison").then(|| {
+        StagedAttachment::from_bytes("fixture.png".into(), encoded.clone(), None).unwrap()
+    });
     let doc = matches!(case.as_str(), "export" | "preview").then(annotated);
     let session = crate::annotation::Session::default();
-    let preview = attachment.image().unwrap().preview.clone();
     let mut cache = PreviewCache::default();
     let mut brush_doc = (case == "pixelation").then(|| Document::from_image(fixture()));
     let mut wall = Vec::new();
@@ -165,6 +183,11 @@ fn measure_workflows() {
         if let Some(doc) = &mut brush_doc {
             doc.marks.clear();
         }
+        let clipboard = (case == "clipboard_image").then(|| gpui_kit::ClipboardItem {
+            entries: vec![gpui_kit::ClipboardEntry::Image(
+                gpui_kit::Image::from_bytes(gpui_kit::ImageFormat::Png, encoded.clone()),
+            )],
+        });
         let start = Instant::now();
         let output = match case.as_str() {
             "import" => {
@@ -175,11 +198,25 @@ fn measure_workflows() {
                 black_box(imported);
                 Vec::new()
             }
+            "clipboard_image" => {
+                let mut clipboard = clipboard.unwrap();
+                let image = crate::model::take_clipboard_image(&mut clipboard).unwrap();
+                let imported = StagedAttachment::from_clipboard(image).unwrap();
+                let elapsed = start.elapsed().as_secs_f64() * 1000.;
+                let image = imported.image().unwrap();
+                assert_eq!(image.pixel_size, (1600, 1400));
+                assert!(image.bytes() == encoded);
+                if sample > 0 {
+                    wall.push(elapsed);
+                }
+                continue;
+            }
             "open_editor" => {
                 black_box(Document::decode(&encoded).unwrap());
                 Vec::new()
             }
             "reopen_editor" => {
+                let preview = &attachment.as_ref().unwrap().image().unwrap().preview;
                 for _ in 0..100 {
                     let retained = session.open(&encoded, preview.clone()).unwrap();
                     let saved = retained.document.edit_state();
@@ -213,10 +250,11 @@ fn measure_workflows() {
                 Vec::new()
             }
             "comparison" => {
+                let attachment = attachment.as_ref().unwrap();
                 let combined =
                     crate::image_composer::combine([attachment.clone(), attachment.clone()])
                         .unwrap();
-                combined.image().unwrap().bytes.to_vec()
+                combined.image().unwrap().bytes().to_vec()
             }
             _ => unreachable!(),
         };

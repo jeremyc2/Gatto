@@ -832,7 +832,7 @@ pub fn migrate_scratchpad(
 
 fn same_media(a: &Media, b: &Media) -> bool {
     match (a, b) {
-        (Media::Image(a), Media::Image(b)) => Arc::ptr_eq(&a.bytes, &b.bytes),
+        (Media::Image(a), Media::Image(b)) => Arc::ptr_eq(&a.preview, &b.preview),
         (Media::Video(a), Media::Video(b)) => Arc::ptr_eq(a, b),
         _ => false,
     }
@@ -1057,7 +1057,7 @@ We know naming things is hard, so we set this space up for you."#
         let mut project = Project::create(directory.path().join("Comparison")).unwrap();
         let mut item = image();
         let mut document =
-            crate::annotation::Document::decode(&item.image().unwrap().bytes).unwrap();
+            crate::annotation::Document::decode(item.image().unwrap().bytes()).unwrap();
         document.comparison = Some(crate::annotation::Comparison::new([
             crate::annotation::Rect {
                 x: 16.,
@@ -1229,7 +1229,7 @@ We know naming things is hard, so we set this space up for you."#
         let data = item.image().unwrap();
         let mut retained = data
             .annotation_session
-            .open(&data.bytes, data.preview.clone())
+            .open(data.bytes(), data.preview.clone())
             .unwrap();
         retained.document.checkpoint();
         retained.document.marks.push(crate::annotation::Mark::new(
@@ -1251,7 +1251,7 @@ We know naming things is hard, so we set this space up for you."#
         let data = items[0].image().unwrap();
         let reopened = data
             .annotation_session
-            .open(&data.bytes, data.preview.clone())
+            .open(data.bytes(), data.preview.clone())
             .unwrap();
         assert_eq!(
             reopened.document.marks.len(),
@@ -1317,8 +1317,8 @@ We know naming things is hard, so we set this space up for you."#
             original_snippet
         );
         assert_eq!(
-            loaded[1].image().unwrap().bytes,
-            first.image().unwrap().bytes
+            loaded[1].image().unwrap().bytes(),
+            first.image().unwrap().bytes()
         );
         let mut before = Vec::new();
         let mut after = Vec::new();

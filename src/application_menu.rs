@@ -24,7 +24,10 @@ pub struct OpenRecentProject {
     pub path: std::path::PathBuf,
 }
 
-pub fn set_recent_projects(projects: Vec<(String, std::path::PathBuf)>, cx: &App) {
+pub fn set_recent_projects(
+    projects: impl IntoIterator<Item = (String, std::path::PathBuf)>,
+    cx: &App,
+) {
     cx.set_dock_menu(
         projects
             .into_iter()

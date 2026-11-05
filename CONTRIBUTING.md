@@ -362,13 +362,16 @@ GATTO_PERF_OUTPUT=target/performance.json cargo test --release --locked --bin ga
 
 These exercise production image import, editor decoding and session reopening,
 annotation preview/export, pixelation, and comparison creation with generated 4K
-images. Each scenario runs in its own process. Reports contain median operation
+images. The clipboard case stages a generated 1600 × 1400 PNG from an in-memory
+clipboard item and verifies that the staged bytes match the input. Each
+scenario runs in its own process. Reports contain median operation
 time, total process CPU time, peak resident memory, and export pixel fingerprints.
 They do not upload, use the clipboard, open windows, or change preferences.
 
 Save a report before a change, then set `GATTO_PERF_BASELINE` to that report's path
-on subsequent runs. The comparison fails on changed export pixels or a regression
-over 25% in time, CPU, or memory (operation timings below 1 ms have a 1 ms floor).
+on subsequent runs. For scenarios in the baseline, the comparison fails on
+changed export pixels or a regression over 25% in time, CPU, or memory
+(operation timings below 1 ms have a 1 ms floor).
 Use the same machine, toolchain, fixtures, and otherwise idle conditions. Process
 CPU/memory include fixture preparation and verification; these are not measurements
 of GPU memory, idle app usage, network speed, or complete button-to-frame latency.

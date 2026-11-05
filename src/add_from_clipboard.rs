@@ -110,7 +110,7 @@ impl ClipboardUpdate {
 
     pub fn same_instance(current: &StagedAttachment, snapshot: &StagedAttachment) -> bool {
         match (&current.media, &snapshot.media) {
-            (Media::Image(a), Media::Image(b)) => Arc::ptr_eq(&a.bytes, &b.bytes),
+            (Media::Image(a), Media::Image(b)) => Arc::ptr_eq(&a.preview, &b.preview),
             (Media::Video(a), Media::Video(b)) => {
                 Arc::ptr_eq(a, b) && current.name == snapshot.name
             }
@@ -391,11 +391,9 @@ fn stage_clipboard(
         .add_from_clipboard_directory()
         .context("Choose a project to use for Add from Clipboard first.")?;
     let summary = crate::projects::summary(&folder)?;
-    let clipboard = clipboard.context("Copy an image or an image/video file in Finder first.")?;
-    let attachment = if let Some(image) = clipboard.entries().iter().find_map(|entry| match entry {
-        ClipboardEntry::Image(image) => Some(image),
-        _ => None,
-    }) {
+    let mut clipboard =
+        clipboard.context("Copy an image or an image/video file in Finder first.")?;
+    let attachment = if let Some(image) = crate::model::take_clipboard_image(&mut clipboard) {
         StagedAttachment::from_clipboard(image)?
     } else if let Some(path) = clipboard.entries().iter().find_map(|entry| match entry {
         ClipboardEntry::ExternalPaths(paths) => paths.paths().first(),

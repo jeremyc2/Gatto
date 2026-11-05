@@ -112,8 +112,9 @@ leaves your original file unchanged. Preview the result before sharing it.
 
 <img src="images/walkthrough/framed/09-video-compressing.png" alt="A video being compressed before upload" width="800">
 
-Gatto stays in the menu bar when you close its window. You can return from there
-whenever you're ready; let active uploads finish before quitting the app.
+Gatto stays in the Dock and menu bar when you close its last window. Right-click
+the Dock icon to open a recent project. Let active uploads finish before
+quitting the app.
 
 ## Updates
 

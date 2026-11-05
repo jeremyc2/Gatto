@@ -89,7 +89,7 @@ impl PreviewImage {
         } else {
             image
                 .annotation_session
-                .open(&image.bytes, image.preview.clone())
+                .open(image.bytes(), image.preview.clone())
                 .ok()
         };
         let (document, source, saved_marks, saved_comparison, saved_next_marker) = retained.map_or(

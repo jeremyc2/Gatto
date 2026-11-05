@@ -5314,7 +5314,7 @@ mod tests {
             .borrow_mut()
             .take()
             .expect("Save after Discard succeeds");
-        assert_eq!(exported.image().unwrap().bytes.as_ref(), expected_png);
+        assert_eq!(exported.image().unwrap().bytes(), expected_png);
         cx.update(|window, cx| {
             view.update(cx, |preview, cx| {
                 preview.annotation_saved(id, Ok(()), window, cx);

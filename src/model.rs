@@ -10,12 +10,23 @@ use std::{
 };
 
 use anyhow::{Context as _, Result, bail};
-use gpui_kit::{Image, ImageFormat};
+use gpui_kit::{ClipboardEntry, ClipboardItem, Image, ImageFormat};
 
 use crate::video::Video;
 
 pub const MAX_ATTACHMENT_BYTES: u64 = 10_000_000;
 pub const UNSUPPORTED_MEDIA_MESSAGE: &str = "Unsupported file type.";
+
+pub(crate) fn take_clipboard_image(clipboard: &mut ClipboardItem) -> Option<Image> {
+    let index = clipboard
+        .entries()
+        .iter()
+        .position(|entry| matches!(entry, ClipboardEntry::Image(_)))?;
+    match clipboard.entries.remove(index) {
+        ClipboardEntry::Image(image) => Some(image),
+        _ => unreachable!("selected an image entry"),
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum VideoUploadLimit {
@@ -93,11 +104,29 @@ pub enum Media {
 pub struct ImageData {
     pub is_comparison: bool,
     pub marker_descriptions: Vec<(u32, String)>,
-    pub bytes: Arc<[u8]>,
     pub preview: Arc<Image>,
     pub pixel_size: (u32, u32),
     pub annotation_session: crate::annotation::Session,
     pub annotation_document: Option<Arc<crate::annotation::AnnotationDocument>>,
+}
+
+impl ImageData {
+    pub fn bytes(&self) -> &[u8] {
+        &self.preview.bytes
+    }
+
+    pub fn has_same_bytes(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.preview, &other.preview) || self.bytes() == other.bytes()
+    }
+}
+
+// An upload or project write can keep reading after the attachment is dropped.
+struct ImageBytes(Arc<Image>);
+
+impl AsRef<[u8]> for ImageBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0.bytes
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -221,14 +250,14 @@ impl StagedAttachment {
 
     pub fn len(&self) -> u64 {
         match &self.media {
-            Media::Image(image) => image.bytes.len() as u64,
+            Media::Image(image) => image.bytes().len() as u64,
             Media::Video(video) => video.len(),
         }
     }
 
     pub fn reader(&self) -> Result<Box<dyn Read + Send>> {
         match &self.media {
-            Media::Image(image) => Ok(Box::new(Cursor::new(image.bytes.clone()))),
+            Media::Image(image) => Ok(Box::new(Cursor::new(ImageBytes(image.preview.clone())))),
             Media::Video(video) => Ok(Box::new(video.reader()?)),
         }
     }
@@ -270,7 +299,7 @@ impl StagedAttachment {
         }
     }
 
-    pub fn from_clipboard(image: &Image) -> Result<Self> {
+    pub fn from_clipboard(image: Image) -> Result<Self> {
         validate_size(image.bytes.len() as u64, MAX_ATTACHMENT_BYTES)?;
         let format = supported_gpui_format(image.format).context(UNSUPPORTED_MEDIA_MESSAGE)?;
         let pixel_size = validate_image_bytes(&image.bytes, format)?;
@@ -280,26 +309,7 @@ impl StagedAttachment {
             .unwrap_or_default()
             .as_secs();
         let name = format!("clipboard-{timestamp}.{}", format.extension());
-        let bytes: Arc<[u8]> = image.bytes.clone().into();
-
-        Ok(Self {
-            id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
-            persistent_id: uuid::Uuid::new_v4(),
-            title: name.clone(),
-            description: String::new(),
-            name,
-            upload_state: AttachmentUploadState::Preview,
-            mime_type: format.mime_type().to_owned(),
-            media: Media::Image(ImageData {
-                is_comparison: false,
-                marker_descriptions: Vec::new(),
-                annotation_session: Default::default(),
-                annotation_document: None,
-                preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
-                bytes,
-                pixel_size,
-            }),
-        })
+        Ok(Self::from_validated_image(name, image, pixel_size))
     }
 
     pub(crate) fn from_bytes(name: String, bytes: Vec<u8>, path: Option<&Path>) -> Result<Self> {
@@ -324,7 +334,11 @@ impl StagedAttachment {
         }
 
         let pixel_size = validate_image_bytes(&bytes, format)?;
-        Ok(Self::from_validated_image(name, bytes, format, pixel_size))
+        Ok(Self::from_validated_image(
+            name,
+            Image::from_bytes(format, bytes),
+            pixel_size,
+        ))
     }
 
     /// Only for PNG bytes and dimensions returned by our own renderer.
@@ -336,19 +350,12 @@ impl StagedAttachment {
         validate_size(bytes.len() as u64, MAX_ATTACHMENT_BYTES)?;
         Ok(Self::from_validated_image(
             name,
-            bytes,
-            ImageFormat::Png,
+            Image::from_bytes(ImageFormat::Png, bytes),
             pixel_size,
         ))
     }
 
-    fn from_validated_image(
-        name: String,
-        bytes: Vec<u8>,
-        format: ImageFormat,
-        pixel_size: (u32, u32),
-    ) -> Self {
-        let bytes: Arc<[u8]> = bytes.into();
+    fn from_validated_image(name: String, image: Image, pixel_size: (u32, u32)) -> Self {
         Self {
             id: NEXT_STAGED_IMAGE_ID.fetch_add(1, Ordering::Relaxed),
             persistent_id: uuid::Uuid::new_v4(),
@@ -356,14 +363,13 @@ impl StagedAttachment {
             description: String::new(),
             name,
             upload_state: AttachmentUploadState::Preview,
-            mime_type: format.mime_type().to_owned(),
+            mime_type: image.format.mime_type().to_owned(),
             media: Media::Image(ImageData {
                 is_comparison: false,
                 marker_descriptions: Vec::new(),
                 annotation_session: Default::default(),
                 annotation_document: None,
-                preview: Arc::new(Image::from_bytes(format, bytes.to_vec())),
-                bytes,
+                preview: Arc::new(image),
                 pixel_size,
             }),
         }
@@ -741,6 +747,31 @@ mod media_tests {
     use std::io::{Seek as _, Write as _};
 
     pub(crate) const VIDEO: &[u8] = include_bytes!("../tests/fixtures/sample.mp4");
+
+    #[test]
+    fn clipboard_staging_moves_encoded_bytes_and_reader_keeps_them_alive() {
+        let png = include_bytes!("../packaging/menu-bar-icon.png");
+        let image = Image::from_bytes(ImageFormat::Png, png.to_vec());
+        let original = image.bytes.as_ptr();
+        let mut clipboard = ClipboardItem {
+            entries: vec![
+                "Clipboard text".to_owned().into(),
+                ClipboardEntry::Image(image),
+                ClipboardEntry::Image(Image::empty()),
+            ],
+        };
+
+        let attachment =
+            StagedAttachment::from_clipboard(take_clipboard_image(&mut clipboard).unwrap())
+                .unwrap();
+        assert_eq!(attachment.image().unwrap().bytes().as_ptr(), original);
+        assert_eq!(attachment.len(), png.len() as u64);
+        let mut reader = attachment.reader().unwrap();
+        drop(attachment);
+        let mut uploaded = Vec::new();
+        reader.read_to_end(&mut uploaded).unwrap();
+        assert_eq!(uploaded, png);
+    }
 
     #[test]
     fn unsupported_file_types_have_a_concise_error() {

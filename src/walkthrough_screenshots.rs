@@ -449,7 +449,7 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
     );
     std::fs::write(
         diagnostic_output.join("comparison-output.png"),
-        &attachment.image().unwrap().bytes,
+        attachment.image().unwrap().bytes(),
     )?;
     let id = attachment.id;
     let (editor, preview) = cx.update(|cx| {

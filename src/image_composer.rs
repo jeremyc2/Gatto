@@ -101,7 +101,7 @@ pub(crate) fn combine(sources: [StagedAttachment; 2]) -> Result<StagedAttachment
     let mut canvas =
         image::RgbaImage::from_pixel(width, height, image::Rgba(comparison::BACKGROUND));
     for (index, source) in sources.iter().enumerate() {
-        let pixels = image::load_from_memory(&source.image().unwrap().bytes)?
+        let pixels = image::load_from_memory(source.image().unwrap().bytes())?
             .resize_exact(
                 sizes[index].0,
                 sizes[index].1,
@@ -303,19 +303,13 @@ impl ImageComposer {
         let Some(index) = self.paste_target() else {
             return;
         };
-        let Some(clipboard) = cx.read_from_clipboard() else {
+        let Some(mut clipboard) = cx.read_from_clipboard() else {
             return;
         };
-        if let Some(image) = clipboard.entries().iter().find_map(|entry| {
-            if let ClipboardEntry::Image(image) = entry {
-                Some(image.clone())
-            } else {
-                None
-            }
-        }) {
+        if let Some(image) = crate::model::take_clipboard_image(&mut clipboard) {
             self.load(
                 index,
-                move || StagedAttachment::from_clipboard(&image),
+                move || StagedAttachment::from_clipboard(image),
                 window,
                 cx,
             );
@@ -652,7 +646,7 @@ mod tests {
     fn combined_png_has_top_aligned_sources_gap_labels_and_its_own_edit_session() {
         let left = fixture(80, 60, [255, 0, 0, 255]);
         let right = fixture(125, 92, [0, 0, 255, 255]);
-        let left_bytes = left.image().unwrap().bytes.clone();
+        let left_preview = left.image().unwrap().preview.clone();
         let output = combine([left.clone(), right]).unwrap();
         assert_eq!(
             output.title, output.name,
@@ -662,12 +656,12 @@ mod tests {
         assert!(image.is_comparison);
         let retained = image
             .annotation_session
-            .open(&image.bytes, image.preview.clone())
+            .open(image.bytes(), image.preview.clone())
             .unwrap();
         assert!(retained.document.marks.is_empty());
         let comparison = retained.document.comparison.as_ref().unwrap();
         assert_eq!(comparison.labels, ["Before", "After"]);
-        let pixels = image::load_from_memory(&image.bytes).unwrap().to_rgba8();
+        let pixels = image::load_from_memory(image.bytes()).unwrap().to_rgba8();
         let x0 = (comparison.panels[0].x + (comparison.panels[0].w - 80.) / 2.).floor() as u32;
         let x1 = (comparison.panels[1].x + (comparison.panels[1].w - 125.) / 2.).floor() as u32;
         let y = PADDING;
@@ -689,12 +683,12 @@ mod tests {
                 .enumerate_pixels()
                 .any(|(_, y, pixel)| y as f32 >= caption.y && pixel.0[..3] == [244, 244, 245])
         );
-        assert!(Arc::ptr_eq(&left_bytes, &left.image().unwrap().bytes));
+        assert!(Arc::ptr_eq(&left_preview, &left.image().unwrap().preview));
         assert!(
             left.image()
                 .unwrap()
                 .annotation_session
-                .open(&left_bytes, left.image().unwrap().preview.clone())
+                .open(&left_preview.bytes, left_preview.clone())
                 .unwrap()
                 .document
                 .comparison
@@ -916,7 +910,7 @@ mod tests {
             let picker = picker.read(cx);
             assert!(picker.combining);
             let colors = picker.sources.each_ref().map(|source| {
-                image::load_from_memory(&source.as_ref().unwrap().image().unwrap().bytes)
+                image::load_from_memory(source.as_ref().unwrap().image().unwrap().bytes())
                     .unwrap()
                     .to_rgba8()
                     .get_pixel(0, 0)

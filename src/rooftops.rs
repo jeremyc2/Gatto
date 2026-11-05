@@ -783,7 +783,7 @@ impl Rooftops {
                 }
                 cx.notify();
             });
-            crate::window_limits::close(window, cx)
+            crate::window_limits::close(window)
         });
         let best_path = remember.then(|| GameData::path().ok()).flatten();
         let stored = best_path

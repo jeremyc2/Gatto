@@ -131,7 +131,10 @@ mod tests {
                 )
                 .unwrap();
                 if let Media::Image(image) = &mut attachment.media {
-                    image.bytes = vec![0; crate::model::MAX_ATTACHMENT_BYTES as usize + 1].into();
+                    image.preview = Arc::new(Image::from_bytes(
+                        ImageFormat::Png,
+                        vec![0; crate::model::MAX_ATTACHMENT_BYTES as usize + 1],
+                    ));
                 }
                 app.staged_attachments = vec![attachment];
                 cx.notify();

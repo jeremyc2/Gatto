@@ -112,27 +112,15 @@ pub fn is_presented(window: &Window) -> bool {
 /// Decision and removal criteria: docs/adr/0001-retain-macos-windows-to-avoid-touch-bar-crashes.md.
 /// Callers retain one handle per window type and reset transient state on close.
 #[cfg(target_os = "macos")]
-pub fn close(window: &Window, cx: &mut App) -> bool {
+pub fn close(window: &Window) -> bool {
     if let Some(native_window) = native_window(window) {
         native_window.orderOut(None);
     }
-    // Query other windows after the close callback releases GPUI's current
-    // window borrow. Hidden retained windows must not keep the Dock visible.
-    cx.defer(|cx| {
-        let any_presented = cx.windows().into_iter().any(|handle| {
-            handle
-                .update(cx, |_, window, _| is_presented(window))
-                .unwrap_or(false)
-        });
-        if !any_presented {
-            set_dock_visible(false);
-        }
-    });
     false
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn close(_: &Window, _: &mut App) -> bool {
+pub fn close(_: &Window) -> bool {
     true
 }
 
@@ -177,7 +165,8 @@ pub fn set_minimum_content_size(window: &Window, width: f64, height: f64) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_minimum_content_size(_: &Window, _: f64, _: f64) {}
 
-/// Shows the Dock icon while the window is open; the menu bar item always stays.
+/// Login launches stay out of the Dock until a window is opened. The Dock tile
+/// then stays available for reopening the app and choosing recent projects.
 #[cfg(target_os = "macos")]
 pub fn set_dock_visible(visible: bool) {
     use objc2::MainThreadMarker;
@@ -246,7 +235,7 @@ mod tests {
     fn repeated_closes_retain_the_window_and_leave_its_sibling_alive(cx: &mut TestAppContext) {
         let sibling = cx.add_window(|_, _| UtilityWindow);
         let handle = cx.add_window(|window, cx| {
-            window.on_window_should_close(cx, |window, cx| super::close(window, cx));
+            window.on_window_should_close(cx, |window, _| super::close(window));
             UtilityWindow
         });
         let mut window = VisualTestContext::from_window(handle.into(), cx);

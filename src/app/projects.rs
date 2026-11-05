@@ -293,21 +293,19 @@ impl UploaderApp {
                 .then_with(|| updated(b).cmp(&updated(a)))
                 .then_with(|| a.cmp(b))
         });
-        let mut recent = self.project_state.folders.clone();
+        let mut recent: Vec<_> = self.project_state.folders.iter().collect();
         recent.sort_by_key(|path| {
             std::cmp::Reverse(
                 self.project_state
                     .summaries
-                    .get(path)
+                    .get(*path)
                     .map_or(0, |summary| summary.metadata.updated_at),
             )
         });
         crate::application_menu::set_recent_projects(
             recent
-                .iter()
-                .take(5)
-                .map(|path| (self.project_label(path), path.clone()))
-                .collect(),
+                .into_iter()
+                .map(|path| (self.project_label(path), path.clone())),
             cx,
         );
     }
