@@ -15,16 +15,35 @@ build() (
   "$@"
 )
 mode=release
-case "${1:-}" in
-  "") ;;
-  --resume) mode=resume ;;
-  -h|--help)
-    echo "Usage: ./scripts/release.sh [--resume]"
-    echo "Guide a release from main, or finish an existing draft/published release."
-    exit 0 ;;
-  *) fail "usage: ./scripts/release.sh [--resume]" ;;
-esac
-[[ $# -le 1 ]] || fail "usage: ./scripts/release.sh [--resume]"
+accept_all=false
+usage="Usage: ./scripts/release.sh [--resume] [--accept-all | --yes]"
+for option in "$@"; do
+  case "$option" in
+    --resume) mode=resume ;;
+    --accept-all|--yes) accept_all=true ;;
+    -h|--help)
+      echo "$usage"
+      echo "Guide a release from main, or finish an existing draft/published release."
+      echo "--accept-all, --yes  Accept all yes/no confirmations."
+      exit 0 ;;
+    *) fail "$usage" ;;
+  esac
+done
+
+confirm() {
+  if "$accept_all"; then
+    return 0
+  fi
+  local answer
+  if [[ -t 0 ]]; then
+    read -r -n 1 -p "$1 [y/N] " answer || return 1
+    printf '\n' >&2
+  else
+    read -r answer || return 1
+  fi
+  [[ "$answer" == y || "$answer" == Y ]]
+}
+
 [[ "$(uname -s)" == Darwin ]] || fail "releases require macOS"
 for tool in bun gh git cargo plutil hdiutil diskutil; do
   command -v "$tool" >/dev/null || fail "missing required tool: $tool; see docs/RELEASING.md"
@@ -109,8 +128,7 @@ if [[ "$mode" == resume ]]; then
     done
     gh release upload "$tag" "$dist/$archive" "$dist/appcast.xml" "$dist/SHA256SUMS" --clobber
     bun scripts/verify-release.ts --tag "$tag" --directory "$dist"
-    read -r -p "Publish verified draft $tag? [y/N] " answer
-    [[ "$answer" == y || "$answer" == Y ]] || fail "cancelled; verified draft retained"
+    confirm "Publish verified draft $tag?" || fail "cancelled; verified draft retained"
     gh release edit "$tag" --draft=false "${publish_flags[@]}"
   else
     bun scripts/verify-release.ts --tag "$tag"
@@ -161,8 +179,8 @@ build bun --no-env-file test:web
 
 git status --short
 git diff --stat HEAD
-read -r -p "Commit and push these changes for $tag, then build the release? [y/N] " answer
-[[ "$answer" == y || "$answer" == Y ]] || fail "cancelled; prepared version and notes remain for review"
+confirm "Commit and push these changes for $tag, then build the release?" \
+  || fail "cancelled; prepared version and notes remain for review"
 git add --all
 if ! git diff --cached --quiet; then git commit -m "Release $tag"; fi
 [[ -z "$(git status --porcelain)" ]] || fail "commit hooks or another process left changes; review them before publishing"
@@ -248,8 +266,7 @@ dist/sparkle/bin/generate_appcast --account "$SPARKLE_ACCOUNT" \
 dist/sparkle/bin/sign_update --account "$SPARKLE_ACCOUNT" --verify "$dist/appcast.xml"
 (cd "$dist" && shasum -a 256 "$archive" appcast.xml > SHA256SUMS)
 
-read -r -p "Publish $tag to GitHub Releases? [y/N] " answer
-[[ "$answer" == y || "$answer" == Y ]] || fail "cancelled; signed artifacts are in $dist"
+confirm "Publish $tag to GitHub Releases?" || fail "cancelled; signed artifacts are in $dist"
 
 notes_file="$(mktemp "${TMPDIR:-/tmp}/gatto-release-notes.XXXXXX")"
 trap 'rm -f "$notes_file"' EXIT

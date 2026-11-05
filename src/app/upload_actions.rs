@@ -10,6 +10,10 @@ impl UploaderApp {
     ) -> impl IntoElement {
         let owner = cx.entity().downgrade();
         let action = self.settings.upload_action;
+        let divider = cx
+            .theme()
+            .primary_foreground
+            .opacity(if enabled { 0.3 } else { 0.16 });
         let menu = move |mut menu: PopupMenu, _: &mut Window, _: &mut Context<PopupMenu>| {
             for choice in [UploadAction::Upload, UploadAction::UploadAndCopy] {
                 let view = owner.clone();
@@ -50,14 +54,21 @@ impl UploaderApp {
                 Button::new("upload-options-chevron")
                     .debug_selector(|| "upload-options-chevron".into())
                     .app_primary()
-                    .when(enabled, |button| button.bg(cx.theme().primary_active))
+                    .relative()
                     .rounded_l_none()
                     .min_w_0()
                     .px_0()
                     .w(px(32.))
-                    .border_l_1()
-                    .border_color(cx.theme().primary_foreground.opacity(0.3))
                     .icon(AssetIconName::ChevronDown)
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top_1p5()
+                            .bottom_1p5()
+                            .w_px()
+                            .bg(divider),
+                    )
                     .accessibility_label("Upload options")
                     .tooltip("Upload options")
                     .disabled(!enabled)

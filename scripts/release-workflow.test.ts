@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 
 // Execute the real shell workflow with isolated stand-ins for signing, GitHub,
 // Git and build tools. Nothing can publish, sign with a real key, or push code.
-async function workflow(mode: string, resume = false) {
+async function workflow(
+  mode: string,
+  resume = false,
+  confirmation?: "terminal" | "--accept-all" | "--yes",
+) {
   const root = await mkdtemp(join(tmpdir(), "gatto-release-workflow-"));
   const bin = join(root, "tools");
   const writeExecutable = async (name: string, source: string) => {
@@ -177,25 +181,39 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
         if (mode !== "published-no-artifacts")
           await Bun.write(join(root, "dist/release", name), "original artifact");
     }
-    const child = Bun.spawn(
-      ["/bin/bash", join(root, "scripts/release.sh"), ...(resume ? ["--resume"] : [])],
-      {
-        cwd: root,
-        env: {
-          ...process.env,
-          GH_TOKEN: "gatto-fixture-not-a-real-token",
-          CLOUDFLARE_API_TOKEN: "gatto-fixture-not-a-real-token",
-          APPLE_PASSWORD: "gatto-fixture-not-a-real-password",
-          PATH: `${bin}:${process.env.PATH}`,
-          SIGN_IDENTITY: "Test Developer ID Application",
-          GATTO_TEST_ROOT: root,
-          GATTO_TEST_MODE: mode,
-        },
-        stdin: new Blob(["y\ny\n"]),
-        stdout: "pipe",
-        stderr: "pipe",
+    let terminalOutput = "";
+    let replies = 0;
+    await using terminal =
+      confirmation === "terminal"
+        ? new Bun.Terminal({
+            data(terminal, data) {
+              terminalOutput += data.toString();
+              if ((terminalOutput.match(/\[y\/N\] /g)?.length ?? 0) > replies) {
+                replies += 1;
+                terminal.write("y");
+              }
+            },
+          })
+        : undefined;
+    const flags = resume ? ["--resume"] : [];
+    if (confirmation === "--accept-all" || confirmation === "--yes") flags.push(confirmation);
+    const child = Bun.spawn(["/bin/bash", join(root, "scripts/release.sh"), ...flags], {
+      cwd: root,
+      env: {
+        ...process.env,
+        GH_TOKEN: "gatto-fixture-not-a-real-token",
+        CLOUDFLARE_API_TOKEN: "gatto-fixture-not-a-real-token",
+        APPLE_PASSWORD: "gatto-fixture-not-a-real-password",
+        PATH: `${bin}:${process.env.PATH}`,
+        SIGN_IDENTITY: "Test Developer ID Application",
+        GATTO_TEST_ROOT: root,
+        GATTO_TEST_MODE: mode,
       },
-    );
+      timeout: 10_000,
+      ...(terminal
+        ? { terminal }
+        : { stdin: new Blob([confirmation ? "" : "y\ny\n"]), stdout: "pipe", stderr: "pipe" }),
+    });
     const stdout = new Response(child.stdout).text();
     const stderr = new Response(child.stderr).text();
     const exit = await child.exited;
@@ -215,7 +233,7 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
         ),
       ),
       screenshot: await Bun.file(join(root, "docs/images/walkthrough/image-editor.png")).text(),
-      output: (await stdout) + (await stderr),
+      output: terminalOutput + (await stdout) + (await stderr),
       exposure: (await exposure.exists()) ? await exposure.text() : "",
     };
   } finally {
@@ -225,8 +243,8 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
 
 const find = (calls: string[][], ...prefix: string[]) =>
   calls.findIndex((call) => prefix.every((part, i) => call[i] === part));
-test("release checks precede commits; uploads are verified as a draft before publication; metadata is verified and pushed", async () => {
-  const result = await workflow("release");
+test("release accepts single keystrokes, verifies drafts before publication, and pushes verified metadata", async () => {
+  const result = await workflow("release", false, "terminal");
   expect(result.exit, result.output).toBe(0);
   expect(result.exposure).toBe("");
   expect(result.notices).toEqual(["Tonejs-LICENSE", "Visual-Effect-LICENSE"]);
@@ -305,7 +323,7 @@ test("published release recovery only verifies and syncs metadata", async () => 
   expect(find(result.calls, "git", "add", "--", "README.md", "Casks/gatto.rb")).toBeGreaterThan(-1);
 });
 test("draft recovery uses its exact target commit and verifies reuploaded assets before publishing", async () => {
-  const result = await workflow("draft-resume", true);
+  const result = await workflow("draft-resume", true, "--yes");
   expect(result.exit, result.output).toBe(0);
   expect(find(result.calls, "gh", "release", "upload")).toBeLessThan(
     find(result.calls, "bun", "scripts/verify-release.ts"),
@@ -340,7 +358,7 @@ test("a failed metadata push retains its local commit for recovery", async () =>
 });
 
 test("beta publication remains a prerelease and refreshes only the signed beta feed", async () => {
-  const result = await workflow("beta-release");
+  const result = await workflow("beta-release", false, "--accept-all");
   expect(result.exit, result.output).toBe(0);
   const create = result.calls[find(result.calls, "gh", "release", "create")]!;
   expect(create).toContain("v0.17.0-beta.1");

@@ -126,7 +126,10 @@ repositories when permitted. GitHub.com is the supported host.
 Changing to a different account or organization clears the previous repository
 selection and pins. Choose and pin repositories for the new owner.
 
-Pin repositories you use often to put them first in the repository picker.
+Open **Pinned repositories** in Preferences and click a repository to pin or
+unpin it. Use search to find a repository, or choose **Show more** to expand the
+pinned group when it has more than five entries. Pins appear first when choosing
+an upload destination.
 Add from Clipboard saves to Scratchpad by default. Choose
 **Use for "Add from Clipboard"** from another project’s sidebar menu to save there.
 Select a repository in that project when you are ready to upload.

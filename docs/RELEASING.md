@@ -124,12 +124,14 @@ The script guides the release in this order:
    Stable, also measure/verify README figures and refresh/verify the Homebrew cask,
    then commit and push those metadata files. Beta leaves stable metadata intact.
 
-The script is the recurring entry point. Code review, manual testing on affected
-hardware, and one-time credentials still require human judgment; automated checks
-do not verify Touch Bar hardware or production authorization prompts. Nothing is
-committed or published merely by invoking the script: the commit/build and
-publication confirmations remain explicit. Cancelling keeps prepared changes
-and artifacts available for inspection.
+At each confirmation, press **Y** to continue or **N** to cancel immediately.
+Pass `--accept-all` or `--yes` to approve every yes/no confirmation, including
+committing and pushing all pending changes and publishing the release. Both flags
+also work with `--resume`. Version and release-note prompts still require input
+when preparing a release. Cancelling keeps prepared changes and artifacts
+available for inspection.
+
+Review the changes and test affected hardware before publishing.
 
 ## Build and publish
 

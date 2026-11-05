@@ -4,18 +4,15 @@ use gpui_kit::component::{
     menu::DropdownMenu,
 };
 use gpui_kit::{
-    AnyElement, App, Bounds, ClickEvent, Corners, Element, ElementId, GlobalElementId, Hitbox,
-    InspectorElementId, InteractiveElement, Interactivity, IntoElement, LayoutId, ParentElement,
-    Pixels, RenderOnce, SharedString, StyleRefinement, Styled, Window, px,
+    AnyElement, App, ClickEvent, InteractiveElement, Interactivity, IntoElement, ParentElement,
+    RenderOnce, SharedString, StyleRefinement, Styled, Window,
 };
 
-/// Preserve the shared button's behavior and layout, and paint the app's stronger
-/// hover border while leaving the component's state handling intact.
+/// Apply the app's button colors while retaining the component's state handling.
 #[derive(IntoElement)]
 pub struct AppButton {
     inner: Button,
     disabled: bool,
-    loading: bool,
     native_hover: bool,
 }
 
@@ -24,7 +21,6 @@ impl AppButton {
         Self {
             inner,
             disabled: false,
-            loading: false,
             native_hover,
         }
     }
@@ -45,7 +41,6 @@ impl AppButton {
         self
     }
     pub fn loading(mut self, loading: bool) -> Self {
-        self.loading = loading;
         self.inner = self.inner.loading(loading);
         self
     }
@@ -112,7 +107,7 @@ impl ParentElement for AppButton {
 impl DropdownMenu for AppButton {}
 
 impl RenderOnce for AppButton {
-    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         if !self.native_hover {
             let colors = ButtonCustomVariant::new(cx)
                 .color(cx.theme().input)
@@ -127,86 +122,6 @@ impl RenderOnce for AppButton {
                     .border_color(cx.theme().input);
             }
         }
-        let corners = &self.inner.style().corner_radii;
-        let radius = cx.theme().radius.into();
-        let corners = Corners {
-            top_left: corners.top_left.unwrap_or(radius),
-            top_right: corners.top_right.unwrap_or(radius),
-            bottom_left: corners.bottom_left.unwrap_or(radius),
-            bottom_right: corners.bottom_right.unwrap_or(radius),
-        }
-        .to_pixels(window.rem_size());
-        HoverBorder {
-            inner: self.inner.into_any_element(),
-            enabled: !self.disabled && !self.loading,
-            corners,
-        }
-    }
-}
-
-/// An element decorator adds no layout node or click handler around the button.
-struct HoverBorder {
-    inner: AnyElement,
-    enabled: bool,
-    corners: Corners<Pixels>,
-}
-impl IntoElement for HoverBorder {
-    type Element = Self;
-    fn into_element(self) -> Self {
-        self
-    }
-}
-impl Element for HoverBorder {
-    type RequestLayoutState = ();
-    type PrepaintState = Hitbox;
-    fn id(&self) -> Option<ElementId> {
-        None
-    }
-    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
-        None
-    }
-    fn request_layout(
-        &mut self,
-        _: Option<&GlobalElementId>,
-        _: Option<&InspectorElementId>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> (LayoutId, ()) {
-        (self.inner.request_layout(window, cx), ())
-    }
-    fn prepaint(
-        &mut self,
-        _: Option<&GlobalElementId>,
-        _: Option<&InspectorElementId>,
-        bounds: Bounds<Pixels>,
-        _: &mut (),
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Hitbox {
-        let hitbox = window.insert_hitbox(bounds, gpui_kit::HitboxBehavior::Normal);
-        self.inner.prepaint(window, cx);
-        hitbox
-    }
-    fn paint(
-        &mut self,
-        _: Option<&GlobalElementId>,
-        _: Option<&InspectorElementId>,
-        bounds: Bounds<Pixels>,
-        _: &mut (),
-        hitbox: &mut Hitbox,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        self.inner.paint(window, cx);
-        if self.enabled && hitbox.is_hovered(window) {
-            window.paint_quad(gpui_kit::quad(
-                bounds,
-                self.corners,
-                gpui_kit::transparent_black(),
-                px(1.),
-                gpui_kit::rgb(super::HOVER_BORDER),
-                gpui_kit::BorderStyle::default(),
-            ));
-        }
+        self.inner
     }
 }

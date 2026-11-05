@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Pin and unpin multiple repositories from one searchable Preferences picker.
+- New projects inherit the repository selected when opening Create Project.
+- Release confirmations accept a single keypress. Use `--accept-all` or
+  `--yes` to approve all yes/no prompts.
+- Inset the divider between Upload and its options arrow and soften it when
+  disabled. Use lighter fills for button hover feedback.
+
 ## [0.22.4] - 2026-10-31
 
 ### Changed

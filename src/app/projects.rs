@@ -393,6 +393,12 @@ impl UploaderApp {
         let cleanup_owner = cx.entity().downgrade();
         let focus = Rc::new(Cell::new(true));
         let owner = cx.entity().downgrade();
+        let repository = self.selected_repository.clone();
+        let draft = WorkspaceMetadata {
+            repository_owner: repository.as_ref().and(self.settings.owner.clone()),
+            repository,
+            ..Default::default()
+        };
         window.open_alert_dialog(cx, move |alert, window, cx| {
             if focus.replace(false) {
                 input.update(cx, |input, cx| input.focus(window, cx));
@@ -402,6 +408,7 @@ impl UploaderApp {
             let description = description.clone();
             let transfer = transfer.clone();
             let owner = owner.clone();
+            let draft = draft.clone();
             alert
                 .width(px(440.))
                 .title("Create project")
@@ -456,11 +463,14 @@ impl UploaderApp {
                 ))
                 .on_ok(move |_, window, cx| {
                     let name = input.read(cx).value().to_string();
-                    let description = description.read(cx).value().to_string();
+                    let description = description.read(cx).value();
+                    let mut metadata = draft.clone();
+                    metadata.description =
+                        (!description.trim().is_empty()).then(|| description.to_string());
                     match owner.update(cx, |this, cx| {
                         this.create_named_project(
                             &name,
-                            description,
+                            metadata,
                             transfer.get(),
                             feedback.clone(),
                             window,
@@ -488,7 +498,7 @@ impl UploaderApp {
     fn create_named_project(
         &mut self,
         name: &str,
-        description: String,
+        mut metadata: WorkspaceMetadata,
         transfer: bool,
         feedback: theme::DialogFeedback,
         window: &mut Window,
@@ -517,12 +527,6 @@ impl UploaderApp {
         } else {
             Vec::new()
         };
-        let mut metadata = if transferring || moving.is_some() {
-            self.project_state.metadata.clone()
-        } else {
-            WorkspaceMetadata::default()
-        };
-        metadata.description = (!description.trim().is_empty()).then_some(description);
         metadata.created_at = crate::projects::timestamp();
         metadata.updated_at = metadata.created_at;
         let source = if (transferring || moving.is_some()) && !recovering {
@@ -2296,7 +2300,10 @@ mod tests {
             view.update(cx, |app, cx| {
                 app.create_named_project(
                     "Review",
-                    "Notes for the review".into(),
+                    WorkspaceMetadata {
+                        description: Some("Notes for the review".into()),
+                        ..app.project_state.metadata.clone()
+                    },
                     true,
                     theme::DialogFeedback::default(),
                     window,
@@ -2369,12 +2376,19 @@ mod tests {
         let scratch = scratchpad(&view, cx, directory.path());
         cx.update(|window, cx| {
             view.update(cx, |app, cx| {
-                app.append_staged_attachments(vec![image()], window, cx)
+                app.append_staged_attachments(vec![image()], window, cx);
+                app.selected_repository = Some(Repository {
+                    id: 42,
+                    name: "screenshots".into(),
+                });
             })
         });
         cx.run_until_parked();
         cx.update(|window, cx| {
-            view.update(cx, |app, cx| app.create_project(&CreateProject, window, cx));
+            view.update(cx, |app, cx| {
+                app.create_project(&CreateProject, window, cx);
+                app.selected_repository = None;
+            });
             window.draw(cx).clear(cx);
         });
         assert!(
@@ -2400,21 +2414,17 @@ mod tests {
         cx.simulate_mouse_down(create, MouseButton::Left, Modifiers::default());
         cx.simulate_mouse_up(create, MouseButton::Left, Modifiers::default());
         cx.run_until_parked();
+        let (project, attachments) =
+            Project::open(directory.path().join("projects/Empty")).unwrap();
         assert_eq!(
-            Project::open(directory.path().join("projects/Empty"))
-                .unwrap()
-                .0
-                .metadata
-                .description,
+            project.metadata.description,
             Some("Optional project notes".into())
         );
+        let repository = project.metadata.repository_for_owner(Some("acme"));
+        assert_eq!(repository.map(|repository| repository.id), Some(42));
+        cx.update(|_, cx| assert_eq!(view.read(cx).selected_repository.as_ref(), repository));
         assert_eq!(Project::open(scratch).unwrap().1.len(), 1);
-        assert!(
-            Project::open(directory.path().join("projects/Empty"))
-                .unwrap()
-                .1
-                .is_empty()
-        );
+        assert!(attachments.is_empty());
     }
 
     #[gpui_kit::test]
@@ -2426,7 +2436,7 @@ mod tests {
             view.update(cx, |app, cx| {
                 app.create_named_project(
                     "Undescribed",
-                    String::new(),
+                    WorkspaceMetadata::default(),
                     false,
                     theme::DialogFeedback::default(),
                     window,

@@ -89,9 +89,11 @@ focus treatment, loading indicators, and disabled states stay on the underlying
 GPUI Button.
 
 Upload uses the standard text-button size and icon proportions, with enough width
-for its progress label. Preview Save and Discard use the same styles and height
-as their exit-dialog equivalents. The preview's Save button keeps a 120-point width
-in both idle and loading states to fit its spinner and full “Saving…” label.
+for its progress label. Its two segments share a fill at rest and use a centered,
+inset divider. The disabled divider uses lower opacity to blend with the fill.
+Preview Save and Discard use the same styles and height as their exit-dialog
+equivalents. The preview's Save button keeps a 120-point width in both idle and
+loading states to fit its spinner and full “Saving…” label.
 Confirmation footers constrain GPUI's full-size wrappers so their buttons stay
 compact; the three-action exit dialog separates Discard from the Cancel/Save
 group. The annotation tool palettes and illustrated Rooftops score card retain
@@ -321,13 +323,13 @@ and the selected/total attachment count appears at the right only when something
 is selected, followed by “selected.”
 The upload button counts all attachments needing upload, regardless of selection,
 and omits the count when it is zero.
-`app/upload_actions.rs` renders the joined upload control. Both its main area
-and shaded chevron are separate buttons with independent hover, focus, and
-pressed feedback. The main button runs the remembered action directly; the
-chevron opens the choices above the control. Selecting an action persists
-`upload_action` in global settings before starting the batch. The batch captures
-its copy mode and attachment IDs; automatic copying includes only successful
-uploads from that batch, skips cancellation and total failure, and honors
+`app/upload_actions.rs` renders the joined upload control. The main action and
+options arrow have independent hover, focus, and pressed states. The main
+button runs the remembered action directly. The arrow opens the choices above
+the control. Selecting an action persists `upload_action` in global settings
+before starting the batch. The batch captures its copy mode and attachment IDs.
+Automatic copying includes only successful uploads from that batch, skips
+cancellation and total failure, and honors
 close-after-copy only when the whole batch succeeds. The selection toolbar shows
 copy only for entirely uploaded selections. Copy all uploaded appears only when
 more than one attachment is uploaded and retains Command+C in a tooltip
@@ -337,11 +339,9 @@ live sibling shifts, edge scrolling, transactional sidebar drops, and Escape
 rollback; preview order is not saved before release. Interactive card controls
 consume pointer events so they cannot start a reorder.
 
-`theme/button.rs` and `theme/checkbox.rs` add shared lighter hover fills and brighter
-borders while retaining the component library's input, focus, and accessibility
-behavior. Button borders are painted without adding a layout node; disabled
-controls keep their ordinary appearance. Attachment copy actions say “Copy” in
-either output format.
+`theme/button.rs` and `theme/checkbox.rs` apply lighter hover fills. Checkboxes
+also brighten their indicator borders. GPUI handles keyboard focus and
+accessibility. Attachment copy actions say “Copy” in either output format.
 
 The main question mark opens workspace information: name, description, total
 storage, repository, and dates. The native Help menu opens documentation links.

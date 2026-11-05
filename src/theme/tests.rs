@@ -11,6 +11,12 @@ impl Render for HoverControls {
             .gap_4()
             .items_start()
             .child(
+                Button::new("hover-primary")
+                    .app_primary()
+                    .label("Primary")
+                    .debug_selector(|| "hover-primary".into()),
+            )
+            .child(
                 Button::new("hover-button")
                     .app_secondary()
                     .label("Button")
@@ -44,9 +50,7 @@ impl Render for HoverControls {
 }
 
 #[gpui_kit::test]
-fn hover_brightens_control_borders_and_backgrounds_without_affecting_disabled_controls(
-    cx: &mut TestAppContext,
-) {
+fn hover_brightens_button_fills_and_checkbox_indicators(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         apply_dark_theme(cx);
@@ -58,6 +62,7 @@ fn hover_brightens_control_borders_and_backgrounds_without_affecting_disabled_co
     });
     cx.update(|window, cx| window.draw(cx).clear(cx));
     for selector in [
+        "hover-primary",
         "hover-button",
         "hover-checkbox",
         "checked-checkbox",
@@ -78,12 +83,19 @@ fn hover_brightens_control_borders_and_backgrounds_without_affecting_disabled_co
             let highlighted = quads
                 .iter()
                 .any(|quad| quad.border_color == rgb(HOVER_BORDER).into());
-            assert_eq!(highlighted, !selector.starts_with("disabled"), "{selector}");
-            if matches!(selector, "hover-button" | "hover-checkbox") {
+            assert_eq!(
+                highlighted,
+                matches!(selector, "hover-checkbox" | "checked-checkbox"),
+                "{selector}"
+            );
+            let fill = match selector {
+                "hover-primary" => Some(cx.theme().button_primary_hover),
+                "hover-button" | "hover-checkbox" => Some(rgb(HOVER_BACKGROUND).into()),
+                _ => None,
+            };
+            if let Some(fill) = fill {
                 assert!(
-                    quads
-                        .iter()
-                        .any(|quad| quad.background == rgb(HOVER_BACKGROUND).into()),
+                    quads.iter().any(|quad| quad.background == fill.into()),
                     "{selector} must also brighten its fill"
                 );
             }

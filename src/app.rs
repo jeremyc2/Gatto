@@ -8,6 +8,7 @@ use std::{
 
 mod attachment_actions;
 mod attachment_drag;
+mod pinned_repositories;
 mod projects;
 mod upload_actions;
 
@@ -213,6 +214,8 @@ pub struct UploaderApp {
     owner_input: Entity<InputState>,
     global_shortcut_input: Entity<InputState>,
     repository_picker: Entity<RepositoryPicker>,
+    pinned_repository_picker: Entity<pinned_repositories::PickerState>,
+    pinned_repository_picker_open: bool,
     repositories: HashMap<String, Repository>,
     selected_repository: Option<Repository>,
     token: Option<String>,
@@ -359,6 +362,7 @@ impl UploaderApp {
             },
         );
 
+        let pinned_repository_picker = Self::new_pinned_repository_picker(window, cx);
         let updater = Updater::shared(cx);
         let update_subscription = cx.observe(&updater, |_, _, cx| cx.notify());
         let rooftops_data_path = persist_repository_selection
@@ -371,6 +375,8 @@ impl UploaderApp {
             owner_input,
             global_shortcut_input,
             repository_picker,
+            pinned_repository_picker,
+            pinned_repository_picker_open: false,
             repositories: HashMap::new(),
             selected_repository: None,
             token: None,
@@ -655,6 +661,7 @@ impl UploaderApp {
 
     pub fn show_main_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel_global_shortcut_recording(window, cx);
+        self.pinned_repository_picker_open = false;
         self.settings_open = false;
         window.focus(&self.focus_handle, cx);
         cx.notify();
@@ -671,6 +678,9 @@ impl UploaderApp {
             self.cancel_attachment_reorder(window, cx);
         } else if self.recording_global_shortcut {
             self.cancel_global_shortcut_recording(window, cx);
+        } else if self.pinned_repository_picker_open {
+            self.pinned_repository_picker_open = false;
+            cx.notify();
         } else if self.settings_open {
             self.show_main_page(window, cx);
         }
@@ -774,6 +784,7 @@ impl UploaderApp {
         };
 
         self.load_state = LoadState::Loading;
+        self.refresh_pinned_repository_picker(window, cx);
         self.repository_picker.update(cx, |picker, cx| {
             picker.set_items(
                 SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
@@ -808,6 +819,7 @@ impl UploaderApp {
                         this.diagnostics
                             .error(format!("Repository loading failed: {error}"));
                         this.load_state = LoadState::Failed;
+                        this.refresh_pinned_repository_picker(window, cx);
                         window.push_notification(Notification::error(error.to_string()), cx);
                     }
                 }
@@ -835,6 +847,7 @@ impl UploaderApp {
         let groups = self.repository_groups();
         self.token = Some(session.token);
         self.load_state = LoadState::Ready;
+        self.refresh_pinned_repository_picker(window, cx);
         self.repository_picker.update(cx, |picker, cx| {
             picker.set_items(SearchableVec::new(groups), window, cx);
         });
@@ -2001,47 +2014,6 @@ impl UploaderApp {
         });
     }
 
-    fn pin_selected_repository(
-        &mut self,
-        _: &gpui_kit::ClickEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(repository) = self.selected_repository.as_ref() else {
-            return;
-        };
-        let name = repository.name.clone();
-        if !self.settings.pinned_repositories.insert(name.clone()) {
-            return;
-        }
-        if let Err(error) = self.settings.save() {
-            self.settings.pinned_repositories.remove(&name);
-            window.push_notification(
-                Notification::error(format!("Could not save preferences: {error}")),
-                cx,
-            );
-        } else {
-            self.refresh_repository_picker(window, cx);
-        }
-        cx.notify();
-    }
-
-    fn unpin_repository(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.settings.pinned_repositories.remove(name) {
-            return;
-        }
-        if let Err(error) = self.settings.save() {
-            self.settings.pinned_repositories.insert(name.to_owned());
-            window.push_notification(
-                Notification::error(format!("Could not save preferences: {error}")),
-                cx,
-            );
-        } else {
-            self.refresh_repository_picker(window, cx);
-        }
-        cx.notify();
-    }
-
     fn save_owner(
         &mut self,
         _: &gpui_kit::ClickEvent,
@@ -2124,7 +2096,10 @@ impl UploaderApp {
             self.cancel_attachment_reorder(window, cx);
         } else if self.recording_global_shortcut {
             self.record_global_shortcut(event, window, cx);
-        } else if self.settings_open && event.keystroke.key == "escape" {
+        } else if self.settings_open
+            && !self.pinned_repository_picker_open
+            && event.keystroke.key == "escape"
+        {
             window.prevent_default();
             cx.stop_propagation();
             self.dismiss(window, cx);
@@ -3463,17 +3438,6 @@ impl UploaderApp {
     }
 
     fn render_settings_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let selected_is_pinned = self
-            .selected_repository
-            .as_ref()
-            .is_some_and(|repository| self.settings.pinned_repositories.contains(&repository.name));
-        let can_pin = self.selected_repository.is_some() && !selected_is_pinned;
-        let pinned_repositories = self
-            .settings
-            .pinned_repositories
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
         let owner_is_saved = parse_owner(&self.owner_input.read(cx).value())
             .is_ok_and(|owner| self.settings.owner.as_deref() == Some(owner.as_str()));
         let channel = self.settings.release_channel;
@@ -3533,55 +3497,7 @@ impl UploaderApp {
                     ),
             )
             .when(self.settings.owner.is_some(), |page| {
-                page.child(
-                    v_flex()
-                        .gap_3()
-                        .rounded_lg()
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .p_4()
-                        .child(self.render_repository_picker("Pinned repositories", cx))
-                        .when(can_pin, |card| {
-                            card.child(
-                                Button::new("pin-selected-repository")
-                                    .app_secondary()
-                                    .self_start()
-                                    .label("Pin")
-                                    .on_click(cx.listener(Self::pin_selected_repository)),
-                            )
-                        })
-                        .when(pinned_repositories.is_empty(), |card| {
-                            card.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("No pinned repositories yet."),
-                            )
-                        })
-                        .children(pinned_repositories.into_iter().map(|repository| {
-                            let repository_for_action = repository.clone();
-                            h_flex()
-                                .items_center()
-                                .justify_between()
-                                .rounded_md()
-                                .bg(cx.theme().muted.opacity(0.28))
-                                .px_3()
-                                .py_2()
-                                .child(div().text_sm().child(repository))
-                                .child(
-                                    Button::new(format!("unpin-{repository_for_action}"))
-                                        .app_secondary()
-                                        .label("Unpin")
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.unpin_repository(
-                                                &repository_for_action,
-                                                window,
-                                                cx,
-                                            );
-                                        })),
-                                )
-                        })),
-                )
+                page.child(self.render_pinned_repositories(cx))
             })
             .child(
                 v_flex()
