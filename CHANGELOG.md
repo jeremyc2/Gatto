@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.22.6] - 2026-11-05
+
 ### Changed
 
 - Place the native window controls above the Projects sidebar. The workspace
