@@ -194,7 +194,7 @@ impl UploaderApp {
             .detach();
             return;
         }
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search projects"));
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search"));
         cx.subscribe(&search, |_, _, _: &InputEvent, cx| cx.notify())
             .detach();
         self.project_state.search = Some(search);
@@ -1793,6 +1793,9 @@ impl UploaderApp {
             .iter()
             .filter(|path| Some(*path) != scratchpad.as_ref())
             .collect::<Vec<_>>();
+        // Sidebar already adds pt_3 above its header.
+        let header_padding =
+            (titlebar_clearance - rems(0.75).to_pixels(cx.theme().font_size)).max(px(0.));
         Sidebar::new("projects-sidebar")
             .w(PROJECT_SIDEBAR_WIDTH)
             .border_0()
@@ -1800,7 +1803,7 @@ impl UploaderApp {
             .header(
                 v_flex()
                     .w_full()
-                    .pt(titlebar_clearance)
+                    .pt(header_padding)
                     .gap_3()
                     .child(
                         h_flex()

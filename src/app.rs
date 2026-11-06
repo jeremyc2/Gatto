@@ -81,6 +81,7 @@ const WORKSPACE_HEADER_GAP: Rems = rems(1.);
 // Leave room for the native buttons and the draggable title bar above GPUI controls.
 const TITLEBAR_HEIGHT: Pixels = px(40.);
 const TITLEBAR_PICKER_TOP: Pixels = px(6.);
+const SIDEBAR_TITLEBAR_HEIGHT: Pixels = px(34.);
 
 pub(crate) fn default_window_width(cx: &App) -> Pixels {
     (PROJECT_SIDEBAR_WIDTH
@@ -3604,6 +3605,11 @@ impl Render for UploaderApp {
                 .into_any_element()
         } else {
             let sidebar_collapsed = self.settings.sidebar_collapsed;
+            let titlebar_height = if sidebar_collapsed {
+                titlebar_height
+            } else {
+                titlebar_height.min(SIDEBAR_TITLEBAR_HEIGHT)
+            };
             let needs_setup = self.load_state == LoadState::NeedsSetup;
             let repository_in_title_bar =
                 sidebar_collapsed && titlebar_height > px(0.) && !needs_setup;

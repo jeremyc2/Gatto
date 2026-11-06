@@ -7,6 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Move the Projects heading, search field, and list closer to the macOS window buttons.
+- Shorten the Projects sidebar search placeholder to “Search”.
+
 ## [0.23.1] - 2026-11-05
 
 ### Changed
