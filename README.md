@@ -18,11 +18,11 @@ https://github.com/user-attachments/assets/9c3b845d-2285-48c4-8fd8-d2564ca80225
 ## Download
 
 <!-- release-size:start -->
-<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.23.2">
+<a href="https://github.com/jeremyc2/Gatto/releases/tag/v0.23.3">
   <img src="docs/images/download-macos.svg" alt="Download Gatto for macOS" width="380">
 </a>
 
-**Gatto v0.23.2** — 12.8 MB download · 30.5 MB installed app.
+**Gatto v0.23.3** — 12.8 MB download · 30.4 MB installed app.
 <!-- release-size:end -->
 
 Homebrew (Apple Silicon):
