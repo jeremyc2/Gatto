@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Update the desktop UI toolkit to GPUI Kit 0.9.0 and GPUI 0.3.11.
+
 ## [0.23.0] - 2026-11-05
 
 ### Added

@@ -387,18 +387,18 @@ configuration remains in `.github/dependabot.yml`. Restoring workflow files to
 
 ## Dependencies
 
-The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.8.1`, which pins
-and re-exports its compatible GPUI `0.3.10` snapshot. Import GPUI through that
+The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.9.0`, which pins
+and re-exports its compatible GPUI `0.3.11` snapshot. Import GPUI through that
 facade; upgrade the pair together. Check `Cargo.toml` for the minimum Rust version
 and `rust-toolchain.toml` for the selected toolchain.
 
-The 0.8.1 update retains the default GPUI backend and existing component/assets
-features. GPUI Fast 0.1.12 and its additional GPU/platform packages are optional
+The 0.9.0 update retains the default GPUI backend and existing component/assets
+features. GPUI Fast 0.1.13 and its additional GPU/platform packages are optional
 lockfile entries, not enabled app dependencies. No new runtime, WebView, or
 syntax-highlighting feature is enabled. All added packages use crates.io and
 pass the existing advisory, license, and source policy. Keep the README size
 figures tied to the published release until a new release is measured.
-Image-editor scrolling uses GPUI 0.3.10's `ScrollEvent` and `on_scroll` APIs;
+Image-editor scrolling uses GPUI's `ScrollEvent` and `on_scroll` APIs;
 the former `ScrollWheelEvent` and `on_scroll_wheel` names are deprecated aliases.
 
 `tests/fixtures/sample.mp4` is a locally generated, two-second H.264 fixture
