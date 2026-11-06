@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-11-05
+
 ### Changed
 
 - Move the Projects heading, search field, and list closer to the macOS window buttons.
