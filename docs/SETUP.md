@@ -141,6 +141,11 @@ Select a repository in that project when you are ready to upload.
 
 ## 4. Set your preferences
 
+- **Interface size** scales app text and spacing as you move the slider. Drag
+  the handle or select a labeled stop from **16 pt** to **24 pt**. Press
+  **Command+=** or **Command+−** to step through the same sizes from the main
+  page or App Preferences. The default is **16 pt**, and Gatto remembers your
+  choice.
 - **Copy images as Markdown** is unchecked by default. Enable it to copy
   `![title](URL)` instead of a sized HTML image tag. It applies to
   individual copy, bulk copy, and Add from Clipboard, including images already uploaded

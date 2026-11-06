@@ -93,6 +93,7 @@ fn main() {
             diagnostics.error(format!("Could not load startup preferences: {error:#}"));
             settings::AppSettings::default()
         });
+        theme::set_ui_font_size(startup_settings.ui_font_size, cx);
         let mut recent = startup_settings.project_directory().and_then(|directory| crate::projects::project_folders(&directory)).unwrap_or_default().into_iter().filter_map(|path| crate::projects::summary(&path).ok().map(|summary| (path, summary))).collect::<Vec<_>>();
         recent.sort_by_key(|(_, summary)| std::cmp::Reverse(summary.metadata.updated_at));
         application_menu::set_recent_projects(recent.into_iter().map(|(path, summary)| (summary.title, path)), cx);
@@ -495,11 +496,14 @@ impl MainWindow {
             )
         };
         let controller = self.clone();
+        let minimum_size = size(px(700.), px(600.));
         let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(800.), px(780.)), cx)),
-            window_min_size: Some(size(px(700.), px(600.))),
-            titlebar: Some(app::uploader_titlebar()),
-            ..Default::default()
+            window_bounds: Some(WindowBounds::centered(
+                size(app::default_window_width(cx), minimum_size.height),
+                cx,
+            )),
+            window_min_size: Some(minimum_size),
+            ..app::uploader_window_options()
         };
         let result = crate::theme::open_window(options, cx, move |window, cx| {
             window_limits::set_maximum_content_size(window, 1100., 1040.);

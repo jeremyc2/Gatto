@@ -58,7 +58,7 @@ impl UploaderApp {
                     .rounded_l_none()
                     .min_w_0()
                     .px_0()
-                    .w(px(32.))
+                    .w(theme::CONTROL_HEIGHT)
                     .icon(AssetIconName::ChevronDown)
                     .child(
                         div()

@@ -21,6 +21,11 @@
       ],
       "default": "stable"
     },
+    "ui_font_size": {
+      "enum": [16, 18, 20, 22, 24],
+      "default": 16,
+      "description": "Base font size in points for desktop interface text and spacing."
+    },
     "owner": {
       "type": [
         "string",

@@ -8,39 +8,38 @@ use std::{
 
 mod attachment_actions;
 mod attachment_drag;
-mod pinned_repositories;
 mod projects;
+mod repository_picker;
+mod ui_size;
 mod upload_actions;
 
 use gpui_kit::assets::IconName as AssetIconName;
 use gpui_kit::base::TestSupportExt as _;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, StyledExt as _,
+    ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, StyledExt as _, TitleBar,
     WindowExt as _,
     attachment::{
         Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia,
         AttachmentStatus, AttachmentTitle,
     },
     button::Button,
-    combobox::{Combobox, ComboboxEvent, ComboboxState},
     h_flex,
-    input::{Input, InputEvent, InputState, Textarea, TextareaState},
+    input::{InputEvent, InputState, Textarea, TextareaState},
     kbd::Kbd,
     menu::DropdownMenu as _,
     notification::Notification,
     progress::Progress,
-    searchable_list::{SearchableGroup, SearchableVec},
-    spinner::Spinner,
+    slider::SliderState,
     v_flex,
 };
 use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, Bounds, BoxShadow, ClipboardEntry, ClipboardItem,
     Context, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, Image, ImageFormat,
     InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Keystroke, MouseButton,
-    ObjectFit, ParentElement as _, PathPromptOptions, Pixels, Render, SharedString,
+    ObjectFit, ParentElement as _, PathPromptOptions, Pixels, Rems, Render, SharedString,
     StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, TitlebarOptions,
     Window, WindowBounds, WindowOptions, actions, div, img, point, prelude::FluentBuilder as _, px,
-    size,
+    rems, size,
 };
 
 use crate::{
@@ -74,20 +73,35 @@ actions!(
 );
 
 const KEY_CONTEXT: &str = "Gatto";
-const WORKSPACE_GUTTER: Pixels = px(8.);
-const WORKSPACE_PADDING: Pixels = px(12.);
+const WORKSPACE_GUTTER: Rems = rems(0.375);
+const WORKSPACE_PADDING: Rems = rems(0.5);
+const PROJECT_SIDEBAR_WIDTH: Pixels = px(220.);
+const WORKSPACE_IDENTITY_WIDTH: Rems = rems(13.75);
+const WORKSPACE_HEADER_GAP: Rems = rems(1.);
 // Leave room for the native buttons and the draggable title bar above GPUI controls.
 const TITLEBAR_HEIGHT: Pixels = px(40.);
+const TITLEBAR_PICKER_TOP: Pixels = px(6.);
 
-pub(crate) fn uploader_titlebar() -> TitlebarOptions {
-    TitlebarOptions {
-        title: Some("Gatto".into()),
-        appears_transparent: cfg!(target_os = "macos"),
-        traffic_light_position: Some(point(px(14.), px(12.))),
-    }
+pub(crate) fn default_window_width(cx: &App) -> Pixels {
+    (PROJECT_SIDEBAR_WIDTH
+        + px(2.) // The inset workspace has a one-point border on each side.
+        + (WORKSPACE_GUTTER + WORKSPACE_PADDING * 2. + WORKSPACE_IDENTITY_WIDTH + WORKSPACE_HEADER_GAP)
+            .to_pixels(cx.theme().font_size)
+        + repository_picker::PICKER_WIDTH)
+        .ceil()
 }
 
-type RepositoryPicker = ComboboxState<SearchableVec<SearchableGroup<String>>>;
+pub(crate) fn uploader_window_options() -> WindowOptions {
+    WindowOptions {
+        titlebar: Some(TitlebarOptions {
+            title: Some("Gatto".into()),
+            appears_transparent: cfg!(target_os = "macos"),
+            traffic_light_position: Some(point(px(14.), px(12.))),
+        }),
+        app_owns_titlebar_drag: cfg!(target_os = "macos"),
+        ..Default::default()
+    }
+}
 
 pub(crate) struct ConvertAttachmentRequested(pub StagedAttachment);
 impl EventEmitter<ConvertAttachmentRequested> for UploaderApp {}
@@ -224,9 +238,9 @@ impl WalkthroughScenario {
 pub struct UploaderApp {
     owner_input: Entity<InputState>,
     global_shortcut_input: Entity<InputState>,
-    repository_picker: Entity<RepositoryPicker>,
-    pinned_repository_picker: Entity<pinned_repositories::PickerState>,
-    pinned_repository_picker_open: bool,
+    ui_size_slider: Entity<SliderState>,
+    repository_picker: Entity<repository_picker::PickerState>,
+    repository_picker_open: bool,
     repositories: HashMap<String, Repository>,
     selected_repository: Option<Repository>,
     token: Option<String>,
@@ -275,7 +289,6 @@ pub struct UploaderApp {
     focus_handle: FocusHandle,
     _owner_subscription: Subscription,
     _global_shortcut_subscription: Subscription,
-    _repository_subscription: Subscription,
 }
 
 impl UploaderApp {
@@ -299,6 +312,7 @@ impl UploaderApp {
         if settings_error.is_some() {
             diagnostics.error("Could not load application preferences; using defaults.");
         }
+        theme::set_ui_font_size(settings.ui_font_size, cx);
         Self::with_settings(
             window,
             diagnostics,
@@ -345,35 +359,8 @@ impl UploaderApp {
                     cx.notify();
                 }
             });
-        let repository_picker = cx.new(|cx| {
-            ComboboxState::new(
-                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
-                vec![],
-                window,
-                cx,
-            )
-            .searchable(true)
-        });
-        let subscription = cx.subscribe(
-            &repository_picker,
-            move |this: &mut Self,
-                  _,
-                  event: &ComboboxEvent<SearchableVec<SearchableGroup<String>>>,
-                  cx| {
-                if let ComboboxEvent::Change(values) = event {
-                    this.selected_repository = values
-                        .first()
-                        .and_then(|name| this.repositories.get(name))
-                        .cloned();
-                    this.project_state.metadata.repository = this.selected_repository.clone();
-                    this.project_state.metadata.repository_owner = this.settings.owner.clone();
-                    this.save_project(cx);
-                    cx.notify();
-                }
-            },
-        );
-
-        let pinned_repository_picker = Self::new_pinned_repository_picker(window, cx);
+        let repository_picker = Self::new_repository_picker(window, cx);
+        let ui_size_slider = Self::new_ui_size_slider(settings.ui_font_size, window, cx);
         let updater = Updater::shared(cx);
         let update_subscription = cx.observe(&updater, |_, _, cx| cx.notify());
         let rooftops_data_path = persist_repository_selection
@@ -385,9 +372,9 @@ impl UploaderApp {
         let mut this = Self {
             owner_input,
             global_shortcut_input,
+            ui_size_slider,
             repository_picker,
-            pinned_repository_picker,
-            pinned_repository_picker_open: false,
+            repository_picker_open: false,
             repositories: HashMap::new(),
             selected_repository: None,
             token: None,
@@ -443,7 +430,6 @@ impl UploaderApp {
             focus_handle: cx.focus_handle(),
             _owner_subscription: owner_subscription,
             _global_shortcut_subscription: global_shortcut_subscription,
-            _repository_subscription: subscription,
         };
         this.register_project_shutdown(cx);
         this.register_attachment_reorder_controls(cx);
@@ -465,7 +451,10 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let mut settings = AppSettings::default();
+        let mut settings = AppSettings {
+            ui_font_size: cx.theme().font_size.as_f32() as u8,
+            ..Default::default()
+        };
         if !matches!(scenario, WalkthroughScenario::FirstRun) {
             settings.owner = Some("field-notes".into());
             settings.pinned_repositories.insert("pixel-tools".into());
@@ -656,7 +645,6 @@ impl UploaderApp {
             }
         }
         this.prepare_walkthrough_sidebar(cx);
-        this.refresh_repository_picker(window, cx);
         if matches!(scenario, WalkthroughScenario::ProjectRename)
             && let Some(folder) = this.project_state.folder.clone()
         {
@@ -672,7 +660,7 @@ impl UploaderApp {
 
     pub fn show_main_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel_global_shortcut_recording(window, cx);
-        self.pinned_repository_picker_open = false;
+        self.repository_picker_open = false;
         self.settings_open = false;
         window.focus(&self.focus_handle, cx);
         cx.notify();
@@ -680,6 +668,9 @@ impl UploaderApp {
 
     pub fn show_settings(&mut self, cx: &mut Context<Self>) {
         self.diagnostics.info("Opened application preferences.");
+        if !self.settings_open {
+            self.repository_picker_open = false;
+        }
         self.settings_open = true;
         cx.notify();
     }
@@ -689,8 +680,8 @@ impl UploaderApp {
             self.cancel_attachment_reorder(window, cx);
         } else if self.recording_global_shortcut {
             self.cancel_global_shortcut_recording(window, cx);
-        } else if self.pinned_repository_picker_open {
-            self.pinned_repository_picker_open = false;
+        } else if self.repository_picker_open {
+            self.repository_picker_open = false;
             cx.notify();
         } else if self.settings_open {
             self.show_main_page(window, cx);
@@ -790,19 +781,13 @@ impl UploaderApp {
             self.diagnostics
                 .info("Repository loading is waiting for an account or organization setting.");
             self.load_state = LoadState::NeedsSetup;
+            self.refresh_repository_picker(window, cx);
             cx.notify();
             return;
         };
 
         self.load_state = LoadState::Loading;
-        self.refresh_pinned_repository_picker(window, cx);
-        self.repository_picker.update(cx, |picker, cx| {
-            picker.set_items(
-                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
-                window,
-                cx,
-            );
-        });
+        self.refresh_repository_picker(window, cx);
         self.diagnostics.info(format!(
             "Loading repositories for account or organization {owner}."
         ));
@@ -830,7 +815,7 @@ impl UploaderApp {
                         this.diagnostics
                             .error(format!("Repository loading failed: {error}"));
                         this.load_state = LoadState::Failed;
-                        this.refresh_pinned_repository_picker(window, cx);
+                        this.refresh_repository_picker(window, cx);
                         window.push_notification(Notification::error(error.to_string()), cx);
                     }
                 }
@@ -855,14 +840,9 @@ impl UploaderApp {
             .into_iter()
             .map(|repository| (repository.name.clone(), repository))
             .collect();
-        let groups = self.repository_groups();
         self.token = Some(session.token);
         self.load_state = LoadState::Ready;
-        self.refresh_pinned_repository_picker(window, cx);
-        self.repository_picker.update(cx, |picker, cx| {
-            picker.set_items(SearchableVec::new(groups), window, cx);
-        });
-        if let Some(repository) = self
+        self.selected_repository = self
             .project_state
             .metadata
             .repository_for_owner(self.settings.owner.as_deref())
@@ -875,24 +855,14 @@ impl UploaderApp {
                         .find(|repository| repository.id == saved.id)
                 }
             })
-            .cloned()
+            .cloned();
+        if let Some(repository) = &self.selected_repository
+            && self.project_state.metadata.repository.as_ref() != Some(repository)
         {
-            self.select_repository(&repository.name, window, cx);
-            if self.project_state.metadata.repository.as_ref() != Some(&repository) {
-                self.project_state.metadata.repository = Some(repository);
-                self.save_project(cx);
-            }
-        } else {
-            self.selected_repository = None;
-            self.repository_picker
-                .update(cx, |picker, cx| picker.set_selected_indices([], window, cx));
+            self.project_state.metadata.repository = Some(repository.clone());
+            self.save_project(cx);
         }
-    }
-
-    fn load_repositories_when_opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.load_state == LoadState::Idle {
-            self.load_repositories(window, cx);
-        }
+        self.refresh_repository_picker(window, cx);
     }
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1528,7 +1498,7 @@ impl UploaderApp {
                     v_flex()
                         .gap_2()
                         .child(div().text_xs().font_semibold().child("Title"))
-                        .child(Input::new(&input).w_full().aria_label("Title"))
+                        .child(theme::compact_input(&input).w_full().aria_label("Title"))
                         .child(div().mt_2().text_xs().font_semibold().child("Description"))
                         .child(
                             Textarea::new(&description_input)
@@ -1977,51 +1947,6 @@ impl UploaderApp {
         }
     }
 
-    fn repository_groups(&self) -> Vec<SearchableGroup<String>> {
-        let mut names = self.repositories.keys().cloned().collect::<Vec<_>>();
-        names.sort_by_key(|name| name.to_ascii_lowercase());
-        let (pinned, remaining): (Vec<_>, Vec<_>) = names
-            .into_iter()
-            .partition(|name| self.settings.pinned_repositories.contains(name));
-        let mut groups = Vec::new();
-        if !pinned.is_empty() {
-            groups.push(SearchableGroup::new("Pinned repositories").items(pinned));
-        }
-        if !remaining.is_empty() {
-            groups.push(SearchableGroup::new("All repositories").items(remaining));
-        }
-        groups
-    }
-
-    fn select_repository(
-        &mut self,
-        name: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(repository) = self.repositories.get(name).cloned() else {
-            return false;
-        };
-        self.selected_repository = Some(repository);
-        self.repository_picker.update(cx, |picker, cx| {
-            picker.set_selected_values(&[name.to_owned()], window, cx);
-        });
-        true
-    }
-
-    fn refresh_repository_picker(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let groups = self.repository_groups();
-        let selected_values = self
-            .selected_repository
-            .as_ref()
-            .map(|selected| vec![selected.name.clone()])
-            .unwrap_or_default();
-        self.repository_picker.update(cx, |picker, cx| {
-            picker.set_items(SearchableVec::new(groups), window, cx);
-            picker.set_selected_values(&selected_values, window, cx);
-        });
-    }
-
     fn save_owner(
         &mut self,
         _: &gpui_kit::ClickEvent,
@@ -2051,9 +1976,6 @@ impl UploaderApp {
             self.selected_repository = None;
             self.loading_repository = false;
             self.sync_add_from_clipboard_enabled();
-            self.repository_picker.update(cx, |picker, cx| {
-                picker.set_selected_indices([], window, cx);
-            });
         }
 
         self.load_repositories(window, cx);
@@ -2105,7 +2027,7 @@ impl UploaderApp {
         } else if self.recording_global_shortcut {
             self.record_global_shortcut(event, window, cx);
         } else if self.settings_open
-            && !self.pinned_repository_picker_open
+            && !self.repository_picker_open
             && event.keystroke.key == "escape"
         {
             window.prevent_default();
@@ -2529,6 +2451,10 @@ impl UploaderApp {
 
         self.project_state = projects::ProjectState::default();
         self.settings = AppSettings::default();
+        theme::set_ui_font_size(self.settings.ui_font_size, cx);
+        self.ui_size_slider.update(cx, |slider, cx| {
+            slider.set_value(f32::from(self.settings.ui_font_size), window, cx);
+        });
         self.updater.update(cx, |updater, cx| {
             updater.set_channel(ReleaseChannel::Stable, cx)
         })?;
@@ -2560,14 +2486,7 @@ impl UploaderApp {
         self.upload_result = None;
         self.uploading = false;
         self.recording_global_shortcut = false;
-        self.repository_picker.update(cx, |picker, cx| {
-            picker.set_selected_indices([], window, cx);
-            picker.set_items(
-                SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
-                window,
-                cx,
-            );
-        });
+        self.refresh_repository_picker(window, cx);
         self.menu_bar.set_add_from_clipboard_enabled(false);
         self.diagnostics
             .info("Reset app state and cleared saved preferences.");
@@ -2864,103 +2783,6 @@ impl UploaderApp {
             return;
         }
         self.updater.update(cx, |updater, cx| updater.install(cx));
-    }
-
-    fn render_repository_picker(
-        &self,
-        heading: &'static str,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let disabled = self.load_state == LoadState::NeedsSetup;
-        let loading = self.load_state == LoadState::Loading;
-        let owner = self.settings.owner.clone().unwrap_or_default();
-        let view = cx.entity();
-        v_flex()
-            .w_full()
-            .gap_2()
-            .child(
-                h_flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_sm().font_semibold().child(heading))
-                    .when(self.load_state == LoadState::Failed, |row| {
-                        row.child(
-                            Button::new("retry-repositories")
-                                .app_icon()
-                                .icon(IconName::RefreshCw)
-                                .tooltip("Retry")
-                                .accessibility_label("Retry loading repositories")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.load_repositories(window, cx);
-                                })),
-                        )
-                    }),
-            )
-            .child(
-                Combobox::new(&self.repository_picker)
-                    .placeholder(format!("Search {owner} repositories…"))
-                    .search_placeholder("Type to filter repositories…")
-                    .disabled(disabled)
-                    .empty(move |_, cx| {
-                        if loading {
-                            v_flex()
-                                .debug_selector(|| "repository-picker-loading".to_owned())
-                                .items_center()
-                                .justify_center()
-                                .py_6()
-                                .child(Spinner::new().large())
-                                .into_any_element()
-                        } else {
-                            h_flex()
-                                .justify_center()
-                                .py_6()
-                                .text_color(cx.theme().muted_foreground.opacity(0.6))
-                                .child(Icon::new(IconName::Inbox).size(px(28.)))
-                                .into_any_element()
-                        }
-                    })
-                    .render_trigger(move |trigger, _, _| {
-                        let trigger_is_open = trigger.is_open();
-                        let repository_name = trigger
-                            .selection()
-                            .first()
-                            .map(|(_, repository)| SharedString::from(repository.clone()))
-                            .unwrap_or_else(|| {
-                                trigger
-                                    .placeholder()
-                                    .cloned()
-                                    .unwrap_or_else(|| "Select a repository".into())
-                            });
-                        let view = view.clone();
-                        h_flex()
-                            .w_full()
-                            .items_center()
-                            .justify_between()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .truncate()
-                                    .child(repository_name),
-                            )
-                            .child(Icon::new(IconName::ChevronDown).xsmall())
-                            .debug_selector(move || {
-                                if trigger_is_open {
-                                    "repository-picker-trigger-open".to_owned()
-                                } else {
-                                    "repository-picker-trigger-closed".to_owned()
-                                }
-                            })
-                            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                                view.update(cx, |this, cx| {
-                                    this.load_repositories_when_opened(window, cx);
-                                });
-                            })
-                    })
-                    .w_full(),
-            )
     }
 
     fn render_setup_prompt(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3389,9 +3211,8 @@ impl UploaderApp {
                                     Button::new("copy-all-upload-markdown")
                                         .debug_selector(|| "copy-all-staged-image-markdown".into())
                                         .app_secondary()
-                                        .xsmall()
+                                        .h(theme::ICON_CONTROL_SIZE)
                                         .min_w_0()
-                                        .px_2()
                                         .label("Copy all uploaded")
                                         .tooltip("Copy all uploaded attachments · ⌘C")
                                         .on_click(cx.listener(Self::copy_all_upload_markdown)),
@@ -3454,6 +3275,7 @@ impl UploaderApp {
             .test_support()
             .flex_none()
             .p_6()
+            .pt_1()
             .gap_5()
             .child(
                 h_flex()
@@ -3467,6 +3289,7 @@ impl UploaderApp {
                             .on_click(cx.listener(Self::close_settings)),
                     ),
             )
+            .child(self.render_ui_size_setting(cx))
             .child(
                 v_flex()
                     .gap_3()
@@ -3490,7 +3313,7 @@ impl UploaderApp {
                                     .child("Enter a personal account or organization login."),
                             ),
                     )
-                    .child(Input::new(&self.owner_input))
+                    .child(theme::compact_input(&self.owner_input))
                     .child(
                         Button::new("save-owner")
                             .app_primary()
@@ -3538,7 +3361,7 @@ impl UploaderApp {
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .child(Input::new(&self.global_shortcut_input).readonly(true)),
+                                    .child(theme::compact_input(&self.global_shortcut_input).readonly(true)),
                             )
                             .child(
                                 Button::new("record-global-add-from-clipboard-shortcut")
@@ -3671,6 +3494,44 @@ impl UploaderApp {
 
             )
     }
+
+    fn render_title_bar(
+        &self,
+        height: Pixels,
+        show_repository: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let full_width = self.settings_open || self.settings.sidebar_collapsed;
+        h_flex()
+            .absolute()
+            .top_0()
+            .left_0()
+            .h(height)
+            .when(full_width, |bar| bar.w_full())
+            .when(!full_width, |bar| bar.w(PROJECT_SIDEBAR_WIDTH))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .debug_selector(|| "title-bar-drag".into())
+                    .child(
+                        TitleBar::new()
+                            .h(height)
+                            .border_0()
+                            .bg(cx.theme().transparent),
+                    ),
+            )
+            .when(show_repository, |bar| {
+                bar.child(
+                    h_flex()
+                        .flex_none()
+                        .self_start()
+                        .mt(TITLEBAR_PICKER_TOP)
+                        .pr(WORKSPACE_PADDING)
+                        .child(self.render_repository_picker(cx)),
+                )
+            })
+    }
 }
 
 impl Focusable for UploaderApp {
@@ -3682,7 +3543,9 @@ impl Focusable for UploaderApp {
 impl Render for UploaderApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let titlebar_height = if cfg!(target_os = "macos") && !window.is_fullscreen() {
-            TITLEBAR_HEIGHT
+            TITLEBAR_HEIGHT.max(
+                theme::CONTROL_HEIGHT.to_pixels(cx.theme().font_size) + TITLEBAR_PICKER_TOP * 2.,
+            )
         } else {
             px(0.)
         };
@@ -3735,10 +3598,15 @@ impl Render for UploaderApp {
         if self.settings_open {
             root.pt(titlebar_height)
                 .child(self.render_settings(cx))
+                .when(titlebar_height > px(0.), |root| {
+                    root.child(self.render_title_bar(titlebar_height, false, cx))
+                })
                 .into_any_element()
         } else {
             let sidebar_collapsed = self.settings.sidebar_collapsed;
             let needs_setup = self.load_state == LoadState::NeedsSetup;
+            let repository_in_title_bar =
+                sidebar_collapsed && titlebar_height > px(0.) && !needs_setup;
             let workspace_title = self.project_state.title.clone().unwrap_or_else(|| {
                 self.project_state.folder.as_ref().map_or_else(
                     || "Scratchpad".to_owned(),
@@ -3763,6 +3631,7 @@ impl Render for UploaderApp {
                         .flex_none()
                         .gap(WORKSPACE_PADDING)
                         .p(WORKSPACE_PADDING)
+                        .when(sidebar_collapsed && titlebar_height > px(0.), |content| content.pt_0())
                         .when_some(self.project_state.error.clone(), |content, error| content.child(
                             v_flex().gap_2().child(div().text_sm().text_color(cx.theme().danger).child(error))
                                 .child(Button::new("retry-project-save").app_secondary().label("Retry save").disabled(self.project_state.saving)
@@ -3774,102 +3643,127 @@ impl Render for UploaderApp {
                                 .w_full()
                                 .min_w_0()
                                 .items_start()
-                                .gap_4()
+                                .flex_wrap()
+                                .gap_x(WORKSPACE_HEADER_GAP)
+                                .gap_y_2()
+                                .debug_selector(|| "workspace-header".into())
                                 .child(
-                                    div()
-                                        .id("rooftops-entry")
-                                        .flex_shrink_0()
-                                        .rounded_full()
-                                        .cursor_pointer()
-                                        .hover(|style| {
-                                            style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
-                                                BoxShadow::new(
-                                                    px(0.),
-                                                    px(0.),
-                                                    cx.theme().primary.opacity(0.18),
-                                                )
-                                                .blur_radius(px(16.))
-                                                .spread_radius(px(2.)),
-                                            ])
-                                        })
-                                        .on_click(cx.listener(Self::open_rooftops))
-                                        .child(
-                                            img(self.header_mark.clone())
-                                                .size(px(72.))
-                                                .flex_shrink_0()
-                                                .object_fit(ObjectFit::Contain),
-                                        ),
-                                )
-                                .child(
-                                    v_flex()
+                                    h_flex()
                                         .flex_1()
+                                        .flex_basis(WORKSPACE_IDENTITY_WIDTH)
                                         .min_w_0()
-                                        .gap_3()
-                                        .child(div().text_2xl().font_semibold().child(workspace_title))
+                                        .debug_selector(|| "workspace-identity".into())
+                                        .items_start()
+                                        .gap_4()
                                         .child(
-                                            h_flex()
-                                                .w_full()
+                                            div()
+                                                .id("rooftops-entry")
+                                                .flex_shrink_0()
+                                                .rounded_full()
+                                                .cursor_pointer()
+                                                .hover(|style| {
+                                                    style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
+                                                        BoxShadow::new(
+                                                            px(0.),
+                                                            px(0.),
+                                                            cx.theme().primary.opacity(0.18),
+                                                        )
+                                                        .blur_radius(px(16.))
+                                                        .spread_radius(px(2.)),
+                                                    ])
+                                                })
+                                                .on_click(cx.listener(Self::open_rooftops))
+                                                .child(
+                                                    img(self.header_mark.clone())
+                                                        .size(px(72.))
+                                                        .flex_shrink_0()
+                                                        .object_fit(ObjectFit::Contain),
+                                                ),
+                                        )
+                                        .child(
+                                            v_flex()
+                                                .flex_1()
                                                 .min_w_0()
                                                 .gap_2()
-                                                .flex_wrap()
-                                                .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
-                                                    let update = self.updater.read(cx);
-                                                    row.child(Button::new("install-update")
-                                                        .debug_selector(|| "install-update".into())
-                                                        .app_icon()
-                                                        .label(match update.state {
-                                                            UpdateState::Installing => "Updating…",
-                                                            UpdateState::Failed => "↻ Update",
-                                                            _ => "↑ Update",
+                                                .child(
+                                                    div()
+                                                        .text_2xl()
+                                                        .line_height(gpui_kit::relative(1.25))
+                                                        .font_semibold()
+                                                        .debug_selector(|| "workspace-title".into())
+                                                        .child(workspace_title),
+                                                )
+                                                .child(
+                                                    h_flex()
+                                                        .w_full()
+                                                        .min_w_0()
+                                                        .gap_1p5()
+                                                        .flex_wrap()
+                                                        .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
+                                                            let update = self.updater.read(cx);
+                                                            row.child(Button::new("install-update")
+                                                                .debug_selector(|| "install-update".into())
+                                                                .app_icon()
+                                                                .label(match update.state {
+                                                                    UpdateState::Installing => "Updating…",
+                                                                    UpdateState::Failed => "↻ Update",
+                                                                    _ => "↑ Update",
+                                                                })
+                                                                .disabled(self.uploading || self.import_busy() || update.state == UpdateState::Installing)
+                                                                .accessibility_label("Install update and restart Gatto")
+                                                                .tooltip(update.message.clone())
+                                                                .on_click(|_, window, cx| {
+                                                                    window.dispatch_action(Box::new(crate::application_menu::InstallUpdate), cx);
+                                                                }))
                                                         })
-                                                        .disabled(self.uploading || self.import_busy() || update.state == UpdateState::Installing)
-                                                        .accessibility_label("Install update and restart Gatto")
-                                                        .tooltip(update.message.clone())
-                                                        .on_click(|_, window, cx| {
-                                                            window.dispatch_action(Box::new(crate::application_menu::InstallUpdate), cx);
-                                                        }))
-                                                })
-                                                .when(self.settings.sidebar_collapsed, |row| row.child(
-                                                    Button::new("show-project-sidebar").debug_selector(|| "show-project-sidebar".into()).app_icon().icon(AssetIconName::PanelLeftOpen)
-                                                        .accessibility_label("Show sidebar").tooltip("Show sidebar · ⌘B")
-                                                        .on_click(cx.listener(|this, _, _, cx| this.toggle_project_sidebar(cx)))
-                                                ))
-                                                .child(
-                                                    Button::new("open-logs")
-                                                        .app_icon()
-                                                        .icon(AssetIconName::Logs)
-                                                        .accessibility_label("Application logs")
-                                                        .tooltip("App logs")
-                                                        .on_click(
-                                                            cx.listener(Self::open_log_window),
+                                                        .when(self.settings.sidebar_collapsed, |row| row.child(
+                                                            Button::new("show-project-sidebar").debug_selector(|| "show-project-sidebar".into()).app_icon().icon(AssetIconName::PanelLeftOpen)
+                                                                .accessibility_label("Show sidebar").tooltip("Show sidebar · ⌘B")
+                                                                .on_click(cx.listener(|this, _, _, cx| this.toggle_project_sidebar(cx)))
+                                                        ))
+                                                        .child(
+                                                            Button::new("open-logs")
+                                                                .app_icon()
+                                                                .icon(AssetIconName::Logs)
+                                                                .accessibility_label("Application logs")
+                                                                .tooltip("App logs")
+                                                                .on_click(
+                                                                    cx.listener(Self::open_log_window),
+                                                                ),
+                                                        )
+                                                        .child(
+                                                            Button::new("open-settings")
+                                                                .app_icon()
+                                                                .icon(IconName::Settings)
+                                                                .accessibility_label("App Preferences")
+                                                                .tooltip("App preferences")
+                                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                                    this.show_settings(cx);
+                                                                })),
+                                                        )
+                                                        .child(
+                                                            Button::new("workspace-information").debug_selector(|| "workspace-information".into())
+                                                                .app_icon()
+                                                                .icon(AssetIconName::CircleQuestionMark)
+                                                                .accessibility_label("Project information")
+                                                                .tooltip("Project information")
+                                                                .on_click(cx.listener(|this, _, window, cx| this.open_project_info(window, cx))),
                                                         ),
-                                                )
-                                                .child(
-                                                    Button::new("open-settings")
-                                                        .app_icon()
-                                                        .icon(IconName::Settings)
-                                                        .accessibility_label("App Preferences")
-                                                        .tooltip("App preferences")
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.show_settings(cx);
-                                                        })),
-                                                )
-                                                .child(
-                                                    Button::new("workspace-information").debug_selector(|| "workspace-information".into())
-                                                        .app_icon()
-                                                        .icon(AssetIconName::CircleQuestionMark)
-                                                        .accessibility_label("Project information")
-                                                        .tooltip("Project information")
-                                                        .on_click(cx.listener(|this, _, window, cx| this.open_project_info(window, cx))),
                                                 ),
                                         ),
-                                ),
+                                )
+                                .when(!needs_setup && !repository_in_title_bar, |header| {
+                                    header.child(
+                                        h_flex()
+                                            .flex_none()
+                                            .child(self.render_repository_picker(cx)),
+                                    )
+                                }),
                         )
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx))
                             .when(!self.staged_attachments.is_empty(), |root| root.child(self.render_attachments(cx))))
                         .when(!needs_setup, |root| {
-                            root.child(self.render_repository_picker("Repository", cx))
-                                .child(self.render_drop_zone(cx))
+                            root.child(self.render_drop_zone(cx))
                                 .when(self.compression.is_some(), |root| {
                                     root.child(self.render_compression(cx))
                                 })
@@ -3896,7 +3790,7 @@ impl Render for UploaderApp {
                 .when(!sidebar_collapsed, |main| {
                     main.my(WORKSPACE_GUTTER)
                         .mr(WORKSPACE_GUTTER)
-                        .rounded(px(14.))
+                        .rounded(px(8.))
                         .border_1()
                         .border_color(cx.theme().border)
                         .bg(cx.theme().background)
@@ -3943,6 +3837,9 @@ impl Render for UploaderApp {
                     })
                     .child(main),
             )
+            .when(titlebar_height > px(0.), |root| {
+                root.child(self.render_title_bar(titlebar_height, repository_in_title_bar, cx))
+            })
             .into_any_element()
         }
     }
@@ -3955,6 +3852,7 @@ pub fn init_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-c", CopyUploadMarkdown, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-b", ToggleProjectSidebar, Some(KEY_CONTEXT)),
     ]);
+    ui_size::init_keybindings(cx);
 }
 
 #[cfg(test)]
@@ -4810,6 +4708,38 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn workspace_title_leaves_room_for_wrapped_names_above_the_controls(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            window.resize(size(px(900.), px(600.)));
+            window.bounds_changed(cx);
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        let title = cx.debug_bounds("workspace-title").unwrap();
+        let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
+        assert_eq!(title.top(), picker.top());
+        assert_eq!(title.size.height, px(30.));
+
+        cx.update(|window, cx| {
+            window.resize(size(default_window_width(cx), px(600.)));
+            window.bounds_changed(cx);
+            view.update(cx, |app, cx| {
+                app.project_state.title = Some("Ấngström, Édition & Typography".into());
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        let wrapped_title = cx.debug_bounds("workspace-title").unwrap();
+        let controls = cx.debug_bounds("workspace-information").unwrap();
+        assert!(wrapped_title.size.height > title.size.height);
+        assert!(controls.top() > wrapped_title.bottom());
+    }
+
+    #[gpui_kit::test]
     fn idle_attachment_preview_has_one_section_gap_below_drop_zone(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
         for item in mixed_attachments() {
@@ -4825,7 +4755,8 @@ mod tests {
             let previews = cx.debug_bounds("staged-attachments").unwrap();
             let gap = previews.origin.y - drop_zone.bottom();
             assert_eq!(
-                gap, WORKSPACE_PADDING,
+                gap,
+                WORKSPACE_PADDING.to_pixels(px(16.)),
                 "idle preview should have one section gap below the drop zone"
             );
         }
@@ -5363,83 +5294,5 @@ mod tests {
                 });
             }
         }
-    }
-
-    #[gpui_kit::test]
-    fn repository_picker_click_survives_the_loading_transition(cx: &mut TestAppContext) {
-        cx.update(gpui_kit::init);
-        let settings = AppSettings {
-            owner: Some("acme-labs".into()),
-            ..AppSettings::default()
-        };
-        let (view, cx) = cx.add_window_view(move |window, cx| {
-            let mut app = UploaderApp::with_settings(
-                window,
-                Diagnostics::new(),
-                AppControllers::default(),
-                settings,
-                None,
-                false,
-                cx,
-            );
-            app.load_state = LoadState::Ready;
-            app
-        });
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-
-        let trigger = cx
-            .debug_bounds("repository-picker-trigger-closed")
-            .expect("the repository picker trigger should be visible");
-        cx.simulate_mouse_down(trigger.center(), MouseButton::Left, Modifiers::default());
-        cx.update(|window, cx| {
-            view.update(cx, |app, cx| {
-                app.load_state = LoadState::Loading;
-                app.repository_picker.update(cx, |picker, cx| {
-                    picker.set_items(
-                        SearchableVec::new(Vec::<SearchableGroup<String>>::new()),
-                        window,
-                        cx,
-                    );
-                });
-                cx.notify();
-            });
-            window.draw(cx).clear(cx);
-        });
-        cx.simulate_mouse_up(trigger.center(), MouseButton::Left, Modifiers::default());
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-
-        assert!(
-            cx.debug_bounds("repository-picker-trigger-open").is_some(),
-            "the repository picker should open even while repositories are loading"
-        );
-        assert!(
-            cx.debug_bounds("repository-picker-loading").is_some(),
-            "the open repository picker should show its loading indicator"
-        );
-
-        cx.update(|window, cx| {
-            view.update(cx, |app, cx| {
-                app.load_state = LoadState::Ready;
-                app.repositories.insert(
-                    "gatto".into(),
-                    Repository {
-                        id: 1,
-                        name: "gatto".into(),
-                    },
-                );
-                let groups = app.repository_groups();
-                app.repository_picker.update(cx, |picker, cx| {
-                    picker.set_items(SearchableVec::new(groups), window, cx);
-                });
-                cx.notify();
-            });
-            window.draw(cx).clear(cx);
-        });
-
-        assert!(
-            cx.debug_bounds("repository-picker-trigger-open").is_some(),
-            "loaded repository items should replace the spinner without closing the picker"
-        );
-        assert!(cx.debug_bounds("repository-picker-loading").is_none());
     }
 }

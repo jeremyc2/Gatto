@@ -425,7 +425,9 @@ impl UploaderApp {
                                         .id("project-name-field")
                                         .debug_selector(|| "project-name-field".into())
                                         .child(
-                                            Input::new(&input).w_full().aria_label("Project name"),
+                                            theme::compact_input(&input)
+                                                .w_full()
+                                                .aria_label("Project name"),
                                         ),
                                 ),
                         )
@@ -668,7 +670,7 @@ impl UploaderApp {
                                         .id("project-name-field")
                                         .debug_selector(|| "project-name-field".into())
                                         .child(
-                                            Input::new(&name_input)
+                                            theme::compact_input(&name_input)
                                                 .w_full()
                                                 .aria_label("Project name"),
                                         ),
@@ -1465,6 +1467,7 @@ impl UploaderApp {
     }
 
     pub(super) fn toggle_project_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.repository_picker_open = false;
         self.settings.sidebar_collapsed = !self.settings.sidebar_collapsed;
         if self.persist_preferences {
             let _ = self.settings.save();
@@ -1791,7 +1794,7 @@ impl UploaderApp {
             .filter(|path| Some(*path) != scratchpad.as_ref())
             .collect::<Vec<_>>();
         Sidebar::new("projects-sidebar")
-            .w(px(220.))
+            .w(PROJECT_SIDEBAR_WIDTH)
             .border_0()
             .collapsible(false)
             .header(
@@ -1818,7 +1821,7 @@ impl UploaderApp {
                             ),
                     )
                     .when_some(self.project_state.search.as_ref(), |header, search| {
-                        header.child(Input::new(search).aria_label("Search projects"))
+                        header.child(theme::compact_input(search).aria_label("Search projects"))
                     }),
             )
             .footer(

@@ -11,7 +11,8 @@ The app's header artwork was refreshed on October 27, 2026 using the
 were regenerated through the same native renderer; the illustrated editor
 fixtures and their source crops remain independent.
 
-Main-window captures show the current interface at 800 logical pixels wide,
+Desktop walkthrough captures use the **18 pt** interface size. Main-window
+captures show the current interface at 800 logical pixels wide,
 including the 220-pixel project sidebar. Most use a 600px height; Preferences
 fits the full settings page, compression uses 640px, and reorder/collapsed-sidebar
 examples use 760px. Preferences height is measured from the rendered content,

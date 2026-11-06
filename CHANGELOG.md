@@ -7,6 +7,32 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add a live Interface size slider in App Preferences with five stops from
+  16 pt to 24 pt. Use Command+= and Command+− to step through them.
+
+### Changed
+
+- Open the main window at its minimum height and wide enough for the project
+  header to fit on one row. Reduce the gap around the workspace panel and the
+  padding inside it.
+- Match the upload destination dropdown to the Pinned repositories picker in
+  App Preferences. Place it on the right side of the project header and wrap it
+  to the left side of a second row when space is tight. Move it into the title
+  bar when the sidebar is collapsed.
+- Use tighter spacing, smaller text, and smaller corners for desktop buttons,
+  search fields, and repository pickers.
+- Tighten the line spacing of the Scratchpad and project titles so they sit
+  closer to the top of the workspace header.
+- Give text fields and searchable dropdowns more vertical room.
+- Bring the App Preferences heading closer to the title bar.
+- Capture desktop walkthrough screenshots at 18 pt for readability.
+
+### Fixed
+
+- Spell Gatto correctly in the About menu item.
+
 ## [0.22.8] - 2026-11-05
 
 ### Changed

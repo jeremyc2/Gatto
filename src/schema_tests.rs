@@ -42,9 +42,13 @@ fn settings_schema_accepts_saved_defaults_preferences_and_legacy_defaults() {
     settings.add_from_clipboard_project = Some("Review".into());
     settings.pinned_projects.insert("Notes".into());
     settings.upload_action = UploadAction::UploadAndCopy;
+    settings.ui_font_size = 24;
     assert_valid(&validator, &serde_json::to_value(settings).unwrap());
     // Settings accept omitted preferences and default them, unlike portable manifests.
     assert_valid(&validator, &json!({}));
+    let mut invalid_size = defaults.clone();
+    invalid_size["ui_font_size"] = json!(21);
+    assert!(!validator.is_valid(&invalid_size));
     for invalid in [
         ".",
         "..",

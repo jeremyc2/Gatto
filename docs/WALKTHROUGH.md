@@ -9,8 +9,9 @@ Hover over icons for short hints, and explore the **⋯** menus as you go.
 
 ## Your first upload
 
-1. **Choose a repository.** Open Gatto and select the GitHub repository you're
-   working with.
+1. **Choose a repository.** Open the dropdown above the drop zone and use
+   **Filter repositories** to find the GitHub repository you're working with.
+   Repositories pinned in App Preferences appear first.
 2. **Add your images or videos.** Paste an image with **Command+V**, drag files
    into Gatto, or click the drop area to choose them. You can add several at once.
 
@@ -112,9 +113,8 @@ leaves your original file unchanged. Preview the result before sharing it.
 
 <img src="images/walkthrough/framed/09-video-compressing.png" alt="A video being compressed before upload" width="800">
 
-Gatto stays in the Dock and menu bar when you close its last window. Right-click
-the Dock icon to open a recent project. Let active uploads finish before
-quitting the app.
+Right-click the Dock icon to open
+a recent project. Let active uploads finish before quitting the app.
 
 ## Updates
 

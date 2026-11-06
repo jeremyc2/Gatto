@@ -9,7 +9,7 @@ a new one.
 
 When reporting a problem, include:
 
-- The app version and commit shown in **Gatto → About Gato**. Click **Copy** to
+- The app version and commit shown in **Gatto → About Gatto**. Click **Copy** to
   copy the details and close the dialog.
 - The macOS version and Mac architecture.
 - The output of `rustc --version`, `cargo --version`, and `gh --version` when the

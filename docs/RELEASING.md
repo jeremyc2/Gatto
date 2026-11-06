@@ -164,7 +164,7 @@ It creates:
 - `dist/release/SHA256SUMS`
 
 Inspect and launch the resulting bundle to verify the release behavior before
-answering the final **Publish** prompt. Confirm that **Gatto → About Gato** shows the
+answering the final **Publish** prompt. Confirm that **Gatto → About Gatto** shows the
 expected version and commit, and check custom URLs and window closing/reopening.
 Open the DMG and check its background, icon alignment, and Applications shortcut.
 Double-click the Applications shortcut to confirm it opens the correct folder.

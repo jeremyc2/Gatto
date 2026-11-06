@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::global_shortcut::DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT;
 
 pub const LOGIN_ARGUMENT: &str = "--login";
+pub const DEFAULT_UI_FONT_SIZE: u8 = 16;
+pub const UI_FONT_SIZES: [u8; 5] = [DEFAULT_UI_FONT_SIZE, 18, 20, 22, 24];
 
 const APPLICATION_SUPPORT_DIRECTORY: &str = "Gatto";
 pub const SCHEMA_URL: &str =
@@ -77,6 +79,7 @@ pub struct AppSettings {
     pub schema: String,
     pub version: u32,
     pub release_channel: ReleaseChannel,
+    pub ui_font_size: u8,
     #[cfg(test)]
     #[serde(skip)]
     pub project_directory_override: Option<PathBuf>,
@@ -112,6 +115,7 @@ impl Default for AppSettings {
             schema: settings_schema(),
             version: 1,
             release_channel: ReleaseChannel::Stable,
+            ui_font_size: DEFAULT_UI_FONT_SIZE,
             #[cfg(test)]
             project_directory_override: None,
             sidebar_collapsed: false,
@@ -265,8 +269,11 @@ impl AppSettings {
     }
 
     fn parse(contents: &str) -> Result<Self> {
-        let settings: Self = serde_json::from_str(contents)?;
+        let mut settings: Self = serde_json::from_str(contents)?;
         anyhow::ensure!(settings.version == 1, "Unsupported settings version");
+        if !UI_FONT_SIZES.contains(&settings.ui_font_size) {
+            settings.ui_font_size = DEFAULT_UI_FONT_SIZE;
+        }
         Ok(settings)
     }
 
@@ -442,6 +449,20 @@ mod tests {
     };
 
     use super::{AppSettings, UploadAction, clear_persistence, write_settings};
+
+    #[test]
+    fn interface_size_round_trips_and_defaults_for_older_settings() {
+        let defaults = AppSettings::parse("{}").unwrap();
+        assert_eq!(defaults.ui_font_size, super::DEFAULT_UI_FONT_SIZE);
+        let settings = AppSettings {
+            ui_font_size: 22,
+            ..defaults
+        };
+        let saved = serde_json::to_string(&settings).unwrap();
+        assert_eq!(AppSettings::parse(&saved).unwrap().ui_font_size, 22);
+        let unsupported = AppSettings::parse(r#"{"ui_font_size":21}"#).unwrap();
+        assert_eq!(unsupported.ui_font_size, super::DEFAULT_UI_FONT_SIZE);
+    }
 
     #[test]
     fn workspace_settings_write_schema_and_login_preference() {

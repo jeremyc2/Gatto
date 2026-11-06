@@ -1243,7 +1243,6 @@ impl ImagePreview {
                             Button::new("preview-exit-discard")
                                 .app_secondary()
                                 .w(px(88.))
-                                .h(px(32.))
                                 .flex_none()
                                 .label("Discard")
                                 .on_click(move |_, window, cx| {
@@ -1260,23 +1259,21 @@ impl ImagePreview {
                                 .gap_2()
                                 .flex_none()
                                 .child(
-                                    div().w(px(88.)).h(px(32.)).flex_none().child(
+                                    div().w(px(88.)).h(theme::CONTROL_HEIGHT).flex_none().child(
                                         DialogClose::new().child(
                                             Button::new("cancel")
                                                 .app_secondary()
                                                 .w(px(88.))
-                                                .h(px(32.))
                                                 .label("Cancel"),
                                         ),
                                     ),
                                 )
                                 .child(
-                                    div().w(px(88.)).h(px(32.)).flex_none().child(
+                                    div().w(px(88.)).h(theme::CONTROL_HEIGHT).flex_none().child(
                                         DialogAction::new().child(
                                             Button::new("ok")
                                                 .app_primary()
                                                 .w(px(88.))
-                                                .h(px(32.))
                                                 .label("Save")
                                                 .disabled(saving),
                                         ),

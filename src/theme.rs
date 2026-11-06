@@ -1,11 +1,12 @@
 use gpui_kit::component::{
-    ActiveTheme as _, Sizable as _, Size, Theme, ThemeMode,
+    ActiveTheme as _, Sizable as _, Theme, ThemeMode,
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{DialogAction, DialogClose, DialogFooter},
+    input::{Input, InputState},
 };
 use gpui_kit::{
-    App, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, Styled as _, Window,
-    div, px, rgb,
+    App, Entity, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _, Rems,
+    Styled as _, Window, div, px, rems, rgb,
 };
 
 mod button;
@@ -15,6 +16,19 @@ pub use checkbox::AppCheckbox;
 
 pub(super) const HOVER_BACKGROUND: u32 = 0x2b3345;
 pub(super) const HOVER_BORDER: u32 = 0xb0a6f7;
+pub(crate) const CONTROL_HEIGHT: Rems = rems(1.5);
+pub(crate) const CONTROL_RADIUS: Rems = rems(0.25);
+pub(crate) const ICON_CONTROL_SIZE: Rems = rems(1.25);
+
+pub(crate) fn set_ui_font_size(points: u8, cx: &mut App) {
+    let size = px(f32::from(points));
+    if cx.theme().font_size != size {
+        Theme::update(cx, |theme| {
+            theme.font_size = size;
+            theme.radius = CONTROL_RADIUS.to_pixels(size);
+        });
+    }
+}
 
 #[cfg(test)]
 mod tests;
@@ -36,7 +50,7 @@ pub fn open_window<V: gpui_kit::Render>(
     })
 }
 
-/// App actions share the landing page's geometry and outlined secondary style.
+/// App actions share compact geometry and an outlined secondary style.
 /// Annotation tools keep their own compact, selectable treatment.
 pub trait AppButtonStyle {
     fn app_primary(self) -> AppButton;
@@ -47,7 +61,7 @@ pub trait AppButtonStyle {
 impl AppButtonStyle for Button {
     fn app_primary(self) -> AppButton {
         AppButton::new(
-            self.primary().with_size(Size::Medium).min_w(px(80.)).px_3(),
+            self.primary().xsmall().h(CONTROL_HEIGHT).min_w_16().px_2(),
             true,
         )
     }
@@ -56,19 +70,27 @@ impl AppButtonStyle for Button {
         AppButton::new(
             self.with_variant(ButtonVariant::Default)
                 .outline()
-                .with_size(Size::Medium)
-                .min_w(px(80.))
-                .px_3(),
+                .xsmall()
+                .h(CONTROL_HEIGHT)
+                .min_w_16()
+                .px_2(),
             false,
         )
     }
 
     fn app_icon(self) -> AppButton {
         AppButton::new(
-            self.with_variant(ButtonVariant::Default).outline().xsmall(),
+            self.with_variant(ButtonVariant::Default)
+                .outline()
+                .xsmall()
+                .h(ICON_CONTROL_SIZE),
             false,
         )
     }
+}
+
+pub(crate) fn compact_input(state: &Entity<InputState>) -> Input {
+    Input::new(state).small().text_xs()
 }
 
 /// Validation belongs to the dialog that owns the action, above its backdrop.
@@ -102,26 +124,27 @@ impl DialogFeedback {
 
 /// Fixed slots keep Base's full-size dialog wrappers from stretching the buttons.
 pub fn confirmation_footer(id: &'static str, label: &'static str, width: f32) -> DialogFooter {
+    let baseline = f32::from(crate::settings::DEFAULT_UI_FONT_SIZE);
+    let cancel_width = rems(88. / baseline);
+    let action_width = rems(width / baseline);
     DialogFooter::new()
         .child(
-            div().w(px(88.)).h(px(32.)).flex_none().child(
+            div().w(cancel_width).h(CONTROL_HEIGHT).flex_none().child(
                 DialogClose::new().child(
                     Button::new("cancel")
                         .app_secondary()
-                        .w(px(88.))
-                        .h(px(32.))
+                        .w(cancel_width)
                         .label("Cancel"),
                 ),
             ),
         )
         .child(
-            div().w(px(width)).h(px(32.)).flex_none().child(
+            div().w(action_width).h(CONTROL_HEIGHT).flex_none().child(
                 DialogAction::new().child(
                     Button::new(id)
                         .debug_selector(move || id.into())
                         .app_primary()
-                        .w(px(width))
-                        .h(px(32.))
+                        .w(action_width)
                         .label(label),
                 ),
             ),
@@ -136,6 +159,7 @@ fn color(hex: u32) -> Hsla {
 pub fn apply_dark_theme(cx: &mut gpui_kit::App) {
     Theme::change(ThemeMode::Dark, None, cx);
     Theme::update(cx, |theme| {
+        theme.radius = CONTROL_RADIUS.to_pixels(theme.font_size);
         theme.background = color(0x0e1017);
         theme.border = color(0x2b2f45);
         theme.sidebar = color(0x171b25);

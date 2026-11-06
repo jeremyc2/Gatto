@@ -1,5 +1,9 @@
 use super::*;
 use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::component::{
+    combobox::{Combobox, ComboboxState},
+    searchable_list::{SearchableGroup, SearchableVec},
+};
 
 impl UploaderApp {
     pub(super) fn attachment_options(
@@ -360,6 +364,8 @@ impl UploaderApp {
                 .when_some(picker.as_ref(), |alert, picker| {
                     alert.child(
                         Combobox::new(picker)
+                            .small()
+                            .text_xs()
                             .placeholder("Select a project")
                             .w_full(),
                     )
@@ -368,13 +374,12 @@ impl UploaderApp {
                 .footer(
                     DialogFooter::new()
                         .child(
-                            div().w(px(88.)).h(px(32.)).child(
+                            div().w(px(88.)).h(theme::CONTROL_HEIGHT).child(
                                 DialogClose::new().child(
                                     Button::new("cancel")
                                         .app_secondary()
                                         .label("Cancel")
-                                        .w(px(88.))
-                                        .h(px(32.)),
+                                        .w(px(88.)),
                                 ),
                             ),
                         )
@@ -383,7 +388,6 @@ impl UploaderApp {
                                 .debug_selector(|| "create-move-destination".into())
                                 .app_secondary()
                                 .label("Create Project")
-                                .h(px(32.))
                                 .on_click(move |_, window, cx| {
                                     let _ = create_owner.update(cx, |this, cx| {
                                         if this.can_create_project() {
@@ -397,13 +401,12 @@ impl UploaderApp {
                         )
                         .when(picker.is_some(), |footer| {
                             footer.child(
-                                div().w(px(88.)).h(px(32.)).child(
+                                div().w(px(88.)).h(theme::CONTROL_HEIGHT).child(
                                     DialogAction::new().child(
                                         Button::new("move-attachments")
                                             .app_primary()
                                             .label("Move")
-                                            .w(px(88.))
-                                            .h(px(32.)),
+                                            .w(px(88.)),
                                     ),
                                 ),
                             )

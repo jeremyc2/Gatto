@@ -43,6 +43,9 @@ use gpui_kit::{
 use crate::app::{UploaderApp, WalkthroughScenario};
 
 #[cfg(target_os = "macos")]
+const CAPTURE_UI_FONT_SIZE: u8 = 18;
+
+#[cfg(target_os = "macos")]
 fn main() {
     if let Err(error) = generate() {
         eprintln!("Could not generate walkthrough screenshots: {error:#}");
@@ -333,6 +336,7 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
     cx.update(|cx| {
         gpui_kit::init(cx);
         theme::apply_dark_theme(cx);
+        theme::set_ui_font_size(CAPTURE_UI_FONT_SIZE, cx);
         image_preview::init_keybindings(cx);
         cx.set_reduce_motion(true);
     });
@@ -402,10 +406,9 @@ fn render_comparison(output: &std::path::Path, editor_only: bool) -> Result<()> 
                     Default::default(),
                     size(px(620.), px(780.)),
                 ))),
-                titlebar: Some(app::uploader_titlebar()),
                 show: false,
                 focus: false,
-                ..Default::default()
+                ..app::uploader_window_options()
             },
             cx,
             |window, cx| {
@@ -889,6 +892,7 @@ fn render_scenario_with_hover(
         gpui_kit::init(cx);
         cx.set_reduce_motion(true);
         theme::apply_dark_theme(cx);
+        theme::set_ui_font_size(CAPTURE_UI_FONT_SIZE, cx);
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
     });
@@ -900,10 +904,9 @@ fn render_scenario_with_hover(
                     origin: Default::default(),
                     size: size(px(width), px(height)),
                 })),
-                titlebar: Some(app::uploader_titlebar()),
                 focus: false,
                 show: false,
-                ..Default::default()
+                ..app::uploader_window_options()
             },
             cx,
             |window, cx| {
@@ -977,6 +980,7 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
         cx.set_reduce_motion(true);
         image_preview::init_keybindings(cx);
         theme::apply_dark_theme(cx);
+        theme::set_ui_font_size(CAPTURE_UI_FONT_SIZE, cx);
     });
     let (handle, preview) = cx.update(|cx| {
         crate::theme::open_window(

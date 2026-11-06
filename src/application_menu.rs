@@ -1,7 +1,7 @@
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::{App, KeyBinding, Menu, MenuItem, Window, actions};
 
-const ABOUT_TITLE: &str = "About Gato";
+const ABOUT_TITLE: &str = "About Gatto";
 const APP_NAME: &str = "Gatto";
 const REPOSITORY_URL: &str = "https://github.com/jeremyc2/Gatto";
 

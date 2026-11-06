@@ -292,11 +292,12 @@ Scratchpad when there is no presented main window; startup requests wait for the
 initial Scratchpad load.
 
 The Projects sidebar shares the window's slate background and has equal left
-and right insets. The workspace sits in a rounded GPUI panel with an eight-point
+and right insets. The workspace sits in a rounded GPUI panel with a six-point
 gutter along the top, right, and bottom, a thin outline, and a soft shadow. The
-workspace uses the same twelve-point inset around its scrollable content and
-Upload footer. A one-point divider separates the footer from the scrollable
-content in both sidebar states. The layout takes its cues from Hex and Rex in the
+workspace uses the same eight-point inset around its scrollable content and
+Upload footer. Workspace titles use a line height of 1.25 times their font
+size. A one-point divider separates the footer from the scrollable content in
+both sidebar states. The layout takes its cues from Hex and Rex in the
 [Syntax Weekly design segment](https://www.youtube.com/watch?v=feteUGx5020&t=622s).
 
 The sidebar has a fixed Projects/search header, a scrolling project
@@ -368,9 +369,12 @@ view identity while installing shared native macOS styling in `window_limits.rs`
 The main window extends its content into a transparent native title bar. Close,
 minimize, and zoom sit above the Projects sidebar. Hiding the sidebar gives the
 workspace a single edge-to-edge background behind the window controls,
-scrolling content, and upload footer. Preferences also reserves space for the
-controls at the top of its page. Fullscreen uses the available height. Utility
-windows use a native title bar with a one-point divider below it. A bounds
+scrolling content, and upload footer. In the collapsed view, the repository
+picker sits at the right of the title bar and the workspace starts below it.
+GPUI handles dragging and double clicks in the empty title bar area. Preferences
+reserves space for the native controls. In fullscreen the picker stays in the
+workspace header. Utility windows use a native title bar with a one-point
+divider below it. A bounds
 observer restores title-bar styling after GPUI's fullscreen transitions.
 
 Opening the main window loads Scratchpad and restores its repository without a
@@ -972,7 +976,7 @@ because AppKit's synchronous close callback otherwise re-borrows the application
 Closing windows leaves the Dock icon and recent projects menu available. Quit
 ends the process.
 
-`application_menu` installs native About Gato, Check for Updates, App Preferences,
+`application_menu` installs native About Gatto, Check for Updates, App Preferences,
 Close Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
 Command+Q bindings for every app window. About presents an icon-free AppKit
 sheet outside the GPUI update and can copy the build details to the clipboard.
