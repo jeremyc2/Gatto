@@ -1,6 +1,6 @@
 [package]
 name = "gatto"
-version = "0.23.0"
+version = "0.23.1"
 edition = "2024"
 default-run = "Gatto"
 rust-version = "1.90"
