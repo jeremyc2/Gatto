@@ -4,8 +4,9 @@ use anyhow::Context as _;
 use gpui_kit::component::{
     Collapsible,
     menu::{DropdownMenu as _, PopupMenuItem},
-    sidebar::{Sidebar, SidebarItem, SidebarMenuItem},
+    sidebar::{Sidebar, SidebarItem},
 };
+use gpui_kit::{Role, WeakEntity};
 
 enum ProjectWrite {
     Save {
@@ -19,8 +20,19 @@ enum ProjectWrite {
 }
 
 #[derive(Clone)]
+struct ProjectRow {
+    folder: PathBuf,
+    index: usize,
+    label: String,
+    add_from_clipboard: bool,
+    pinned: bool,
+    scratchpad: bool,
+}
+
+#[derive(Clone)]
 struct ProjectRows {
-    rows: Vec<(PathBuf, SidebarMenuItem)>,
+    rows: Vec<ProjectRow>,
+    view: WeakEntity<UploaderApp>,
     bounds: Rc<RefCell<HashMap<PathBuf, Bounds<gpui_kit::Pixels>>>>,
     active: Option<PathBuf>,
     pinned_count: usize,
@@ -37,77 +49,222 @@ impl SidebarItem for ProjectRows {
     fn render(
         self,
         id: impl Into<gpui_kit::ElementId>,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut App,
     ) -> impl IntoElement {
         let id = id.into();
         self.bounds.borrow_mut().clear();
         v_flex()
             .gap_2()
-            .children(
-                self.rows
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, (folder, item))| {
-                        let layout = self.bounds.clone();
-                        let selected = self.active.as_ref() == Some(&folder);
-                        let can_drop = !selected;
-                        v_flex()
+            .children(self.rows.into_iter().enumerate().map(|(index, row)| {
+                let folder = row.folder.clone();
+                let layout = self.bounds.clone();
+                let selected = self.active.as_ref() == Some(&folder);
+                let can_drop = !selected;
+                v_flex()
+                    .w_full()
+                    .when(index == 0 && self.pinned_count > 0, |group| {
+                        group.child(
+                            div()
+                                .px_2()
+                                .pb_2()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Primary"),
+                        )
+                    })
+                    .when(index == self.pinned_count && index > 0, |group| {
+                        group.child(
+                            div()
+                                .w_full()
+                                .h(px(2.))
+                                .my_3()
+                                .rounded_full()
+                                .bg(cx.theme().muted_foreground.opacity(0.5)),
+                        )
+                    })
+                    .child(
+                        div()
+                            .id(format!("{id}-project-drop-{index}"))
+                            .relative()
                             .w_full()
-                            .when(index == 0 && self.pinned_count > 0, |group| {
-                                group.child(
-                                    div()
-                                        .px_2()
-                                        .pb_2()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("Primary"),
+                            .rounded_lg()
+                            .border_1()
+                            .border_color(cx.theme().border.opacity(0.))
+                            .when(can_drop, |row| {
+                                row.drag_over::<attachment_drag::AttachmentDrag>(
+                                    |style, _, _, cx| {
+                                        style
+                                            .border_color(cx.theme().primary)
+                                            .bg(cx.theme().primary.opacity(0.12))
+                                    },
                                 )
                             })
-                            .when(index == self.pinned_count && index > 0, |group| {
-                                group.child(
-                                    div()
-                                        .w_full()
-                                        .h(px(2.))
-                                        .my_3()
-                                        .rounded_full()
-                                        .bg(cx.theme().muted_foreground.opacity(0.5)),
-                                )
-                            })
+                            .child(row.render(
+                                format!("{id}-project-item-{index}"),
+                                selected,
+                                self.view.clone(),
+                                cx,
+                            ))
                             .child(
-                                div()
-                                    .id(format!("{id}-project-drop-{index}"))
-                                    .relative()
-                                    .w_full()
-                                    .rounded_lg()
-                                    .border_1()
-                                    .border_color(cx.theme().border.opacity(0.))
-                                    .when(can_drop, |row| {
-                                        row.drag_over::<attachment_drag::AttachmentDrag>(
-                                            |style, _, _, cx| {
-                                                style
-                                                    .border_color(cx.theme().primary)
-                                                    .bg(cx.theme().primary.opacity(0.12))
-                                            },
-                                        )
+                                gpui_kit::canvas(
+                                    move |bounds, _, _| {
+                                        layout.borrow_mut().insert(folder, bounds);
+                                    },
+                                    |_, _, _, _| {},
+                                )
+                                .absolute()
+                                .inset_0(),
+                            ),
+                    )
+            }))
+    }
+}
+
+impl ProjectRow {
+    fn render(
+        self,
+        id: String,
+        selected: bool,
+        view: WeakEntity<UploaderApp>,
+        cx: &App,
+    ) -> impl IntoElement {
+        let Self {
+            folder,
+            index,
+            label,
+            add_from_clipboard,
+            pinned,
+            scratchpad,
+        } = self;
+        let accessibility_label = if add_from_clipboard {
+            format!(r#"{label}, used for "Add from Clipboard""#)
+        } else if pinned {
+            format!("{label}, pinned")
+        } else {
+            label.clone()
+        };
+        let icon = if add_from_clipboard {
+            AssetIconName::Star
+        } else {
+            AssetIconName::Folder
+        };
+        let menu_path = folder.clone();
+        let project_view = view.clone();
+        h_flex()
+            .id(id)
+            .role(Role::TreeItem)
+            .aria_label(accessibility_label)
+            .aria_selected(selected)
+            .w_full()
+            .min_h_7()
+            .px_2()
+            .py_1()
+            .gap_2()
+            .rounded(cx.theme().radius)
+            .text_sm()
+            .when(selected, |row| {
+                row.font_medium()
+                    .bg(cx.theme().sidebar_accent)
+                    .text_color(cx.theme().sidebar_accent_foreground)
+            })
+            .when(!selected, |row| {
+                row.hover(|style| {
+                    style
+                        .bg(cx.theme().sidebar_accent.opacity(0.8))
+                        .text_color(cx.theme().sidebar_accent_foreground)
+                })
+            })
+            .on_click(move |_, window, cx| {
+                let _ = project_view.update(cx, |this, cx| {
+                    this.request_workspace(Some(folder.clone()), window, cx)
+                });
+            })
+            .child(Icon::new(icon).flex_shrink_0())
+            .child(
+                div()
+                    .id("label")
+                    .debug_selector(move || format!("project-label-{index}"))
+                    .flex_1()
+                    .min_w_0()
+                    .whitespace_normal()
+                    .child(label),
+            )
+            .child(
+                div().flex_shrink_0().child(
+                    Button::new(format!("project-menu-{index}"))
+                        .debug_selector(move || format!("project-options-{index}"))
+                        .app_icon()
+                        .icon(AssetIconName::Ellipsis)
+                        .accessibility_label("Project options")
+                        .dropdown_menu(move |mut menu, _, _| {
+                            if !scratchpad || !add_from_clipboard {
+                                let view = view.clone();
+                                let path = menu_path.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new(if add_from_clipboard {
+                                        r#"Stop using for "Add from Clipboard""#
+                                    } else {
+                                        r#"Use for "Add from Clipboard""#
                                     })
-                                    .child(item.render(
-                                        format!("{id}-project-item-{index}"),
-                                        window,
-                                        cx,
-                                    ))
-                                    .child(
-                                        gpui_kit::canvas(
-                                            move |bounds, _, _| {
-                                                layout.borrow_mut().insert(folder, bounds);
-                                            },
-                                            |_, _, _, _| {},
-                                        )
-                                        .absolute()
-                                        .inset_0(),
+                                    .icon(AssetIconName::Star)
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            let _ = view.update(cx, |this, cx| {
+                                                this.change_project_preference(
+                                                    &path, true, window, cx,
+                                                )
+                                            });
+                                        },
                                     ),
-                            )
-                    }),
+                                );
+                            }
+                            let pin_view = view.clone();
+                            let pin_path = menu_path.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(if pinned {
+                                    "Unpin project"
+                                } else {
+                                    "Pin project"
+                                })
+                                .icon(AssetIconName::Pin)
+                                .on_click(move |_, window, cx| {
+                                    let _ = pin_view.update(cx, |this, cx| {
+                                        this.change_project_preference(&pin_path, false, window, cx)
+                                    });
+                                }),
+                            );
+                            if !scratchpad {
+                                let edit_view = view.clone();
+                                let edit_path = menu_path.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new("Edit metadata")
+                                        .icon(AssetIconName::Tags)
+                                        .on_click(move |_, window, cx| {
+                                            let _ = edit_view.update(cx, |this, cx| {
+                                                this.edit_project_metadata(
+                                                    edit_path.clone(),
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        }),
+                                );
+                                let delete_view = view.clone();
+                                let delete_path = menu_path.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new("Delete")
+                                        .icon(AssetIconName::Trash)
+                                        .on_click(move |_, window, cx| {
+                                            let _ = delete_view.update(cx, |this, cx| {
+                                                this.remove_project(delete_path.clone(), window, cx)
+                                            });
+                                        }),
+                                );
+                            }
+                            menu
+                        }),
+                ),
             )
     }
 }
@@ -1662,119 +1819,6 @@ impl UploaderApp {
         cx.notify();
     }
 
-    fn project_sidebar_row(
-        &self,
-        folder: &PathBuf,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) -> SidebarMenuItem {
-        let label = self.project_label(folder);
-        let path = folder.clone();
-        let menu_path = folder.clone();
-        let view = cx.entity().downgrade();
-        let add_from_clipboard = self.project_uses_add_from_clipboard(folder);
-        let pinned = folder
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|key| self.settings.pinned_projects.contains(key));
-        let scratchpad = self.scratchpad_path().ok().as_ref() == Some(folder);
-        SidebarMenuItem::new(label.clone())
-            .accessibility_label(if add_from_clipboard {
-                format!(r#"{label}, used for "Add from Clipboard""#)
-            } else if pinned {
-                format!("{label}, pinned")
-            } else {
-                label
-            })
-            .icon(if add_from_clipboard {
-                AssetIconName::Star
-            } else {
-                AssetIconName::Folder
-            })
-            .active(self.project_state.storage_folder.as_ref() == Some(folder))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.request_workspace(Some(path.clone()), window, cx)
-            }))
-            .suffix(move |_, _| {
-                let view = view.clone();
-                let menu_path = menu_path.clone();
-                h_flex().items_center().gap_1().child(
-                    Button::new(format!("project-menu-{index}"))
-                        .debug_selector(move || format!("project-options-{index}"))
-                        .app_icon()
-                        .icon(AssetIconName::Ellipsis)
-                        .accessibility_label("Project options")
-                        .dropdown_menu(move |mut menu, _, _| {
-                            if !scratchpad || !add_from_clipboard {
-                                let view = view.clone();
-                                let path = menu_path.clone();
-                                menu = menu.item(
-                                    PopupMenuItem::new(if add_from_clipboard {
-                                        r#"Stop using for "Add from Clipboard""#
-                                    } else {
-                                        r#"Use for "Add from Clipboard""#
-                                    })
-                                    .icon(AssetIconName::Star)
-                                    .on_click(
-                                        move |_, window, cx| {
-                                            let _ = view.update(cx, |this, cx| {
-                                                this.change_project_preference(
-                                                    &path, true, window, cx,
-                                                )
-                                            });
-                                        },
-                                    ),
-                                );
-                            }
-                            let pin_view = view.clone();
-                            let pin_path = menu_path.clone();
-                            menu = menu.item(
-                                PopupMenuItem::new(if pinned {
-                                    "Unpin project"
-                                } else {
-                                    "Pin project"
-                                })
-                                .icon(AssetIconName::Pin)
-                                .on_click(move |_, window, cx| {
-                                    let _ = pin_view.update(cx, |this, cx| {
-                                        this.change_project_preference(&pin_path, false, window, cx)
-                                    });
-                                }),
-                            );
-                            if !scratchpad {
-                                let edit_view = view.clone();
-                                let edit_path = menu_path.clone();
-                                menu = menu.item(
-                                    PopupMenuItem::new("Edit metadata")
-                                        .icon(AssetIconName::Tags)
-                                        .on_click(move |_, window, cx| {
-                                            let _ = edit_view.update(cx, |this, cx| {
-                                                this.edit_project_metadata(
-                                                    edit_path.clone(),
-                                                    window,
-                                                    cx,
-                                                )
-                                            });
-                                        }),
-                                );
-                                let delete_view = view.clone();
-                                let delete_path = menu_path.clone();
-                                menu = menu.item(
-                                    PopupMenuItem::new("Delete")
-                                        .icon(AssetIconName::Trash)
-                                        .on_click(move |_, window, cx| {
-                                            let _ = delete_view.update(cx, |this, cx| {
-                                                this.remove_project(delete_path.clone(), window, cx)
-                                            });
-                                        }),
-                                );
-                            }
-                            menu
-                        }),
-                )
-            })
-    }
-
     pub(super) fn render_project_sidebar(
         &self,
         titlebar_clearance: Pixels,
@@ -1863,8 +1907,16 @@ impl UploaderApp {
                     .copied()
                     .enumerate()
                     .filter(|(_, path)| self.project_label(path).to_lowercase().contains(&query))
-                    .map(|(index, folder)| {
-                        (folder.clone(), self.project_sidebar_row(folder, index, cx))
+                    .map(|(index, folder)| ProjectRow {
+                        folder: folder.clone(),
+                        index,
+                        label: self.project_label(folder),
+                        add_from_clipboard: self.project_uses_add_from_clipboard(folder),
+                        pinned: folder
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|key| self.settings.pinned_projects.contains(key)),
+                        scratchpad: scratchpad.as_ref() == Some(folder),
                     })
                     .collect(),
                 pinned_count: projects
@@ -1874,6 +1926,7 @@ impl UploaderApp {
                             && self.project_is_pinned(path)
                     })
                     .count(),
+                view: cx.entity().downgrade(),
                 bounds: self.project_bounds.clone(),
                 active: self.project_state.storage_folder.clone(),
             })
@@ -2456,6 +2509,39 @@ mod tests {
             .unwrap()
             .0;
         assert_eq!(project.metadata.description, None);
+    }
+
+    #[gpui_kit::test]
+    fn sidebar_wraps_long_project_names_and_keeps_options_visible(cx: &mut TestAppContext) {
+        let (view, cx) = super::super::tests::upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.project_state.folders = ["Short", "Long", "Unbroken"].map(PathBuf::from).into();
+                app.project_state.titles.insert(
+                    PathBuf::from("Long"),
+                    "A project name that needs multiple lines in the sidebar".into(),
+                );
+                app.project_state.titles.insert(
+                    PathBuf::from("Unbroken"),
+                    "AProjectNameWithoutAnySpacesThatAlsoNeedsMultipleLines".into(),
+                );
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+
+        let short_label = cx.debug_bounds("project-label-0").unwrap();
+        let short_options = cx.debug_bounds("project-options-0").unwrap();
+        for (label, options) in [
+            ("project-label-1", "project-options-1"),
+            ("project-label-2", "project-options-2"),
+        ] {
+            let label = cx.debug_bounds(label).unwrap();
+            let options = cx.debug_bounds(options).unwrap();
+            assert!(label.size.height > short_label.size.height);
+            assert!(label.right() < options.left());
+            assert_eq!(options.right(), short_options.right());
+        }
     }
 
     #[gpui_kit::test]

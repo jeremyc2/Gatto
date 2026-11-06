@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.23.3] - 2026-11-06
+
+### Changed
+
+- Wrap long project names onto multiple lines in the Projects sidebar.
+
 ## [0.23.2] - 2026-11-05
 
 ### Changed
