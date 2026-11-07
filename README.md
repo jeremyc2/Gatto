@@ -4,7 +4,7 @@
   <img src="docs/images/readme-cat.png" alt="Gatto, a seated black pixel-art kitten with cyan and violet eyes" width="256">
 </p>
 
-A macOS app for adding images and videos to GitHub pull requests, issues, comments,
+A macOS app for adding annotated images and videos to GitHub pull requests, issues, comments,
 and discussions.
 
 Paste an image or a copied Finder file, drag in media, or select a file. Upload it and copy the Markdown. For fewer steps,
