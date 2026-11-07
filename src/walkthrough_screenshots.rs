@@ -3,6 +3,9 @@
 
 mod add_from_clipboard;
 mod annotation;
+#[cfg(target_os = "macos")]
+#[path = "walkthrough_screenshots/annotation_demo.rs"]
+mod annotation_demo;
 mod app;
 mod application_menu;
 mod compression;
@@ -18,6 +21,9 @@ mod image_preview;
 mod log_viewer;
 mod menu_bar;
 mod model;
+#[cfg(target_os = "macos")]
+#[path = "walkthrough_screenshots/product_demo.rs"]
+mod product_demo;
 mod projects;
 mod rooftops;
 mod rooftops_score;
@@ -89,6 +95,12 @@ fn generate() -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
+    if std::env::args().any(|arg| arg == "--product-demo") {
+        return product_demo::render(output_directory);
+    }
+    if std::env::args().any(|arg| arg == "--annotation-demo") {
+        return annotation_demo::render(output_directory);
+    }
     if std::env::args().any(|arg| arg == "--upload-button-hover") {
         for (name, hover) in [
             ("idle", None),

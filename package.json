@@ -11,6 +11,7 @@
     "aseprite:check": "bun --no-env-file scripts/aseprite-mcp.ts --check",
     "audit:dependencies": "bun --no-env-file scripts/audit-dependencies.ts",
     "check:docs": "bun --no-env-file scripts/check-markdown-links.ts",
+    "build:demo": "bun --no-env-file scripts/build-product-demo.ts",
     "build:web": "bun --no-env-file web/scripts/build-portal-seam.ts && bunx --no-env-file --no-install --bun vite build --config web/vite.config.ts && bun --no-env-file web/scripts/prerender.ts",
     "dev:web": "bunx --no-env-file --no-install --bun vite --config web/vite.config.ts",
     "lint:web": "bunx --no-env-file --no-install --bun oxlint --type-aware --type-check -c web/.oxlintrc.json web && bun --no-env-file fmt --check web package.json",

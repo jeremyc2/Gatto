@@ -120,6 +120,10 @@ comparison editor captures; its framing and exports belong to the
 
 ## Licenses and attribution
 
+The [product demo](product-demo.md) extends the same off-screen capture pipeline
+into a project workflow with real circle, arrow, and text annotations, composed
+headlessly in EffectCraft. Its output is separate from these walkthrough stills.
+
 The captured interface is Aseprite 1.3.18.6, copyright Igara Studio S.A. and its
 contributors, governed by its [license agreement](https://github.com/aseprite/aseprite/blob/main/EULA.txt).
 Its appearance here demonstrates Gatto’s image tools and does not imply endorsement.

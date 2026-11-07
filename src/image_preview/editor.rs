@@ -1638,6 +1638,147 @@ fn frame_outline(
 
 #[cfg(feature = "walkthrough-screenshots")]
 impl ImagePreview {
+    /// A clean native editor fixture for motion-demo frame generation.
+    #[allow(dead_code)]
+    pub fn for_annotation_demo(cx: &mut Context<Self>) -> Self {
+        let mut preview = Self::walkthrough_source("canvas", cx);
+        preview.doc_mut().unwrap().marks.clear();
+        preview.editor.style = Style {
+            color: 6,
+            width: 3.5,
+            ..Default::default()
+        };
+        preview.refresh_annotations(cx);
+        preview
+    }
+
+    #[allow(dead_code)]
+    pub fn annotation_demo_tool(
+        &mut self,
+        name: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let tool = match name {
+            "ellipse" => Tool::Ellipse,
+            "arrow" => Tool::Arrow,
+            "text" => Tool::Text,
+            _ => Tool::Select,
+        };
+        if matches!(tool, Tool::Arrow | Tool::Text) {
+            self.editor_key_down(
+                &KeyDownEvent {
+                    keystroke: gpui_kit::Keystroke {
+                        key: if tool == Tool::Arrow { "a" } else { "t" }.into(),
+                        ..Default::default()
+                    },
+                    is_held: false,
+                    prefer_character_input: false,
+                },
+                window,
+                cx,
+            );
+        } else {
+            self.select_tool(tool, window, cx);
+        }
+        if tool == Tool::Text {
+            self.editor.style.font_size = 28.;
+        }
+    }
+
+    /// Feed the native annotation text input, without the OS clipboard or IME.
+    #[allow(dead_code)]
+    pub fn annotation_demo_type(
+        &mut self,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_kit::EntityInputHandler as _;
+        if let Some(input) = self.editor.editing.clone() {
+            input.update(cx, |input, cx| {
+                input.replace_text_in_range(None, value, window, cx)
+            });
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn annotation_demo_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.finish_text(cx);
+        self.clear_selection();
+        window.focus(&self.focus_handle, cx);
+        self.refresh_annotations(cx);
+    }
+
+    #[allow(dead_code)]
+    pub fn annotation_demo_png(&self) -> anyhow::Result<Vec<u8>> {
+        self.doc()
+            .ok_or_else(|| anyhow::anyhow!("Annotation demo has no document"))?
+            .snapshot()
+            .png(None)
+            .map(|(bytes, _)| bytes)
+    }
+
+    #[allow(dead_code)]
+    pub fn annotation_demo_text_bounds(&self) -> Option<[f32; 4]> {
+        let mark = self
+            .doc()?
+            .marks
+            .iter()
+            .find(|mark| mark.tool == Tool::Text)?;
+        let bounds = mark.world_bounds();
+        Some([bounds.x, bounds.y, bounds.w, bounds.h])
+    }
+
+    /// Drive the production gesture handlers in image coordinates, with no OS input.
+    #[allow(dead_code)]
+    pub fn annotation_demo_pointer(
+        &mut self,
+        phase: &str,
+        at: [f32; 2],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (origin, scale) = self.transform(window);
+        let position = point(px(origin.x + at[0] * scale), px(origin.y + at[1] * scale));
+        match phase {
+            "down" => self.editor_mouse_down(
+                &MouseDownEvent {
+                    position,
+                    button: MouseButton::Left,
+                    ..Default::default()
+                },
+                window,
+                cx,
+            ),
+            "move" => self.editor_mouse_move(
+                &MouseMoveEvent {
+                    position,
+                    pressed_button: Some(MouseButton::Left),
+                    ..Default::default()
+                },
+                window,
+                cx,
+            ),
+            "up" => self.editor_mouse_up(
+                &gpui_kit::MouseUpEvent {
+                    position,
+                    button: MouseButton::Left,
+                    ..Default::default()
+                },
+                window,
+                cx,
+            ),
+            _ => {}
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn annotation_demo_transform(&self, window: &Window) -> ([f32; 2], f32) {
+        let (origin, scale) = self.transform(window);
+        ([origin.x, origin.y], scale)
+    }
+
     #[allow(dead_code)]
     pub fn for_walkthrough(cx: &mut Context<Self>) -> Self {
         Self::walkthrough_source("canvas", cx)

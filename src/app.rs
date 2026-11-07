@@ -659,6 +659,99 @@ impl UploaderApp {
         this
     }
 
+    /// The film fixture keeps project and attachment changes entirely in memory.
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(crate) fn for_product_demo(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::for_walkthrough(WalkthroughScenario::EmptyProjects, window, cx)
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(crate) fn product_demo_create_project(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let folder = PathBuf::from("/Users/example/.gatto/projects/Palette review");
+        self.project_state.folders.push(folder.clone());
+        self.project_state.folder = Some(folder.clone());
+        self.project_state.storage_folder = Some(folder);
+        self.project_state.title = Some("Palette review".into());
+        self.project_state.metadata.repository = self.selected_repository.clone();
+        self.project_state.metadata.repository_owner = self.settings.owner.clone();
+        window.close_dialog(cx);
+        window.focus(&self.focus_handle, cx);
+        cx.notify();
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(crate) fn product_demo_stage_image(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> u64 {
+        let mut image =
+            StagedAttachment::from_path(path, Default::default()).expect("valid demo image");
+        image.name = "interface-review.png".into();
+        image.title = "Interface review".into();
+        let id = image.id;
+        self.staged_attachments.clear();
+        self.append_staged_attachments(vec![image], window, cx);
+        id
+    }
+
+    /// Render deterministic transfer states without issuing an upload request.
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(crate) fn product_demo_upload_progress(&mut self, percent: u64, cx: &mut Context<Self>) {
+        self.settings.upload_action = crate::settings::UploadAction::Upload;
+        self.settings.close_window_after_copy = false;
+        self.uploading = true;
+        self.upload_control = Some(github::UploadControl::default());
+        for attachment in &mut self.staged_attachments {
+            let total = attachment.len();
+            attachment.upload_state = AttachmentUploadState::Uploading {
+                sent: (total * percent.min(100)).div_ceil(100),
+                total,
+            };
+        }
+        self.sync_upload_result();
+        cx.notify();
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(crate) fn product_demo_upload_complete(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.uploading = false;
+        self.upload_control = None;
+        for attachment in &mut self.staged_attachments {
+            attachment.upload_state = AttachmentUploadState::Uploaded {
+                url: "https://github.com/user-attachments/assets/01234567-89ab-cdef-0123-456789abcdef".into(),
+            };
+        }
+        self.sync_upload_result();
+        window.push_notification(
+            Notification::success("1 attachment(s) uploaded successfully."),
+            cx,
+        );
+        cx.notify();
+    }
+
+    /// Use the production success feedback while leaving the OS clipboard alone.
+    #[cfg(feature = "walkthrough-screenshots")]
+    pub(crate) fn product_demo_copy_feedback(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.close_window_after_copy = false;
+        window.clear_notifications(cx);
+        self.finish_copy("Copied to the clipboard.", window, cx);
+        cx.notify();
+    }
+
     pub fn show_main_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel_global_shortcut_recording(window, cx);
         self.repository_picker_open = false;
