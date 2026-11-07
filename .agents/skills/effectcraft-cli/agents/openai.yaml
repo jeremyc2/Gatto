@@ -1,0 +1,5 @@
+interface:
+  display_name: "EffectCraft CLI"
+  short_description: "Edit and render EffectCraft projects"
+policy:
+  allow_implicit_invocation: true
