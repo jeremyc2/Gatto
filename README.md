@@ -15,6 +15,10 @@ service. Images and videos go directly from your Mac to GitHub; Gatto doesn't ha
 
 https://github.com/user-attachments/assets/9c3b845d-2285-48c4-8fd8-d2564ca80225
 
+- [Using Gatto in 30 Seconds](https://youtu.be/suB9eru2zr8?si=zVSSRsCIQwE7Zbtb)
+- Subscribe to my [YouTube Channel](https://www.youtube.com/@Gatto-For-GitHub)
+- Check out my cute cat website: https://gatto.jeremyc2.workers.dev
+
 ## Download
 
 <!-- release-size:start -->
