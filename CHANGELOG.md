@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-08
+
 ### Added
 
 - Add compression preferences for Quality H.264, smaller AV1 files, and fast
