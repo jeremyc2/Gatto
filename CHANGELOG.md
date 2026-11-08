@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-11-08
+
 ### Changed
 
 - Allow dragging the window from the workspace's existing top border and header

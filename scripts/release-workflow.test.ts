@@ -265,16 +265,17 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
 
 const find = (calls: string[][], ...prefix: string[]) =>
   calls.findIndex((call) => prefix.every((part, i) => call[i] === part));
-test("stable and beta appcasts exclude encoder sources while releases still upload them", async () => {
-  for (const mode of ["release", "beta-release"]) {
+test.each(["release", "beta-release"])(
+  "%s appcast excludes encoder sources while its release still uploads them",
+  async (mode) => {
     const result = await workflow(mode, false, "--yes");
     expect(result.exit, result.output).toBe(0);
     expect(result.output).not.toContain("Skipped video-encoder-sources.tar.xz");
     expect(result.calls[find(result.calls, "gh", "release", "create")]).toContain(
       "dist/release/video-encoder-sources.tar.xz",
     );
-  }
-});
+  },
+);
 test("release accepts single keystrokes, verifies drafts before publication, and pushes verified metadata", async () => {
   const result = await workflow("release", false, "terminal");
   expect(result.exit, result.output).toBe(0);
