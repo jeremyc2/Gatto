@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-11-08
+
 ### Changed
 
 - Allow changing video compression mode while a video is compressing; the new
