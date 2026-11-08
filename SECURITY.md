@@ -215,18 +215,27 @@ Rust dependency audits do not audit the separately bundled native Sparkle SDK.
   pixels underneath pixelation or other annotations; uploads contain only the
   rendered image. Undo/redo history is not persisted.
 - Project deletion removes the project folder and its contents. Reset removes
-  projects and clears Scratchpad; Delete All Projects retains Scratchpad and
+  projects and clears Scratchpad; Delete all projects retains Scratchpad and
   preferences. Deletion validates the manifest and does not follow child symlinks.
 - Video staging creates a private 0600 temporary snapshot with a random name;
   it is removed when its last draft, upload, or external viewer reference is
   released. Viewer references last until the macOS player application exits,
   and forced termination can leave temporary files for operating-system cleanup.
-  Optional compression uses private `gatto-compress-*` directories and native
-  hardware H.264/AAC encoding after an explicit Compress choice. Failed/canceled
+  Optional compression uses private `gatto-compress-*` directories after an
+  explicit Compress choice. Quality and Smaller files use bundled, separate
+  FFmpeg process with static codec libraries and an integrated, file-only metadata reader; Fast uses macOS hardware
+  H.264/AAC encoding. Helper builds pin source hashes, disable networking and
+  autodetected libraries, and verify system-only dynamic dependencies. The app
+  passes only local files and clears the helper environment, including credentials
+  and loader/report variables. Readers drain bounded metadata/error buffers;
+  cancellation or a ten-minute attempt deadline kills and reaps the helper.
+  Codec source pins and GPL notices are maintained separately from Rust's
+  dependency audit; see [helper maintenance](docs/RELEASING.md#video-encoder-helpers).
+  Failed/canceled
   attempts are deleted; successful output is copied into the staged snapshot
   only after size validation. Source videos are never modified. No screen or
   microphone capture permission is used.
-- Start at Login writes a per-user LaunchAgent containing the executable path.
+- Start at login writes a per-user LaunchAgent containing the executable path.
   See [local data and recovery](SUPPORT.md#local-data-and-recovery) for paths and
   removal instructions.
 

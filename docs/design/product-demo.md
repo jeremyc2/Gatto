@@ -19,7 +19,7 @@ progress and Uploaded, then presses Copy and holds Gatto's native “Copied to t
 clipboard.” confirmation before the final pullback.
 
 The native walkthrough renderer captures 24 sparse introductory states and nine
-closing states at 2000 × 1520. The Create Project dialog, incremental name entry,
+closing states at 2000 × 1520. The Create project dialog, incremental name entry,
 and popup menus are real app UI. Creating the project and the final save outcome
 are represented by in-memory fixtures, leaving personal projects unchanged.
 Upload progress and completion use the production attachment model, and clipboard

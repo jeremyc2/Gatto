@@ -2,6 +2,7 @@
 //! the UI exchanges only cancellation flags, progress, and a staged snapshot.
 use crate::model::{StagedAttachment, VideoUploadLimit};
 use anyhow::{Context as _, Result, bail, ensure};
+use serde::{Deserialize, Serialize};
 use std::{
     path::Path,
     sync::{
@@ -9,6 +10,34 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CompressionMode {
+    SmallerFiles,
+    Fast,
+    #[default]
+    #[serde(other)]
+    Quality,
+}
+
+impl CompressionMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Quality => "Quality — H.264",
+            Self::SmallerFiles => "Smaller files — AV1",
+            Self::Fast => "Fast — H.264",
+        }
+    }
+
+    pub fn provenance(self) -> crate::video::VideoCompression {
+        match self {
+            Self::Quality => crate::video::VideoCompression::H264Quality,
+            Self::Fast => crate::video::VideoCompression::H264Fast,
+            Self::SmallerFiles => crate::video::VideoCompression::Av1,
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct CompressionControl(Arc<AtomicBool>);
@@ -38,6 +67,17 @@ pub struct Progress {
     pub percent: u8,
 }
 
+impl Progress {
+    /// Reserve half the bar for each possible size attempt. Software encoding
+    /// already combines its two internal encoder passes into one attempt.
+    fn overall(self) -> Self {
+        Self {
+            percent: ((self.attempt - 1) * 50 + self.percent / 2).min(99),
+            ..self
+        }
+    }
+}
+
 /// ABR is a target; acceptance always uses the finalized MP4's actual byte count.
 fn video_bitrate(
     seconds: f64,
@@ -64,6 +104,7 @@ fn video_bitrate(
 pub fn compress(
     path: &Path,
     limit: VideoUploadLimit,
+    mode: CompressionMode,
     control: &CompressionControl,
     progress: impl Fn(Progress),
 ) -> Result<StagedAttachment> {
@@ -73,6 +114,7 @@ pub fn compress(
         let original =
             std::fs::metadata(path).context("The original video is unavailable. Add it again.")?;
         ensure!(original.is_file(), "Choose a regular video file.");
+        let report = |value: Progress| progress(value.overall());
         for attempt in 1..=2 {
             control.check()?;
             let directory = tempfile::Builder::new()
@@ -80,11 +122,16 @@ pub fn compress(
                 .tempdir()
                 .context("Could not create temporary storage. Check available disk space.")?;
             let output = directory.path().join("compressed.mp4");
-            progress(Progress {
+            report(Progress {
                 attempt,
                 percent: 0,
             });
-            native::transcode(path, &output, control, attempt, &progress, limit)?;
+            match mode {
+                CompressionMode::Fast => {
+                    native::transcode(path, &output, control, attempt, &report, limit)?
+                }
+                _ => software::transcode(path, &output, control, attempt, &report, limit, mode)?,
+            }
             control.check()?;
             let current = std::fs::metadata(path)
                 .context("The source video was removed during compression. Add it again.")?;
@@ -104,6 +151,8 @@ pub fn compress(
                     .unwrap_or("video");
                 attachment.name = format!("{stem}.mp4");
                 attachment.title = attachment.name.clone();
+                attachment.compressed_with = Some(mode.provenance());
+                control.check()?;
                 progress(Progress {
                     attempt,
                     percent: 100,
@@ -120,18 +169,37 @@ pub fn compress(
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (path, progress, limit);
+        let _ = (path, progress, limit, mode);
         bail!("Video compression requires macOS.")
     }
 }
 
 #[cfg(target_os = "macos")]
 mod native;
+#[cfg(target_os = "macos")]
+mod process;
+#[cfg(target_os = "macos")]
+mod software;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::MAX_ATTACHMENT_BYTES;
+
+    #[test]
+    fn progress_reserves_both_attempts_without_moving_backward() {
+        let percentages = [1, 2]
+            .into_iter()
+            .flat_map(|attempt| {
+                (0..=100).map(move |percent| Progress { attempt, percent }.overall().percent)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(percentages[0], 0);
+        assert_eq!(percentages[100], 50);
+        assert_eq!(percentages[101], 50);
+        assert_eq!(*percentages.last().unwrap(), 99);
+        assert!(percentages.windows(2).all(|pair| pair[0] <= pair[1]));
+    }
 
     #[test]
     fn duration_budget_reserves_audio_and_rejects_unusable_durations() {
@@ -164,6 +232,7 @@ mod tests {
         let result = compress(
             &source,
             VideoUploadLimit::Standard,
+            CompressionMode::Fast,
             &CompressionControl::default(),
             |_| {},
         )
@@ -171,6 +240,10 @@ mod tests {
         assert!(result.len() < MAX_ATTACHMENT_BYTES);
         assert_eq!(result.mime_type, "video/mp4");
         assert_eq!(result.name, "sample.mp4");
+        assert_eq!(
+            result.compressed_with,
+            Some(crate::video::VideoCompression::H264Fast)
+        );
         assert_eq!(std::fs::read(source).unwrap(), original);
     }
 
@@ -181,6 +254,7 @@ mod tests {
         let error = compress(
             Path::new("/does-not-exist.mp4"),
             VideoUploadLimit::Standard,
+            CompressionMode::Fast,
             &control,
             |_| {},
         )
@@ -195,11 +269,17 @@ mod tests {
         let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/sample-audio.mp4");
         let control = CompressionControl::default();
-        let error = compress(&source, VideoUploadLimit::Standard, &control, |progress| {
-            if progress.percent > 0 {
-                control.cancel();
-            }
-        })
+        let error = compress(
+            &source,
+            VideoUploadLimit::Standard,
+            CompressionMode::Fast,
+            &control,
+            |progress| {
+                if progress.percent > 0 {
+                    control.cancel();
+                }
+            },
+        )
         .err()
         .unwrap();
         assert!(error.downcast_ref::<Canceled>().is_some(), "{error}");
@@ -216,6 +296,7 @@ mod tests {
         let compressed = compress(
             &source,
             VideoUploadLimit::Standard,
+            CompressionMode::Fast,
             &CompressionControl::default(),
             |_| {},
         )

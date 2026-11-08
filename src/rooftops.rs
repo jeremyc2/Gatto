@@ -1207,7 +1207,7 @@ impl Rooftops {
                         ),
                 )
                 .child(
-                    score_button("save-rooftops-score", "Download Scorecard", cx)
+                    score_button("save-rooftops-score", "Download scorecard", cx)
                         .debug_selector(|| "download-rooftops-scorecard".into())
                         .loading(self.saving)
                         .on_click(cx.listener(Self::save_score)),

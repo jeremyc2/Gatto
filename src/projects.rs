@@ -112,6 +112,8 @@ struct Attachment {
     name: String,
     title: String,
     description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    compressed_with: Option<crate::video::VideoCompression>,
     uploaded_url: Option<String>,
     marker_descriptions: Vec<(u32, String)>,
     is_comparison: bool,
@@ -335,6 +337,7 @@ impl Project {
             item.name = record.name;
             item.title = record.title;
             item.description = record.description;
+            item.compressed_with = record.compressed_with.filter(|_| item.image().is_none());
             if let Some(files) = &record.annotations {
                 ensure!(item.image().is_some(), "Only images can have annotations");
                 let source = fs::read(project_media_path(&project.folder, &files.source)?)?;
@@ -467,6 +470,7 @@ impl Project {
                 name: item.name.clone(),
                 title: item.title.clone(),
                 description: item.description.clone(),
+                compressed_with: item.compressed_with,
                 uploaded_url: item.upload_state.uploaded_url().map(str::to_owned),
                 marker_descriptions: item
                     .image()
@@ -1265,6 +1269,72 @@ We know naming things is hard, so we set this space up for you."#
             0,
             "Removing the attachment removes its annotation files"
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn compressed_video_provenance_survives_reopen_and_retires_owned_original() {
+        use crate::compression::{self, CompressionControl, CompressionMode};
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("original.mp4");
+        let bytes = include_bytes!("../tests/fixtures/sample.mp4");
+        fs::write(&source, bytes).unwrap();
+        for mode in [
+            CompressionMode::Quality,
+            CompressionMode::SmallerFiles,
+            CompressionMode::Fast,
+        ] {
+            let original =
+                StagedAttachment::from_path(source.clone(), VideoUploadLimit::Standard).unwrap();
+            assert_eq!(original.compressed_with, None);
+            let folder = directory.path().join(mode.provenance().label());
+            let mut project = Project::create(folder.clone()).unwrap();
+            project.save(std::slice::from_ref(&original)).unwrap();
+            let owned_original = fs::read_dir(folder.join(ASSETS))
+                .unwrap()
+                .next()
+                .unwrap()
+                .unwrap()
+                .path();
+            let mut compressed = compression::compress(
+                &source,
+                VideoUploadLimit::Standard,
+                mode,
+                &CompressionControl::default(),
+                |_| {},
+            )
+            .unwrap();
+            compressed.id = original.id;
+            compressed.persistent_id = original.persistent_id;
+            project.save(&[compressed]).unwrap();
+            assert!(!owned_original.exists());
+            assert_eq!(fs::read_dir(folder.join(ASSETS)).unwrap().count(), 1);
+            let (_, loaded) = Project::open(folder.clone()).unwrap();
+            assert_eq!(loaded[0].compressed_with, Some(mode.provenance()));
+            let mut manifest: serde_json::Value =
+                serde_json::from_slice(&fs::read(folder.join(MANIFEST)).unwrap()).unwrap();
+            manifest["attachments"][0]["compressed_with"] = serde_json::json!("h264");
+            fs::write(
+                folder.join(MANIFEST),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                Project::open(folder.clone()).unwrap().1[0].compressed_with,
+                Some(crate::video::VideoCompression::H264)
+            );
+            manifest["attachments"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("compressed_with");
+            fs::write(
+                folder.join(MANIFEST),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(Project::open(folder).unwrap().1[0].compressed_with, None);
+            assert_eq!(fs::read(&source).unwrap(), bytes);
+        }
     }
 
     #[test]

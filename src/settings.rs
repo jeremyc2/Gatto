@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::global_shortcut::DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT;
+use crate::compression::CompressionMode;
 
 pub const LOGIN_ARGUMENT: &str = "--login";
 pub const DEFAULT_UI_FONT_SIZE: u8 = 16;
@@ -90,23 +90,17 @@ pub struct AppSettings {
     #[serde(alias = "quick_copy_project")]
     pub add_from_clipboard_project: Option<String>,
     pub pinned_projects: BTreeSet<String>,
-    #[serde(
-        default = "default_add_from_clipboard_shortcut",
-        alias = "global_quick_copy_shortcut"
-    )]
-    pub global_add_from_clipboard_shortcut: String,
+    #[serde(alias = "global_quick_copy_shortcut")]
+    pub global_add_from_clipboard_shortcut: Option<String>,
     #[serde(alias = "global_quick_copy_shortcut_enabled")]
     pub global_add_from_clipboard_shortcut_enabled: bool,
     pub automatically_copy_add_from_clipboard: bool,
     pub upload_action: UploadAction,
     pub close_window_after_copy: bool,
     pub allow_large_videos: bool,
+    pub video_compression: CompressionMode,
     pub copy_images_as_markdown: bool,
     pub start_at_login: bool,
-}
-
-fn default_add_from_clipboard_shortcut() -> String {
-    DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT.to_owned()
 }
 
 impl Default for AppSettings {
@@ -123,12 +117,13 @@ impl Default for AppSettings {
             pinned_repositories: BTreeSet::new(),
             add_from_clipboard_project: None,
             pinned_projects: BTreeSet::new(),
-            global_add_from_clipboard_shortcut: default_add_from_clipboard_shortcut(),
+            global_add_from_clipboard_shortcut: None,
             global_add_from_clipboard_shortcut_enabled: false,
             automatically_copy_add_from_clipboard: false,
             upload_action: UploadAction::Upload,
             close_window_after_copy: false,
             allow_large_videos: false,
+            video_compression: CompressionMode::default(),
             copy_images_as_markdown: false,
             start_at_login: false,
         }
@@ -273,6 +268,18 @@ impl AppSettings {
         anyhow::ensure!(settings.version == 1, "Unsupported settings version");
         if !UI_FONT_SIZES.contains(&settings.ui_font_size) {
             settings.ui_font_size = DEFAULT_UI_FONT_SIZE;
+        }
+        // Disabled legacy defaults were never active bindings. The record/reset
+        // control represents them as unset rather than offering a preset.
+        if !settings.global_add_from_clipboard_shortcut_enabled {
+            settings.global_add_from_clipboard_shortcut = None;
+        } else if settings
+            .global_add_from_clipboard_shortcut
+            .as_deref()
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            settings.global_add_from_clipboard_shortcut_enabled = false;
+            settings.global_add_from_clipboard_shortcut = None;
         }
         Ok(settings)
     }
@@ -625,10 +632,7 @@ mod tests {
         assert_eq!(saved["version"], 1);
         assert!(saved.get("last_repository").is_none());
         assert!(saved.get("last_repository_id").is_none());
-        assert_eq!(
-            settings.global_add_from_clipboard_shortcut,
-            "Command+Shift+G"
-        );
+        assert!(settings.global_add_from_clipboard_shortcut.is_none());
         assert!(!settings.global_add_from_clipboard_shortcut_enabled);
         assert!(!settings.close_window_after_copy);
         assert!(!settings.allow_large_videos);
@@ -639,6 +643,51 @@ mod tests {
             crate::model::ImageCopyFormat::Html
         );
         assert_eq!(settings.video_upload_limit().bytes(), 10_000_000);
+    }
+
+    #[test]
+    fn shortcut_defaults_and_disabled_legacy_presets_are_unset() {
+        assert_eq!(
+            serde_json::to_value(AppSettings::default()).unwrap()["global_add_from_clipboard_shortcut"],
+            serde_json::Value::Null
+        );
+        assert!(
+            AppSettings::parse(r#"{"global_add_from_clipboard_shortcut":null}"#)
+                .unwrap()
+                .global_add_from_clipboard_shortcut
+                .is_none()
+        );
+        for source in [
+            "{}",
+            r#"{"global_add_from_clipboard_shortcut":"Command+Shift+G","global_add_from_clipboard_shortcut_enabled":false}"#,
+        ] {
+            let settings = AppSettings::parse(source).unwrap();
+            assert!(settings.global_add_from_clipboard_shortcut.is_none());
+            assert!(!settings.global_add_from_clipboard_shortcut_enabled);
+        }
+        let settings = AppSettings::parse(r#"{"global_add_from_clipboard_shortcut":"","global_add_from_clipboard_shortcut_enabled":true}"#).unwrap();
+        assert!(!settings.global_add_from_clipboard_shortcut_enabled);
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let recorded = AppSettings {
+            global_add_from_clipboard_shortcut: Some("Command+Shift+U".into()),
+            global_add_from_clipboard_shortcut_enabled: true,
+            ..Default::default()
+        };
+        write_settings(&recorded, &path).unwrap();
+        let restored = AppSettings::parse(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            restored.global_add_from_clipboard_shortcut.as_deref(),
+            Some("Command+Shift+U")
+        );
+        assert!(restored.global_add_from_clipboard_shortcut_enabled);
+        write_settings(&AppSettings::default(), &path).unwrap();
+        assert!(
+            AppSettings::parse(&fs::read_to_string(path).unwrap())
+                .unwrap()
+                .global_add_from_clipboard_shortcut
+                .is_none()
+        );
     }
 
     #[test]
@@ -672,8 +721,8 @@ mod tests {
             Some("Review")
         );
         assert_eq!(
-            settings.global_add_from_clipboard_shortcut,
-            "Command+Shift+U"
+            settings.global_add_from_clipboard_shortcut.as_deref(),
+            Some("Command+Shift+U")
         );
         assert!(settings.global_add_from_clipboard_shortcut_enabled);
         assert!(!settings.automatically_copy_add_from_clipboard);

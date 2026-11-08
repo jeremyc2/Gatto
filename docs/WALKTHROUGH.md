@@ -11,7 +11,7 @@ Hover over icons for short hints, and explore the **⋯** menus as you go.
 
 1. **Choose a repository.** Open the dropdown above the drop zone and use
    **Filter repositories** to find the GitHub repository you're working with.
-   Repositories pinned in App Preferences appear first.
+   Repositories pinned in App preferences appear first.
 2. **Add your images or videos.** Paste an image with **Command+V**, drag files
    into Gatto, or click the drop area to choose them. You can add several at once.
 
@@ -39,7 +39,7 @@ You can also give attachments useful titles and descriptions before sharing.
 
 ## Keep your work organized
 
-**Scratchpad** is a handy place for quick, everyday work. Use **Create Project**
+**Scratchpad** is a handy place for quick, everyday work. Use **Create project**
 when you'd like to keep related attachments together. Each project remembers
 its own repository.
 
@@ -96,7 +96,7 @@ This uses Scratchpad by default. To use another project, open that project's
 **⋯** menu and choose **Use for "Add from Clipboard"**.
 
 For a one-step upload and copy, turn on **Automatically copy "Add from clipboard"**
-in App Preferences. You can also enable a global shortcut there to use Add from
+in App preferences. You can also enable a global shortcut there to use Add from
 Clipboard while you're working in another app.
 
 ## Uploads and retries
@@ -106,8 +106,7 @@ and keeps the ones that succeeded.
 
 <img src="images/walkthrough/framed/07-mixed-upload-progress.png" alt="A batch of attachments at different stages of uploading" width="800">
 
-For a larger video, Gatto may offer **Compress**. This makes a smaller copy and
-leaves your original file unchanged. Preview the result before sharing it.
+For a larger video, Gatto may offer **Compress**.
 
 <img src="images/walkthrough/framed/08-video-too-large.png" alt="Gatto offers to compress a larger video" width="800">
 

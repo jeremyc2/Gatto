@@ -88,6 +88,14 @@ if (tool === 'git') {
  if (args[1] === 'create') writeFileSync(draft, 'draft');
  if (args[1] === 'edit' && !existsSync(draft) && !['draft-resume','beta-draft-resume'].includes(mode)) throw new Error('Published without a verified draft');
 } else if (tool === 'bun') {
+ if (args[0] === 'scripts/prepare-video-encoders.ts') {
+  const directory = join(root, '.tools/video-encoders/arm64');
+  mkdirSync(join(directory, 'bin'), {recursive:true});
+  mkdirSync(join(directory, 'notices'), {recursive:true});
+  writeFileSync(join(directory, 'bin/ffmpeg'), 'encoder');
+  writeFileSync(join(directory, 'notices/NOTICE'), 'license');
+  writeFileSync(join(directory, 'video-encoder-sources.tar.xz'), 'corresponding source');
+ }
  if (args[0] === 'scripts/refresh-assets.ts') {
   const child = Bun.spawnSync([process.execPath, join(root, args[0])], {env: process.env, stdout:'inherit', stderr:'inherit'});
   process.exit(child.exitCode);
@@ -177,6 +185,7 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
         `gatto-${mode.startsWith("beta-") ? "0.17.0-beta.1" : "0.15.0"}-aarch64-apple-darwin.dmg`,
         "appcast.xml",
         "SHA256SUMS",
+        "video-encoder-sources.tar.xz",
       ])
         if (mode !== "published-no-artifacts")
           await Bun.write(join(root, "dist/release", name), "original artifact");
@@ -267,6 +276,21 @@ test("release accepts single keystrokes, verifies drafts before publication, and
   );
   const create = find(result.calls, "gh", "release", "create");
   expect(result.calls[create]).toContain("--draft");
+  expect(result.calls[create]).toContain("dist/release/video-encoder-sources.tar.xz");
+  const codecs = find(result.calls, "bun", "scripts/prepare-video-encoders.ts");
+  expect(codecs).toBeGreaterThan(-1);
+  expect(codecs).toBeLessThan(find(result.calls, "cargo", "test"));
+  expect(codecs).toBeLessThan(find(result.calls, "xcrun", "notarytool", "history"));
+  const outerSignature = result.calls.findIndex(
+    (call) => call[0] === "codesign" && call.at(-1) === "dist/release/Gatto.app",
+  );
+  for (const helper of ["gatto-video-ffmpeg"]) {
+    const signHelper = result.calls.findIndex(
+      (call) => call[0] === "codesign" && call.at(-1)?.endsWith(`/Contents/MacOS/${helper}`),
+    );
+    expect(signHelper).toBeGreaterThan(-1);
+    expect(signHelper).toBeLessThan(outerSignature);
+  }
   expect(create).toBeLessThan(find(result.calls, "bun", "scripts/verify-release.ts"));
   expect(find(result.calls, "bun", "scripts/verify-release.ts")).toBeLessThan(
     find(result.calls, "gh", "release", "edit"),

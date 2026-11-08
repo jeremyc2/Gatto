@@ -29,7 +29,7 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 
 | Symptom                                                          | What to check                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub CLI works in Terminal but Gatto cannot find it            | Application Logs shows the resolved CLI path. Gatto checks `GH_PATH`, `PATH`, `/opt/homebrew/bin/gh`, and `/usr/local/bin/gh`. For a custom installation, launch the executable with `GH_PATH=/absolute/path/to/gh` set; a GUI app may not inherit your shell’s Homebrew path.                                                                     |
+| GitHub CLI works in Terminal but Gatto cannot find it            | Application logs shows the resolved CLI path. Gatto checks `GH_PATH`, `PATH`, `/opt/homebrew/bin/gh`, and `/usr/local/bin/gh`. For a custom installation, launch the executable with `GH_PATH=/absolute/path/to/gh` set; a GUI app may not inherit your shell’s Homebrew path.                                                                     |
 | Account or organization does not load or a repository is missing | Enter a personal account or organization login, not a URL or `owner/repository`. Run `gh auth status --hostname github.com` to check the active GitHub CLI account. That account must have access to the selected owner’s repositories, including any private repository you need. For SAML single sign-on, authorize its token for SSO on GitHub. |
 | An account switch is not reflected in Gatto                      | Restart Gatto after switching accounts with GitHub CLI; Gatto caches its session in memory.                                                                                                                                                                                                                                                        |
 | File is rejected                                                 | Use PNG, JPEG, GIF, WebP, MP4, MOV, or WebM within your selected limit: 10 MB by default, optionally 100 MB for videos. Files must be nonempty and readable, with a supported extension. Choose Compress for an oversized video in the main window. Export corrupt or unsupported videos as H.264 MP4.                                             |
@@ -37,16 +37,16 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | Video does not play                                              | Click its play tile to open the default macOS video app. Install a compatible player or export as H.264 MP4. WebM and some MOV codecs are not supported by every player/browser.                                                                                                                                                                   |
 | GIF does not animate                                             | Animation plays in the separate image preview while active. macOS Reduce Motion holds the first frame.                                                                                                                                                                                                                                             |
 | Clipboard action finds no image                                  | Copy actual image data or an image/video file in Finder; a text URL or Markdown snippet is not media data.                                                                                                                                                                                                                                         |
-| A normal upload fails                                            | Inspect the attachment error and Application Logs, check network/account access, then click Upload to retry. Scratchpad and projects persist drafts and completed URLs.                                                                                                                                                                                          |
+| A normal upload fails                                            | Inspect the attachment error and Application logs, check network/account access, then click Upload to retry. Scratchpad and projects persist drafts and completed URLs.                                                                                                                                                                                          |
 | Add from Clipboard fails                                                 | Check that the project is accessible and the clipboard contains an image or copied media file. Uploading additionally requires an account and project repository. Failed uploads retain the saved draft; use the notification’s Upload and copy button or upload it in Gatto.                                                                                                                                                                       |
 | Global shortcut will not register                                | Use at least two modifiers and a supported key. If another app owns the chord, record a different shortcut. No Accessibility permission is required.                                                                                                                                                                                               |
 | Shortcut recorder keeps waiting or retains the previous shortcut | Quit any other Gatto copies, including source builds and local bundles, then retry with one copy running. A second copy can intercept the chord before the recorder receives it; each copy also retains its own preferences in memory.                                                                                                             |
-| A window still opens at login after upgrading                    | Open the updated app once to refresh its existing login item, or toggle Start at Login off and on.                                                                                                                                                                                                                                                 |
-| Start at Login stopped working after moving the app              | Put the app in its final location, then toggle Start at Login off and on.                                                                                                                                                                                                                                                                          |
+| A window still opens at login after upgrading                    | Open the updated app once to refresh its existing login item, or toggle Start at login off and on.                                                                                                                                                                                                                                                 |
+| Start at login stopped working after moving the app              | Put the app in its final location, then toggle Start at login off and on.                                                                                                                                                                                                                                                                          |
 | `gatto://` URLs do not open                                      | Install and open `Gatto.app`; a standalone development executable does not register the URL scheme.                                                                                                                                                                                                                                                |
 
 Gatto defaults to a 10 MB (10,000,000-byte) limit per image or video for Free-plan
-compatibility. [App Preferences](docs/SETUP.md#4-set-your-preferences) offers an
+compatibility. [App preferences](docs/SETUP.md#4-set-your-preferences) offers an
 unchecked **Allow videos up to 100 MB** option for eligible paid-plan users.
 It applies to videos only; Gatto does not verify your GitHub plan. If GitHub
 rejects a larger upload, verify the repository owner's plan and your membership,
@@ -66,7 +66,7 @@ Gatto writes these per-user files:
   and large-video opt-in. Repository selections live only in project manifests.
 - `~/.gatto/rooftops.cbor`: Rooftops' lowest completion time and fastest completed
   ghost replay. Delete this file to clear both.
-- `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at Login executable path.
+- `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at login executable path.
 
 Scratchpad saves to `~/.gatto/projects/Scratchpad`. New projects use named subfolders in
 `~/.gatto/projects`. Each workspace contains `project.json` and
@@ -85,7 +85,7 @@ it and its previous contents are discarded. No recovery project is created.
 Legacy global repository fields are removed after
 migration; an existing Scratchpad selection takes precedence.
 
-**Retry save** retries a failed write; **Create Project** in the sidebar can
+**Retry save** retries a failed write; **Create project** in the sidebar can
 preserve the current attachments in a new project. Project menu **Delete** removes
 its folder immediately. Removing a project folder outside the app makes it
 disappear when the sidebar refreshes.
@@ -100,12 +100,12 @@ Forced termination may leave either kind of temporary data for macOS cleanup.
 
 If malformed or unreadable settings prevent use, quit Gatto, move
 `~/.gatto/settings.json` somewhere safe, and reopen the app to configure it again.
-This resets preferences, including Start at Login; workspace folders remain.
+This resets preferences, including Start at login; workspace folders remain.
 
 ## App updates
 
 See [Setup's update instructions](docs/SETUP.md#updates). If installation fails,
-hover **↻ Update** for details and open Application Logs, then click to retry.
+hover **↻ Update** for details and open Application logs, then click to retry.
 Offline release checks are retried by Sparkle's four-hour scheduler. Only
 bundled updater-enabled releases can update themselves; versions through v0.14.0
 need a new DMG or Homebrew install once. Source builds do not check for updates.
@@ -153,15 +153,15 @@ app does not install or update that separate workflow.
 
 ## Reset and uninstall
 
-**App Preferences → Reset app** asks for confirmation, removes the entire
+**App preferences → Reset app** asks for confirmation, removes the entire
 `~/.gatto` folder, including projects, Scratchpad, settings, and Rooftops best times
 and ghost replays, removes the macOS login item, and disables the global shortcut.
-The app then initializes fresh local state. **Delete All Projects** deletes
+The app then initializes fresh local state. **Delete all projects** deletes
 projects while retaining settings, Scratchpad, and Rooftops progress.
 Neither operation removes GitHub-hosted attachments, GitHub CLI authentication,
 or downloaded Rooftops scorecards.
 
-To clear Rooftops, use **App Preferences → General → Reset Rooftops**. This button
+To clear Rooftops, use **App preferences → General → Reset Rooftops**. This button
 appears before **Reset app**, only after a completed run. It immediately clears the best time and
 ghost, restarts any open Rooftops game, and hides until the game is completed
 again. Downloaded scorecards remain in Downloads.
@@ -182,7 +182,7 @@ See [Contributing](CONTRIBUTING.md#development-setup) for build prerequisites.
 
 ## Collecting diagnostics
 
-Open **Application Logs** from the main window or App Preferences and choose
+Open **Application logs** from the main window or App preferences and choose
 **Copy all**. Logs cover lifecycle, image processing, GitHub CLI, and uploads.
 They retain at most 500 events and disappear on quit, so collect them before restarting. Gatto redacts common GitHub token prefixes, but logs can contain
 local paths, account/organization and repository names, filenames, descriptions, and server

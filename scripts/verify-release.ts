@@ -7,14 +7,15 @@ import { parseArgs } from "node:util";
 
 export function releaseChecksums(source: string, version: string): Map<string, string> {
   const names = [`gatto-${version}-aarch64-apple-darwin.dmg`, "appcast.xml"];
+  const optional = "video-encoder-sources.tar.xz";
   const entries = new Map<string, string>();
   for (const line of source.trim().split(/\r?\n/)) {
     const match = /^([a-f0-9]{64})  (.+)$/.exec(line);
-    if (!match || !names.includes(match[2]!) || entries.has(match[2]!))
+    if (!match || ![...names, optional].includes(match[2]!) || entries.has(match[2]!))
       throw new Error("Invalid or duplicate release checksum");
     entries.set(match[2]!, match[1]!);
   }
-  if (entries.size !== names.length) throw new Error("Missing DMG or appcast checksum");
+  if (names.some((name) => !entries.has(name))) throw new Error("Missing DMG or appcast checksum");
   return entries;
 }
 
@@ -69,6 +70,17 @@ if (import.meta.main) {
       await Bun.file(join(directory, "SHA256SUMS")).text(),
       tag.slice(1),
     );
+    if (checksums.has("video-encoder-sources.tar.xz"))
+      run([
+        "gh",
+        "release",
+        "download",
+        tag,
+        "--dir",
+        directory,
+        "--pattern",
+        "video-encoder-sources.tar.xz",
+      ]);
     for (const name of [...checksums.keys(), "SHA256SUMS"]) {
       const file = Bun.file(join(directory, name));
       const bytes = await file.arrayBuffer();

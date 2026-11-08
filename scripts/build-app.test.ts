@@ -17,7 +17,7 @@ async function build(failure: string, args: string[] = []) {
     for (const name of ["Tonejs-LICENSE", "Visual-Effect-LICENSE"])
       await Bun.write(join(root, "packaging/licenses", name), name);
     await Bun.write(join(root, "dist/local/Gatto.app/previous"), "previous build");
-    for (const tool of ["cargo", "codesign", "plutil", "git", "uname"]) {
+    for (const tool of ["bun", "cargo", "codesign", "plutil", "git", "uname"]) {
       const path = join(root, "tools", tool);
       await Bun.write(
         path,
@@ -26,7 +26,12 @@ set -eu
 echo '${tool}' "$@" >> "$GATTO_BUILD_TEST_ROOT/calls"
 [[ "$GATTO_BUILD_TEST_FAILURE" != '${tool}' ]] || exit 1
 case '${tool}' in
-  uname) echo Darwin ;;
+  uname) if [[ "$1" == -m ]]; then echo arm64; else echo Darwin; fi ;;
+  bun)
+    mkdir -p .tools/video-encoders/arm64/{bin,notices}
+    echo encoder > .tools/video-encoders/arm64/bin/ffmpeg
+    echo license > .tools/video-encoders/arm64/notices/NOTICE
+    ;;
   git) echo aaaaaaaaaaaa ;;
   cargo)
     profile=debug
@@ -69,6 +74,12 @@ esac
             .catch(() => ""),
         ),
       ),
+      encoder: await Bun.file(join(root, "dist/local/Gatto.app/Contents/MacOS/gatto-video-ffmpeg"))
+        .text()
+        .catch(() => ""),
+      probeExists: await Bun.file(
+        join(root, "dist/local/Gatto.app/Contents/MacOS/gatto-video-ffprobe"),
+      ).exists(),
       previous: await Bun.file(join(root, "dist/local/Gatto.app/previous")).exists(),
       calls: await Bun.file(join(root, "calls")).text(),
     };
@@ -83,6 +94,11 @@ test("local build works from another directory and prints the fresh bundle path"
   expect(result.binary).toBe("debug binary\n");
   expect(result.previous).toBe(false);
   expect(result.notices).toEqual(["Tonejs-LICENSE", "Visual-Effect-LICENSE"]);
+  expect(result.encoder).toBe("encoder\n");
+  expect(
+    result.calls.indexOf("codesign --force --sign -", result.calls.indexOf("gatto-video-ffmpeg")),
+  ).toBeGreaterThan(-1);
+  expect(result.probeExists).toBe(false);
   expect(result.output).toContain(`Created ${result.root}/dist/local/Gatto.app`);
 });
 
@@ -92,7 +108,7 @@ test("optimized local build uses the newly compiled release binary", async () =>
   expect(result.binary).toBe("release binary\n");
 });
 
-for (const failure of ["cargo", "codesign"]) {
+for (const failure of ["bun", "cargo", "codesign"]) {
   test(`failed ${failure} preserves the previous local app`, async () => {
     const result = await build(failure);
     expect(result.exit).not.toBe(0);

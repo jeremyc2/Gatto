@@ -12,7 +12,7 @@ fn redraw(cx: &mut HeadlessAppContext, handle: MainHandle) -> Result<()> {
 }
 
 fn bounds(cx: &mut HeadlessAppContext, handle: MainHandle, selector: &str) -> Result<[f32; 4]> {
-    Ok(cx.update_window(handle, |_, window, _| {
+    cx.update_window(handle, |_, window, _| {
         let b = if selector == "project-name-field" {
             window
                 .within("project-name-field")
@@ -35,7 +35,7 @@ fn bounds(cx: &mut HeadlessAppContext, handle: MainHandle, selector: &str) -> Re
             b.size.width.as_f32() * scale,
             b.size.height.as_f32() * scale,
         ]
-    })?)
+    })
 }
 
 fn center(b: [f32; 4]) -> [f32; 2] {
@@ -72,14 +72,13 @@ fn capture(
         .save(output.join(&file))?;
     eprintln!("product demo: {id}");
     let focus = if id == "project-menu" || id == "attachment-menu" || id == "annotate-choice" {
-        let at = cx.update_window(handle, |_, window, _| {
+        cx.update_window(handle, |_, window, _| {
             let b = window.within("popup-menu").find(2usize).bounds();
             [
                 b.center().x.as_f32() * window.scale_factor(),
                 b.center().y.as_f32() * window.scale_factor(),
             ]
-        })?;
-        at
+        })?
     } else if id == "create-dialog" || id.starts_with("name-") || id == "confirm-create" {
         [1000., 760.]
     } else if id == "project-annotated" || id == "final-clean" || id.starts_with("upload-progress-")

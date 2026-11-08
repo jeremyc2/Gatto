@@ -435,7 +435,7 @@ fn upload_saved_item(
             .owner
             .as_deref()
             .filter(|name| !name.trim().is_empty())
-            .context("Set an account or organization in App Preferences before uploading.")?;
+            .context("Set an account or organization in App preferences before uploading.")?;
         let repository = project
             .metadata
             .repository_for_owner(Some(owner))

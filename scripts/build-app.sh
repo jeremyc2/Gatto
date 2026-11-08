@@ -18,6 +18,10 @@ esac
 [[ $# -le 1 ]] || fail "usage: $0 [--release]"
 [[ "$(uname -s)" == Darwin ]] || fail "app bundles require macOS"
 
+bun --no-env-file scripts/prepare-video-encoders.ts
+encoder_arch="$(uname -m)"
+encoders=".tools/video-encoders/$encoder_arch"
+
 GIT_COMMIT_HASH="$(git rev-parse HEAD)" cargo build "${build_flags[@]}"
 plutil -lint packaging/Info.plist
 mkdir -p dist/local
@@ -29,8 +33,11 @@ cp packaging/Info.plist "$bundle/Contents/Info.plist"
 cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
 cp packaging/licenses/* "$bundle/Contents/Resources/"
 cp "target/$profile/Gatto" "$bundle/Contents/MacOS/gatto"
+cp "$encoders/bin/ffmpeg" "$bundle/Contents/MacOS/gatto-video-ffmpeg"
+cp -R "$encoders/notices" "$bundle/Contents/Resources/video-encoders"
 # Local apps do not bundle Sparkle or contact its release feed.
 plutil -remove SUFeedURL "$bundle/Contents/Info.plist"
+codesign --force --sign - "$bundle/Contents/MacOS/gatto-video-ffmpeg"
 codesign --force --sign - "$bundle"
 codesign --verify --deep --strict "$bundle"
 rm -rf dist/local/Gatto.app

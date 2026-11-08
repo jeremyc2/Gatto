@@ -45,21 +45,29 @@ Quit any running Gatto copy before starting a source build. The installed app an
 a development executable can run together, but their global shortcuts compete
 and their in-memory preferences can differ.
 
-Clone and run the project:
+Install [Bun](https://bun.sh/docs/installation), then clone and run the project:
 
 ```sh
 git clone https://github.com/jeremyc2/Gatto.git
 cd Gatto
 rustup component add rustfmt clippy
 cargo fetch --locked
+bun --no-env-file scripts/prepare-video-encoders.ts
 cargo run
 ```
 
 Entering this repository selects the stable toolchain in `rust-toolchain.toml`,
 including formatter and linter components. Follow the
 [app setup guide](docs/SETUP.md#2-connect-github-cli) for GitHub CLI authentication
-before trying uploads. To create an optimized binary, run `cargo build --release`.
+before trying uploads. To create a complete optimized app with bundled codec
+helpers, run `./scripts/build-app.sh --release`. A bare `cargo build --release`
+does not package those helpers alongside the executable.
 A source build can run on Intel macOS; published bundles currently target Apple Silicon.
+The first preparation downloads hash-pinned source archives and build tools into
+ignored `.tools/video-encoders`; subsequent builds reuse the verified helpers.
+Xcode command-line tools compile the libraries. No Homebrew codec installation
+is required for app compression. Intel codec builds are supported by the recipe
+but have not been validated on an Intel machine in this change.
 
 ## Pixel art tooling
 
@@ -140,7 +148,7 @@ New UI should remain keyboard accessible and usable with macOS accessibility
 features.
 
 Clipboard writes must always follow an explicit user action. Changes to settings
-storage or Start at Login must preserve the per-user scope documented in
+storage or Start at login must preserve the per-user scope documented in
 [the architecture notes](docs/ARCHITECTURE.md). Never persist GitHub credentials.
 Scratchpad and projects persist media and upload URLs in their workspace folders;
 settings contain only preferences. See
@@ -226,6 +234,11 @@ release-size updates, and link checks. Record user-visible changes under
 **Unreleased** in [CHANGELOG.md](CHANGELOG.md).
 
 ### Walkthrough screenshots
+
+To inspect the video upload UI without changing personal settings, use
+`cargo run --locked --features walkthrough-screenshots --bin walkthrough-screenshots -- /tmp/gatto-video-review --video-upload-review`.
+It renders the compressed-video row, progress card and click-open Preferences
+info popover using isolated fixtures. Remove the generated images after review.
 
 Run `bun refresh:assets` on macOS to export the approved artwork, compile the app
 icons, regenerate documentation screenshots and the installer preview, and export
@@ -426,9 +439,18 @@ to Stable. Release versions use `x.y.z-beta.N` for Cargo/display/tags and `x.y.z
 for macOS's build version; `prepare-release.ts --check` verifies the mapping.
 Compression uses narrowly enabled `objc2` AVFoundation, AVFAudio, CoreMedia,
 CoreVideo, and VideoToolbox bindings. They link macOS's existing decoders and
-hardware encoder; no software codec, capture framework, or external encoder
-executable is bundled. The first four additions are framework glue; the
+hardware encoder for **Fast — H.264**. **Quality — H.264**, the default, and
+**Smaller files — AV1** use a bundled FFmpeg executable with a small integrated metadata reader, built
+with static x264, SVT-AV1 and libaom libraries. No capture framework is added.
+Run `bun scripts/prepare-video-encoders.ts` before media tests or source runs;
+`scripts/build-app.sh` does this automatically. The first four additions are framework glue; the
 VideoToolbox binding supplies the hardware-requirement key.
+
+The helper recipe disables network protocols, autodetected dependencies and
+unused codecs. It checks source SHA-256, architecture, and system-only dynamic
+dependencies. Source pins live in `scripts/video-encoder-sources.json`; build
+logs and reusable tools stay under `.tools`. Releases include GPL helper notices
+and a corresponding-source archive. See [Releasing](docs/RELEASING.md#video-encoder-helpers).
 
 Keep new dependencies to a minimum. In a dependency change, explain:
 

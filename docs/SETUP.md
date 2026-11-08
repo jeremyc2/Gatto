@@ -9,11 +9,11 @@
 2. Open the downloaded file to see the installation window.
 3. Drag the Gatto icon onto the Applications folder shown below. Wait for the copy
    to finish.
-4. Open Applications in Finder and double-click Gatto.
+4. Open applications in Finder and double-click Gatto.
 
 ![Gatto's installation window: drag the cat app icon onto the Applications folder](images/dmg-install.png)
 
-Install before enabling Start at Login so the saved app location is correct.
+Install before enabling Start at login so the saved app location is correct.
 You can delete the downloaded file after installation. For macOS compatibility
 and Intel Macs, see [Support](../SUPPORT.md#compatibility).
 
@@ -47,10 +47,10 @@ or see [Support](../SUPPORT.md#finder-integration) for troubleshooting.
 
 ### Updates
 
-Open **Gatto → Check for Updates…** to check manually. If you’re up to date,
+Open **Gatto → Check for updates…** to check manually. If you’re up to date,
 the dialog shows your installed version.
 
-Choose **Stable** or **Beta** in **App Preferences → Release channel**.
+Choose **Stable** or **Beta** in **App preferences → Release channel**.
 Stable is the default, including when no preference was previously saved. Beta
 receives preview releases and newer stable releases. The preference survives
 restarts. Selecting a channel refreshes availability without downloading or
@@ -58,7 +58,7 @@ installing anything; an offer from the previous channel is cleared.
 
 Switching from Beta to Stable keeps your installed beta until a stable release
 catches up. Gatto never installs an older version automatically. Preferences show
-the installed and latest stable versions while waiting; **Check for Updates…**
+the installed and latest stable versions while waiting; **Check for updates…**
 reports the same status. You can return to Beta at any time.
 
 If your installed stable version has no channel dropdown, install a beta DMG
@@ -77,7 +77,7 @@ and in the menu bar menu. Click once to download, verify, install, and restart.
 No download or installation starts without that click. The tooltip mentions the
 restart; finish your current work before updating. Active uploads must finish
 first. A failed installation leaves **↻ Update** available to retry, with details
-in its tooltip and Application Logs. macOS may request authorization if the app
+in its tooltip and Application logs. macOS may request authorization if the app
 is owned by another user.
 
 Versions through v0.14.0 do not contain an updater. Install the first
@@ -114,11 +114,11 @@ installations work without extra configuration; see
 
 ## 3. Choose your account or organization
 
-On first launch, open **App Preferences** from the settings icon or the menu bar.
+On first launch, open **App preferences** from the settings icon or the menu bar.
 Gatto waits for an account or organization login before loading repositories.
 Public release checks do not need GitHub CLI authentication.
 
-<img src="images/walkthrough/framed/01-first-run.png" alt="Gatto's first-run screen with Application Logs, App Preferences, and an Open App Preferences button" width="800">
+<img src="images/walkthrough/framed/01-first-run.png" alt="Gatto's first-run screen with Application logs, App preferences, and an Open app preferences button" width="800">
 
 Enter a personal account login, such as `octocat`, or an organization login, such
 as `acme`, in **GitHub account/organization**, and save it. Use the login rather
@@ -137,14 +137,14 @@ Add from Clipboard saves to Scratchpad by default. Choose
 **Use for "Add from Clipboard"** from another project’s sidebar menu to save there.
 Select a repository in that project when you are ready to upload.
 
-<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App Preferences showing account and repository choices, clipboard shortcuts, image copying, video uploads, release channel, and general settings" width="800">
+<img src="images/walkthrough/framed/02-preferences.png" alt="Gatto App preferences showing account and repository choices, clipboard shortcuts, image copying, video uploads, release channel, and general settings" width="800">
 
 ## 4. Set your preferences
 
-- **Interface size** scales app text and spacing as you move the slider. Drag
+- **Base font size** scales app text and spacing as you move the slider. Drag
   the handle or select a labeled stop from **16 pt** to **24 pt**. Press
   **Command+=** or **Command+−** to step through the same sizes from the main
-  page or App Preferences. The default is **16 pt**, and Gatto remembers your
+  page or App preferences. The default is **16 pt**, and Gatto remembers your
   choice.
 - **Copy images as Markdown** is unchecked by default. Enable it to copy
   `![title](URL)` instead of a sized HTML image tag. It applies to
@@ -159,19 +159,23 @@ Select a repository in that project when you are ready to upload.
   grant upload access. The preference applies to file selection, drag/drop,
   Finder paste, Add from Clipboard, and the compression target. Images and GIFs remain
   limited to 10 MB. See [GitHub's attachment limits](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files).
-- **Start at Login** starts Gatto quietly in the menu bar, without opening a
+- **Start at login** starts Gatto quietly in the menu bar, without opening a
   window or showing a Dock icon. Add from Clipboard and update checks work in the background.
-  Choose **Open App** from the menu bar to show the window. Existing login items
+  Choose **Open app** from the menu bar to show the window. Existing login items
   are refreshed when you next open the updated app. If you move the app later,
   toggle this off and on to refresh its saved location.
-- **Automatically copy "Add from clipboard"** is off by default. It lets the
+- **Automatically upload and copy result** is off by default. It lets the
   background action upload the saved item and copy its output automatically.
   With it off, the item is saved as a draft and the notification offers
   **Upload and copy**. Both modes always post a system notification.
-- **Add from Clipboard shortcut** enables a global shortcut, initially
-  **Command+Shift+G**. It is off by default and requires no Accessibility
-  permission. Saving drafts does not require a repository selection. Use
-  **Record shortcut** to choose a different combination.
+- **Add from Clipboard** includes **Record global hotkey** and **Reset** for its global
+  shortcut. There is no preset shortcut. Record a combination to activate it;
+  the keys appear to the right of Reset and remain until replaced or reset.
+  **Reset** clears the keys and unregisters the shortcut. Existing active saved
+  shortcuts are preserved. No Accessibility permission is required, and saving
+  drafts does not require a repository selection. Press **Escape** or **Cancel**
+  to leave recording without changing the saved shortcut. A one-modifier attempt
+  shows an inline hint, which clears when two supported modifiers are held.
 - **Close the window after copy** closes the main window after copying uploaded
   Markdown. Attachments and completed upload URLs stay saved in the workspace.
 
@@ -187,5 +191,5 @@ An existing `~/.gatto/scratchpad` folder moves there automatically on launch,
 replacing the destination if it already exists.
 Preferences live in `~/.gatto/settings.json`, with a repository-hosted JSON Schema
 reference for code editors. Existing Application Support settings migrate on launch.
-Start at Login is also recorded there; macOS still requires its LaunchAgent in
+Start at login is also recorded there; macOS still requires its LaunchAgent in
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`.

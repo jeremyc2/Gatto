@@ -1,0 +1,14 @@
+Gatto's separate gatto-video-ffmpeg executable is
+FFmpeg 9.0.2, built with x264 r3222 (b35605ace3ddf7c1a5d67a2eb553f034aef41d55),
+SVT-AV1 4.2.0 and libaom 3.15.3 (b141d9c45db236335351c8a4b2a14b3ade27c937).
+This helper, including the Gatto metadata-inspection modification in
+packaging/video-inspect.c, is licensed under GNU GPL version 3 or later. It is not linked
+into Gatto's Rust executable. Gatto's own source remains under its MIT license.
+See the accompanying license and patent notices for the individual libraries.
+
+Complete corresponding source and the build recipe accompany each release as
+video-encoder-sources.tar.xz at https://github.com/jeremyc2/Gatto/releases.
+For source builds: bun scripts/prepare-video-encoders.ts.
+FFmpeg: https://ffmpeg.org/  x264: https://code.videolan.org/videolan/x264
+SVT-AV1: https://gitlab.com/AOMediaCodec/SVT-AV1
+libaom: https://aomedia.googlesource.com/aom

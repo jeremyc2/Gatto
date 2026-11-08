@@ -171,14 +171,14 @@ to create the parallax effect.
 Finishing the third level opens your results: total coins, kills,
 deaths, and total completion time. Only a faster completed run replaces the
 record; restarting or closing the game keeps it. Time spent paused or waiting between levels does not count.
-**Download Scorecard** writes a 3600 × 2160 PNG to Downloads. Repeated saves use a new filename.
+**Download scorecard** writes a 3600 × 2160 PNG to Downloads. Repeated saves use a new filename.
 Both cards show a full moon and four centered columns for coins, deaths,
 enemies defeated, and completion time, alongside the final rooftop home and its
 sleeping cat under “Home at last.” Zs animate on the results screen; the exported
 PNG captures a fixed frame. The footer shows `personal best: <time>`
 when the current run is slower than the saved best, displaying that faster saved
 time. First runs, ties, and new records have no personal-best footer. **Play again**, **Exit**,
-and **Download Scorecard** share the same height, padding, and styling, with
+and **Download scorecard** share the same height, padding, and styling, with
 widths that fit their labels.
 The best time and its complete ghost replay are saved together in
 `~/.gatto/rooftops.cbor`. Removing this file clears both. The game starts fresh
@@ -187,7 +187,7 @@ Records from the earlier course retain their best time and completion status.
 Their ghost is retired because the shared starting rooftops changed geometry;
 the next complete run records a ghost for the current course.
 
-After completing Rooftops, **App Preferences → General** includes **Reset Rooftops**
+After completing Rooftops, **App preferences → General** includes **Reset Rooftops**
 before **Reset app**.
 Clicking it immediately clears the best time and ghost, restarts any open game
 from level 1, and hides the button until you complete all three levels again.
@@ -197,7 +197,7 @@ local app data; see [reset and uninstall](../SUPPORT.md#reset-and-uninstall).
 Moon geometry and icon references are recorded in
 [the HUD research notes](research/rooftops-hud-2026-10-28.md).
 
-![The results screen with coins, deaths, active play time, and the Download Scorecard button](images/walkthrough/framed/rooftops-3.png)
+![The results screen with coins, deaths, active play time, and the Download scorecard button](images/walkthrough/framed/rooftops-3.png)
 
 The saved scorecard:
 

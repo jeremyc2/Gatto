@@ -19,7 +19,7 @@ The application separates these responsibilities within a single local process:
   stream image and video bytes directly to GitHub's attachment service. Gatto has no backend
   or server of its own.
 - **macOS integration:** provide menu bar actions, the optional global shortcut,
-  custom URL actions, Start at Login, and silent installer ejection. Interactive
+  custom URL actions, Start at login, and silent installer ejection. Interactive
   entry points feed into the app's shared action handling.
 - **Preferences and diagnostics:** persist local preferences and keep a bounded,
   in-memory event log available in the Application logs window.
@@ -131,7 +131,7 @@ blocked during installation. The user driver never consents to install without
 the click. Information-only releases and installation failures leave a retry
 control and actionable tooltip; background-check errors enter diagnostics and,
 when no offer exists, the status in Preferences.
-The macOS **Gatto → Check for Updates…** action requests a fresh check without
+The macOS **Gatto → Check for updates…** action requests a fresh check without
 granting installation consent. It queues behind an active background check and
 deduplicates repeated requests. Only this manual check presents native alerts:
 the available version with a release link and Update/Cancel choices, no update,
@@ -301,7 +301,7 @@ both sidebar states. The layout takes its cues from Hex and Rex in the
 [Syntax Weekly design segment](https://www.youtube.com/watch?v=feteUGx5020&t=622s).
 
 The sidebar has a fixed Projects/search header, a scrolling project
-list containing named projects, and fixed Scratchpad and Create Project controls
+list containing named projects, and fixed Scratchpad and Create project controls
 at the bottom. Scratchpad is excluded from the list and Primary section, including
 when used for Add from Clipboard; its button keeps its notebook icon. Named projects
 keep folder icons when pinned, with pin icons only in the Pin/Unpin menu actions.
@@ -514,8 +514,46 @@ and compression result before staging the accepted items in their input order.
 A separate cancellation flag and generation guard prevent stale native jobs
 from restoring discarded imports. Uploads and updates are disabled during import.
 
-`compression.rs` owns the offline AVURLAsset → AVAssetReader → AVAssetWriter
-pipeline through narrowly enabled `objc2` framework bindings.
+`compression.rs` owns offline compression policy, cancellation, private storage,
+size retries, and staging. `CompressionMode` is persisted in preferences and
+snapshotted with the upload limit when a job starts. Missing or unknown mode
+values resolve to Quality. A click-only info icon by Video uploads compares
+screen detail, encoding time and file size relative to Fast, using the measured
+screen-recording estimates. Detailed compatibility remains in the research notes.
+
+`compression/software.rs` runs one bundled `gatto-video-ffmpeg` helper. Its
+`--gatto-inspect` entry point returns only the stream, timing, rotation and HDR
+metadata used by Gatto. The small GPL inspection adapter is compiled into that
+executable from `packaging/video-inspect.c`; no ffprobe executable is bundled. Quality (default) uses libx264 slow, two passes,
+8-bit 4:2:0; Smaller files uses SVT-AV1 preset 6, two passes, 10-bit 4:2:0,
+`tune=0:scd=1:scm=3:lp=4`. Both normalize to 30 fps, keep decoded pixel dimensions
+and orientation, use a 300-frame GOP, and preserve audio as mono 48 kHz AAC at
+64 kbps. Software AV1 decoding is bundled for Macs without AV1 hardware. Probe
+validation rejects HDR and multiple audio/video tracks; finalized output must
+retain the expected codec, dimensions, rotation, audio and duration and decode
+its first picture. A failed software mode reports an error rather than silently
+changing the user's choice.
+
+`compression/process.rs` owns child processes and pipe readers. It clears the
+environment, uses file/pipe protocols only, drains progress and bounded error
+tails, caps metadata at 256 KiB and kills/reaps on cancellation or timeout. Pass
+statistics live in the private attempt directory. Each possible size attempt
+gets half of the overall progress range; software encoding divides its half
+between two encoder passes. A successful first attempt jumps to 100 only after
+the size gate and staged snapshot succeed. No pass, attempt or percent text is
+shown in the UI. The bar never resets when a retry begins.
+
+Compressed attachments store optional `compressed_with` provenance in the
+portable manifest: `h264_quality`, `h264_fast` or `av1`. Legacy `h264` identifies
+only the codec. Missing records default to no provenance; reopening never infers
+that a video was compressed or guesses its encoding mode. Attachment headers
+combine title, size and format on one line; compression provenance is right
+aligned beside the upload status on the second line. Import compression stages only the accepted
+result, without an uncompressed backup. Project saves retire replaced owned
+media only after the new manifest commits; external source files are untouched.
+
+Fast uses the AVURLAsset → AVAssetReader → AVAssetWriter pipeline through
+narrowly enabled `objc2` framework bindings.
 `compression/native.rs` denies unsafe code in orchestration, budgeting, progress,
 deadlines and errors. Its private `bindings.rs` owns reader/writer/sample operations,
 while `settings.rs` holds the documented native dictionary schemas. Session ownership
@@ -531,7 +569,7 @@ sizes produce actionable errors rather than silent media loss or CPU fallback.
 
 The ABR budget reserves audio first from 92% of the selected byte limit and scales
 with source duration (capped at 12 Mbps for short clips). At 60 seconds with
-audio under the default 10 MB policy it is about 1.16 Mbps for video. A second pass may retry from the original
+audio under the default 10 MB policy it is about 1.16 Mbps for video. A second size attempt may retry from the original
 at 70% of the first video bitrate. Only a finalized, nonempty MP4 strictly below
 the selected 10 MB or 100 MB limit is copied into a staged video snapshot; byte estimates alone
 never authorize upload. The original is read without modification and its size
@@ -542,7 +580,12 @@ and uses per-iteration autorelease pools. UI cancellation only sets an atomic
 flag; the owner cancels reader/writer operations serially. A ten-minute deadline
 bounds each attempt. `gatto-compress-*` directories are private and removed on
 success, failure, or cancellation; only the accepted upload snapshot survives.
-Compression does not capture screens or microphones or invoke external encoders.
+Compression does not capture screens or microphones or contact the network.
+`scripts/prepare-video-encoders.ts` builds the GPL helper executables from
+hash-pinned FFmpeg, x264, SVT-AV1 and libaom sources, verifying architecture and
+system-only dynamic dependencies. Source builds use the ignored `.tools` cache;
+bundles use signed sibling helpers, never a PATH-installed encoder. Releases
+carry codec license notices and a corresponding-source archive.
 
 On macOS, closing a window orders it out and vetoes native destruction. GPUI's
 window teardown can trigger an uncaught AppKit Touch Bar observer exception
@@ -560,7 +603,7 @@ use native destruction.
 The shared image/GIF preview starts with maximized window bounds and no content
 size cap. Reusing its retained window preserves subsequent manual resizing.
 
-`image_composer.rs` owns a separate, non-maximized **Side-by-Side Comparison**
+`image_composer.rs` owns a separate, non-maximized **Side-by-side comparison**
 attachment picker, opened from the native Advanced menu or status item. The main
 controller retains one picker under the existing macOS window lifecycle. It
 contains two labeled slots, using main-window-style image drop zones and the
@@ -976,8 +1019,8 @@ because AppKit's synchronous close callback otherwise re-borrows the application
 Closing windows leaves the Dock icon and recent projects menu available. Quit
 ends the process.
 
-`application_menu` installs native About Gatto, Check for Updates, App Preferences,
-Close Window and Quit Gatto menu items, with unscoped Command+, / Command+W /
+`application_menu` installs native About Gatto, Check for updates, App preferences,
+Close window and Quit Gatto menu items, with unscoped Command+, / Command+W /
 Command+Q bindings for every app window. About presents an icon-free AppKit
 sheet outside the GPUI update and can copy the build details to the clipboard.
 The cat icon's menu also shows preferences, quit and the Add from Clipboard
@@ -1050,7 +1093,7 @@ the first group. The saved/manual order is retained within each group, and drag
 reordering stays within its group. Batch upload/copy ordering therefore remains
 stable even as individual uploads finish.
 
-## App Preferences and local state
+## App preferences and local state
 
 The repository owner (personal account or organization), repository favorites,
 project pins, the project folder used for Add from Clipboard, shortcut configuration,
@@ -1060,22 +1103,22 @@ shortcut keys are accepted on read and rewritten under the new names; automatic
 upload remains off unless explicitly enabled. The GitHub token and image bytes
 are never written there.
 Until an account or organization is set, the main screen points the user to
-App Preferences. The `owner` setting accepts the former
+App preferences. The `owner` setting accepts the former
 `organization` key when reading existing preferences. Changing owners clears
 the active repository selection and repository favorites after successfully saving
 settings. Project repository records retain their owner and are inactive while
 another owner is configured. Global settings do not store repository selections.
 
-Start at Login is recorded in settings and synchronized with the macOS-required file
+Start at login is recorded in settings and synchronized with the macOS-required file
 `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`. Enabling the
 setting writes a LaunchAgent containing the current executable's canonical path
 and a `--login` argument; disabling it removes that one file. The agent runs in
 the user's Aqua session at the next login. A login launch hides the Dock icon and
 creates no windows. Startup loads preferences and registers the global shortcut
 without an uploader view; menu actions, custom URLs, and background update checks
-remain available. Explicitly opening Gatto or choosing Open App shows the window.
+remain available. Explicitly opening Gatto or choosing Open app shows the window.
 On startup, an existing login item is atomically refreshed with the new argument;
-this never enables Start at Login for users who have not selected it. No privileged
+this never enables Start at login for users who have not selected it. No privileged
 helper or system-wide login service is installed.
 
 The **Reset app** preference deletes projects, clears Scratchpad, removes settings
@@ -1084,8 +1127,15 @@ Projects preserves Scratchpad and preferences. Neither operation modifies GitHub
 CLI authentication, which is managed outside of Gatto.
 
 The global Add from Clipboard shortcut uses macOS hotkey registration rather than global keyboard event
-monitoring, so it does not require Accessibility permission. The shortcut is opt-in, must contain
-at least two modifiers, and is unregistered when disabled or when the app resets.
+monitoring, so it does not require Accessibility permission. It has no preset:
+Record saves and activates a chord with at least two supported modifiers;
+Reset clears it and unregisters it. The shortcut is stored as a nullable string;
+unset and reset values serialize as `null`, and legacy empty strings migrate to
+`null`. The enabled flag remains in persisted settings
+for compatibility, with disabled legacy presets treated as unset. Failed native
+registration does not erase a saved selection. The inline modifier hint appears
+after a one-modifier attempt and clears immediately when a second supported
+modifier is pressed, on successful capture, or when recording ends.
 
 The build script accepts an explicit `GIT_COMMIT_HASH` environment value or asks
 the local Git executable for the current short commit. It falls back to `unknown`
@@ -1110,6 +1160,6 @@ pair and upgrade rules.
 - Custom action URLs do not accept parameters.
 - Upload results are copied after an explicit copy action or a user-configured Add from Clipboard action.
 - Persistent settings contain repository names and app preferences, never tokens or image bytes;
-  Start at Login stores the executable path in a per-user LaunchAgent.
+  Start at login stores the executable path in a per-user LaunchAgent.
 - Logs and errors should never include tokens or raw image bytes.
 - Diagnostic events are retained only in memory (up to 500 entries) and are lost on quit.

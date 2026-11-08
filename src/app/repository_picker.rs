@@ -378,12 +378,6 @@ impl UploaderApp {
                     .min_w_0()
                     .gap_1()
                     .child(div().font_semibold().text_sm().child("Pinned repositories"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Choose which repositories appear first when uploading."),
-                    )
                     .when(self.load_state == LoadState::Failed, |heading| {
                         heading.child(
                             Button::new("retry-pin-repositories")

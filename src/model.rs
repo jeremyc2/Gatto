@@ -12,7 +12,7 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use gpui_kit::{ClipboardEntry, ClipboardItem, Image, ImageFormat};
 
-use crate::video::Video;
+use crate::video::{Video, VideoCompression};
 
 pub const MAX_ATTACHMENT_BYTES: u64 = 10_000_000;
 pub const UNSUPPORTED_MEDIA_MESSAGE: &str = "Unsupported file type.";
@@ -91,6 +91,7 @@ pub struct StagedAttachment {
     pub description: String,
     pub upload_state: AttachmentUploadState,
     pub mime_type: String,
+    pub compressed_with: Option<VideoCompression>,
     pub media: Media,
 }
 
@@ -229,6 +230,7 @@ impl StagedAttachment {
                 name,
                 upload_state: AttachmentUploadState::Preview,
                 mime_type: mime_type.into(),
+                compressed_with: None,
                 media: Media::Video(Arc::new(video)),
             });
         }
@@ -364,6 +366,7 @@ impl StagedAttachment {
             name,
             upload_state: AttachmentUploadState::Preview,
             mime_type: image.format.mime_type().to_owned(),
+            compressed_with: None,
             media: Media::Image(ImageData {
                 is_comparison: false,
                 marker_descriptions: Vec::new(),
@@ -381,6 +384,19 @@ impl StagedAttachment {
             format!("{:.1} MB", bytes / 1_000_000.0)
         } else {
             format!("{:.0} KB", (bytes / 1000.0).max(0.1))
+        }
+    }
+
+    pub fn format_label(&self) -> &str {
+        match self.mime_type.as_str() {
+            "video/mp4" => "MP4",
+            "video/quicktime" => "MOV",
+            "video/webm" => "WebM",
+            "image/png" => "PNG",
+            "image/jpeg" => "JPEG",
+            "image/gif" => "GIF",
+            "image/webp" => "WebP",
+            other => other,
         }
     }
 }

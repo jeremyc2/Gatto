@@ -44,8 +44,9 @@
       "description": "Repository picker favorites for the configured owner. They do not select the Add from Clipboard destination."
     },
     "global_add_from_clipboard_shortcut": {
-      "type": "string",
-      "default": "Command+Shift+G"
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Recorded Add from Clipboard shortcut; null until recorded or after Reset."
     },
     "sidebar_collapsed": {
       "type": "boolean",
@@ -53,7 +54,8 @@
     },
     "global_add_from_clipboard_shortcut_enabled": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Set by recording a shortcut and cleared by Reset; retained for compatibility with earlier settings."
     },
     "close_window_after_copy": {
       "type": "boolean",
@@ -67,6 +69,11 @@
     "allow_large_videos": {
       "type": "boolean",
       "default": false
+    },
+    "video_compression": {
+      "enum": ["quality", "smaller_files", "fast"],
+      "default": "quality",
+      "description": "Encoding mode for oversized video imports: two-pass H.264, two-pass AV1, or native hardware H.264."
     },
     "copy_images_as_markdown": {
       "type": "boolean",

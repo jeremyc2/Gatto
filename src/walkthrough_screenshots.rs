@@ -95,6 +95,25 @@ fn generate() -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
+    if std::env::args().any(|arg| arg == "--video-upload-review") {
+        for (scenario, name) in [
+            (WalkthroughScenario::VideoStaged, "compressed-video.png"),
+            (
+                WalkthroughScenario::VideoCompressing,
+                "compression-progress.png",
+            ),
+            (WalkthroughScenario::Preferences, "video-preferences.png"),
+        ] {
+            render_scenario(scenario, &output_directory.join(name))?;
+        }
+        return Ok(());
+    }
+    if std::env::args().any(|arg| arg == "--compression-comparison") {
+        return render_scenario(
+            WalkthroughScenario::Preferences,
+            &output_directory.join("compression-comparison.png"),
+        );
+    }
     if std::env::args().any(|arg| arg == "--product-demo") {
         return product_demo::render(output_directory);
     }
@@ -953,6 +972,18 @@ fn render_scenario_with_hover(
             );
             Ok::<_, anyhow::Error>(())
         })??;
+    }
+    if matches!(scenario, WalkthroughScenario::Preferences)
+        && std::env::args()
+            .any(|arg| arg == "--compression-comparison" || arg == "--video-upload-review")
+    {
+        cx.update_window(window_handle, |_, window, cx| {
+            window.click("video-upload-info", cx)
+        })?;
+        cx.run_until_parked();
+        cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
+        cx.run_until_parked();
+        cx.update_window(window_handle, |_, window, cx| window.render_frame(cx))?;
     }
     if let Some(selector) = hover {
         cx.update_window(window_handle, |_, window, cx| {

@@ -102,13 +102,7 @@ impl UploaderApp {
             .border_1()
             .border_color(cx.theme().border)
             .p_4()
-            .child(div().font_semibold().text_sm().child("Interface size"))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Adjust the base text size and spacing throughout Gatto."),
-            )
+            .child(div().font_semibold().text_sm().child("Base font size"))
             .child(
                 v_flex()
                     .px_6()
@@ -116,7 +110,7 @@ impl UploaderApp {
                         Slider::new(&self.ui_size_slider)
                             .bg(cx.theme().primary)
                             .text_color(cx.theme().primary_foreground)
-                            .accessibility_label("Interface size in points"),
+                            .accessibility_label("Base font size in points"),
                     )
                     .child(div().relative().h_7().children(UI_FONT_SIZES.map(|points| {
                         let slider = self.ui_size_slider.clone();

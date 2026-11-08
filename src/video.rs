@@ -12,6 +12,27 @@ use tempfile::NamedTempFile;
 
 use crate::model::{VideoUploadLimit, validate_size};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VideoCompression {
+    // Older projects stored the codec without the H.264 encoding mode.
+    H264,
+    H264Fast,
+    H264Quality,
+    Av1,
+}
+
+impl VideoCompression {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::H264 => "H.264",
+            Self::H264Fast => "H.264 (Fast)",
+            Self::H264Quality => "H.264 (Quality)",
+            Self::Av1 => "AV1",
+        }
+    }
+}
+
 pub struct Video {
     file: NamedTempFile,
     len: u64,

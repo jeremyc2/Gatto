@@ -92,10 +92,10 @@ impl Menu {
             item
         };
         let this = Self {
-            open: item("Open App", "", 1),
+            open: item("Open app", "", 1),
             quick: item("Add from Clipboard", "", 3),
-            preferences: item("App Preferences", ",", 4),
-            composition: item("Side-by-Side Comparison", "", 7),
+            preferences: item("App preferences", ",", 4),
+            composition: item("Side-by-side comparison", "", 7),
             update: item("↑ Update", "", 5),
             quit: item("Quit", "q", 6),
             main_thread,

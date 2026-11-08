@@ -93,7 +93,7 @@ The script fetches the remote before proceeding.
 
 The script guides the release in this order:
 
-1. Check tool availability and compile the pinned native updater SDK without
+1. Check tool availability, build the pinned video encoder helpers and compile the native updater SDK without
    reading signing credentials.
 2. Show a numbered release menu with the exact destination version and channel:
    the prepared version, next Beta, promotion to Stable, patch/minor/major Stable
@@ -162,6 +162,7 @@ It creates:
 - `dist/release/gatto-<version>-aarch64-apple-darwin.dmg`
 - `dist/release/appcast.xml`
 - `dist/release/SHA256SUMS`
+- `dist/release/video-encoder-sources.tar.xz`
 
 Inspect and launch the resulting bundle to verify the release behavior before
 answering the final **Publish** prompt. Confirm that **Gatto → About Gatto** shows the
@@ -288,7 +289,7 @@ in the background; the downloaded DMG should remain. Also verify that a busy
 disk or two mounted copies of the same installer stay mounted without a prompt,
 and that launching the copy inside the DMG does not eject it. These checks use
 disposable installations; do not overwrite an installation you need to retain.
-Install before enabling Start at Login. Do not ask users to bypass a
+Install before enabling Start at login. Do not ask users to bypass a
 failed signature or Gatekeeper assessment; investigate and replace the artifact.
 
 ## Verify updates and Homebrew
@@ -427,3 +428,38 @@ interrupted post-publication steps. For changes
 to code, embedded assets, dependencies, or packaging before publication, keep the
 README’s released version label accurate and refresh the figures when that build
 ships. See [documentation upkeep](agents/documentation.md) for ownership rules.
+
+## Video encoder helpers
+
+Before checks or signing credentials, the release command runs
+`bun --no-env-file scripts/prepare-video-encoders.ts --archive`. Local app builds
+run the same recipe automatically. It compiles FFmpeg 9.0.2, x264 r3222, SVT-AV1
+4.2.0 and libaom 3.15.3 as a static-library-linked helper for macOS 13+.
+The pinned CMake and pkgconf build tools are cached locally and are not bundled.
+The recipe validates source SHA-256, the host architecture and dynamic library
+paths; only macOS system libraries are allowed. Published releases use arm64.
+Intel builds disable assembly where necessary and need Intel hardware validation.
+
+The bundle contains `gatto-video-ffmpeg` in
+`Contents/MacOS`, plus library licenses, patent notices and a NOTICE under
+`Contents/Resources/video-encoders`. Sign the helper with the hardened runtime
+before signing the outer bundle; local builds use ad hoc signatures. The codec
+helper is a GPL v3 or later executable, separate from the MIT Rust app.
+
+Upload `video-encoder-sources.tar.xz` with every helper-bearing release, including
+its SHA-256 in `SHA256SUMS`. It contains exact source archives, build tools, pins,
+notices and the Bun build recipe. The verifier checks this asset when present
+and remains compatible with older releases that predate the helpers. Draft
+recovery needs the original source archive alongside the DMG and feed.
+
+For codec upgrades, review upstream security notices and license changes, update
+`scripts/video-encoder-sources.json`, rebuild, and run real media tests plus the
+recording comparison described in the [benchmark note](research/screen-recording-codec-benchmarks.md).
+`cargo deny` only audits Rust dependencies; it does not audit these sources.
+Recheck startup, seek and end playback in Chrome, audio, orientation, cancellation,
+strict byte limits and system-only dependencies. Measure bundle size after
+release; existing README figures stay tied to their published version.
+
+The helper build disables ffprobe. The Gatto-specific inspection adapter is
+compiled into FFmpeg and included in the corresponding-source archive. Changes
+to that adapter invalidate the build cache alongside source pins and the recipe.

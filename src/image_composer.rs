@@ -29,7 +29,7 @@ use gpui_kit::{
 };
 use std::{cell::Cell, path::PathBuf, rc::Rc, sync::Arc};
 
-pub(crate) const TITLE: &str = "Side-by-Side Comparison";
+pub(crate) const TITLE: &str = "Side-by-side comparison";
 pub(crate) const WINDOW_WIDTH: f32 = 540.;
 pub(crate) const WINDOW_HEIGHT: f32 = 500.;
 const DROP_ZONE_HEIGHT: f32 = 160.;

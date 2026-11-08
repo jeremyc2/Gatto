@@ -73,6 +73,39 @@ fn settings_schema_accepts_saved_defaults_preferences_and_legacy_defaults() {
 }
 
 #[test]
+fn compression_preference_migrates_and_round_trips() {
+    use crate::compression::CompressionMode;
+    let validator = validator(SETTINGS);
+    let legacy: AppSettings = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(legacy.video_compression, CompressionMode::Quality);
+    for mode in [
+        CompressionMode::Quality,
+        CompressionMode::SmallerFiles,
+        CompressionMode::Fast,
+    ] {
+        let settings = AppSettings {
+            video_compression: mode,
+            ..Default::default()
+        };
+        let value = serde_json::to_value(&settings).unwrap();
+        assert_valid(&validator, &value);
+        assert_eq!(
+            serde_json::from_value::<AppSettings>(value)
+                .unwrap()
+                .video_compression,
+            mode
+        );
+    }
+    assert_eq!(
+        serde_json::from_value::<AppSettings>(json!({"video_compression": "future"}))
+            .unwrap()
+            .video_compression,
+        CompressionMode::Quality
+    );
+    assert!(!validator.is_valid(&json!({"video_compression":"future"})));
+}
+
+#[test]
 fn saved_project_media_and_annotation_sidecars_match_their_schemas() {
     let directory = tempfile::tempdir().unwrap();
     let bytes = include_bytes!("../packaging/menu-bar-icon.png");
@@ -115,6 +148,14 @@ fn saved_project_media_and_annotation_sidecars_match_their_schemas() {
             .unwrap();
     let project_validator = validator(PROJECT);
     assert_valid(&project_validator, &manifest);
+    for codec in ["h264", "h264_fast", "h264_quality", "av1"] {
+        let mut with_compression = manifest.clone();
+        with_compression["attachments"][0]["compressed_with"] = json!(codec);
+        assert_valid(&project_validator, &with_compression);
+    }
+    let mut invalid_compression = manifest.clone();
+    invalid_compression["attachments"][0]["compressed_with"] = json!("unknown");
+    assert!(!project_validator.is_valid(&invalid_compression));
     let sidecar = manifest["attachments"][0]["annotations"]["json"]
         .as_str()
         .unwrap();

@@ -3,7 +3,6 @@ use anyhow::{Context as _, Result, bail};
 use gpui_kit::Keystroke;
 use std::{cell::RefCell, rc::Rc};
 
-pub const DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT: &str = "Command+Shift+G";
 type ShortcutObserver = Rc<dyn Fn(Option<&str>)>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -324,9 +323,7 @@ pub fn shortcut_from_keystroke(keystroke: &Keystroke) -> Result<String> {
 mod tests {
     use gpui_kit::{Keystroke, Modifiers as GpuiModifiers};
 
-    use super::{
-        DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT, canonicalize_shortcut, shortcut_from_keystroke,
-    };
+    use super::{canonicalize_shortcut, shortcut_from_keystroke};
 
     #[test]
     fn stored_shortcuts_round_trip_aliases_keypad_function_and_media_keys() {
@@ -379,7 +376,7 @@ mod tests {
             "Command+Shift+G"
         );
         assert_eq!(
-            canonicalize_shortcut(DEFAULT_ADD_FROM_CLIPBOARD_SHORTCUT).unwrap(),
+            canonicalize_shortcut("Command+Shift+G").unwrap(),
             "Command+Shift+G"
         );
     }

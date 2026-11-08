@@ -87,7 +87,7 @@ fn main() {
             "Application started."
         });
         if let Err(error) = settings::AppSettings::refresh_start_at_login() {
-            diagnostics.error(format!("Could not refresh Start at Login: {error:#}"));
+            diagnostics.error(format!("Could not refresh Start at login: {error:#}"));
         }
         let startup_settings = settings::AppSettings::load().unwrap_or_else(|error| {
             diagnostics.error(format!("Could not load startup preferences: {error:#}"));
@@ -116,7 +116,7 @@ fn main() {
         if startup_settings.global_add_from_clipboard_shortcut_enabled
             && startup_settings.add_from_clipboard_available()
             && let Err(error) = global_shortcut_controller
-                .set_shortcut(Some(&startup_settings.global_add_from_clipboard_shortcut))
+                .set_shortcut(startup_settings.global_add_from_clipboard_shortcut.as_deref())
         {
             diagnostics.error(format!(
                 "Could not restore the global Add from Clipboard shortcut: {error:#}"

@@ -123,10 +123,10 @@ if [[ "$mode" == resume ]]; then
     || fail "code differs from $tag; resume using its release checkout"
   [[ -z "$(git ls-files --others --exclude-standard)" ]] || fail "untracked files are present; preserve or commit them before resuming"
   if [[ "$draft" == true ]]; then
-    for asset in "$archive" appcast.xml SHA256SUMS; do
+    for asset in "$archive" appcast.xml SHA256SUMS video-encoder-sources.tar.xz; do
       [[ -f "$dist/$asset" ]] || fail "draft recovery needs the original $dist/$asset"
     done
-    gh release upload "$tag" "$dist/$archive" "$dist/appcast.xml" "$dist/SHA256SUMS" --clobber
+    gh release upload "$tag" "$dist/$archive" "$dist/appcast.xml" "$dist/SHA256SUMS" "$dist/video-encoder-sources.tar.xz" --clobber
     bun scripts/verify-release.ts --tag "$tag" --directory "$dist"
     confirm "Publish verified draft $tag?" || fail "cancelled; verified draft retained"
     gh release edit "$tag" --draft=false "${publish_flags[@]}"
@@ -143,6 +143,7 @@ done
 cargo deny --version >/dev/null 2>&1 \
   || fail "install the one-time audit tool: cargo install --locked cargo-deny --version 0.20.2"
 build ./scripts/prepare-updater.sh
+build bun --no-env-file scripts/prepare-video-encoders.ts --archive
 
 bun scripts/prepare-release.ts
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
@@ -231,6 +232,13 @@ cp packaging/AppIcon.icns packaging/Assets.car "$bundle/Contents/Resources/"
 cp dist/sparkle/LICENSE "$bundle/Contents/Resources/Sparkle-LICENSE"
 cp packaging/licenses/* "$bundle/Contents/Resources/"
 cp "target/$TARGET/release/Gatto" "$bundle/Contents/MacOS/gatto"
+encoders=".tools/video-encoders/arm64"
+cp "$encoders/bin/ffmpeg" "$bundle/Contents/MacOS/gatto-video-ffmpeg"
+cp -R "$encoders/notices" "$bundle/Contents/Resources/video-encoders"
+cp "$encoders/video-encoder-sources.tar.xz" "$dist/"
+for helper in gatto-video-ffmpeg; do
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bundle/Contents/MacOS/$helper"
+done
 
 # Pair the app with its installer before signing. Compression preserves this
 # volume's UUID, letting the installed app identify it without reading its files.
@@ -264,7 +272,7 @@ dist/sparkle/bin/generate_appcast --account "$SPARKLE_ACCOUNT" \
   --link "https://github.com/jeremyc2/Gatto/releases/tag/$tag" \
   --maximum-deltas 0 ${feed_flags[@]+"${feed_flags[@]}"} "$dist"
 dist/sparkle/bin/sign_update --account "$SPARKLE_ACCOUNT" --verify "$dist/appcast.xml"
-(cd "$dist" && shasum -a 256 "$archive" appcast.xml > SHA256SUMS)
+(cd "$dist" && shasum -a 256 "$archive" appcast.xml video-encoder-sources.tar.xz > SHA256SUMS)
 
 confirm "Publish $tag to GitHub Releases?" || fail "cancelled; signed artifacts are in $dist"
 
@@ -272,7 +280,7 @@ notes_file="$(mktemp "${TMPDIR:-/tmp}/gatto-release-notes.XXXXXX")"
 trap 'rm -f "$notes_file"' EXIT
 bun scripts/prepare-release.ts --print-notes > "$notes_file"
 # Keep incomplete uploads in a draft until their bytes have been verified.
-gh release create "$tag" "$dist/$archive" "$dist/appcast.xml" "$dist/SHA256SUMS" \
+gh release create "$tag" "$dist/$archive" "$dist/appcast.xml" "$dist/SHA256SUMS" "$dist/video-encoder-sources.tar.xz" \
   --target "$release_commit" --title "$tag" --notes-file "$notes_file" --draft ${create_flags[@]+"${create_flags[@]}"}
 bun scripts/verify-release.ts --tag "$tag" --directory "$dist" \
   || fail "draft upload verification failed; run ./scripts/release.sh --resume"

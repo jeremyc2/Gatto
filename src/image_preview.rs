@@ -300,7 +300,7 @@ impl ImagePreview {
 
     fn update_window_title(&self, window: &mut Window) {
         if let Some(image) = self.current() {
-            window.set_window_title(&format!("{} — Gatto Preview", image.name));
+            window.set_window_title(&format!("{} — Gatto preview", image.name));
         }
     }
 

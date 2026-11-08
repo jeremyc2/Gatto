@@ -387,7 +387,7 @@ impl UploaderApp {
                             Button::new("create-move-destination")
                                 .debug_selector(|| "create-move-destination".into())
                                 .app_secondary()
-                                .label("Create Project")
+                                .label("Create project")
                                 .on_click(move |_, window, cx| {
                                     let _ = create_owner.update(cx, |this, cx| {
                                         if this.can_create_project() {

@@ -196,6 +196,9 @@ test("publication verification requires unique checksums for both exact release 
   const digest = "a".repeat(64);
   const sums = `${digest}  gatto-0.15.0-aarch64-apple-darwin.dmg\n${digest}  appcast.xml\n`;
   expect(releaseChecksums(sums, "0.15.0").size).toBe(2);
+  expect(releaseChecksums(sums + `${digest}  video-encoder-sources.tar.xz\n`, "0.15.0").size).toBe(
+    3,
+  );
   for (const invalid of [
     "",
     sums + sums,

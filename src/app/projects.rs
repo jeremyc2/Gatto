@@ -1657,7 +1657,8 @@ impl UploaderApp {
         let shortcut = (available
             && self.settings.global_add_from_clipboard_shortcut_enabled
             && !self.recording_global_shortcut)
-            .then_some(self.settings.global_add_from_clipboard_shortcut.as_str());
+            .then_some(self.settings.global_add_from_clipboard_shortcut.as_deref())
+            .flatten();
         if let Err(error) = self.global_shortcut.set_shortcut(shortcut) {
             self.diagnostics.error(format!(
                 "Could not update Add from Clipboard shortcut availability: {error}"
@@ -1894,7 +1895,7 @@ impl UploaderApp {
                             .debug_selector(|| "create-project".into())
                             .app_secondary()
                             .w_full()
-                            .label("Create Project")
+                            .label("Create project")
                             .icon(AssetIconName::FolderPlus)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.create_project(&CreateProject, window, cx)

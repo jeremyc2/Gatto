@@ -154,6 +154,11 @@
           "format": "uri",
           "description": "Reusable upload URL, valid only when the media matches sha256."
         },
+        "compressed_with": {
+          "enum": ["h264", "h264_fast", "h264_quality", "av1"],
+          "readOnly": true,
+          "description": "Gatto compression mode. Legacy h264 records identify only the codec. Absent when provenance is unknown."
+        },
         "is_comparison": {
           "type": "boolean",
           "description": "Whether this image is a side-by-side comparison."

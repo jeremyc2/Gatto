@@ -83,19 +83,19 @@ pub fn init(cx: &mut App) {
     cx.set_menus([
         Menu::new(APP_NAME).items([
             MenuItem::action(ABOUT_TITLE, OpenAbout),
-            MenuItem::action("Check for Updates…", CheckForUpdates),
+            MenuItem::action("Check for updates…", CheckForUpdates),
             MenuItem::separator(),
-            MenuItem::action("App Preferences", OpenPreferences),
+            MenuItem::action("App preferences", OpenPreferences),
             MenuItem::separator(),
             MenuItem::action("Quit Gatto", Quit),
         ]),
-        Menu::new("File").items([MenuItem::action("Close Window", CloseWindow)]),
+        Menu::new("File").items([MenuItem::action("Close window", CloseWindow)]),
         Menu::new("Advanced").items([MenuItem::action(
             crate::image_composer::TITLE,
             CreateComposition,
         )]),
         Menu::new("Help").items([
-            MenuItem::action("GitHub Repository", HelpRepository),
+            MenuItem::action("GitHub repository", HelpRepository),
             MenuItem::action("Walkthrough", HelpWalkthrough),
             MenuItem::action("Setup", HelpSetup),
             MenuItem::action("Support", HelpSupport),
@@ -132,7 +132,7 @@ fn show_about() {
     let version = env!("CARGO_PKG_VERSION");
     let commit = env!("GIT_COMMIT_HASH");
     let details = format!(
-        "Version: {version}\nCommit: {commit}\nLead Developer: Jeremy Chandler\nRepository: {REPOSITORY_URL}"
+        "Version: {version}\nCommit: {commit}\nLead developer: Jeremy Chandler\nRepository: {REPOSITORY_URL}"
     );
     let alert = NSAlert::new(mtm);
     alert.setAlertStyle(NSAlertStyle::Informational);

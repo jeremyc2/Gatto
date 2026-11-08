@@ -8,10 +8,12 @@ use std::{
 
 mod attachment_actions;
 mod attachment_drag;
+mod global_shortcut_setting;
 mod projects;
 mod repository_picker;
 mod ui_size;
 mod upload_actions;
+mod video_compression;
 
 use gpui_kit::assets::IconName as AssetIconName;
 use gpui_kit::base::TestSupportExt as _;
@@ -46,7 +48,7 @@ use crate::{
     compression,
     diagnostics::Diagnostics,
     github,
-    global_shortcut::{GlobalShortcutController, canonicalize_shortcut, shortcut_from_keystroke},
+    global_shortcut::{GlobalShortcutController, shortcut_from_keystroke},
     image_preview::ImagePreview,
     log_viewer::LogViewer,
     menu_bar::MenuBarController,
@@ -67,6 +69,9 @@ actions!(
         CopyUploadMarkdown,
         SelectStableChannel,
         SelectBetaChannel,
+        SelectQualityCompression,
+        SelectSmallerCompression,
+        SelectFastCompression,
         ToggleProjectSidebar,
         CreateProject
     ]
@@ -164,7 +169,6 @@ struct PendingImport {
 
 struct CompressionJob {
     control: compression::CompressionControl,
-    name: String,
     progress: compression::Progress,
 }
 
@@ -238,7 +242,6 @@ impl WalkthroughScenario {
 
 pub struct UploaderApp {
     owner_input: Entity<InputState>,
-    global_shortcut_input: Entity<InputState>,
     ui_size_slider: Entity<SliderState>,
     repository_picker: Entity<repository_picker::PickerState>,
     repository_picker_open: bool,
@@ -273,6 +276,7 @@ pub struct UploaderApp {
     settings: AppSettings,
     settings_open: bool,
     recording_global_shortcut: bool,
+    shortcut_modifier_hint: bool,
     log_window: Option<(AnyWindowHandle, Entity<LogViewer>)>,
     preview_open: bool,
     preview_window: Option<(AnyWindowHandle, Entity<ImagePreview>)>,
@@ -289,7 +293,6 @@ pub struct UploaderApp {
     _rooftops_subscription: Option<Subscription>,
     focus_handle: FocusHandle,
     _owner_subscription: Subscription,
-    _global_shortcut_subscription: Subscription,
 }
 
 impl UploaderApp {
@@ -338,7 +341,6 @@ impl UploaderApp {
         cx: &mut Context<Self>,
     ) -> Self {
         let initial_owner = settings.owner.clone().unwrap_or_default();
-        let initial_shortcut = settings.global_add_from_clipboard_shortcut.clone();
         let owner_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("account or organization")
@@ -349,17 +351,6 @@ impl UploaderApp {
                 cx.notify();
             }
         });
-        let global_shortcut_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Command+Shift+G")
-                .default_value(initial_shortcut)
-        });
-        let global_shortcut_subscription =
-            cx.subscribe(&global_shortcut_input, |_: &mut Self, _, event, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            });
         let repository_picker = Self::new_repository_picker(window, cx);
         let ui_size_slider = Self::new_ui_size_slider(settings.ui_font_size, window, cx);
         let updater = Updater::shared(cx);
@@ -372,7 +363,6 @@ impl UploaderApp {
             .is_some_and(crate::rooftops_score::replay::GameData::has_completed);
         let mut this = Self {
             owner_input,
-            global_shortcut_input,
             ui_size_slider,
             repository_picker,
             repository_picker_open: false,
@@ -411,6 +401,7 @@ impl UploaderApp {
             settings,
             settings_open: false,
             recording_global_shortcut: false,
+            shortcut_modifier_hint: false,
             log_window: None,
             preview_open: false,
             preview_window: None,
@@ -430,7 +421,6 @@ impl UploaderApp {
             _rooftops_subscription: None,
             focus_handle: cx.focus_handle(),
             _owner_subscription: owner_subscription,
-            _global_shortcut_subscription: global_shortcut_subscription,
         };
         this.register_project_shutdown(cx);
         this.register_attachment_reorder_controls(cx);
@@ -542,6 +532,9 @@ impl UploaderApp {
                 .expect("valid walkthrough video fixture");
             video.name = "interaction-recording.mp4".into();
             video.title = "Interaction recording".into();
+            if std::env::args().any(|arg| arg == "--video-upload-review") {
+                video.compressed_with = Some(crate::video::VideoCompression::H264Quality);
+            }
             if matches!(scenario, WalkthroughScenario::MixedUploadProgress) {
                 this.uploading = true;
                 this.upload_control = Some(github::UploadControl::default());
@@ -589,7 +582,6 @@ impl UploaderApp {
             });
             this.compression = Some(CompressionJob {
                 control: compression::CompressionControl::default(),
-                name: "interaction-recording.mov".into(),
                 progress: compression::Progress {
                     attempt: 1,
                     percent: 42,
@@ -661,11 +653,13 @@ impl UploaderApp {
 
     /// The film fixture keeps project and attachment changes entirely in memory.
     #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)] // Used by the capture binary, which shares this app module.
     pub(crate) fn for_product_demo(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self::for_walkthrough(WalkthroughScenario::EmptyProjects, window, cx)
     }
 
     #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
     pub(crate) fn product_demo_create_project(
         &mut self,
         window: &mut Window,
@@ -684,6 +678,7 @@ impl UploaderApp {
     }
 
     #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
     pub(crate) fn product_demo_stage_image(
         &mut self,
         path: PathBuf,
@@ -702,6 +697,7 @@ impl UploaderApp {
 
     /// Render deterministic transfer states without issuing an upload request.
     #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
     pub(crate) fn product_demo_upload_progress(&mut self, percent: u64, cx: &mut Context<Self>) {
         self.settings.upload_action = crate::settings::UploadAction::Upload;
         self.settings.close_window_after_copy = false;
@@ -719,6 +715,7 @@ impl UploaderApp {
     }
 
     #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
     pub(crate) fn product_demo_upload_complete(
         &mut self,
         window: &mut Window,
@@ -741,6 +738,7 @@ impl UploaderApp {
 
     /// Use the production success feedback while leaving the OS clipboard alone.
     #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
     pub(crate) fn product_demo_copy_feedback(
         &mut self,
         window: &mut Window,
@@ -790,26 +788,21 @@ impl UploaderApp {
         }
         match self
             .global_shortcut
-            .set_shortcut(Some(&self.settings.global_add_from_clipboard_shortcut))
+            .set_shortcut(self.settings.global_add_from_clipboard_shortcut.as_deref())
         {
             Ok(Some(canonical)) => {
-                self.settings.global_add_from_clipboard_shortcut = canonical.clone();
-                self.global_shortcut_input.update(cx, |input, cx| {
-                    input.set_value(canonical, window, cx);
-                });
+                self.settings.global_add_from_clipboard_shortcut = Some(canonical);
                 self.diagnostics
                     .info("Registered the global Add from Clipboard shortcut.");
             }
             Ok(None) => {}
             Err(error) => {
-                self.settings.global_add_from_clipboard_shortcut_enabled = false;
-                let _ = self.settings.save();
                 self.diagnostics.error(format!(
                     "Could not restore the global Add from Clipboard shortcut: {error}"
                 ));
                 window.push_notification(
                     Notification::error(format!(
-                        "Global Add from Clipboard shortcut disabled: {error}"
+                        "Could not activate Add from Clipboard shortcut: {error}"
                     )),
                     cx,
                 );
@@ -1314,13 +1307,8 @@ impl UploaderApp {
 
     fn start_compression(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let control = compression::CompressionControl::default();
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Video".into());
         self.compression = Some(CompressionJob {
             control: control.clone(),
-            name,
             progress: compression::Progress {
                 attempt: 1,
                 percent: 0,
@@ -1329,9 +1317,10 @@ impl UploaderApp {
         let generation = self.upload_generation;
         let (sender, receiver) = async_channel::unbounded();
         let video_limit = self.settings.video_upload_limit();
+        let mode = self.settings.video_compression;
         cx.background_spawn(async move {
             let progress = sender.clone();
-            let result = compression::compress(&path, video_limit, &control, move |value| {
+            let result = compression::compress(&path, video_limit, mode, &control, move |value| {
                 let _ = progress.try_send(CompressionEvent::Progress(value));
             });
             let _ = sender.try_send(CompressionEvent::Finished(Box::new(result)));
@@ -1389,10 +1378,7 @@ impl UploaderApp {
                     .rounded_lg()
                     .border_1()
                     .border_color(cx.theme().border)
-                    .child(div().text_sm().child(format!(
-                        "Compressing {} · pass {} of 2 · {}%",
-                        job.name, job.progress.attempt, job.progress.percent
-                    )))
+                    .child(div().text_sm().child("Compressing video…"))
                     .child(
                         Progress::new("compression-progress")
                             .value(job.progress.percent as f32)
@@ -1403,10 +1389,11 @@ impl UploaderApp {
                     .child(
                         Button::new("cancel-compression")
                             .app_secondary()
+                            .self_start()
                             .label(if job.control.is_canceled() {
                                 "Canceling…"
                             } else {
-                                "Cancel compression"
+                                "Cancel"
                             })
                             .disabled(job.control.is_canceled())
                             .on_click(move |_, _, cx| {
@@ -2078,7 +2065,7 @@ impl UploaderApp {
     fn set_start_at_login(&mut self, enabled: bool, window: &mut Window, cx: &mut Context<Self>) {
         if let Err(error) = self.settings.set_start_at_login(enabled) {
             window.push_notification(
-                Notification::error(format!("Could not update Start at Login: {error}")),
+                Notification::error(format!("Could not update Start at login: {error}")),
                 cx,
             );
         }
@@ -2104,6 +2091,7 @@ impl UploaderApp {
         }
 
         self.recording_global_shortcut = true;
+        self.shortcut_modifier_hint = false;
         window.focus(&self.focus_handle, cx);
         cx.notify();
     }
@@ -2139,7 +2127,6 @@ impl UploaderApp {
         if !self.recording_global_shortcut {
             return;
         }
-
         window.prevent_default();
         cx.stop_propagation();
         if event.is_held {
@@ -2149,7 +2136,22 @@ impl UploaderApp {
             self.cancel_global_shortcut_recording(window, cx);
             return;
         }
-
+        let count = global_shortcut_setting::modifier_count(&event.keystroke.modifiers);
+        if count < 2 {
+            if count == 1 {
+                self.shortcut_modifier_hint = true;
+                cx.notify();
+            }
+            return;
+        }
+        self.shortcut_modifier_hint = false;
+        cx.notify();
+        if matches!(
+            event.keystroke.key.as_str(),
+            "cmd" | "command" | "ctrl" | "control" | "alt" | "option" | "shift" | "fn"
+        ) {
+            return;
+        }
         let canonical = match shortcut_from_keystroke(&event.keystroke) {
             Ok(shortcut) => shortcut,
             Err(error) => {
@@ -2157,40 +2159,13 @@ impl UploaderApp {
                 return;
             }
         };
-        let previous = self.settings.global_add_from_clipboard_shortcut.clone();
-
-        if self.settings.global_add_from_clipboard_shortcut_enabled
-            && let Err(error) = self.global_shortcut.set_shortcut(Some(&canonical))
-        {
-            let _ = self.global_shortcut.set_shortcut(Some(&previous));
-            self.recording_global_shortcut = false;
+        if let Err(error) = self.update_recorded_shortcut(Some(canonical)) {
             window.push_notification(Notification::error(error.to_string()), cx);
-            cx.notify();
             return;
         }
-
-        self.settings.global_add_from_clipboard_shortcut = canonical.clone();
-        if let Err(error) = self.settings.save() {
-            if self.settings.global_add_from_clipboard_shortcut_enabled {
-                let _ = self.global_shortcut.set_shortcut(Some(&previous));
-            }
-            self.settings.global_add_from_clipboard_shortcut = previous;
-            self.recording_global_shortcut = false;
-            window.push_notification(
-                Notification::error(format!("Could not save preferences: {error}")),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
-
-        self.global_shortcut_input.update(cx, |input, cx| {
-            input.set_value(canonical, window, cx);
-        });
+        self.recording_global_shortcut = false;
         self.diagnostics
             .info("Saved the global Add from Clipboard shortcut.");
-        window.push_notification(Notification::success("Global shortcut saved."), cx);
-        self.recording_global_shortcut = false;
         self.sync_add_from_clipboard_enabled();
         cx.notify();
     }
@@ -2201,20 +2176,19 @@ impl UploaderApp {
         }
 
         self.recording_global_shortcut = false;
+        self.shortcut_modifier_hint = false;
         if self.settings.global_add_from_clipboard_shortcut_enabled
             && self.settings.add_from_clipboard_available()
             && let Err(error) = self
                 .global_shortcut
-                .set_shortcut(Some(&self.settings.global_add_from_clipboard_shortcut))
+                .set_shortcut(self.settings.global_add_from_clipboard_shortcut.as_deref())
         {
-            self.settings.global_add_from_clipboard_shortcut_enabled = false;
-            let _ = self.settings.save();
             self.diagnostics.error(format!(
                 "Could not restore the global Add from Clipboard shortcut: {error}"
             ));
             window.push_notification(
                 Notification::error(format!(
-                    "Global Add from Clipboard shortcut disabled: {error}"
+                    "Could not activate Add from Clipboard shortcut: {error}"
                 )),
                 cx,
             );
@@ -2258,74 +2232,6 @@ impl UploaderApp {
         cx: &mut Context<Self>,
     ) {
         self.show_main_page(window, cx);
-    }
-
-    fn set_global_shortcut_enabled(
-        &mut self,
-        enabled: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if enabled == self.settings.global_add_from_clipboard_shortcut_enabled {
-            return;
-        }
-
-        let raw_shortcut = self.global_shortcut_input.read(cx).value();
-        let canonical = if enabled {
-            match canonicalize_shortcut(&raw_shortcut) {
-                Ok(shortcut) => shortcut,
-                Err(error) => {
-                    window.push_notification(Notification::error(error.to_string()), cx);
-                    return;
-                }
-            }
-        } else {
-            self.settings.global_add_from_clipboard_shortcut.clone()
-        };
-        let previous_shortcut = self.settings.global_add_from_clipboard_shortcut.clone();
-
-        let update = if enabled && self.settings.add_from_clipboard_available() {
-            self.global_shortcut.set_shortcut(Some(&canonical))
-        } else {
-            self.global_shortcut.set_shortcut(None)
-        };
-        if let Err(error) = update {
-            window.push_notification(Notification::error(error.to_string()), cx);
-            return;
-        }
-
-        self.settings.global_add_from_clipboard_shortcut_enabled = enabled;
-        self.settings.global_add_from_clipboard_shortcut = canonical.clone();
-        if let Err(error) = self.settings.save() {
-            let rollback = if enabled {
-                self.global_shortcut.set_shortcut(None)
-            } else {
-                self.global_shortcut.set_shortcut(Some(&previous_shortcut))
-            };
-            if let Err(rollback_error) = rollback {
-                self.diagnostics.error(format!(
-                    "Could not restore the previous global shortcut: {rollback_error}"
-                ));
-            }
-            self.settings.global_add_from_clipboard_shortcut_enabled = !enabled;
-            self.settings.global_add_from_clipboard_shortcut = previous_shortcut;
-            window.push_notification(
-                Notification::error(format!("Could not save preferences: {error}")),
-                cx,
-            );
-            return;
-        }
-
-        self.global_shortcut_input.update(cx, |input, cx| {
-            input.set_value(canonical, window, cx);
-        });
-        self.diagnostics.info(if enabled {
-            "Enabled the global Add from Clipboard shortcut."
-        } else {
-            "Disabled the global Add from Clipboard shortcut."
-        });
-        self.sync_add_from_clipboard_enabled();
-        cx.notify();
     }
 
     fn set_automatically_copy_add_from_clipboard(
@@ -2555,10 +2461,6 @@ impl UploaderApp {
         self.owner_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
-        let default_shortcut = self.settings.global_add_from_clipboard_shortcut.clone();
-        self.global_shortcut_input.update(cx, |input, cx| {
-            input.set_value(default_shortcut, window, cx);
-        });
         self.repositories.clear();
         self.selected_repository = None;
         self.token = None;
@@ -2580,6 +2482,7 @@ impl UploaderApp {
         self.upload_result = None;
         self.uploading = false;
         self.recording_global_shortcut = false;
+        self.shortcut_modifier_hint = false;
         self.refresh_repository_picker(window, cx);
         self.menu_bar.set_add_from_clipboard_enabled(false);
         self.diagnostics
@@ -2658,7 +2561,7 @@ impl UploaderApp {
             ..Default::default()
         };
         let result = crate::theme::open_window(options, cx, move |window, cx| {
-            window.set_window_title("Gatto Logs");
+            window.set_window_title("Gatto logs");
             window_limits::set_maximum_content_size(window, 1200., 1000.);
             window.on_window_should_close(cx, move |window, cx| {
                 let should_close = window_limits::close(window);
@@ -2737,7 +2640,7 @@ impl UploaderApp {
             let title = preview_name.clone();
             if preview_window
                 .update(cx, move |_, window, _| {
-                    window.set_window_title(&format!("{title} — Gatto Preview"));
+                    window.set_window_title(&format!("{title} — Gatto preview"));
                     window.activate_window();
                 })
                 .is_ok()
@@ -2752,7 +2655,7 @@ impl UploaderApp {
         }
 
         let uploader = cx.entity().downgrade();
-        let window_title = format!("{preview_name} — Gatto Preview");
+        let window_title = format!("{preview_name} — Gatto preview");
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Maximized(Bounds::centered(
                 None,
@@ -2901,13 +2804,13 @@ impl UploaderApp {
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Enter a GitHub account/organization in App Preferences to load its repositories.",
+                        "Enter a GitHub account/organization in App preferences to load its repositories.",
                     ),
             )
             .child(
                 Button::new("setup-open-settings")
                     .app_primary()
-                    .label("Open App Preferences")
+                    .label("Open app preferences")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_settings(cx);
                     })),
@@ -2982,12 +2885,7 @@ impl UploaderApp {
         let image_id = image.id;
         let source = image.image().map(|data| data.preview.clone());
         let title = image.title.clone();
-        let detail = format!(
-            "{} · {} · {}",
-            image.name,
-            image.formatted_size(),
-            image.mime_type
-        );
+        let detail = format!("· {} · {}", image.formatted_size(), image.format_label());
         let (status, status_icon, status_label, status_color) = match &image.upload_state {
             AttachmentUploadState::Preview => (
                 AttachmentStatus::Pending,
@@ -3067,16 +2965,16 @@ impl UploaderApp {
                 .w_full()
                 .when(!floating, |card| card.cursor_pointer())
                 .status(status)
-                .when(image.image().is_none(), |attachment| attachment.tooltip("Open video in your macOS video app"))
                 .media(match source {
                     Some(source) => AttachmentMedia::new().src(source).cursor(gpui_kit::CursorStyle::OpenHand),
                     None => AttachmentMedia::new().cursor(gpui_kit::CursorStyle::OpenHand).child(Icon::new(AssetIconName::Play).size(px(26.))),
                 })
                 .content(
                     AttachmentContent::new()
-                        .title(AttachmentTitle::new(title))
-                        .description(AttachmentDescription::new(detail))
-                        .child(h_flex().gap_2().items_center().child(status_row)
+                        .child(h_flex().gap_2().items_center().min_w_0()
+                            .child(AttachmentTitle::new(title).status(status).min_w_0())
+                            .child(div().flex_none().text_xs().text_color(cx.theme().muted_foreground).child(detail)))
+                        .child(h_flex().w_full().gap_2().items_center().child(status_row)
                             .when(image.image().is_some_and(|image| !image.marker_descriptions.is_empty()), |row| row.child(
                                 Button::new(format!("marker-descriptions-{image_id}"))
                                     .debug_selector(move || format!("marker-descriptions-{image_id}"))
@@ -3087,7 +2985,11 @@ impl UploaderApp {
                                         cx.stop_propagation();
                                         let _ = marker_view.update(cx, |this, cx| this.open_attachment_preview(image_id, window, cx));
                                     })
-                            )))
+                            ))
+                            .when_some(image.compressed_with, |row, compression| row
+                                .child(div().flex_1())
+                                .child(div().min_w_0().truncate().text_xs().text_color(cx.theme().muted_foreground)
+                                    .child(format!("Compressed using {}", compression.label())))))
                         .when_some(upload_percentage, |content, value| content.child(
                             Progress::new(format!("attachment-progress-{image_id}")).value(value).color(status_color).xsmall().w_full()
                                 .accessibility_label("Attachment upload progress")
@@ -3375,7 +3277,7 @@ impl UploaderApp {
                 h_flex()
                     .justify_between()
                     .items_center()
-                    .child(div().font_semibold().text_lg().child("App Preferences"))
+                    .child(div().font_semibold().text_lg().child("App preferences"))
                     .child(
                         Button::new("close-settings")
                             .app_secondary()
@@ -3391,22 +3293,7 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(
-                        v_flex()
-                            .gap_0p5()
-                            .child(
-                                div()
-                                    .font_semibold()
-                                    .text_sm()
-                                    .child("GitHub account/organization"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Enter a personal account or organization login."),
-                            ),
-                    )
+                    .child(div().font_semibold().text_sm().child("GitHub account/organization"))
                     .child(theme::compact_input(&self.owner_input))
                     .child(
                         Button::new("save-owner")
@@ -3431,49 +3318,13 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("Add to clipboard shortcut"))
+                    .child(div().font_semibold().text_sm().child("Add from Clipboard"))
                     .child(Checkbox::new("automatically-copy-add-from-clipboard")
-                        .label(r#"Automatically copy "Add from clipboard""#)
+                        .label("Automatically upload and copy result")
                         .checked(self.settings.automatically_copy_add_from_clipboard)
                         .on_click(cx.listener(|this, checked, window, cx| this.set_automatically_copy_add_from_clipboard(*checked, window, cx))))
-                    .child(div().text_xs().text_color(cx.theme().muted_foreground)
-                        .child(r#"Allow "Add from clipboard" to automatically upload the latest item on your clipboard to GitHub and copy the resulting output."#))
-                    .child(div().font_semibold().text_sm().child("Global shortcut"))
-                    .child(
-                        Checkbox::new("enable-global-add-from-clipboard-shortcut")
-                            .label("Enable")
-                            .checked(self.settings.global_add_from_clipboard_shortcut_enabled)
-                            .on_click(cx.listener(|this, checked, window, cx| {
-                                this.set_global_shortcut_enabled(*checked, window, cx);
-                            })),
-                    )
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(theme::compact_input(&self.global_shortcut_input).readonly(true)),
-                            )
-                            .child(
-                                Button::new("record-global-add-from-clipboard-shortcut")
-                                    .app_secondary()
-                                    .label(if self.recording_global_shortcut {
-                                        "Press shortcut…"
-                                    } else {
-                                        "Record shortcut"
-                                    })
-                                    .on_click(cx.listener(Self::start_global_shortcut_recording)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("At least two modifiers are required."),
-                    ),
+                    .child(self.render_global_shortcut(cx))
+,
             )
             .child(
                 v_flex()
@@ -3482,7 +3333,7 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("Image copying"))
+                    .child(div().font_semibold().text_sm().child("Image uploads"))
                     .child(
                         Checkbox::new("copy-images-as-markdown")
                             .label("Copy images as Markdown")
@@ -3493,7 +3344,7 @@ impl UploaderApp {
                     )
                     .child(
                         div().text_xs().text_color(cx.theme().muted_foreground)
-                            .child("Use ![title](URL) instead of an image tag. Markdown images do not include width or height. Applies to individual copy, bulk copy, and Add from Clipboard."),
+                            .child("Use ![title](URL) instead of an image tag. Markdown images do not include width or height."),
                     ),
             )
             .child(
@@ -3503,7 +3354,10 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .p_4()
-                    .child(div().font_semibold().text_sm().child("Video uploads"))
+                    .child(h_flex().gap_2().items_center()
+                        .child(div().font_semibold().text_sm().child("Video uploads"))
+                        .child(self.video_upload_info()))
+                    .child(self.render_video_compression())
                     .child(
                         Checkbox::new("allow-large-videos")
                             .label("Allow videos up to 100 MB")
@@ -3513,10 +3367,7 @@ impl UploaderApp {
                                 this.set_allow_large_videos(*checked, window, cx);
                             })),
                     )
-                    .child(
-                        div().text_xs().text_color(cx.theme().muted_foreground)
-                            .child("Enable only if the destination repository is on a paid GitHub plan and you’re eligible to upload larger videos. Gatto does not verify your plan. Images and GIFs stay limited to 10 MB."),
-                    ),
+,
             )
             .child(
                 v_flex()
@@ -3537,10 +3388,8 @@ impl UploaderApp {
                                         .menu_with_check("Beta", channel == ReleaseChannel::Beta, Box::new(SelectBetaChannel))
                                 })),
                     )
-                    .child(div().text_xs().text_color(cx.theme().muted_foreground)
-                        .child("Beta includes preview releases and newer stable releases. Returning to Stable keeps your installed beta until a stable release catches up. Changing channels never installs an update."))
                     .child(Button::new("check-channel-updates").app_secondary().self_start()
-                        .label("Check for Updates…")
+                        .label("Check for updates…")
                         .disabled(self.updater.read(cx).state == UpdateState::Installing)
                         .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::application_menu::CheckForUpdates), cx)))
                     .when(!self.updater.read(cx).message.is_empty(), |section| {
@@ -3557,7 +3406,7 @@ impl UploaderApp {
                     .child(div().font_semibold().text_sm().child("General"))
                     .child(
                         Checkbox::new("start-at-login")
-                            .label("Start at Login")
+                            .label("Start at login")
                             .checked(self.settings.start_at_login)
                             .on_click(cx.listener(|this, checked, window, cx| {
                                 this.set_start_at_login(*checked, window, cx);
@@ -3572,7 +3421,7 @@ impl UploaderApp {
                             })),
                     )
                     .child(h_flex().gap_2().flex_wrap()
-                        .child(Button::new("delete-all-projects").app_secondary().label("Delete All Projects").on_click(cx.listener(|this, _, window, cx| this.delete_all_projects(window, cx))))
+                        .child(Button::new("delete-all-projects").app_secondary().label("Delete all projects").on_click(cx.listener(|this, _, window, cx| this.delete_all_projects(window, cx))))
                         .when(self.rooftops_completed, |actions| actions.child(
                             Button::new("reset-rooftops").debug_selector(|| "reset-rooftops".into())
                                 .app_secondary().label("Reset Rooftops")
@@ -3656,6 +3505,23 @@ impl Render for UploaderApp {
             && !self.loading_repository
             && self.updater.read(cx).state != UpdateState::Installing;
         let root = v_flex()
+            .on_action(
+                cx.listener(|this, _: &SelectQualityCompression, window, cx| {
+                    this.set_video_compression(compression::CompressionMode::Quality, window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &SelectSmallerCompression, window, cx| {
+                    this.set_video_compression(
+                        compression::CompressionMode::SmallerFiles,
+                        window,
+                        cx,
+                    )
+                }),
+            )
+            .on_action(cx.listener(|this, _: &SelectFastCompression, window, cx| {
+                this.set_video_compression(compression::CompressionMode::Fast, window, cx)
+            }))
             .on_action(cx.listener(|this, _: &SelectStableChannel, window, cx| {
                 this.set_release_channel(ReleaseChannel::Stable, window, cx)
             }))
@@ -3665,6 +3531,17 @@ impl Render for UploaderApp {
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
             .capture_key_down(cx.listener(Self::handle_key_down))
+            .on_modifiers_changed(cx.listener(
+                |this, event: &gpui_kit::ModifiersChangedEvent, _, cx| {
+                    if this.recording_global_shortcut
+                        && this.shortcut_modifier_hint
+                        && global_shortcut_setting::modifier_count(&event.modifiers) >= 2
+                    {
+                        this.shortcut_modifier_hint = false;
+                        cx.notify();
+                    }
+                },
+            ))
             .on_drag_move::<attachment_drag::AttachmentDrag>(cx.listener(
                 |this,
                  event: &gpui_kit::DragMoveEvent<attachment_drag::AttachmentDrag>,
@@ -3834,7 +3711,7 @@ impl Render for UploaderApp {
                                                             Button::new("open-settings")
                                                                 .app_icon()
                                                                 .icon(IconName::Settings)
-                                                                .accessibility_label("App Preferences")
+                                                                .accessibility_label("App preferences")
                                                                 .tooltip("App preferences")
                                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                                     this.show_settings(cx);
@@ -5129,6 +5006,7 @@ mod tests {
 
     #[gpui_kit::test]
     fn shortcut_recorder_receives_command_shift_g(cx: &mut TestAppContext) {
+        let directory = tempfile::tempdir().unwrap();
         cx.update(|cx| {
             gpui_kit::init(cx);
             init_keybindings(cx);
@@ -5139,10 +5017,12 @@ mod tests {
             window.activate_window();
             view.update(cx, |app, cx| {
                 app.show_settings(cx);
-                app.settings.global_add_from_clipboard_shortcut = "Command+Shift+U".into();
+                app.settings.global_add_from_clipboard_shortcut = Some("Command+Shift+U".into());
                 app.settings.global_add_from_clipboard_shortcut_enabled = true;
-                // No native service is installed in a GPUI test. Receiving the
-                // key ends recording at registration failure, before saving.
+                // Saving a shortcut for an unavailable destination defers native
+                // registration, so this test can verify capture on a GPUI worker.
+                app.settings.project_directory_override = Some(directory.path().into());
+                app.settings.add_from_clipboard_project = Some("Missing".into());
                 app.recording_global_shortcut = true;
                 app.focus_handle.focus(window, cx);
             });
@@ -5151,6 +5031,13 @@ mod tests {
         cx.simulate_keystrokes("cmd-shift-g");
         cx.update(|_, cx| {
             assert!(!view.read(cx).recording_global_shortcut);
+            assert_eq!(
+                view.read(cx)
+                    .settings
+                    .global_add_from_clipboard_shortcut
+                    .as_deref(),
+                Some("Command+Shift+G")
+            );
         });
     }
 
@@ -5164,7 +5051,7 @@ mod tests {
         });
         let (view, cx) = upload_window(cx);
 
-        for focus in ["page", "owner", "shortcut", "none"] {
+        for focus in ["page", "owner", "none"] {
             cx.update(|window, cx| {
                 window.activate_window();
                 view.update(cx, |app, cx| {
@@ -5172,9 +5059,6 @@ mod tests {
                     match focus {
                         "owner" => app
                             .owner_input
-                            .update(cx, |input, cx| input.focus(window, cx)),
-                        "shortcut" => app
-                            .global_shortcut_input
                             .update(cx, |input, cx| input.focus(window, cx)),
                         "none" => window.blur(cx),
                         _ => app.focus_handle.focus(window, cx),

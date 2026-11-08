@@ -7,6 +7,30 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add compression preferences for Quality H.264, smaller AV1 files, and fast
+  hardware H.264, with a compact encoding tradeoff matrix.
+
+### Changed
+
+- Use sentence case consistently for app controls, menus and headings, and match
+  their names in the current documentation while preserving proper names.
+- Rename Interface size to Base font size and remove its description in Preferences.
+- Remove the separate bundled ffprobe executable. The encoder helper now supplies
+  the metadata required for compression and validation through a compact reader.
+- Replace the Add from Clipboard shortcut toggle and preset with Record,
+  saved keycaps and Reset, with contextual modifier validation.
+- Move video compression labels beside upload status, distinguish H.264 Fast
+  from Quality, and remove the external-player tooltip.
+- Simplify Preferences, display global shortcuts as keycaps, and move video help
+  to a compact info popover with encoding tradeoffs.
+- Keep attachment title, size and format on one line, remember the compression
+  mode, and show overall compression progress without attempt or percentage text.
+- Default video compression to two-pass software H.264 for clearer screen text
+  and opening frames. Bundle file-only codec helpers and their license notices;
+  publish their corresponding source with releases.
+
 ## [0.23.3] - 2026-11-06
 
 ### Changed
