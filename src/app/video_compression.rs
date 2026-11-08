@@ -9,7 +9,7 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.uploading || self.import_busy() {
+        if self.uploading || (self.import_busy() && self.compression.is_none()) {
             return;
         }
         let previous = self.settings.video_compression;
@@ -39,7 +39,7 @@ impl UploaderApp {
                     .label(mode.label())
                     .icon(IconName::ChevronDown)
                     .accessibility_label("Video compression mode")
-                    .disabled(self.uploading || self.import_busy())
+                    .disabled(self.uploading || (self.import_busy() && self.compression.is_none()))
                     .dropdown_menu(move |menu, _, _| {
                         menu.menu_with_check(
                             CompressionMode::Quality.label(),

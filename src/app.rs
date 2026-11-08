@@ -3791,7 +3791,7 @@ impl Render for UploaderApp {
                             footer.child(
                                 Button::new("cancel-upload")
                                     .app_secondary()
-                                    .label("Cancel upload")
+                                    .label("Cancel")
                                     .disabled(
                                         self.upload_control
                                             .as_ref()
@@ -3915,6 +3915,27 @@ mod tests {
         });
         let view = captured.borrow().clone().unwrap();
         (view, window_cx)
+    }
+
+    #[gpui_kit::test]
+    fn changing_compression_mode_during_compression_sets_the_next_mode(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.compression = Some(CompressionJob {
+                    control: compression::CompressionControl::default(),
+                    progress: compression::Progress {
+                        attempt: 1,
+                        percent: 50,
+                    },
+                });
+                app.set_video_compression(compression::CompressionMode::SmallerFiles, window, cx);
+                assert_eq!(
+                    app.settings.video_compression,
+                    compression::CompressionMode::SmallerFiles
+                );
+            });
+        });
     }
 
     fn mixed_attachments() -> Vec<StagedAttachment> {

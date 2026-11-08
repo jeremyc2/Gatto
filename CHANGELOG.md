@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Allow changing video compression mode while a video is compressing; the new
+  mode applies to future videos.
+- Shorten the upload cancellation button label to “Cancel”.
+
 ## [0.24.0] - 2026-11-08
 
 ### Added
