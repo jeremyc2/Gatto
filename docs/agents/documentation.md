@@ -9,7 +9,7 @@ concrete language and measured claims in the README. Keep the header illustratio
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | [README](../../README.md)                    | macOS product introduction, download, measured release sizes, key capabilities, URL action table, links to project Markdown documents. |
 | [Setup](../SETUP.md)                         | Installation, checksum verification, GitHub CLI login, organization and pins, initial preferences.                                     |
-| [Walkthrough](../WALKTHROUGH.md)             | Upload/copy workflows, batches and retries, preview controls, shortcuts, automation requirements, window behavior.                     |
+| [Walkthrough](../WALKTHROUGH.md)             | Essential workflows and instructions needed to complete common user tasks.                                                            |
 | [Support](../../SUPPORT.md)                  | Troubleshooting, diagnostics, local file paths, reset, uninstall, recovery.                                                            |
 | [Contributing](../../CONTRIBUTING.md)        | Developer tools, source builds, checks, dependency compatibility, screenshot regeneration.                                             |
 | [Website](../../web/README.md)               | Website setup and essential development commands.                                                                                      |
@@ -22,6 +22,15 @@ concrete language and measured claims in the README. Keep the header illustratio
 Changelogs, ADRs, research notes, and artwork prompts record dated history or
 rationale. Preserve their evidence and dates; link to current instructions when
 needed. Agent docs and contribution templates keep their own operational scope.
+
+## Walkthrough scope
+
+Keep the walkthrough focused on essential workflows. Add content only for
+substantial new workflows or changes that materially affect how users complete
+common tasks. Correct existing instructions when they become inaccurate.
+Routine bug fixes, visual polish, and minor quality-of-life improvements belong
+in the changelog; implementation details belong in architecture or design docs.
+When existing walkthrough instructions still work, leave them unchanged.
 
 ## Release figures
 
@@ -37,8 +46,9 @@ measured artifact/version, and a reproducible method.
 
 ## Change verification
 
-When behavior changes, update its owning guide. Change a README only when setup
-or essential usage instructions change; visual tweaks belong in design docs.
+When behavior changes, review affected guides for accuracy and apply their scope
+before adding content. Change a README only when setup or essential usage
+instructions change; visual tweaks belong in design docs.
 Move details with their caveats when shortening a page. Keep the README’s project
 index linked to project Markdown documents, excluding bundled agent skills and
 the Easter egg guide. Keep the Easter egg’s entry action undocumented everywhere,

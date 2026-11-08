@@ -105,6 +105,9 @@ impl UploaderApp {
             .child(div().font_semibold().text_sm().child("Base font size"))
             .child(
                 v_flex()
+                    .w_full()
+                    .max_w(SETTINGS_CONTROL_WIDTH)
+                    .self_start()
                     .px_6()
                     .child(
                         Slider::new(&self.ui_size_slider)

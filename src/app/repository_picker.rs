@@ -487,7 +487,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn repository_picker_wraps_to_the_left_when_it_does_not_fit(cx: &mut TestAppContext) {
+    fn repository_picker_wraps_below_the_title_when_it_does_not_fit(cx: &mut TestAppContext) {
         let (view, cx) = super::super::tests::upload_window(cx);
         let default_width = cx.update(|_, cx| default_window_width(cx));
         for (width, sidebar_collapsed, wraps) in [
@@ -507,7 +507,7 @@ mod tests {
                 window.draw(cx).clear(cx);
             });
             let header = cx.debug_bounds("workspace-header").unwrap();
-            let identity = cx.debug_bounds("workspace-identity").unwrap();
+            let title = cx.debug_bounds("workspace-title").unwrap();
             let trigger = cx.debug_bounds("repository-picker-trigger").unwrap();
             let drop_zone = cx.debug_bounds("image-drop-zone").unwrap();
             let upload_options = cx.debug_bounds("upload-options-chevron").unwrap();
@@ -539,17 +539,17 @@ mod tests {
             }
             if wraps {
                 assert!(
-                    trigger.top() > identity.bottom(),
+                    trigger.top() > title.bottom(),
                     "width {width}, sidebar collapsed {sidebar_collapsed}"
                 );
-                assert_eq!(trigger.left(), header.left());
+                assert_eq!(trigger.left(), title.left());
             } else {
                 assert_eq!(
                     trigger.top(),
-                    identity.top(),
+                    title.top(),
                     "width {width}, sidebar collapsed {sidebar_collapsed}"
                 );
-                assert!(trigger.left() > identity.right());
+                assert!(trigger.left() > title.right());
                 assert_eq!(trigger.right(), header.right());
             }
         }

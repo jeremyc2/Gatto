@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Allow dragging the window from the workspace's existing top border and header
+  padding, without changing its appearance or layout.
+- Cap the base font size slider and GitHub account/organization input widths in
+  App preferences so they stay compact on wide windows.
+- Put the workspace title and repository picker above a full-width utility
+  button row beside the mascot, and balance the title vertically with the
+  picker while preserving space for accents.
+- Allow adding photos and videos while compression runs. New files join the
+  ordered import queue, with a waiting-file count in the progress card.
+
 ## [0.24.1] - 2026-11-08
 
 ### Changed

@@ -78,6 +78,16 @@ separate [Aseprite source and artwork record](design/explorations/art/app-cat/ar
 retain the website Pocket Kitten's compact flying pose, dark purple coat,
 continuous lavender body and tail outline and mostly obscured twin thrusters for the dark app
 background. The Dock/menu-bar assets remain separate from this header image.
+Beside the mascot, the workspace title and repository picker share a row, with
+utility buttons spanning the full width below them. The picker wraps below the
+title when space is limited. The title trims its outer half-leading without
+clipping glyphs while preserving normal spacing between wrapped lines. A
+single-line title's layout height matches the picker, leaving natural space
+around the letters for visual centering and accents.
+
+In App preferences, the base font size slider and GitHub account/organization
+input are left-aligned and capped at 400 logical screen points, shrinking to fit
+narrower windows. Slider travel stays bounded on wide monitors.
 
 `theme.rs` owns `AppButtonStyle` and the shared confirmation footer. Ordinary
 text actions use 32-point buttons with the same type size, corner radius, and
@@ -371,7 +381,12 @@ minimize, and zoom sit above the Projects sidebar. Hiding the sidebar gives the
 workspace a single edge-to-edge background behind the window controls,
 scrolling content, and upload footer. In the collapsed view, the repository
 picker sits at the right of the title bar and the workspace starts below it.
-GPUI handles dragging and double clicks in the empty title bar area. Preferences
+GPUI handles dragging and double clicks in the empty title bar area. With the
+sidebar open, transparent drag regions also cover the workspace's existing top
+gutter, border, and padding above the header. The inner padding region scrolls
+with the content, keeping scrolled controls clickable; the outer gutter remains
+draggable. These regions reuse GPUI Kit's title-bar behavior and add no visible
+chrome, layout space, or padding. Preferences
 reserves space for the native controls. In fullscreen the picker stays in the
 workspace header. Utility windows use a native title bar with a one-point
 divider below it. A bounds
@@ -440,7 +455,7 @@ reference reports a service error instead of forwarding a synthetic `/.file/id=`
 path. It forwards the whole resolved selection
 to GPUI's `application:openURLs:` delegate, which only enqueues events. The file
 picker, paste, drop, and Finder file opening share one background path loader and
-import-busy guard, including cancellation and reset guards. Both the
+input-admission guard, including cancellation and reset guards. Both the
 service and Open With use the early `on_open_urls` channel until the controller is
 ready, including at cold launch. `open_request.rs` decodes local file URLs without
 changing existing `gatto://` actions. File events activate the main window and use
@@ -511,6 +526,12 @@ Oversized video imports carry a typed `OversizedVideo` result into an ordered
 import batch. The main window offers Cancel / Compress per file; Add from Clipboard
 instead returns a main-window recovery hint. The batch waits for each choice
 and compression result before staging the accepted items in their input order.
+While compression runs, additional picker, paste, drop, and Finder inputs append
+to that batch's remaining queue; the progress card shows the queued file count.
+Only one path loader and one encoder run at a time. Additional oversized videos
+receive their own compression prompt when reached, including after canceling or
+failing the preceding video. Inputs admitted during compression can still join
+the batch if the next prompt opens before their background loading finishes.
 A separate cancellation flag and generation guard prevent stale native jobs
 from restoring discarded imports. Uploads and updates are disabled during import.
 

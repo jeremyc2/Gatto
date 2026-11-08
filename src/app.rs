@@ -81,8 +81,10 @@ const KEY_CONTEXT: &str = "Gatto";
 const WORKSPACE_GUTTER: Rems = rems(0.375);
 const WORKSPACE_PADDING: Rems = rems(0.5);
 const PROJECT_SIDEBAR_WIDTH: Pixels = px(220.);
-const WORKSPACE_IDENTITY_WIDTH: Rems = rems(13.75);
+const WORKSPACE_MARK_SIZE: Pixels = px(72.);
+const WORKSPACE_TITLE_WIDTH: Rems = rems(8.25);
 const WORKSPACE_HEADER_GAP: Rems = rems(1.);
+const SETTINGS_CONTROL_WIDTH: Pixels = px(400.);
 // Leave room for the native buttons and the draggable title bar above GPUI controls.
 const TITLEBAR_HEIGHT: Pixels = px(40.);
 const TITLEBAR_PICKER_TOP: Pixels = px(6.);
@@ -91,7 +93,8 @@ const SIDEBAR_TITLEBAR_HEIGHT: Pixels = px(34.);
 pub(crate) fn default_window_width(cx: &App) -> Pixels {
     (PROJECT_SIDEBAR_WIDTH
         + px(2.) // The inset workspace has a one-point border on each side.
-        + (WORKSPACE_GUTTER + WORKSPACE_PADDING * 2. + WORKSPACE_IDENTITY_WIDTH + WORKSPACE_HEADER_GAP)
+        + WORKSPACE_MARK_SIZE
+        + (WORKSPACE_GUTTER + WORKSPACE_PADDING * 2. + rems(1.) + WORKSPACE_TITLE_WIDTH + WORKSPACE_HEADER_GAP)
             .to_pixels(cx.theme().font_size)
         + repository_picker::PICKER_WIDTH)
         .ceil()
@@ -954,7 +957,7 @@ impl UploaderApp {
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.diagnostics.info("Opened the attachment file picker.");
-        if self.uploading || self.import_busy() {
+        if !self.can_add_attachments() {
             return;
         }
         let prompt = cx.prompt_for_paths(PathPromptOptions {
@@ -976,7 +979,9 @@ impl UploaderApp {
                 {
                     return;
                 }
-                this.load_attachment_paths(paths, window, cx);
+                // The picker was admitted before it opened. A compression
+                // prompt reached in the meantime must not discard its files.
+                this.read_attachment_paths(paths, window, cx);
             });
         })
         .detach();
@@ -1106,9 +1111,9 @@ impl UploaderApp {
     }
 
     fn on_paste(&mut self, _: &PasteImage, window: &mut Window, cx: &mut Context<Self>) {
-        if self.uploading || self.import_busy() {
+        if !self.can_add_attachments() {
             self.warn(
-                "Finish the current upload or compression before adding attachments.",
+                "Finish the current upload or import before adding attachments.",
                 window,
                 cx,
             );
@@ -1149,7 +1154,19 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if paths.is_empty() || self.uploading || self.import_busy() {
+        if !self.can_add_attachments() {
+            return;
+        }
+        self.read_attachment_paths(paths, window, cx);
+    }
+
+    fn read_attachment_paths(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() || self.uploading || self.attachment_input_busy() {
             return;
         }
         self.loading_attachment_paths = true;
@@ -1192,8 +1209,7 @@ impl UploaderApp {
         if paths.is_empty() {
             return;
         }
-        if self.uploading
-            || self.import_busy()
+        if !self.can_add_attachments()
             || window.has_active_dialog(cx)
             || self.updater.read(cx).state == UpdateState::Installing
         {
@@ -1214,12 +1230,20 @@ impl UploaderApp {
     }
 
     fn import_busy(&self) -> bool {
+        self.attachment_input_busy() || self.pending_import.is_some() || self.compression.is_some()
+    }
+
+    fn attachment_input_busy(&self) -> bool {
         self.attachment_drag.is_some()
             || self.project_state.loading
             || self.loading_attachment_paths
-            || self.pending_import.is_some()
-            || self.compression.is_some()
             || self.combining_comparison
+    }
+
+    fn can_add_attachments(&self) -> bool {
+        !self.uploading
+            && !self.attachment_input_busy()
+            && (self.pending_import.is_none() || self.compression.is_some())
     }
 
     fn accept_attachment_results(
@@ -1228,12 +1252,19 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.uploading || self.import_busy() {
+        if self.uploading || self.attachment_input_busy() {
             self.warn(
-                "Finish the current upload or compression before adding more files.",
+                "Finish the current upload or import before adding more files.",
                 window,
                 cx,
             );
+            return;
+        }
+        // Inputs admitted during compression may finish after the next video
+        // prompt opens. Keep them in the same ordered batch in either case.
+        if let Some(batch) = &mut self.pending_import {
+            batch.remaining.extend(results);
+            cx.notify();
             return;
         }
         self.pending_import = Some(PendingImport {
@@ -1244,6 +1275,9 @@ impl UploaderApp {
     }
 
     fn advance_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.compression.is_some() {
+            return;
+        }
         let Some(mut batch) = self.pending_import.take() else {
             return;
         };
@@ -1340,20 +1374,7 @@ impl UploaderApp {
                             }
                         }
                         CompressionEvent::Finished(result) => {
-                            this.compression = None;
-                            if let Some(batch) = &mut this.pending_import {
-                                match *result {
-                                    Err(error)
-                                        if error
-                                            .downcast_ref::<compression::Canceled>()
-                                            .is_some() =>
-                                    {
-                                        this.diagnostics.info("Video compression canceled.")
-                                    }
-                                    result => batch.processed.push(result),
-                                }
-                            }
-                            this.advance_import(window, cx);
+                            this.finish_compression(*result, window, cx);
                         }
                     }
                     cx.notify();
@@ -1368,6 +1389,24 @@ impl UploaderApp {
         cx.notify();
     }
 
+    fn finish_compression(
+        &mut self,
+        result: anyhow::Result<StagedAttachment>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.compression = None;
+        if let Some(batch) = &mut self.pending_import {
+            match result {
+                Err(error) if error.downcast_ref::<compression::Canceled>().is_some() => {
+                    self.diagnostics.info("Video compression canceled.")
+                }
+                result => batch.processed.push(result),
+            }
+        }
+        self.advance_import(window, cx);
+    }
+
     fn render_compression(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity().downgrade();
         v_flex().when_some(self.compression.as_ref(), |content, job| {
@@ -1379,6 +1418,23 @@ impl UploaderApp {
                     .border_1()
                     .border_color(cx.theme().border)
                     .child(div().text_sm().child("Compressing video…"))
+                    .when_some(
+                        self.pending_import
+                            .as_ref()
+                            .map(|batch| batch.remaining.len())
+                            .filter(|count| *count > 0),
+                        |content, count| {
+                            content.child(
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!(
+                                        "{count} file{} queued",
+                                        if count == 1 { "" } else { "s" }
+                                    )),
+                            )
+                        },
+                    )
                     .child(
                         Progress::new("compression-progress")
                             .value(job.progress.percent as f32)
@@ -2818,7 +2874,7 @@ impl UploaderApp {
     }
 
     fn render_drop_zone(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let uploading = self.uploading || self.import_busy();
+        let input_blocked = !self.can_add_attachments();
         let has_staged_attachments = !self.staged_attachments.is_empty();
         div()
             .id("image-drop-zone")
@@ -2830,7 +2886,7 @@ impl UploaderApp {
             .border_dashed()
             .border_color(cx.theme().primary.opacity(0.4))
             .bg(cx.theme().primary.opacity(0.05))
-            .when(!uploading, |zone| {
+            .when(!input_blocked, |zone| {
                 zone.cursor_pointer()
                     .hover(|style| style.bg(cx.theme().primary.opacity(0.14)))
                     .drag_over::<ExternalPaths>(|style, _, _, cx| {
@@ -2846,7 +2902,7 @@ impl UploaderApp {
                         this.choose_file(window, cx);
                     }))
             })
-            .when(uploading, |zone| zone.opacity(0.55))
+            .when(input_blocked, |zone| zone.opacity(0.55))
             .flex()
             .items_center()
             .justify_center()
@@ -3294,7 +3350,13 @@ impl UploaderApp {
                     .border_color(cx.theme().border)
                     .p_4()
                     .child(div().font_semibold().text_sm().child("GitHub account/organization"))
-                    .child(theme::compact_input(&self.owner_input))
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(SETTINGS_CONTROL_WIDTH)
+                            .self_start()
+                            .child(theme::compact_input(&self.owner_input)),
+                    )
                     .child(
                         Button::new("save-owner")
                             .app_primary()
@@ -3438,6 +3500,21 @@ impl UploaderApp {
             )
     }
 
+    fn render_window_drag_region(id: &'static str, height: Pixels, cx: &App) -> impl IntoElement {
+        div()
+            .id(id)
+            .debug_selector(move || id.into())
+            .w_full()
+            .h(height)
+            .child(
+                TitleBar::new()
+                    .h(height)
+                    .pl_0()
+                    .border_0()
+                    .bg(cx.theme().transparent),
+            )
+    }
+
     fn render_title_bar(
         &self,
         height: Pixels,
@@ -3450,20 +3527,30 @@ impl UploaderApp {
             .top_0()
             .left_0()
             .h(height)
-            .when(full_width, |bar| bar.w_full())
-            .when(!full_width, |bar| bar.w(PROJECT_SIDEBAR_WIDTH))
+            .w_full()
             .child(
                 div()
-                    .flex_1()
+                    .id("native-title-bar-region")
+                    .when(full_width, |region| region.flex_1())
+                    .when(!full_width, |region| {
+                        region.w(PROJECT_SIDEBAR_WIDTH).flex_none()
+                    })
                     .min_w_0()
-                    .debug_selector(|| "title-bar-drag".into())
-                    .child(
-                        TitleBar::new()
-                            .h(height)
-                            .border_0()
-                            .bg(cx.theme().transparent),
-                    ),
+                    .child(Self::render_window_drag_region(
+                        "title-bar-drag",
+                        height,
+                        cx,
+                    )),
             )
+            .when(!full_width, |bar| {
+                bar.child(div().flex_1().min_w_0().self_start().child(
+                    Self::render_window_drag_region(
+                        "workspace-border-drag",
+                        WORKSPACE_GUTTER.to_pixels(cx.theme().font_size) + px(1.),
+                        cx,
+                    ),
+                ))
+            })
             .when(show_repository, |bar| {
                 bar.child(
                     h_flex()
@@ -3604,10 +3691,23 @@ impl Render for UploaderApp {
                 .track_scroll(&self.main_scroll)
                 .child(
                     v_flex()
+                        .relative()
                         .flex_none()
                         .gap(WORKSPACE_PADDING)
                         .p(WORKSPACE_PADDING)
                         .when(sidebar_collapsed && titlebar_height > px(0.), |content| content.pt_0())
+                        .when(!sidebar_collapsed && titlebar_height > px(0.), |content| {
+                            // Keep this hit region inside the scrolling content so it
+                            // cannot cover controls that scroll up to the top edge.
+                            content.child(
+                                div().absolute().top_0().left_0().w_full()
+                                    .child(Self::render_window_drag_region(
+                                        "workspace-padding-drag",
+                                        WORKSPACE_PADDING.to_pixels(cx.theme().font_size),
+                                        cx,
+                                    )),
+                            )
+                        })
                         .when_some(self.project_state.error.clone(), |content, error| content.child(
                             v_flex().gap_2().child(div().text_sm().text_color(cx.theme().danger).child(error))
                                 .child(Button::new("retry-project-save").app_secondary().label("Retry save").disabled(self.project_state.saving)
@@ -3619,122 +3719,131 @@ impl Render for UploaderApp {
                                 .w_full()
                                 .min_w_0()
                                 .items_start()
-                                .flex_wrap()
-                                .gap_x(WORKSPACE_HEADER_GAP)
-                                .gap_y_2()
+                                .gap_4()
                                 .debug_selector(|| "workspace-header".into())
                                 .child(
-                                    h_flex()
-                                        .flex_1()
-                                        .flex_basis(WORKSPACE_IDENTITY_WIDTH)
-                                        .min_w_0()
-                                        .debug_selector(|| "workspace-identity".into())
-                                        .items_start()
-                                        .gap_4()
-                                        .child(
-                                            div()
-                                                .id("rooftops-entry")
-                                                .flex_shrink_0()
-                                                .rounded_full()
-                                                .cursor_pointer()
-                                                .hover(|style| {
-                                                    style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
-                                                        BoxShadow::new(
-                                                            px(0.),
-                                                            px(0.),
-                                                            cx.theme().primary.opacity(0.18),
-                                                        )
-                                                        .blur_radius(px(16.))
-                                                        .spread_radius(px(2.)),
-                                                    ])
-                                                })
-                                                .on_click(cx.listener(Self::open_rooftops))
-                                                .child(
-                                                    img(self.header_mark.clone())
-                                                        .size(px(72.))
-                                                        .flex_shrink_0()
-                                                        .object_fit(ObjectFit::Contain),
-                                                ),
-                                        )
-                                        .child(
-                                            v_flex()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .gap_2()
-                                                .child(
-                                                    div()
-                                                        .text_2xl()
-                                                        .line_height(gpui_kit::relative(1.25))
-                                                        .font_semibold()
-                                                        .debug_selector(|| "workspace-title".into())
-                                                        .child(workspace_title),
+                                    div()
+                                        .id("rooftops-entry")
+                                        .flex_shrink_0()
+                                        .rounded_full()
+                                        .cursor_pointer()
+                                        .hover(|style| {
+                                            style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
+                                                BoxShadow::new(
+                                                    px(0.),
+                                                    px(0.),
+                                                    cx.theme().primary.opacity(0.18),
                                                 )
-                                                .child(
-                                                    h_flex()
-                                                        .w_full()
-                                                        .min_w_0()
-                                                        .gap_1p5()
-                                                        .flex_wrap()
-                                                        .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
-                                                            let update = self.updater.read(cx);
-                                                            row.child(Button::new("install-update")
-                                                                .debug_selector(|| "install-update".into())
-                                                                .app_icon()
-                                                                .label(match update.state {
-                                                                    UpdateState::Installing => "Updating…",
-                                                                    UpdateState::Failed => "↻ Update",
-                                                                    _ => "↑ Update",
-                                                                })
-                                                                .disabled(self.uploading || self.import_busy() || update.state == UpdateState::Installing)
-                                                                .accessibility_label("Install update and restart Gatto")
-                                                                .tooltip(update.message.clone())
-                                                                .on_click(|_, window, cx| {
-                                                                    window.dispatch_action(Box::new(crate::application_menu::InstallUpdate), cx);
-                                                                }))
-                                                        })
-                                                        .when(self.settings.sidebar_collapsed, |row| row.child(
-                                                            Button::new("show-project-sidebar").debug_selector(|| "show-project-sidebar".into()).app_icon().icon(AssetIconName::PanelLeftOpen)
-                                                                .accessibility_label("Show sidebar").tooltip("Show sidebar · ⌘B")
-                                                                .on_click(cx.listener(|this, _, _, cx| this.toggle_project_sidebar(cx)))
-                                                        ))
-                                                        .child(
-                                                            Button::new("open-logs")
-                                                                .app_icon()
-                                                                .icon(AssetIconName::Logs)
-                                                                .accessibility_label("Application logs")
-                                                                .tooltip("App logs")
-                                                                .on_click(
-                                                                    cx.listener(Self::open_log_window),
-                                                                ),
-                                                        )
-                                                        .child(
-                                                            Button::new("open-settings")
-                                                                .app_icon()
-                                                                .icon(IconName::Settings)
-                                                                .accessibility_label("App preferences")
-                                                                .tooltip("App preferences")
-                                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                                    this.show_settings(cx);
-                                                                })),
-                                                        )
-                                                        .child(
-                                                            Button::new("workspace-information").debug_selector(|| "workspace-information".into())
-                                                                .app_icon()
-                                                                .icon(AssetIconName::CircleQuestionMark)
-                                                                .accessibility_label("Project information")
-                                                                .tooltip("Project information")
-                                                                .on_click(cx.listener(|this, _, window, cx| this.open_project_info(window, cx))),
-                                                        ),
-                                                ),
+                                                .blur_radius(px(16.))
+                                                .spread_radius(px(2.)),
+                                            ])
+                                        })
+                                        .on_click(cx.listener(Self::open_rooftops))
+                                        .child(
+                                            img(self.header_mark.clone())
+                                                .size(WORKSPACE_MARK_SIZE)
+                                                .flex_shrink_0()
+                                                .object_fit(ObjectFit::Contain),
                                         ),
                                 )
-                                .when(!needs_setup && !repository_in_title_bar, |header| {
-                                    header.child(
-                                        h_flex()
-                                            .flex_none()
-                                            .child(self.render_repository_picker(cx)),
-                                    )
-                                }),
+                                .child(
+                                    v_flex()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .gap_2()
+                                        .debug_selector(|| "workspace-content".into())
+                                        .child(
+                                            h_flex()
+                                                .w_full()
+                                                .min_w_0()
+                                                .items_start()
+                                                .flex_wrap()
+                                                .gap_x(WORKSPACE_HEADER_GAP)
+                                                .gap_y_2()
+                                                .child(
+                                                    v_flex()
+                                                        .flex_1()
+                                                        .flex_basis(WORKSPACE_TITLE_WIDTH)
+                                                        .min_w_0()
+                                                        .debug_selector(|| "workspace-title".into())
+                                                        .child(
+                                                            div()
+                                                                .text_2xl()
+                                                                .line_height(gpui_kit::relative(1.25))
+                                                                .font_semibold()
+                                                                // Trim the outer half-leading only;
+                                                                // wrapped lines keep their full spacing.
+                                                                .my(rems(-0.1875))
+                                                                .child(workspace_title),
+                                                        ),
+                                                )
+                                                .when(!needs_setup && !repository_in_title_bar, |row| {
+                                                    row.child(
+                                                        h_flex()
+                                                            .flex_none()
+                                                            .child(self.render_repository_picker(cx)),
+                                                    )
+                                                }),
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .debug_selector(|| "workspace-controls".into())
+                                                .w_full()
+                                                .min_w_0()
+                                                .gap_1p5()
+                                                .flex_wrap()
+                                                .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
+                                                    let update = self.updater.read(cx);
+                                                    row.child(Button::new("install-update")
+                                                        .debug_selector(|| "install-update".into())
+                                                        .app_icon()
+                                                        .label(match update.state {
+                                                            UpdateState::Installing => "Updating…",
+                                                            UpdateState::Failed => "↻ Update",
+                                                            _ => "↑ Update",
+                                                        })
+                                                        .disabled(self.uploading || self.import_busy() || update.state == UpdateState::Installing)
+                                                        .accessibility_label("Install update and restart Gatto")
+                                                        .tooltip(update.message.clone())
+                                                        .on_click(|_, window, cx| {
+                                                            window.dispatch_action(Box::new(crate::application_menu::InstallUpdate), cx);
+                                                        }))
+                                                })
+                                                .when(self.settings.sidebar_collapsed, |row| row.child(
+                                                    Button::new("show-project-sidebar").debug_selector(|| "show-project-sidebar".into()).app_icon().icon(AssetIconName::PanelLeftOpen)
+                                                        .accessibility_label("Show sidebar").tooltip("Show sidebar · ⌘B")
+                                                        .on_click(cx.listener(|this, _, _, cx| this.toggle_project_sidebar(cx)))
+                                                ))
+                                                .child(
+                                                    Button::new("open-logs")
+                                                        .app_icon()
+                                                        .icon(AssetIconName::Logs)
+                                                        .accessibility_label("Application logs")
+                                                        .tooltip("App logs")
+                                                        .on_click(
+                                                            cx.listener(Self::open_log_window),
+                                                        ),
+                                                )
+                                                .child(
+                                                    Button::new("open-settings")
+                                                        .app_icon()
+                                                        .icon(IconName::Settings)
+                                                        .accessibility_label("App preferences")
+                                                        .tooltip("App preferences")
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.show_settings(cx);
+                                                        })),
+                                                )
+                                                .child(
+                                                    Button::new("workspace-information").debug_selector(|| "workspace-information".into())
+                                                        .app_icon()
+                                                        .icon(AssetIconName::CircleQuestionMark)
+                                                        .accessibility_label("Project information")
+                                                        .tooltip("Project information")
+                                                        .on_click(cx.listener(|this, _, window, cx| this.open_project_info(window, cx))),
+                                                ),
+                                        ),
+                                ),
                         )
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx))
                             .when(!self.staged_attachments.is_empty(), |root| root.child(self.render_attachments(cx))))
@@ -4306,6 +4415,213 @@ mod tests {
         (directory, paths)
     }
 
+    fn hold_compression(app: &mut UploaderApp) {
+        let mut before = mixed_attachments().remove(0);
+        before.name = "before.png".into();
+        let mut after = mixed_attachments().remove(0);
+        after.name = "after.png".into();
+        app.load_state = LoadState::Ready;
+        app.pending_import = Some(PendingImport {
+            processed: vec![Ok(before)],
+            remaining: vec![Ok(after)].into(),
+        });
+        app.compression = Some(CompressionJob {
+            control: compression::CompressionControl::default(),
+            progress: compression::Progress {
+                attempt: 1,
+                percent: 42,
+            },
+        });
+    }
+
+    #[gpui_kit::test]
+    fn imports_during_compression_join_the_batch_in_order(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|_, cx| {
+            view.update(cx, |app, cx| {
+                hold_compression(app);
+                cx.notify();
+            })
+        });
+        // Exercise the real drop handler, clipboard path loader, file picker,
+        // and Finder entry point while the original encoder is still active.
+        drop_paths(
+            cx,
+            vec![
+                paths[0].clone(),
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sample.mp4"),
+            ],
+        );
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            cx.write_to_clipboard(ClipboardItem {
+                entries: vec![ClipboardEntry::ExternalPaths(ExternalPaths(
+                    vec![paths[1].clone()].into_iter().collect(),
+                ))],
+            });
+            view.update(cx, |app, cx| app.on_paste(&PasteImage, window, cx));
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| view.update(cx, |app, cx| app.choose_file(window, cx)));
+        assert!(cx.did_prompt_for_paths());
+        cx.simulate_path_prompt_response(|_| Some(vec![paths[2].clone()]));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.stage_opened_files(vec![paths[3].clone()], window, cx)
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                assert_eq!(app.compression.as_ref().unwrap().progress.percent, 42);
+                assert!(app.staged_attachments.is_empty());
+                assert_eq!(app.pending_import.as_ref().unwrap().remaining.len(), 6);
+                assert!(app.import_busy(), "uploads and updates must keep waiting");
+                let mut compressed = mixed_attachments().remove(1);
+                compressed.name = "compressed.mp4".into();
+                app.finish_compression(Ok(compressed), window, cx);
+                assert!(!app.import_busy());
+                assert_eq!(
+                    app.staged_attachments
+                        .iter()
+                        .map(|item| item.name.as_str())
+                        .collect::<Vec<_>>(),
+                    [
+                        "before.png",
+                        "compressed.mp4",
+                        "after.png",
+                        "dropped-1.png",
+                        "sample.mp4",
+                        "dropped-2.png",
+                        "dropped-3.png",
+                        "dropped-4.png"
+                    ]
+                );
+                assert!(app.upload_result.is_none());
+                assert!(!app.uploading);
+            })
+        });
+    }
+
+    #[gpui_kit::test]
+    fn compression_completion_keeps_new_input_when_the_next_video_prompt_opens(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        let video = large_video();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                hold_compression(app);
+                app.pending_import.as_mut().unwrap().remaining.push_back(
+                    StagedAttachment::from_path(video.path().into(), Default::default()),
+                );
+                app.load_attachment_paths(vec![paths[0].clone()], window, cx);
+                // Finish before the path loader returns, opening the next prompt.
+                app.finish_compression(Err(compression::Canceled.into()), window, cx);
+                assert!(!app.can_add_attachments());
+                assert!(window.has_active_dialog(cx));
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert_eq!(
+                view.read(cx)
+                    .pending_import
+                    .as_ref()
+                    .unwrap()
+                    .remaining
+                    .len(),
+                1
+            );
+            assert!(window.has_active_dialog(cx));
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert!(!app.import_busy());
+            assert_eq!(
+                app.staged_attachments
+                    .iter()
+                    .map(|item| item.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["before.png", "after.png", "dropped-1.png"]
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn a_file_picker_opened_during_compression_can_finish_at_the_next_prompt(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        let video = large_video();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                hold_compression(app);
+                app.pending_import.as_mut().unwrap().remaining.push_back(
+                    StagedAttachment::from_path(video.path().into(), Default::default()),
+                );
+                app.choose_file(window, cx);
+                app.finish_compression(Err(anyhow::anyhow!("Encoder failed")), window, cx);
+                assert!(window.has_active_dialog(cx));
+            })
+        });
+        assert!(cx.did_prompt_for_paths());
+        cx.simulate_path_prompt_response(|_| Some(vec![paths[0].clone()]));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert_eq!(
+                view.read(cx)
+                    .pending_import
+                    .as_ref()
+                    .unwrap()
+                    .remaining
+                    .len(),
+                1
+            );
+            window.draw(cx).clear(cx);
+        });
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert!(!app.import_busy());
+            assert_eq!(
+                app.staged_attachments
+                    .iter()
+                    .map(|item| item.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["before.png", "after.png", "dropped-1.png"]
+            );
+            assert!(app.diagnostics.text().contains("Encoder failed"));
+        });
+    }
+
+    #[gpui_kit::test]
+    fn discarding_compression_also_discards_new_input_in_flight(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                hold_compression(app);
+                app.load_attachment_paths(paths, window, cx);
+                app.clear_staged_attachments("Discarded compression and queued inputs", cx);
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert!(!app.import_busy());
+            assert!(app.staged_attachments.is_empty());
+        });
+    }
+
     #[gpui_kit::test]
     fn finder_selection_stages_supported_files_in_order_without_uploading(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
@@ -4704,6 +5020,87 @@ mod tests {
         });
     }
 
+    #[cfg(target_os = "macos")]
+    #[gpui_kit::test]
+    fn window_drag_regions_cover_the_existing_top_gutter_and_padding(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        for font_size in crate::settings::UI_FONT_SIZES {
+            cx.update(|window, cx| {
+                theme::set_ui_font_size(font_size, cx);
+                window.resize(size(px(1000.), px(600.)));
+                window.bounds_changed(cx);
+                view.update(cx, |app, cx| {
+                    app.load_state = LoadState::Ready;
+                    cx.notify();
+                });
+                window.draw(cx).clear(cx);
+            });
+            let sidebar = cx.debug_bounds("title-bar-drag").unwrap();
+            let border = cx.debug_bounds("workspace-border-drag").unwrap();
+            let padding = cx.debug_bounds("workspace-padding-drag").unwrap();
+            let header = cx.debug_bounds("workspace-header").unwrap();
+            let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
+            assert_eq!(sidebar.left(), px(0.));
+            assert_eq!(sidebar.right(), border.left());
+            assert_eq!(border.right(), px(1000.));
+            assert_eq!(border.top(), px(0.));
+            assert_eq!(border.bottom(), padding.top());
+            assert_eq!(
+                padding.size.height,
+                WORKSPACE_PADDING.to_pixels(px(f32::from(font_size)))
+            );
+            assert_eq!(padding.bottom(), header.top());
+            assert_eq!(padding.bottom(), picker.top());
+        }
+        let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
+        cx.simulate_click(
+            point(picker.center().x, picker.top() + px(1.)),
+            Modifiers::default(),
+        );
+        cx.run_until_parked();
+        cx.update(|_, cx| assert!(view.read(cx).repository_picker_open));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[gpui_kit::test]
+    fn window_drag_padding_scrolls_out_without_covering_the_repository_picker(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            window.resize(size(px(900.), px(600.)));
+            window.bounds_changed(cx);
+            view.update(cx, |app, cx| {
+                app.load_state = LoadState::Ready;
+                app.staged_attachments = (0..8).flat_map(|_| mixed_attachments()).collect();
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        let border = cx.debug_bounds("workspace-border-drag").unwrap();
+        let original = cx.debug_bounds("workspace-padding-drag").unwrap();
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.main_scroll
+                    .set_offset(point(px(0.), -original.size.height / 2.));
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        let scrolled = cx.debug_bounds("workspace-padding-drag").unwrap();
+        let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
+        assert_eq!(scrolled.top(), original.top() - original.size.height / 2.);
+        assert_eq!(scrolled.bottom(), picker.top());
+        assert_eq!(cx.debug_bounds("workspace-border-drag").unwrap(), border);
+        // This point was part of the draggable padding before the scroll.
+        let position = point(picker.center().x, picker.top() + px(1.));
+        assert!(position.y < original.bottom());
+        assert!(position.y > border.bottom());
+        cx.simulate_click(position, Modifiers::default());
+        cx.run_until_parked();
+        cx.update(|_, cx| assert!(view.read(cx).repository_picker_open));
+    }
+
     #[gpui_kit::test]
     fn workspace_title_leaves_room_for_wrapped_names_above_the_controls(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
@@ -4719,7 +5116,7 @@ mod tests {
         let title = cx.debug_bounds("workspace-title").unwrap();
         let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
         assert_eq!(title.top(), picker.top());
-        assert_eq!(title.size.height, px(30.));
+        assert_eq!(title.size.height, px(24.));
 
         cx.update(|window, cx| {
             window.resize(size(default_window_width(cx), px(600.)));
@@ -4734,6 +5131,46 @@ mod tests {
         let controls = cx.debug_bounds("workspace-information").unwrap();
         assert!(wrapped_title.size.height > title.size.height);
         assert!(controls.top() > wrapped_title.bottom());
+    }
+
+    #[gpui_kit::test]
+    fn workspace_controls_span_below_the_title_and_picker_during_updates(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        for font_size in crate::settings::UI_FONT_SIZES {
+            for sidebar_collapsed in [false, true] {
+                cx.update(|window, cx| {
+                    theme::set_ui_font_size(font_size, cx);
+                    window.resize(size(default_window_width(cx), px(600.)));
+                    window.bounds_changed(cx);
+                    view.update(cx, |app, cx| {
+                        app.load_state = LoadState::Ready;
+                        app.settings.sidebar_collapsed = sidebar_collapsed;
+                        app.updater.update(cx, |updater, cx| {
+                            updater.state = UpdateState::Installing;
+                            cx.notify();
+                        });
+                        cx.notify();
+                    });
+                    window.draw(cx).clear(cx);
+                });
+                let content = cx.debug_bounds("workspace-content").unwrap();
+                let controls = cx.debug_bounds("workspace-controls").unwrap();
+                let title = cx.debug_bounds("workspace-title").unwrap();
+                let update = cx.debug_bounds("install-update").unwrap();
+                let info = cx.debug_bounds("workspace-information").unwrap();
+                assert_eq!(controls.left(), title.left());
+                assert_eq!(controls.right(), content.right());
+                assert!(controls.top() > title.bottom());
+                assert_eq!(update.top(), info.top(), "font size {font_size}");
+                assert!(info.right() <= controls.right());
+                if !sidebar_collapsed {
+                    let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
+                    assert_eq!(title.top(), picker.top());
+                    assert_eq!(controls.right(), picker.right());
+                    assert!(controls.top() > picker.bottom());
+                }
+            }
+        }
     }
 
     #[gpui_kit::test]
