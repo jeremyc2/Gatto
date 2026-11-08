@@ -157,6 +157,9 @@ notarization, the signed/stapled bundle replaces the template's unsigned copy,
 and the template is compressed to the final DMG without changing its volume UUID.
 This pairing allows the installed app to eject its own disk using only system
 metadata. The temporary template is removed before publication.
+Sparkle generates the appcast from the DMG before the video encoder source
+archive is copied into the release directory. The source archive is not an app
+update; it is included in the release upload and checksums, not the update feed.
 It creates:
 
 - `dist/release/gatto-<version>-aarch64-apple-darwin.dmg`

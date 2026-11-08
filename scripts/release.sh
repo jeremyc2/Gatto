@@ -235,7 +235,6 @@ cp "target/$TARGET/release/Gatto" "$bundle/Contents/MacOS/gatto"
 encoders=".tools/video-encoders/arm64"
 cp "$encoders/bin/ffmpeg" "$bundle/Contents/MacOS/gatto-video-ffmpeg"
 cp -R "$encoders/notices" "$bundle/Contents/Resources/video-encoders"
-cp "$encoders/video-encoder-sources.tar.xz" "$dist/"
 for helper in gatto-video-ffmpeg; do
   codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bundle/Contents/MacOS/$helper"
 done
@@ -272,6 +271,8 @@ dist/sparkle/bin/generate_appcast --account "$SPARKLE_ACCOUNT" \
   --link "https://github.com/jeremyc2/Gatto/releases/tag/$tag" \
   --maximum-deltas 0 ${feed_flags[@]+"${feed_flags[@]}"} "$dist"
 dist/sparkle/bin/sign_update --account "$SPARKLE_ACCOUNT" --verify "$dist/appcast.xml"
+# Sparkle scans archives for app bundles; corresponding sources are not updates.
+cp "$encoders/video-encoder-sources.tar.xz" "$dist/"
 (cd "$dist" && shasum -a 256 "$archive" appcast.xml video-encoder-sources.tar.xz > SHA256SUMS)
 
 confirm "Publish $tag to GitHub Releases?" || fail "cancelled; signed artifacts are in $dist"

@@ -159,9 +159,22 @@ mkdir -p dist/sparkle/bin dist/sparkle/Sparkle.framework
 printf bridge > dist/sparkle/libGattoUpdater.dylib
 printf license > dist/sparkle/LICENSE
 printf '#!/bin/bash\\nprintf test-public-key\\n' > dist/sparkle/bin/generate_keys
-printf '#!/bin/bash\\nprintf feed > dist/release/appcast.xml\\n' > dist/sparkle/bin/generate_appcast
 printf '#!/bin/bash\\nexit 0\\n' > dist/sparkle/bin/sign_update
 chmod +x dist/sparkle/bin/*
+cp dist-appcast-fixture dist/sparkle/bin/generate_appcast
+`,
+    );
+    await writeExecutable(
+      join(root, "dist-appcast-fixture"),
+      `#!${process.execPath}
+import { readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const directory = process.argv.at(-1)!;
+for (const name of readdirSync(directory)) {
+  if (name.endsWith('.tar.xz'))
+    console.error('Skipped ' + name + ' Error Domain=SUSparkleErrorDomain Code=4002 "No supported items [note: only .app bundles are supported]"');
+}
+writeFileSync(join(directory, 'appcast.xml'), 'feed');
 `,
     );
     await writeExecutable(join(root, "scripts/test-updater.sh"), "#!/bin/bash\nexit 0\n");
@@ -252,6 +265,16 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
 
 const find = (calls: string[][], ...prefix: string[]) =>
   calls.findIndex((call) => prefix.every((part, i) => call[i] === part));
+test("stable and beta appcasts exclude encoder sources while releases still upload them", async () => {
+  for (const mode of ["release", "beta-release"]) {
+    const result = await workflow(mode, false, "--yes");
+    expect(result.exit, result.output).toBe(0);
+    expect(result.output).not.toContain("Skipped video-encoder-sources.tar.xz");
+    expect(result.calls[find(result.calls, "gh", "release", "create")]).toContain(
+      "dist/release/video-encoder-sources.tar.xz",
+    );
+  }
+});
 test("release accepts single keystrokes, verifies drafts before publication, and pushes verified metadata", async () => {
   const result = await workflow("release", false, "terminal");
   expect(result.exit, result.output).toBe(0);
