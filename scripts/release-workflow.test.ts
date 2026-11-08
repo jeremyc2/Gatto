@@ -1,7 +1,11 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, mkdir, rm, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+
+// Allow the workflow's 10-second subprocess limit to fire first, with time for
+// fixture setup, output collection and cleanup on slower machines.
+setDefaultTimeout(15_000);
 
 // Execute the real shell workflow with isolated stand-ins for signing, GitHub,
 // Git and build tools. Nothing can publish, sign with a real key, or push code.

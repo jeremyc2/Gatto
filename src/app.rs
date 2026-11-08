@@ -1445,7 +1445,7 @@ impl UploaderApp {
                     .child(
                         Button::new("cancel-compression")
                             .app_secondary()
-                            .self_start()
+                            .self_end()
                             .label(if job.control.is_canceled() {
                                 "Canceling…"
                             } else {

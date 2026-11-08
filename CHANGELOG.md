@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-11-08
+
+### Changed
+
+- Align the compression Cancel button to the right beneath the progress bar.
+
 ## [0.24.2] - 2026-11-08
 
 ### Changed
