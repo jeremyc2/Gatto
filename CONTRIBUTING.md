@@ -400,13 +400,13 @@ configuration remains in `.github/dependabot.yml`. Restoring workflow files to
 
 ## Dependencies
 
-The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.9.0`, which pins
-and re-exports its compatible GPUI `0.3.11` snapshot. Import GPUI through that
+The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.9.1`, which pins
+and re-exports its compatible GPUI `0.3.12` snapshot. Import GPUI through that
 facade; upgrade the pair together. Check `Cargo.toml` for the minimum Rust version
 and `rust-toolchain.toml` for the selected toolchain.
 
-The 0.9.0 update retains the default GPUI backend and existing component/assets
-features. GPUI Fast 0.1.13 and its additional GPU/platform packages are optional
+Gatto uses the default GPUI backend and component/assets features.
+GPUI Fast 0.1.14 and its additional GPU/platform packages are optional
 lockfile entries, not enabled app dependencies. No new runtime, WebView, or
 syntax-highlighting feature is enabled. All added packages use crates.io and
 pass the existing advisory, license, and source policy. Keep the README size
