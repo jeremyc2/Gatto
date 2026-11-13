@@ -56,9 +56,15 @@ pub fn init(cx: &mut App) {
     // Unscoped actions work in every window, including focused text fields.
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, None),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-w", CloseWindow, None),
         KeyBinding::new("escape", DismissWindow, None),
         KeyBinding::new("cmd-q", Quit, None),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-q", Quit, None),
         KeyBinding::new("cmd-,", OpenPreferences, None),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-,", OpenPreferences, None),
     ]);
     cx.on_action(|_: &Quit, cx| request_quit(cx));
     cx.on_action(|_: &CloseWindow, cx| close_focused_window(false, cx));

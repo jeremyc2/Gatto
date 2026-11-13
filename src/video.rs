@@ -100,8 +100,54 @@ impl Video {
             );
             Ok(())
         }
-        #[cfg(not(target_os = "macos"))]
-        anyhow::bail!("Video preview currently requires macOS.")
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt as _;
+            use windows::{
+                Win32::{
+                    Foundation::{CloseHandle, WAIT_OBJECT_0},
+                    System::Threading::{INFINITE, WaitForSingleObject},
+                    UI::{
+                        Shell::{
+                            SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS,
+                            SHELLEXECUTEINFOW, ShellExecuteExW,
+                        },
+                        WindowsAndMessaging::SW_SHOWNORMAL,
+                    },
+                },
+                core::PCWSTR,
+            };
+            let path: Vec<u16> = self
+                .file
+                .path()
+                .as_os_str()
+                .encode_wide()
+                .chain([0])
+                .collect();
+            let mut launch = SHELLEXECUTEINFOW {
+                cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+                fMask: SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
+                lpFile: PCWSTR(path.as_ptr()),
+                nShow: SW_SHOWNORMAL.0,
+                ..Default::default()
+            };
+            // SAFETY: The path and structure remain live through the call.
+            unsafe { ShellExecuteExW(&mut launch) }
+                .context("Could not open the default video player")?;
+            if !launch.hProcess.is_invalid() {
+                // SAFETY: ShellExecuteExW returned an owned process handle.
+                let status = unsafe { WaitForSingleObject(launch.hProcess, INFINITE) };
+                unsafe { CloseHandle(launch.hProcess) }
+                    .context("Could not close the video player handle")?;
+                ensure!(
+                    status == WAIT_OBJECT_0,
+                    "Could not wait for the video player"
+                );
+            }
+            Ok(())
+        }
+        #[cfg(not(any(target_os = "macos", windows)))]
+        anyhow::bail!("Video preview is unavailable on this platform.")
     }
 }
 

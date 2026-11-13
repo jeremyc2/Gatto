@@ -5,8 +5,14 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
 };
+#[cfg(not(windows))]
 mod macos;
+#[cfg(not(windows))]
 use macos::{line_ranges, shape_line};
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows::{line_ranges, shape_line};
 
 #[derive(Clone)]
 pub(super) struct Line {

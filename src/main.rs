@@ -1,10 +1,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod add_from_clipboard;
 mod annotation;
 mod app;
 mod application_menu;
 mod compression;
 mod custom_url;
+#[cfg(not(windows))]
+mod desktop;
+#[cfg(windows)]
+#[path = "desktop/windows.rs"]
 mod desktop;
 mod diagnostics;
 mod github;
@@ -48,12 +53,13 @@ use crate::{
 };
 
 fn main() {
-    let login_launch = std::env::args_os()
-        .skip(1)
-        .any(|argument| argument == settings::LOGIN_ARGUMENT);
+    let login_launch = cfg!(target_os = "macos")
+        && std::env::args_os()
+            .skip(1)
+            .any(|argument| argument == settings::LOGIN_ARGUMENT);
     let application = gpui_kit::application()
         .with_assets(gpui_kit::assets::AllAssets)
-        .with_quit_mode(gpui_kit::QuitMode::Explicit);
+        .with_quit_mode(gpui_kit::QuitMode::Default);
     let main_window = Rc::new(RefCell::new(None::<MainWindow>));
     let reopen_main = main_window.clone();
     application.on_reopen(move |cx| {
@@ -86,6 +92,7 @@ fn main() {
         } else {
             "Application started."
         });
+        #[cfg(not(windows))]
         if let Err(error) = settings::AppSettings::refresh_start_at_login() {
             diagnostics.error(format!("Could not refresh Start at login: {error:#}"));
         }
@@ -213,7 +220,14 @@ fn main() {
             .detach();
         }
 
+        #[cfg(windows)]
+        {
+            updater::Updater::start(cx, diagnostics, menu_bar_controller, startup_settings.release_channel);
+        }
+
+        #[cfg(not(windows))]
         let add_from_clipboard_enabled = startup_settings.add_from_clipboard_available();
+        #[cfg(not(windows))]
         let (menu_bar, menu_events) = match MenuBar::install(
             add_from_clipboard_enabled,
             global_shortcut_controller.registered_shortcut().as_deref(),
@@ -236,11 +250,14 @@ fn main() {
                 return;
             }
         };
+        #[cfg(not(windows))]
         menu_bar_controller.attach(menu_bar);
+        #[cfg(not(windows))]
         updater::Updater::start(cx, diagnostics.clone(), menu_bar_controller.clone(), startup_settings.release_channel);
         #[cfg(target_os = "macos")]
         installer_cleanup::start(diagnostics.clone());
 
+        #[cfg(not(windows))]
         cx.spawn(async move |cx| {
             // Keep the native status item alive for the entire application lifetime.
             while let Ok(event) = menu_events.recv().await {

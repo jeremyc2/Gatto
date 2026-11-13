@@ -200,11 +200,15 @@ impl AppSettings {
 
     pub fn load() -> Result<Self> {
         let path = settings_path()?;
+        #[cfg(not(windows))]
         let legacy = home_directory()?
             .join("Library/Application Support")
             .join(APPLICATION_SUPPORT_DIRECTORY)
             .join("settings.json");
+        #[cfg(not(windows))]
         let source = if path.exists() { &path } else { &legacy };
+        #[cfg(windows)]
+        let source = &path;
         let mut legacy_selection = None;
         let mut cleanup_legacy = false;
         let mut rewrite_clipboard_names = false;
@@ -241,6 +245,7 @@ impl AppSettings {
             crate::projects::migrate_scratchpad(&data, legacy_selection, settings.owner.clone())?;
             settings.save()?;
         }
+        #[cfg(not(windows))]
         if source == &legacy && legacy.exists() {
             settings.start_at_login = launch_agent_path()?.exists();
             if legacy.exists() {
@@ -305,11 +310,20 @@ impl AppSettings {
 
     /// Removes the complete local data directory and the login item.
     pub fn reset() -> Result<()> {
+        #[cfg(windows)]
+        return clear_data_directory(&data_directory()?);
+        #[cfg(not(windows))]
         clear_persistence(&data_directory()?, &launch_agent_path()?)
     }
 }
 
 pub fn data_directory() -> Result<PathBuf> {
+    #[cfg(windows)]
+    return Ok(
+        PathBuf::from(env::var_os("LOCALAPPDATA").context("Local AppData is unavailable")?)
+            .join(APPLICATION_SUPPORT_DIRECTORY),
+    );
+    #[cfg(not(windows))]
     Ok(home_directory()?.join(".gatto"))
 }
 fn settings_path() -> Result<PathBuf> {
@@ -419,6 +433,12 @@ fn remove_launch_agent() -> Result<()> {
 }
 
 fn clear_persistence(data_directory: &PathBuf, launch_agent_path: &PathBuf) -> Result<()> {
+    clear_data_directory(data_directory)?;
+    remove_file_if_present(launch_agent_path)
+        .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
+}
+
+fn clear_data_directory(data_directory: &Path) -> Result<()> {
     match fs::remove_dir_all(data_directory) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -427,8 +447,7 @@ fn clear_persistence(data_directory: &PathBuf, launch_agent_path: &PathBuf) -> R
                 .with_context(|| format!("Could not remove {}", data_directory.display()));
         }
     }
-    remove_file_if_present(launch_agent_path)
-        .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
+    Ok(())
 }
 
 fn remove_file_if_present(path: &PathBuf) -> Result<()> {

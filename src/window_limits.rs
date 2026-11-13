@@ -138,7 +138,31 @@ pub fn request_close(window: &Window, cx: &App) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+pub fn request_close(window: &Window, _: &App) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::{
+        Foundation::{HWND, LPARAM, WPARAM},
+        UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE},
+    };
+
+    if let Ok(handle) = window.window_handle()
+        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    {
+        // SAFETY: The window owns the HWND. WM_CLOSE carries no pointers and
+        // lets GPUI's normal close callback validate and flush pending work.
+        let _ = unsafe {
+            PostMessageW(
+                Some(HWND(handle.hwnd.get() as _)),
+                WM_CLOSE,
+                WPARAM(0),
+                LPARAM(0),
+            )
+        };
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn request_close(window: &mut Window, _: &App) {
     window.remove_window();
 }

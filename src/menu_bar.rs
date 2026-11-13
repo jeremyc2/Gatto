@@ -20,6 +20,7 @@ pub struct MenuBar {
 }
 
 impl MenuBar {
+    #[cfg(not(windows))]
     pub fn install(
         add_from_clipboard_enabled: bool,
         add_from_clipboard_shortcut: Option<&str>,
@@ -61,6 +62,7 @@ impl MenuBarController {
         }
         Ok(())
     }
+    #[cfg(not(windows))]
     pub fn attach(&self, menu_bar: MenuBar) {
         *self.menu_bar.borrow_mut() = Some(menu_bar);
     }

@@ -24,11 +24,23 @@ pub(super) fn init(cx: &mut gpui_kit::App) {
         KeyBinding::new("left", MoveLeft, Some("AnnotationText")),
         KeyBinding::new("right", MoveRight, Some("AnnotationText")),
         KeyBinding::new("cmd-c", CopyText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-c", CopyText, Some("AnnotationText")),
         KeyBinding::new("cmd-x", CutText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-x", CutText, Some("AnnotationText")),
         KeyBinding::new("cmd-v", PasteText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-v", PasteText, Some("AnnotationText")),
         KeyBinding::new("cmd-a", SelectAllText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-a", SelectAllText, Some("AnnotationText")),
         KeyBinding::new("cmd-z", UndoText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-z", UndoText, Some("AnnotationText")),
         KeyBinding::new("cmd-shift-z", RedoText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-shift-z", RedoText, Some("AnnotationText")),
     ]);
 }
 

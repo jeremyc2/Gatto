@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add an experimental Windows x64 executable for testing the main attachment workflow.
+
 ## [0.24.4] - 2026-11-12
 
 ### Fixed

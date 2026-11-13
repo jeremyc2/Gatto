@@ -398,6 +398,28 @@ contributors must perform the checks above locally. Dependabot's weekly update
 configuration remains in `.github/dependabot.yml`. Restoring workflow files to
 `.github/workflows/` is a separate repository change.
 
+## Windows preview build
+
+On Windows 11 x64, install Rust with the MSVC toolchain and the Visual Studio
+C++ build tools with a Windows SDK that includes `fxc.exe`. From a Developer
+PowerShell in the checkout, run:
+
+```powershell
+cargo build --locked --release --bin Gatto
+cargo test --locked --bin Gatto
+```
+
+Launch `target/release/Gatto.exe`. The Windows build workflow also publishes
+that executable as the `Gatto-windows-x64` artifact. Install the Windows GitHub
+CLI and run `gh auth login` before testing uploads. Gatto stores the Windows
+preview’s projects and settings in `%LOCALAPPDATA%\Gatto`.
+
+The preview covers the main app window, projects, clipboard paste and Explorer
+drop, annotation, comparison, and attachment upload and copy. The Windows
+preview does not bundle a compressor, installer, or updater. The notification
+area, global shortcuts, start at login, Finder Services and URL registration,
+and Rooftops audio and score export are pending Windows integrations.
+
 ## Dependencies
 
 The app uses Rust, GPUI, and GPUI Kit. GPUI Kit is pinned to `0.9.1`, which pins

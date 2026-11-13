@@ -1285,11 +1285,15 @@ impl UploaderApp {
             match result {
                 Ok(attachment) => batch.processed.push(Ok(attachment)),
                 Err(error) => match error.downcast::<OversizedVideo>() {
-                    Ok(video) => {
+                    Ok(video) if cfg!(target_os = "macos") || cfg!(test) => {
                         self.pending_import = Some(batch);
                         self.prompt_compression(video, window, cx);
                         return;
                     }
+                    Ok(video) => batch.processed.push(Err(anyhow::anyhow!(
+                        "This video exceeds the {} MB limit. Trim or compress it in a video app, then add it again.",
+                        video.limit_mb,
+                    ))),
                     Err(error) => batch.processed.push(Err(error)),
                 },
             }
@@ -2926,7 +2930,10 @@ impl UploaderApp {
                             .items_center()
                             .text_sm()
                             .text_center()
-                            .child(Kbd::new(Keystroke::parse("cmd-v").expect("valid shortcut")))
+                            .child(Kbd::new(
+                                Keystroke::parse(if cfg!(windows) { "ctrl-v" } else { "cmd-v" })
+                                    .expect("valid shortcut"),
+                            ))
                             .child("/ Drag and drop / Click to add media"),
                     ),
             )
@@ -3373,7 +3380,7 @@ impl UploaderApp {
             .when(self.settings.owner.is_some(), |page| {
                 page.child(self.render_pinned_repositories(cx))
             })
-            .child(
+            .when(cfg!(target_os = "macos"), |page| page.child(
                 v_flex()
                     .gap_3()
                     .rounded_lg()
@@ -3385,9 +3392,8 @@ impl UploaderApp {
                         .label("Automatically upload and copy result")
                         .checked(self.settings.automatically_copy_add_from_clipboard)
                         .on_click(cx.listener(|this, checked, window, cx| this.set_automatically_copy_add_from_clipboard(*checked, window, cx))))
-                    .child(self.render_global_shortcut(cx))
-,
-            )
+                    .child(self.render_global_shortcut(cx)),
+            ))
             .child(
                 v_flex()
                     .gap_3()
@@ -3419,7 +3425,7 @@ impl UploaderApp {
                     .child(h_flex().gap_2().items_center()
                         .child(div().font_semibold().text_sm().child("Video uploads"))
                         .child(self.video_upload_info()))
-                    .child(self.render_video_compression())
+                    .when(cfg!(target_os = "macos"), |section| section.child(self.render_video_compression()))
                     .child(
                         Checkbox::new("allow-large-videos")
                             .label("Allow videos up to 100 MB")
@@ -3431,7 +3437,7 @@ impl UploaderApp {
                     )
 ,
             )
-            .child(
+            .when(cfg!(target_os = "macos"), |page| page.child(
                 v_flex()
                     .gap_3()
                     .rounded_lg()
@@ -3457,7 +3463,7 @@ impl UploaderApp {
                     .when(!self.updater.read(cx).message.is_empty(), |section| {
                         section.child(div().text_xs().child(self.updater.read(cx).message.clone()))
                     }),
-            )
+            ))
             .child(
                 v_flex()
                     .gap_3()
@@ -3466,14 +3472,14 @@ impl UploaderApp {
                     .border_color(cx.theme().border)
                     .p_4()
                     .child(div().font_semibold().text_sm().child("General"))
-                    .child(
+                    .when(cfg!(target_os = "macos"), |section| section.child(
                         Checkbox::new("start-at-login")
                             .label("Start at login")
                             .checked(self.settings.start_at_login)
                             .on_click(cx.listener(|this, checked, window, cx| {
                                 this.set_start_at_login(*checked, window, cx);
                             })),
-                    )
+                    ))
                     .child(
                         Checkbox::new("close-window-after-copy")
                             .label("Close the window after copy")
@@ -3935,7 +3941,11 @@ pub fn init_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-v", PasteImage, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-v", PasteImage, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-c", CopyUploadMarkdown, Some(KEY_CONTEXT)),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-c", CopyUploadMarkdown, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-b", ToggleProjectSidebar, Some(KEY_CONTEXT)),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-b", ToggleProjectSidebar, Some(KEY_CONTEXT)),
     ]);
     ui_size::init_keybindings(cx);
 }
