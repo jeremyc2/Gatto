@@ -928,7 +928,7 @@ impl ImagePreview {
             return;
         }
         let key = event.keystroke.key.as_str();
-        let command = event.keystroke.modifiers.platform;
+        let command = crate::theme::primary_modifier(event.keystroke.modifiers);
         if self.editor.comparison_edit.is_some() && !(command && key == "s") {
             return;
         }

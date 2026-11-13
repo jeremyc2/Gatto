@@ -319,10 +319,15 @@ impl AppSettings {
 
 pub fn data_directory() -> Result<PathBuf> {
     #[cfg(windows)]
-    return Ok(
-        PathBuf::from(env::var_os("LOCALAPPDATA").context("Local AppData is unavailable")?)
-            .join(APPLICATION_SUPPORT_DIRECTORY),
-    );
+    {
+        let directory =
+            PathBuf::from(env::var_os("LOCALAPPDATA").context("Local AppData is unavailable")?);
+        anyhow::ensure!(
+            directory.is_absolute(),
+            "Local AppData is not an absolute path"
+        );
+        Ok(directory.join(APPLICATION_SUPPORT_DIRECTORY))
+    }
     #[cfg(not(windows))]
     Ok(home_directory()?.join(".gatto"))
 }

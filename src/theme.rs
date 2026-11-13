@@ -197,3 +197,7 @@ pub fn force_dark_appearance() {
 
 #[cfg(not(target_os = "macos"))]
 pub fn force_dark_appearance() {}
+
+pub fn primary_modifier(modifiers: gpui_kit::Modifiers) -> bool {
+    modifiers.platform || (cfg!(windows) && modifiers.control)
+}

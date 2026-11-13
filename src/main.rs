@@ -49,7 +49,7 @@ use crate::{
     custom_url::CustomUrlAction,
     diagnostics::Diagnostics,
     global_shortcut::GlobalShortcutController,
-    menu_bar::{MenuAction, MenuBar, MenuBarController},
+    menu_bar::{MenuAction, MenuBarController},
 };
 
 fn main() {
@@ -228,7 +228,7 @@ fn main() {
         #[cfg(not(windows))]
         let add_from_clipboard_enabled = startup_settings.add_from_clipboard_available();
         #[cfg(not(windows))]
-        let (menu_bar, menu_events) = match MenuBar::install(
+        let (menu_bar, menu_events) = match menu_bar::MenuBar::install(
             add_from_clipboard_enabled,
             global_shortcut_controller.registered_shortcut().as_deref(),
         ) {

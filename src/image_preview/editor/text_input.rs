@@ -277,7 +277,7 @@ impl TextInput {
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
         let modifiers = event.keystroke.modifiers;
-        let command = modifiers.platform;
+        let command = crate::theme::primary_modifier(modifiers);
         let range = self.range();
         let layout = self.mark.text_layout();
         let b = self.mark.label_edit_bounds().unwrap();
