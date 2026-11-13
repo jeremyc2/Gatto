@@ -437,7 +437,7 @@ fn remove_launch_agent() -> Result<()> {
     remove_file_if_present(&path).with_context(|| format!("Could not remove {}", path.display()))
 }
 
-fn clear_persistence(data_directory: &PathBuf, launch_agent_path: &PathBuf) -> Result<()> {
+fn clear_persistence(data_directory: &Path, launch_agent_path: &Path) -> Result<()> {
     clear_data_directory(data_directory)?;
     remove_file_if_present(launch_agent_path)
         .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
@@ -455,7 +455,7 @@ fn clear_data_directory(data_directory: &Path) -> Result<()> {
     Ok(())
 }
 
-fn remove_file_if_present(path: &PathBuf) -> Result<()> {
+fn remove_file_if_present(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

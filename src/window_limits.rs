@@ -146,7 +146,7 @@ pub fn request_close(window: &Window, _: &App) {
         UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE},
     };
 
-    if let Ok(handle) = window.window_handle()
+    if let Ok(handle) = HasWindowHandle::window_handle(window)
         && let RawWindowHandle::Win32(handle) = handle.as_raw()
     {
         // SAFETY: The window owns the HWND. WM_CLOSE carries no pointers and
