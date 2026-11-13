@@ -36,4 +36,5 @@ jobs:
           path: target/release/Gatto.exe
           if-no-files-found: error
       - name: Test the Windows executable
-        run: cargo test --locked --bin Gatto
+        # The editor interaction budget is intended for the shipped build.
+        run: cargo test --locked --release --bin Gatto

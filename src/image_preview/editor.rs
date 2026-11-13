@@ -2334,7 +2334,11 @@ mod tests {
         cx.simulate_input("Open settings");
         cx.simulate_keystrokes("enter");
         cx.simulate_input("Choose a repository");
-        cx.simulate_keystrokes("cmd-a cmd-c");
+        cx.simulate_keystrokes(if cfg!(windows) {
+            "ctrl-a ctrl-c"
+        } else {
+            "cmd-a cmd-c"
+        });
         cx.update(|_, cx| {
             assert_eq!(
                 cx.read_from_clipboard().and_then(|item| item.text()),
@@ -2351,9 +2355,13 @@ mod tests {
             })
         });
         cx.simulate_keystrokes("escape");
-        cx.simulate_keystrokes("cmd-z");
+        cx.simulate_keystrokes(if cfg!(windows) { "ctrl-z" } else { "cmd-z" });
         cx.update(|_, cx| assert!(view.read(cx).doc().unwrap().marks[1].description.is_empty()));
-        cx.simulate_keystrokes("cmd-shift-z");
+        cx.simulate_keystrokes(if cfg!(windows) {
+            "ctrl-shift-z"
+        } else {
+            "cmd-shift-z"
+        });
         cx.update(|window, cx| {
             view.update(cx, |preview, cx| {
                 assert_eq!(
