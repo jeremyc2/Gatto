@@ -36,5 +36,7 @@ jobs:
           path: target/release/Gatto.exe
           if-no-files-found: error
       - name: Test the Windows executable
-        # The editor interaction budget is intended for the shipped build.
+        # Keep GPUI's debug selectors while timing optimized editor code.
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS: "true"
         run: cargo test --locked --release --bin Gatto
