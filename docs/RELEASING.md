@@ -82,6 +82,11 @@ Enter the app-specific password when prompted. The certificate stays in your
 login keychain and credentials in the keychain profile; neither belongs in the
 repository or GitHub.
 
+If `notarytool` returns HTTP 403 saying a required agreement is missing or
+expired, have the Account Holder review any pending agreements in the
+[Apple Developer account](https://developer.apple.com/account/). Retry
+`xcrun notarytool history --keychain-profile gatto-notary` before rerunning the release.
+
 ## One-time updater signing setup
 
 Run on the release Mac:

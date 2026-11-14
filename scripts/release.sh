@@ -202,8 +202,8 @@ if [[ -z "${SIGN_IDENTITY:-}" ]]; then
   [[ "$(wc -l <<< "$identities")" -eq 1 ]] || fail "several identities found; set SIGN_IDENTITY"
   SIGN_IDENTITY="$(sed -E 's/.*"(.*)".*/\1/' <<< "$identities")"
 fi
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
-  || fail "notarytool profile '$NOTARY_PROFILE' is missing or invalid"
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null \
+  || fail "notarization preflight failed for profile '$NOTARY_PROFILE'; see docs/RELEASING.md"
 sparkle_key="$(dist/sparkle/bin/generate_keys --account "$SPARKLE_ACCOUNT" -p)" \
   || fail "create the one-time Sparkle signing key; see docs/RELEASING.md"
 [[ -n "$sparkle_key" ]] || fail "Sparkle signing key is empty"
