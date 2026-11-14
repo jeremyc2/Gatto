@@ -4226,55 +4226,6 @@ pub fn init_keybindings(cx: &mut App) {
     ui_size::init_keybindings(cx);
 }
 
-#[cfg(all(windows, feature = "walkthrough-screenshots"))]
-pub(crate) fn run_windows_capture(scenario: &str) {
-    let fixture = match scenario {
-        "preferences" => WalkthroughScenario::Preferences,
-        "sidebar-collapsed" => WalkthroughScenario::SidebarCollapsed,
-        _ => WalkthroughScenario::ImageStaged,
-    };
-    let compact = scenario == "compact";
-    let editor = scenario == "attachment-editor";
-    gpui_kit::application()
-        .with_assets(gpui_kit::assets::AllAssets)
-        .with_quit_mode(gpui_kit::QuitMode::Explicit)
-        .run(move |cx| {
-            gpui_kit::init(cx);
-            theme::apply_dark_theme(cx);
-            init_keybindings(cx);
-            crate::image_preview::init_keybindings(cx);
-            let (handle, view) = theme::open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::centered(
-                        if compact {
-                            size(px(700.), px(600.))
-                        } else {
-                            size(px(840.), px(640.))
-                        },
-                        cx,
-                    )),
-                    window_min_size: Some(size(px(700.), px(600.))),
-                    ..uploader_window_options()
-                },
-                cx,
-                |window, cx| {
-                    let view = cx.new(|cx| UploaderApp::for_walkthrough(fixture, window, cx));
-                    window.focus(&view.read(cx).focus_handle(cx), cx);
-                    window.on_window_should_close(cx, |_, _| true);
-                    view
-                },
-            )
-            .expect("open screenshot fixture");
-            if editor {
-                let _ = handle.update(cx, |_, window, cx| {
-                    view.update(cx, |this, cx| {
-                        this.open_attachment_preview(this.staged_attachments[0].id, window, cx);
-                    });
-                });
-            }
-        });
-}
-
 #[cfg(test)]
 mod tests {
     use crate::model::VideoUploadLimit;
