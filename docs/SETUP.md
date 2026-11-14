@@ -11,10 +11,11 @@
 2. Install from your regular Windows account and open Gatto from Start. If Windows
    reports a missing `VCRUNTIME140.dll`, install the
    [Microsoft Visual C++ Redistributable for x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
-3. Import and annotate media without signing in. To upload, install
-   [GitHub CLI for Windows](https://github.com/cli/cli/blob/trunk/docs/install_windows.md),
-   run `gh auth login` in PowerShell, and set your account or organization in App
-   preferences. Restart Gatto after installing the CLI if the app was already running.
+3. Set your GitHub account or organization in App preferences to start importing
+   media. For uploads, install
+   [GitHub CLI for Windows](https://github.com/cli/cli/blob/trunk/docs/install_windows.md)
+   and run `gh auth login` in PowerShell. Restart Gatto if it was open when you
+   installed the CLI.
 
 On an installed copy, right-click supported media in Explorer and use **Open with
 → Gatto** or **Show more options → Send to → Gatto**. Gatto stages the files for
@@ -142,7 +143,7 @@ installations work without extra configuration; see
 ## 3. Choose your account or organization
 
 On first launch, open **App preferences** from the settings icon or the menu bar.
-Gatto waits for an account or organization login before loading repositories.
+Save a GitHub account or organization to load repositories and start adding media.
 Public release checks do not need GitHub CLI authentication.
 
 <img src="images/walkthrough/framed/01-first-run.png" alt="Gatto's first-run screen with Application logs, App preferences, and an Open app preferences button" width="800">

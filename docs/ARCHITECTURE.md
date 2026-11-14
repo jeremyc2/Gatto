@@ -1079,10 +1079,11 @@ window requirement. Menu, global shortcut, and `gatto://add-from-clipboard` invo
 that service. It snapshots the clipboard, waits for pending workspace writes,
 loads preferences, and saves a new draft to the chosen project as a direct child
 of the projects directory. Null `add_from_clipboard_project` uses Scratchpad and
-creates it if necessary. Staging needs no account or repository selection and
-never changes the clipboard. Opening the app shows the saved draft, including
-before account setup. The separate Draft from Clipboard menu and URL action are
-retired; focused Command+V still dispatches the normal paste action.
+creates it if necessary. All media import requires a saved account or
+organization. Add from Clipboard shows a system notification if setup is still
+needed. Once an owner is saved, staging can run without a repository selection.
+It leaves the clipboard intact and the saved draft appears when you open Gatto.
+Focused Command+V on Mac or Ctrl+V on Windows dispatches normal paste.
 
 `automatically_copy_add_from_clipboard` defaults to false. The default completion
 posts a native system notification with **Upload and copy**. With the preference

@@ -56,7 +56,7 @@ use crate::{
         AttachmentUploadState, Media, OversizedVideo, Repository, StagedAttachment,
         UNSUPPORTED_MEDIA_MESSAGE, parse_owner,
     },
-    settings::{AppSettings, ReleaseChannel, UploadAction},
+    settings::{AppSettings, IMPORT_SETUP_REQUIRED, ReleaseChannel, UploadAction},
     theme::{self, AppButtonStyle as _, AppCheckbox as Checkbox},
     updater::{UpdateState, Updater},
     window_limits,
@@ -958,10 +958,10 @@ impl UploaderApp {
     }
 
     fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diagnostics.info("Opened the attachment file picker.");
-        if !self.can_add_attachments() {
+        if !self.require_import_setup(window, cx) || !self.can_add_attachments() {
             return;
         }
+        self.diagnostics.info("Opened the attachment file picker.");
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
@@ -1004,6 +1004,9 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), &'static str> {
+        if self.settings.owner.is_none() {
+            return Err(IMPORT_SETUP_REQUIRED);
+        }
         self.request_workspace(None, window, cx);
         if self.project_state.loading {
             self.pending_comparison = Some(sources);
@@ -1061,6 +1064,9 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), &'static str> {
+        if self.settings.owner.is_none() {
+            return Err(IMPORT_SETUP_REQUIRED);
+        }
         if self.project_state.loading && self.project_state.storage_folder.is_none() {
             self.pending_comparison = Some(sources);
             return Ok(());
@@ -1113,6 +1119,9 @@ impl UploaderApp {
     }
 
     fn on_paste(&mut self, _: &PasteImage, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.require_import_setup(window, cx) {
+            return;
+        }
         if !self.can_add_attachments() {
             self.warn(
                 "Finish the current upload or import before adding attachments.",
@@ -1143,7 +1152,7 @@ impl UploaderApp {
             ClipboardEntry::ExternalPaths(paths) => Some(paths.paths().to_vec()),
             _ => None,
         }) {
-            self.load_attachment_paths(paths, window, cx);
+            self.read_attachment_paths(paths, window, cx);
             return;
         }
 
@@ -1156,7 +1165,7 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.can_add_attachments() {
+        if !self.require_import_setup(window, cx) || !self.can_add_attachments() {
             return;
         }
         self.read_attachment_paths(paths, window, cx);
@@ -1197,18 +1206,18 @@ impl UploaderApp {
         cx.notify();
     }
 
-    /// Desktop open requests stage for review even before GitHub setup.
+    /// Stage media opened from Finder or Explorer for review.
     pub fn stage_opened_files(
         &mut self,
         paths: Vec<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.project_state.loading && self.project_state.storage_folder.is_none() {
-            self.pending_open_files.extend(paths);
+        if paths.is_empty() || !self.require_import_setup(window, cx) {
             return;
         }
-        if paths.is_empty() {
+        if self.project_state.loading && self.project_state.storage_folder.is_none() {
+            self.pending_open_files.extend(paths);
             return;
         }
         if !self.can_add_attachments()
@@ -1219,7 +1228,7 @@ impl UploaderApp {
             return;
         }
         self.show_main_page(window, cx);
-        self.load_attachment_paths(paths, window, cx);
+        self.read_attachment_paths(paths, window, cx);
     }
 
     fn accept_attachment_result(
@@ -1246,6 +1255,22 @@ impl UploaderApp {
         !self.uploading
             && !self.attachment_input_busy()
             && (self.pending_import.is_none() || self.compression.is_some())
+    }
+
+    pub(crate) fn has_import_setup(&self) -> bool {
+        self.settings.owner.is_some()
+    }
+
+    pub(crate) fn require_import_setup(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.has_import_setup() {
+            return true;
+        }
+        self.warn(IMPORT_SETUP_REQUIRED, window, cx);
+        false
     }
 
     fn accept_attachment_results(
@@ -2546,7 +2571,7 @@ impl UploaderApp {
         self.recording_global_shortcut = false;
         self.shortcut_modifier_hint = false;
         self.refresh_repository_picker(window, cx);
-        self.menu_bar.set_add_from_clipboard_enabled(false);
+        self.sync_add_from_clipboard_enabled();
         self.diagnostics
             .info("Reset app state and cleared saved preferences.");
         window.push_notification(
@@ -2846,6 +2871,8 @@ impl UploaderApp {
 
     fn render_setup_prompt(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
+            .id("account-setup")
+            .debug_selector(|| "account-setup".into())
             .gap_3()
             .items_center()
             .justify_center()
@@ -2860,13 +2887,18 @@ impl UploaderApp {
                     .size(px(30.))
                     .text_color(cx.theme().primary),
             )
-            .child(div().text_sm().font_semibold().child("Set an account or organization"))
+            .child(
+                div()
+                    .text_sm()
+                    .font_semibold()
+                    .child("Set an account or organization"),
+            )
             .child(
                 div()
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Add media below. To upload, set a GitHub account or organization in App preferences.",
+                        "Enter a GitHub account or organization in App preferences to get started.",
                     ),
             )
             .child(
@@ -3593,6 +3625,7 @@ impl Focusable for UploaderApp {
 
 impl Render for UploaderApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let needs_setup = self.settings.owner.is_none();
         let titlebar_height = if cfg!(target_os = "macos") && !window.is_fullscreen() {
             TITLEBAR_HEIGHT.max(
                 theme::CONTROL_HEIGHT.to_pixels(cx.theme().font_size) + TITLEBAR_PICKER_TOP * 2.,
@@ -3663,6 +3696,11 @@ impl Render for UploaderApp {
                 }
             }))
             .on_action(cx.listener(Self::on_paste))
+            .when(needs_setup, |root| {
+                root.on_drop(cx.listener(|this, _: &ExternalPaths, window, cx| {
+                    this.require_import_setup(window, cx);
+                }))
+            })
             .on_action(
                 cx.listener(|this, _: &ToggleProjectSidebar, _, cx| {
                     this.toggle_project_sidebar(cx)
@@ -3688,7 +3726,6 @@ impl Render for UploaderApp {
             } else {
                 titlebar_height.min(SIDEBAR_TITLEBAR_HEIGHT)
             };
-            let needs_setup = self.load_state == LoadState::NeedsSetup;
             let repository_in_title_bar =
                 sidebar_collapsed && titlebar_height > px(0.) && !needs_setup;
             let workspace_title = self.project_state.title.clone().unwrap_or_else(|| {
@@ -3887,7 +3924,7 @@ impl Render for UploaderApp {
                                 ),
                         )
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
-                        .child(self.render_drop_zone(cx))
+                        .when(!needs_setup, |root| root.child(self.render_drop_zone(cx)))
                         .when(self.compression.is_some(), |root| root.child(self.render_compression(cx)))
                         .when(self.combining_comparison, |root| {
                                     root.child(
@@ -4273,7 +4310,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn file_picker_is_available_before_account_setup(cx: &mut TestAppContext) {
+    fn shows_only_the_setup_box_until_an_owner_is_saved(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
         cx.update(|window, cx| {
             view.update(cx, |app, cx| {
@@ -4283,25 +4320,27 @@ mod tests {
             });
             window.draw(cx).clear(cx);
         });
-        let zone = cx
-            .debug_bounds("image-drop-zone")
-            .expect("import without GitHub setup");
-        cx.simulate_mouse_down(
-            zone.center(),
-            gpui_kit::MouseButton::Left,
-            gpui_kit::Modifiers::default(),
-        );
-        cx.simulate_mouse_up(
-            zone.center(),
-            gpui_kit::MouseButton::Left,
-            gpui_kit::Modifiers::default(),
-        );
-        assert!(cx.did_prompt_for_paths());
+        assert!(cx.debug_bounds("account-setup").is_some());
+        assert!(cx.debug_bounds("image-drop-zone").is_none());
+
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.settings.set_owner("acme".into());
+                app.load_state = LoadState::Loading;
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        assert!(cx.debug_bounds("account-setup").is_none());
+        assert!(cx.debug_bounds("image-drop-zone").is_some());
     }
 
     #[gpui_kit::test]
-    fn clipboard_drafts_remain_visible_before_account_setup(cx: &mut TestAppContext) {
+    fn import_entry_points_notify_and_reject_media_before_account_setup(cx: &mut TestAppContext) {
+        use gpui_kit::{FileDropEvent, InputEvent as _};
+
         let (view, cx) = upload_window(cx);
+        let (_directory, paths) = four_image_paths();
         cx.update(|window, cx| {
             init_keybindings(cx);
             cx.write_to_clipboard(gpui_kit::ClipboardItem::new_image(
@@ -4314,15 +4353,53 @@ mod tests {
                 app.settings.owner = None;
                 app.load_state = LoadState::NeedsSetup;
                 app.focus_handle.focus(window, cx);
+                cx.notify();
             });
-        });
-        cx.simulate_keystrokes("cmd-v");
-        cx.run_until_parked();
-        cx.update(|window, cx| {
-            assert_eq!(view.read(cx).staged_attachments.len(), 1);
-            let id = view.read(cx).staged_attachments[0].id;
             window.draw(cx).clear(cx);
-            assert!(view.read(cx).attachment_bounds.borrow().contains_key(&id));
+        });
+        cx.simulate_keystrokes(if cfg!(windows) { "ctrl-v" } else { "cmd-v" });
+        cx.update(|window, cx| {
+            assert!(!window.notifications(cx).is_empty(), "paste should notify");
+            window.clear_notifications(cx);
+            view.update(cx, |app, cx| app.choose_file(window, cx));
+            assert!(
+                !window.notifications(cx).is_empty(),
+                "file picker should notify"
+            );
+            window.clear_notifications(cx);
+            view.update(cx, |app, cx| {
+                app.stage_opened_files(paths.clone(), window, cx)
+            });
+            assert!(
+                !window.notifications(cx).is_empty(),
+                "desktop open should notify"
+            );
+            window.clear_notifications(cx);
+            window.draw(cx).clear(cx);
+        });
+        assert!(!cx.did_prompt_for_paths());
+
+        let position = cx.debug_bounds("account-setup").unwrap().center();
+        cx.update(|window, cx| {
+            window.dispatch_event(
+                FileDropEvent::Entered {
+                    position,
+                    paths: ExternalPaths(paths.into_iter().collect()),
+                }
+                .to_platform_input(),
+                cx,
+            );
+            window.draw(cx).clear(cx);
+            window.dispatch_event(FileDropEvent::Submit { position }.to_platform_input(), cx);
+            window.dispatch_event(FileDropEvent::Ended.to_platform_input(), cx);
+            assert!(!window.notifications(cx).is_empty(), "drop should notify");
+        });
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            let app = view.read(cx);
+            assert!(app.staged_attachments.is_empty());
+            assert!(app.pending_open_files.is_empty());
+            assert!(app.diagnostics.text().contains(IMPORT_SETUP_REQUIRED));
         });
     }
 

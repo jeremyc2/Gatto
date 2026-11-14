@@ -13,7 +13,7 @@ use crate::{
     github,
     model::{AttachmentUploadState, ImageCopyFormat, Media, Repository, StagedAttachment},
     projects::Project,
-    settings::AppSettings,
+    settings::{AppSettings, IMPORT_SETUP_REQUIRED},
 };
 
 const TAG_PREFIX: &str = "gatto-add-from-clipboard:";
@@ -384,6 +384,7 @@ fn stage_clipboard(
     settings: &AppSettings,
     clipboard: Option<ClipboardItem>,
 ) -> Result<ClipboardUpdate> {
+    ensure!(settings.owner.is_some(), "{IMPORT_SETUP_REQUIRED}");
     if settings.add_from_clipboard_project.is_none() && !settings.scratchpad_directory()?.exists() {
         crate::projects::open_scratchpad(settings.scratchpad_directory()?)?;
     }
@@ -536,8 +537,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let fixture = Fixture::new();
-        let mut settings = fixture.settings.clone();
-        settings.owner = None;
+        let settings = fixture.settings.clone();
         let (mut project, _) =
             Project::open(settings.add_from_clipboard_directory().unwrap()).unwrap();
         project.metadata.repository = None;
@@ -564,6 +564,32 @@ mod tests {
         assert_eq!(notification.title.as_ref(), "Added from Clipboard");
         assert!(notification.body.contains("Scratchpad"));
         assert_eq!(notification.actions[0].label.as_ref(), "Upload and copy");
+        assert!(!service.is_busy());
+    }
+
+    #[gpui_kit::test]
+    async fn add_from_clipboard_notifies_and_leaves_the_project_untouched_before_setup(
+        cx: &mut TestAppContext,
+    ) {
+        let fixture = Fixture::new();
+        let mut settings = fixture.settings.clone();
+        settings.owner = None;
+        let folder = settings.add_from_clipboard_directory().unwrap();
+        let service = AddFromClipboard::new(Diagnostics::new(), Default::default());
+        cx.update(|cx| cx.write_to_clipboard(image()));
+        start(
+            &service,
+            cx,
+            settings,
+            Arc::new(FakeBackend::default()),
+            Work::Clipboard,
+        );
+        cx.run_until_parked();
+
+        assert!(Project::open(folder).unwrap().1.is_empty());
+        let shown = cx.shown_system_notifications();
+        assert_eq!(shown.last().unwrap().body.as_ref(), IMPORT_SETUP_REQUIRED);
+        assert!(shown.last().unwrap().actions.is_empty());
         assert!(!service.is_busy());
     }
 

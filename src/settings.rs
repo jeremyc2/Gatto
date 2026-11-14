@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::compression::CompressionMode;
 
 pub const LOGIN_ARGUMENT: &str = "--login";
+pub(crate) const IMPORT_SETUP_REQUIRED: &str =
+    "Set a GitHub account or organization in App preferences before adding media.";
 pub const DEFAULT_UI_FONT_SIZE: u8 = 16;
 pub const UI_FONT_SIZES: [u8; 5] = [DEFAULT_UI_FONT_SIZE, 18, 20, 22, 24];
 

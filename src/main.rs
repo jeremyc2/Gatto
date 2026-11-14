@@ -441,6 +441,30 @@ impl MainWindow {
     }
 
     fn show_composer(&self, source: Option<crate::model::StagedAttachment>, cx: &mut App) {
+        let current = self.0.borrow().current.clone();
+        let has_owner = if let Some((_, view)) = current {
+            view.read(cx).has_import_setup()
+        } else {
+            match settings::AppSettings::load() {
+                Ok(settings) => settings.owner.is_some(),
+                Err(error) => {
+                    let (handle, view) = self.show(cx);
+                    let _ = handle.update(cx, |_, window, cx| {
+                        view.update(cx, |view, cx| {
+                            view.report_open_error(error.to_string(), window, cx)
+                        });
+                    });
+                    return;
+                }
+            }
+        };
+        if !has_owner {
+            let (handle, view) = self.show(cx);
+            let _ = handle.update(cx, |_, window, cx| {
+                view.update(cx, |view, cx| view.require_import_setup(window, cx));
+            });
+            return;
+        }
         set_dock_visible(true);
         cx.activate(true);
         let existing = self.0.borrow().composer.clone();
