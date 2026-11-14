@@ -20,6 +20,7 @@ actions!(
         HelpWalkthrough,
         HelpSetup,
         HelpSupport,
+        #[cfg(windows)]
         AddFromClipboard
     ]
 );

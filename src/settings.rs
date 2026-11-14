@@ -300,20 +300,24 @@ impl AppSettings {
         Ok(settings)
     }
 
+    #[cfg(not(windows))]
     pub fn set_start_at_login(&mut self, enabled: bool) -> Result<()> {
-        #[cfg(windows)]
-        crate::desktop::set_start_at_login(enabled)?;
-        #[cfg(not(windows))]
         if enabled {
             install_launch_agent()?;
         } else {
             remove_launch_agent()?;
         }
+        self.start_at_login = enabled;
+        self.save()
+    }
+
+    #[cfg(windows)]
+    pub fn set_start_at_login(&mut self, enabled: bool) -> Result<()> {
+        crate::desktop::set_start_at_login(enabled)?;
         let previous = self.start_at_login;
         self.start_at_login = enabled;
         if let Err(error) = self.save() {
             self.start_at_login = previous;
-            #[cfg(windows)]
             crate::desktop::set_start_at_login(previous)
                 .context("Could not restore the previous login entry")?;
             return Err(error);

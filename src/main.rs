@@ -53,7 +53,13 @@ use crate::{
 };
 
 fn main() {
+    #[cfg(not(windows))]
+    let login_launch = std::env::args_os()
+        .skip(1)
+        .any(|argument| argument == settings::LOGIN_ARGUMENT);
+    #[cfg(windows)]
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    #[cfg(windows)]
     let login_launch = arguments == [settings::LOGIN_ARGUMENT];
     #[cfg(windows)]
     let (windows_sender, windows_events) = async_channel::bounded(64);
@@ -623,6 +629,20 @@ impl MainWindow {
                 composer_controller.show_composer(Some(event.0.clone()), cx);
             },
         )
+        .detach();
+        let reset_controller = self.clone();
+        cx.subscribe(&result.1, move |_, _: &app::AppReset, cx| {
+            let reset_controller = reset_controller.clone();
+            cx.defer(move |cx| {
+                let composer = reset_controller.0.borrow().composer.clone();
+                if let Some((handle, view)) = composer {
+                    let _ = handle.update(cx, |_, window, cx| {
+                        view.update(cx, |composer, cx| composer.reset(cx));
+                        window_limits::request_close(window, cx);
+                    });
+                }
+            });
+        })
         .detach();
         self.0.borrow_mut().current = Some(result.clone());
         result

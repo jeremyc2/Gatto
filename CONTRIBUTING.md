@@ -482,6 +482,15 @@ Keep new dependencies to a minimum. In a dependency change, explain:
 - Why an existing dependency or the standard library is insufficient.
 - Any security, licensing, binary-size, or platform implications.
 
+The Windows adapters in [Cargo.toml](Cargo.toml) have target-specific dependencies.
+Reqwest, Tokio, and Futures stream uploads with cancellation and timeouts. Reqwest
+uses Windows Schannel for TLS. The standard library lacks an HTTP client, and the
+existing macOS transport uses Foundation. Cosmic Text shapes and rasterizes
+annotation and scorecard text because Core Text runs on Mac. Chrono supplies local
+time conversion in place of Foundation. The Windows bindings provide Win32 and
+Media Foundation APIs, and embed-resource calls the Windows resource compiler to
+embed the app icon. The Windows build uses the system TLS and media libraries.
+
 Project persistence uses `uuid` for UUID generation and validation, and `sha2`
 0.11 for SHA-256 content fingerprints; Rust's standard library provides neither.
 Both packages already belong to the active GPUI dependency graph. Local timestamp

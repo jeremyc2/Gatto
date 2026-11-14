@@ -115,6 +115,9 @@ pub(crate) fn uploader_window_options() -> WindowOptions {
 pub(crate) struct ConvertAttachmentRequested(pub StagedAttachment);
 impl EventEmitter<ConvertAttachmentRequested> for UploaderApp {}
 
+pub(crate) struct AppReset;
+impl EventEmitter<AppReset> for UploaderApp {}
+
 #[derive(Default)]
 struct AppControllers {
     menu_bar: MenuBarController,
@@ -2591,6 +2594,7 @@ impl UploaderApp {
         self.sync_add_from_clipboard_enabled();
         self.diagnostics
             .info("Reset app state and cleared saved preferences.");
+        cx.emit(AppReset);
         window.push_notification(
             Notification::success("App reset. Set up Gatto to continue."),
             cx,
@@ -3574,6 +3578,33 @@ impl UploaderApp {
             )
     }
 
+    #[cfg(windows)]
+    fn render_windows_app_menu(&self) -> impl IntoElement {
+        use crate::application_menu as actions;
+
+        let clipboard = self.settings.add_from_clipboard_available();
+        Button::new("windows-app-menu")
+            .app_icon()
+            .icon(IconName::Ellipsis)
+            .accessibility_label("Gatto menu")
+            .dropdown_menu(move |mut menu, _, _| {
+                if clipboard {
+                    menu = menu.menu("Add from Clipboard", Box::new(actions::AddFromClipboard));
+                }
+                menu.menu(
+                    crate::image_composer::TITLE,
+                    Box::new(actions::CreateComposition),
+                )
+                .menu(
+                    "Check for Windows updates…",
+                    Box::new(actions::CheckForUpdates),
+                )
+                .menu("About Gatto", Box::new(actions::OpenAbout))
+                .menu("Help", Box::new(actions::HelpWalkthrough))
+                .menu("Quit Gatto", Box::new(actions::Quit))
+            })
+    }
+
     fn render_window_drag_region(id: &'static str, height: Pixels, cx: &App) -> impl IntoElement {
         div()
             .id(id)
@@ -3914,26 +3945,11 @@ impl Render for UploaderApp {
                                                             this.open_preferences(window, cx);
                                                         })),
                                                 )
-                                                .when(cfg!(windows), |row| row.child(
-                                                    Button::new("windows-app-menu")
-                                                        .app_icon()
-                                                        .icon(IconName::Ellipsis)
-                                                        .accessibility_label("Gatto menu")
-                                                        .dropdown_menu({
-                                                            let clipboard = self.settings.add_from_clipboard_available();
-                                                            move |mut menu, _, _| {
-                                                                use crate::application_menu as actions;
-                                                                if clipboard {
-                                                                    menu = menu.menu("Add from Clipboard", Box::new(actions::AddFromClipboard));
-                                                                }
-                                                                menu.menu(crate::image_composer::TITLE, Box::new(actions::CreateComposition))
-                                                                    .menu("Check for Windows updates…", Box::new(actions::CheckForUpdates))
-                                                                    .menu("About Gatto", Box::new(actions::OpenAbout))
-                                                                    .menu("Help", Box::new(actions::HelpWalkthrough))
-                                                                    .menu("Quit Gatto", Box::new(actions::Quit))
-                                                            }
-                                                        }),
-                                                ))
+                                                .map(|row| {
+                                                    #[cfg(windows)]
+                                                    let row = row.child(self.render_windows_app_menu());
+                                                    row
+                                                })
                                                 .child(
                                                     Button::new("workspace-information").debug_selector(|| "workspace-information".into())
                                                         .app_icon()
