@@ -83,6 +83,7 @@ const WORKSPACE_PADDING: Rems = rems(0.5);
 const PROJECT_SIDEBAR_WIDTH: Pixels = px(220.);
 const WORKSPACE_MARK_SIZE: Pixels = px(72.);
 const WORKSPACE_TITLE_WIDTH: Rems = rems(8.25);
+const WINDOWS_WORKSPACE_TITLE_MIN: Pixels = px(128.);
 const WORKSPACE_HEADER_GAP: Rems = rems(1.);
 const SETTINGS_CONTROL_WIDTH: Pixels = px(400.);
 // Leave room for the native buttons and the draggable title bar above GPUI controls.
@@ -3909,7 +3910,7 @@ impl Render for UploaderApp {
                                         .when(windows_caption, |title| {
                                             Self::windows_drag_region(
                                                 title
-                                                    .min_w(px(72.))
+                                                    .min_w(WINDOWS_WORKSPACE_TITLE_MIN)
                                                     .h(theme::CONTROL_HEIGHT
                                                         .to_pixels(cx.theme().font_size))
                                                     .justify_center(),
