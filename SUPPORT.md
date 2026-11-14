@@ -11,7 +11,7 @@ When reporting a problem, include:
 
 - The app version and commit shown in **Gatto → About Gatto**. Click **Copy** to
   copy the details and close the dialog.
-- The macOS version and Mac architecture.
+- The operating system version and CPU architecture.
 - The output of `rustc --version`, `cargo --version`, and `gh --version` when the
   problem concerns local development.
 - Clear reproduction steps and the expected and actual behavior.
@@ -23,7 +23,19 @@ images before sharing logs or screenshots.
 ## Compatibility
 
 Gatto requires macOS 13 or newer. The download supports Apple Silicon Macs;
-Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
+Intel Macs need a [source build](CONTRIBUTING.md#development-setup). The
+[Windows preview](docs/SETUP.md#windows-11-x64-preview) targets Windows 11 x64.
+
+On Windows, oversized video compression uses software H.264 and optional AAC.
+Use an upright H.264 MP4 with even pixel dimensions and either no audio or
+mono/stereo AAC at 44.1 or 48 kHz. On Windows N, install the
+[Media Feature Pack](https://support.microsoft.com/en-us/windows/experience/platform-variants/media-feature-pack-for-windows-n)
+if compression reports that Media Foundation is unavailable.
+
+To uninstall on Windows, quit from the tray and remove Gatto under **Settings →
+Apps → Installed apps**. Your projects and settings remain in
+`%LOCALAPPDATA%\Gatto`. Back up any projects you want to keep before deleting
+that folder.
 
 ## Common problems
 
@@ -34,7 +46,7 @@ Intel Macs need a [source build](CONTRIBUTING.md#development-setup).
 | An account switch is not reflected in Gatto                      | Restart Gatto after switching accounts with GitHub CLI; Gatto caches its session in memory.                                                                                                                                                                                                                                                        |
 | File is rejected                                                 | Use PNG, JPEG, GIF, WebP, MP4, MOV, or WebM within your selected limit: 10 MB by default, optionally 100 MB for videos. Files must be nonempty and readable, with a supported extension. Choose Compress for an oversized video in the main window. Export corrupt or unsupported videos as H.264 MP4.                                             |
 | Compression fails                                                | Use a shorter, SDR recording with one video track and at most one audio track. Check free disk space. Native hardware H.264 encoding and decoder support are required; some WebM codecs need another export. Canceling or failing leaves the original unchanged.                                                                                   |
-| Video does not play                                              | Click its play tile to open the default macOS video app. Install a compatible player or export as H.264 MP4. WebM and some MOV codecs are not supported by every player/browser.                                                                                                                                                                   |
+| Video does not play                                              | Click its play tile to open the default video app. Install a compatible player or export as H.264 MP4. WebM and some MOV codecs are not supported by every player/browser.                                                                                                                                                                   |
 | GIF does not animate                                             | Animation plays in the separate image preview while active. macOS Reduce Motion holds the first frame.                                                                                                                                                                                                                                             |
 | Clipboard action finds no image                                  | Copy actual image data or an image/video file in Finder; a text URL or Markdown snippet is not media data.                                                                                                                                                                                                                                         |
 | A normal upload fails                                            | Inspect the attachment error and Application logs, check network/account access, then click Upload to retry. Scratchpad and projects persist drafts and completed URLs.                                                                                                                                                                                          |

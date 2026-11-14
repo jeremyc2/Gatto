@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(windows)]
+#[path = "cursor/windows.rs"]
+mod native;
+
 impl ImagePreview {
     pub(in crate::image_preview) fn preview_cursor_layer(
         &self,
@@ -31,10 +35,13 @@ impl ImagePreview {
                     // Paint after all controls: a descendant's default cursor must not
                     // override the operation beneath the pointer on the artwork.
                     window.set_window_cursor_style(fallback);
-                    #[cfg(target_os = "macos")]
+                    #[cfg(any(target_os = "macos", windows))]
                     window.defer(cx, move |window, _| native::set(window, kind, fallback));
+                } else {
+                    #[cfg(windows)]
+                    window.defer(cx, move |window, _| native::clear(window));
                 }
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(not(any(target_os = "macos", windows)))]
                 let _ = (kind, cx);
             },
         )
@@ -50,7 +57,7 @@ impl ImagePreview {
         if self.editor.editing.is_some() {
             return;
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         {
             let cursor =
                 if self.editor.tool == Tool::Select && self.drag.is_none() && !self.editor.space {
@@ -61,7 +68,7 @@ impl ImagePreview {
             // Run after GPUI has applied its standard cursor for the completed frame.
             window.defer(cx, move |window, _| native::set(window, cursor, fallback));
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", windows)))]
         let _ = (window, fallback, cx);
     }
 }
@@ -124,11 +131,11 @@ mod native {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", windows, test))]
 const CURSOR_SIZE: f64 = 24.;
 
 /// Small closed arrow silhouettes: dark interior, thin white outline, dark outer keyline.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", windows, test))]
 pub(super) fn cursor_image(kind: SelectionCursor) -> Option<tiny_skia::Pixmap> {
     use tiny_skia::{FillRule, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform};
     let mut p = PathBuilder::new();
@@ -180,7 +187,7 @@ pub(super) fn cursor_image(kind: SelectionCursor) -> Option<tiny_skia::Pixmap> {
     // Leave room for sharp outlined tips, including their outer contrast keyline.
     path = path.transform(Transform::from_row(0.82, 0., 0., 0.82, 2.16, 2.16))?;
     // A two-times representation keeps the 24-point AppKit cursor crisp on Retina.
-    let mut image = Pixmap::new(48, 48)?;
+    let mut image = Pixmap::new(CURSOR_SIZE as u32 * 2, CURSOR_SIZE as u32 * 2)?;
     let transform = Transform::from_scale(2., 2.);
     let mut paint = Paint::default();
     paint.set_color_rgba8(18, 18, 18, 255);

@@ -44,6 +44,8 @@ pub fn open_window<V: gpui_kit::Render>(
         .as_ref()
         .is_some_and(|titlebar| titlebar.appears_transparent);
     gpui_kit::open_window(options, cx, |window, cx| {
+        #[cfg(windows)]
+        crate::desktop::set_window_icon(window);
         let view = build(window, cx);
         crate::window_limits::style_window(&view, window, full_size_content, cx);
         view
@@ -197,3 +199,7 @@ pub fn force_dark_appearance() {
 
 #[cfg(not(target_os = "macos"))]
 pub fn force_dark_appearance() {}
+
+pub fn primary_modifier(modifiers: gpui_kit::Modifiers) -> bool {
+    modifiers.platform || (cfg!(windows) && modifiers.control)
+}

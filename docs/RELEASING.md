@@ -1,11 +1,40 @@
 # Releasing Gatto
 
-Releases are built locally on macOS with `scripts/release.sh`. The script produces
+macOS releases are built locally with `scripts/release.sh`. The script produces
 a Developer ID signed and notarized Apple Silicon app and disk image, then
 publishes the DMG, signed Sparkle appcast, and checksums to GitHub Releases.
-There is no active release workflow in GitHub Actions.
 
-## Prerequisites
+## Windows preview releases
+
+Once the workflow is on the default branch, open **Actions → Windows release →
+Run workflow** and select a trusted branch or tag. The workflow reads Gatto's
+version from Cargo and uses the preview number you enter to form a tag such as
+`windows-v0.24.4-preview.1`. Use a new preview number for each release of the
+same version.
+
+The workflow builds and tests on a Windows x64 runner. It produces an unsigned
+per-user installer, a portable ZIP with `Gatto.exe` and the license, and
+`SHA256SUMS` for both downloads. Select **Build the installer, ZIP, and checksums
+without publishing** to download the artifacts before creating a release.
+Publication uses GitHub's built-in token. Windows builds are prereleases and
+leave GitHub's **Latest** release available to the macOS updater.
+
+The job uses Inno Setup 6 from the runner to compile
+[`Gatto.iss`](../packaging/windows/Gatto.iss).
+For a local package, run the release build from
+[Contributing](../CONTRIBUTING.md#windows-preview-build), then run this from the repository root
+in PowerShell with Inno Setup 6 installed:
+
+```powershell
+./packaging/windows/package.ps1 -Preview 1 -Executable target/x86_64-pc-windows-msvc/release/Gatto.exe -ReleaseDirectory release
+```
+
+The installer registers Explorer and the `gatto://` scheme only for the current
+user and leaves default file handlers alone. It requires Gatto to be closed
+before replacing the executable and preserves Local AppData on uninstall.
+See [Windows setup](SETUP.md#windows-11-x64-preview).
+
+## macOS prerequisites
 
 - The [development tools](../CONTRIBUTING.md#development-setup) and an authenticated `gh`
   account with permission to create releases in this repository.

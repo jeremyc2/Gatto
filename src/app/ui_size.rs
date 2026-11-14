@@ -17,7 +17,7 @@ pub(super) fn init_keybindings(cx: &mut App) {
     // Use the window's view so the shortcuts also work when no control has focus.
     cx.intercept_keystrokes(|event, window, cx| {
         let modifiers = event.keystroke.modifiers;
-        if !modifiers.platform || modifiers.number_of_modifiers() != 1 {
+        if !crate::theme::primary_modifier(modifiers) || modifiers.number_of_modifiers() != 1 {
             return;
         }
         let direction = match event.keystroke.key.as_str() {

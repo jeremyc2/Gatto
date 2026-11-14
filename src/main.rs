@@ -1,10 +1,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod add_from_clipboard;
 mod annotation;
 mod app;
 mod application_menu;
 mod compression;
 mod custom_url;
+#[cfg(not(windows))]
+mod desktop;
+#[cfg(windows)]
+#[path = "desktop/windows.rs"]
 mod desktop;
 mod diagnostics;
 mod github;
@@ -44,16 +49,26 @@ use crate::{
     custom_url::CustomUrlAction,
     diagnostics::Diagnostics,
     global_shortcut::GlobalShortcutController,
-    menu_bar::{MenuAction, MenuBar, MenuBarController},
+    menu_bar::{MenuAction, MenuBarController},
 };
 
 fn main() {
-    let login_launch = std::env::args_os()
-        .skip(1)
-        .any(|argument| argument == settings::LOGIN_ARGUMENT);
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    let login_launch = arguments == [settings::LOGIN_ARGUMENT];
+    #[cfg(windows)]
+    let (windows_sender, windows_events) = async_channel::bounded(64);
+    #[cfg(windows)]
+    let _desktop = match desktop::Desktop::start(&arguments, windows_sender) {
+        Ok(Some(desktop)) => desktop,
+        Ok(None) => return,
+        Err(error) => {
+            desktop::launch_error(&error);
+            return;
+        }
+    };
     let application = gpui_kit::application()
         .with_assets(gpui_kit::assets::AllAssets)
-        .with_quit_mode(gpui_kit::QuitMode::Explicit);
+        .with_quit_mode(gpui_kit::QuitMode::Default);
     let main_window = Rc::new(RefCell::new(None::<MainWindow>));
     let reopen_main = main_window.clone();
     application.on_reopen(move |cx| {
@@ -75,10 +90,10 @@ fn main() {
         app::init_keybindings(cx);
         image_preview::init_keybindings(cx);
         application_menu::init(cx);
-        let file_service = desktop::install_file_service();
         set_dock_visible(!login_launch);
         let diagnostics = Diagnostics::new();
-        if let Err(error) = file_service {
+        #[cfg(not(windows))]
+        if let Err(error) = desktop::install_file_service() {
             diagnostics.error(format!("Could not install the Finder service: {error:#}"));
         }
         diagnostics.info(if login_launch {
@@ -86,6 +101,7 @@ fn main() {
         } else {
             "Application started."
         });
+        #[cfg(not(windows))]
         if let Err(error) = settings::AppSettings::refresh_start_at_login() {
             diagnostics.error(format!("Could not refresh Start at login: {error:#}"));
         }
@@ -138,7 +154,9 @@ fn main() {
                 }
             });
         });
+        #[cfg(not(windows))]
         let check_main = controller.clone();
+        #[cfg(not(windows))]
         cx.on_action(move |_: &application_menu::CheckForUpdates, cx| {
             let main = check_main.clone();
             cx.defer(move |cx| {
@@ -156,6 +174,25 @@ fn main() {
                 }
             });
         });
+        #[cfg(windows)]
+        {
+            let clipboard_main = controller.clone();
+            cx.on_action(move |_: &application_menu::AddFromClipboard, cx| {
+                let main = clipboard_main.clone();
+                cx.defer(move |cx| perform_action(MenuAction::AddFromClipboard, &main, cx));
+            });
+        }
+        #[cfg(windows)]
+        {
+            let about_main = controller.clone();
+            cx.on_action(move |_: &application_menu::OpenAbout, cx| {
+                let main = about_main.clone();
+                cx.defer(move |cx| {
+                    let (handle, _) = main.show(cx);
+                    let _ = handle.update(cx, |_, window, cx| application_menu::show_about_windows(window, cx));
+                });
+            });
+        }
         let preferences_main = controller.clone();
         cx.on_action(move |_: &application_menu::OpenPreferences, cx| {
             // Keyboard dispatch can still borrow the focused window.
@@ -181,7 +218,24 @@ fn main() {
                 service.upload_saved(item, cx, saved, notification_main.clipboard_store());
             }
         });
+        #[cfg(not(windows))]
         controller.start(login_launch, cx);
+        #[cfg(windows)]
+        {
+            let activation_main = controller.clone();
+            cx.spawn(async move |cx| {
+                while let Ok(requests) = windows_events.recv().await {
+                    cx.update(|cx| {
+                        for request in requests {
+                            handle_open_request(request, &activation_main, cx);
+                        }
+                    });
+                }
+            }).detach();
+            if arguments.is_empty() {
+                controller.start(false, cx);
+            }
+        }
         let composition_main = controller.clone();
         cx.on_action(move |_: &application_menu::CreateComposition, cx| {
             let main = composition_main.clone();
@@ -214,19 +268,19 @@ fn main() {
         }
 
         let add_from_clipboard_enabled = startup_settings.add_from_clipboard_available();
-        let (menu_bar, menu_events) = match MenuBar::install(
+        let (menu_bar, menu_events) = match menu_bar::MenuBar::install(
             add_from_clipboard_enabled,
             global_shortcut_controller.registered_shortcut().as_deref(),
         ) {
             Ok(menu_bar) => menu_bar,
             Err(error) => {
-                diagnostics.error(format!("Menu bar setup failed: {error}"));
-                if !login_launch {
+                diagnostics.error(format!("Desktop menu setup failed: {error}"));
+                if !login_launch || cfg!(windows) {
                     let (handle, view) = controller.show(cx);
                     let _ = handle.update(cx, |_, window, cx| {
                         view.update(cx, |this, cx| {
                             this.report_menu_bar_error(
-                                format!("Menu bar setup failed: {error}"),
+                                format!("Desktop menu setup failed: {error}"),
                                 window,
                                 cx,
                             );
@@ -237,6 +291,8 @@ fn main() {
             }
         };
         menu_bar_controller.attach(menu_bar);
+        #[cfg(windows)]
+        cx.set_quit_mode(gpui_kit::QuitMode::Explicit);
         updater::Updater::start(cx, diagnostics.clone(), menu_bar_controller.clone(), startup_settings.release_channel);
         #[cfg(target_os = "macos")]
         installer_cleanup::start(diagnostics.clone());
@@ -258,6 +314,8 @@ fn handle_open_request(request: open_request::OpenRequest, main: &MainWindow, cx
     use open_request::OpenRequest;
     match request {
         OpenRequest::Action(action) => perform_action(action.into(), main, cx),
+        #[cfg(windows)]
+        OpenRequest::Reopen => main.reopen(cx),
         request => {
             let (handle, view) = main.show(cx);
             let _ = handle.update(cx, |_, window, cx| {
@@ -265,6 +323,8 @@ fn handle_open_request(request: open_request::OpenRequest, main: &MainWindow, cx
                     OpenRequest::Files(paths) => this.stage_opened_files(paths, window, cx),
                     OpenRequest::Invalid(error) => this.report_open_error(error, window, cx),
                     OpenRequest::Action(_) => unreachable!(),
+                    #[cfg(windows)]
+                    OpenRequest::Reopen => unreachable!(),
                 });
             });
         }
@@ -381,6 +441,30 @@ impl MainWindow {
     }
 
     fn show_composer(&self, source: Option<crate::model::StagedAttachment>, cx: &mut App) {
+        let current = self.0.borrow().current.clone();
+        let has_owner = if let Some((_, view)) = current {
+            view.read(cx).has_import_setup()
+        } else {
+            match settings::AppSettings::load() {
+                Ok(settings) => settings.owner.is_some(),
+                Err(error) => {
+                    let (handle, view) = self.show(cx);
+                    let _ = handle.update(cx, |_, window, cx| {
+                        view.update(cx, |view, cx| {
+                            view.report_open_error(error.to_string(), window, cx)
+                        });
+                    });
+                    return;
+                }
+            }
+        };
+        if !has_owner {
+            let (handle, view) = self.show(cx);
+            let _ = handle.update(cx, |_, window, cx| {
+                view.update(cx, |view, cx| view.require_import_setup(window, cx));
+            });
+            return;
+        }
         set_dock_visible(true);
         cx.activate(true);
         let existing = self.0.borrow().composer.clone();
@@ -589,8 +673,10 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
             service.start(cx, main.clipboard_save_barrier(cx), main.clipboard_store());
         }
         MenuAction::Settings => {
-            let (_, view) = main.show(cx);
-            view.update(cx, |this, cx| this.show_settings(cx));
+            let (handle, view) = main.show(cx);
+            let _ = handle.update(cx, |_, window, cx| {
+                view.update(cx, |this, cx| this.open_preferences(window, cx));
+            });
         }
         MenuAction::CreateComposition => main.show_composer(None, cx),
         MenuAction::Update => {
@@ -602,6 +688,10 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
                 });
             });
         }
+        #[cfg(windows)]
+        MenuAction::CheckForUpdates => cx.dispatch_action(&application_menu::CheckForUpdates),
+        #[cfg(windows)]
+        MenuAction::About => cx.dispatch_action(&application_menu::OpenAbout),
         MenuAction::Quit => application_menu::request_quit(cx),
     }
 }

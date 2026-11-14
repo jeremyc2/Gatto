@@ -1,11 +1,13 @@
 #![forbid(unsafe_code)]
 //! Bounded video snapshots and container checks. Playback/codec validation belongs
-//! to the macOS video application; container validation never transcodes media.
+//! to the default video player; container validation never transcodes media.
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
-    process::{Command, Stdio},
 };
+
+#[cfg(target_os = "macos")]
+use std::process::{Command, Stdio};
 
 use anyhow::{Context as _, Result, ensure};
 use tempfile::NamedTempFile;
@@ -15,7 +17,7 @@ use crate::model::{VideoUploadLimit, validate_size};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VideoCompression {
-    // Older projects stored the codec without the H.264 encoding mode.
+    // Windows and older macOS projects store the codec without an encoder mode.
     H264,
     H264Fast,
     H264Quality,
@@ -100,8 +102,10 @@ impl Video {
             );
             Ok(())
         }
-        #[cfg(not(target_os = "macos"))]
-        anyhow::bail!("Video preview currently requires macOS.")
+        #[cfg(windows)]
+        return crate::desktop::preview_video(self.file.path());
+        #[cfg(not(any(target_os = "macos", windows)))]
+        anyhow::bail!("Video preview is unavailable on this platform.")
     }
 }
 
@@ -149,6 +153,60 @@ fn mp4_box(file: &mut File, position: u64, limit: u64) -> Result<([u8; 4], u64, 
         position + header_len,
         position + size,
     ))
+}
+
+/// The MP4 movie header is the presentation timeline. Windows decoders can
+/// expose a last sample that extends past it when the input has an edit list.
+#[cfg(windows)]
+pub(crate) fn mp4_duration_ticks(path: &std::path::Path) -> Result<u64> {
+    let mut file = File::open(path)?;
+    let len = file.metadata()?.len();
+    let mut position = 0;
+    while position < len {
+        let (kind, start, end) = mp4_box(&mut file, position, len)?;
+        position = end;
+        if kind != *b"moov" {
+            continue;
+        }
+        let mut child = start;
+        while child < end {
+            let (kind, start, stop) = mp4_box(&mut file, child, end)?;
+            child = stop;
+            if kind != *b"mvhd" {
+                continue;
+            }
+            ensure!(stop - start >= 20, "Truncated MP4 movie header");
+            file.seek(SeekFrom::Start(start))?;
+            let mut header = [0; 32];
+            file.read_exact(&mut header[..20])?;
+            let (scale, duration) = match header[0] {
+                0 => (
+                    u32::from_be_bytes(header[12..16].try_into()?),
+                    u64::from(u32::from_be_bytes(header[16..20].try_into()?)),
+                ),
+                1 => {
+                    ensure!(stop - start >= 32, "Truncated MP4 movie header");
+                    file.read_exact(&mut header[20..])?;
+                    (
+                        u32::from_be_bytes(header[20..24].try_into()?),
+                        u64::from_be_bytes(header[24..32].try_into()?),
+                    )
+                }
+                _ => anyhow::bail!("Unsupported MP4 movie header"),
+            };
+            ensure!(
+                scale != 0 && duration != 0,
+                "The MP4 has no playable duration"
+            );
+            let ticks = u64::try_from(u128::from(duration) * 10_000_000 / u128::from(scale))?;
+            ensure!(
+                ticks > 0 && ticks <= i64::MAX as u64,
+                "The MP4 has no usable playback duration"
+            );
+            return Ok(ticks);
+        }
+    }
+    anyhow::bail!("Missing MP4 movie header")
 }
 
 fn has_video_handler(file: &mut File, mut position: u64, limit: u64, depth: u8) -> Result<bool> {

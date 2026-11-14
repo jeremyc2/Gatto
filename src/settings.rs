@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::compression::CompressionMode;
 
 pub const LOGIN_ARGUMENT: &str = "--login";
+pub(crate) const IMPORT_SETUP_REQUIRED: &str =
+    "Set a GitHub account or organization in App preferences before adding media.";
 pub const DEFAULT_UI_FONT_SIZE: u8 = 16;
 pub const UI_FONT_SIZES: [u8; 5] = [DEFAULT_UI_FONT_SIZE, 18, 20, 22, 24];
 
@@ -200,11 +202,15 @@ impl AppSettings {
 
     pub fn load() -> Result<Self> {
         let path = settings_path()?;
+        #[cfg(not(windows))]
         let legacy = home_directory()?
             .join("Library/Application Support")
             .join(APPLICATION_SUPPORT_DIRECTORY)
             .join("settings.json");
+        #[cfg(not(windows))]
         let source = if path.exists() { &path } else { &legacy };
+        #[cfg(windows)]
+        let source = &path;
         let mut legacy_selection = None;
         let mut cleanup_legacy = false;
         let mut rewrite_clipboard_names = false;
@@ -241,6 +247,7 @@ impl AppSettings {
             crate::projects::migrate_scratchpad(&data, legacy_selection, settings.owner.clone())?;
             settings.save()?;
         }
+        #[cfg(not(windows))]
         if source == &legacy && legacy.exists() {
             settings.start_at_login = launch_agent_path()?.exists();
             if legacy.exists() {
@@ -251,6 +258,11 @@ impl AppSettings {
             remove_launch_agent()?;
         } else if !launch_agent_path()?.exists() {
             install_launch_agent()?;
+        }
+
+        #[cfg(windows)]
+        {
+            settings.start_at_login = crate::desktop::starts_at_login()?;
         }
 
         if rewrite_clipboard_names && !cleanup_legacy {
@@ -266,6 +278,10 @@ impl AppSettings {
     fn parse(contents: &str) -> Result<Self> {
         let mut settings: Self = serde_json::from_str(contents)?;
         anyhow::ensure!(settings.version == 1, "Unsupported settings version");
+        #[cfg(windows)]
+        {
+            settings.video_compression = CompressionMode::Quality;
+        }
         if !UI_FONT_SIZES.contains(&settings.ui_font_size) {
             settings.ui_font_size = DEFAULT_UI_FONT_SIZE;
         }
@@ -285,16 +301,28 @@ impl AppSettings {
     }
 
     pub fn set_start_at_login(&mut self, enabled: bool) -> Result<()> {
+        #[cfg(windows)]
+        crate::desktop::set_start_at_login(enabled)?;
+        #[cfg(not(windows))]
         if enabled {
             install_launch_agent()?;
         } else {
             remove_launch_agent()?;
         }
+        let previous = self.start_at_login;
         self.start_at_login = enabled;
-        self.save()
+        if let Err(error) = self.save() {
+            self.start_at_login = previous;
+            #[cfg(windows)]
+            crate::desktop::set_start_at_login(previous)
+                .context("Could not restore the previous login entry")?;
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Upgrade an existing login item without enabling login startup for new users.
+    #[cfg(not(windows))]
     pub fn refresh_start_at_login() -> Result<()> {
         let path = launch_agent_path()?;
         if path.exists() {
@@ -305,11 +333,28 @@ impl AppSettings {
 
     /// Removes the complete local data directory and the login item.
     pub fn reset() -> Result<()> {
+        #[cfg(windows)]
+        {
+            crate::desktop::set_start_at_login(false)?;
+            return clear_data_directory(&data_directory()?);
+        }
+        #[cfg(not(windows))]
         clear_persistence(&data_directory()?, &launch_agent_path()?)
     }
 }
 
 pub fn data_directory() -> Result<PathBuf> {
+    #[cfg(windows)]
+    {
+        let directory =
+            PathBuf::from(env::var_os("LOCALAPPDATA").context("Local AppData is unavailable")?);
+        anyhow::ensure!(
+            directory.is_absolute(),
+            "Local AppData is not an absolute path"
+        );
+        Ok(directory.join(APPLICATION_SUPPORT_DIRECTORY))
+    }
+    #[cfg(not(windows))]
     Ok(home_directory()?.join(".gatto"))
 }
 fn settings_path() -> Result<PathBuf> {
@@ -418,7 +463,13 @@ fn remove_launch_agent() -> Result<()> {
     remove_file_if_present(&path).with_context(|| format!("Could not remove {}", path.display()))
 }
 
-fn clear_persistence(data_directory: &PathBuf, launch_agent_path: &PathBuf) -> Result<()> {
+fn clear_persistence(data_directory: &Path, launch_agent_path: &Path) -> Result<()> {
+    clear_data_directory(data_directory)?;
+    remove_file_if_present(launch_agent_path)
+        .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
+}
+
+fn clear_data_directory(data_directory: &Path) -> Result<()> {
     match fs::remove_dir_all(data_directory) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -427,11 +478,10 @@ fn clear_persistence(data_directory: &PathBuf, launch_agent_path: &PathBuf) -> R
                 .with_context(|| format!("Could not remove {}", data_directory.display()));
         }
     }
-    remove_file_if_present(launch_agent_path)
-        .with_context(|| format!("Could not remove {}", launch_agent_path.display()))
+    Ok(())
 }
 
-fn remove_file_if_present(path: &PathBuf) -> Result<()> {
+fn remove_file_if_present(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

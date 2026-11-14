@@ -728,3 +728,6 @@ mod tests {
         assert!(lefts[0] < lefts[1] && lefts[1] < lefts[2]);
     }
 }
+
+#[cfg(windows)]
+pub(crate) use layout::score_label;

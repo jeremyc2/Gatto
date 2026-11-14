@@ -5,6 +5,12 @@ use std::{cell::RefCell, rc::Rc};
 
 type ShortcutObserver = Rc<dyn Fn(Option<&str>)>;
 
+const EXAMPLE: &str = if cfg!(windows) {
+    "Use a shortcut such as Ctrl+Shift+G."
+} else {
+    "Use a shortcut such as Command+Shift+G."
+};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Shortcut {
     pub key: String,
@@ -26,15 +32,14 @@ impl Shortcut {
                 "CONTROL" | "CTRL" => 2,
                 "OPTION" | "ALT" => 4,
                 "SHIFT" => 8,
-                _ => bail!("Use a shortcut such as Command+Shift+G."),
+                _ => bail!(EXAMPLE),
             };
         }
         if mask.count_ones() < 2 {
             bail!("Use at least two modifier keys so the shortcut does not interfere with typing.");
         }
         let upper = key.to_ascii_uppercase();
-        let key = normalize_key(&upper)
-            .ok_or_else(|| anyhow::anyhow!("Use a shortcut such as Command+Shift+G."))?;
+        let key = normalize_key(&upper).ok_or_else(|| anyhow::anyhow!(EXAMPLE))?;
         let numpad = key.starts_with("Numpad");
         let equivalent = menu_equivalent(&key);
         Ok(Self {

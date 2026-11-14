@@ -1,8 +1,8 @@
 # Architecture
 
-Gatto is a single-process macOS menu bar application. GPUI owns the
-application and window lifecycle, while small modules isolate GitHub access,
-platform integration, persistent settings, and shared state.
+Gatto is a desktop app for macOS and Windows. GPUI owns the application and
+window lifecycle. Platform adapters isolate desktop integration, and shared
+modules handle GitHub access, projects, and persistent settings.
 
 The public website is a separate static Solid project in `web/`. Vite runs under
 Bun for development and builds; Bun prerenders its static HTML. It does not add
@@ -21,6 +21,11 @@ The application separates these responsibilities within a single local process:
 - **macOS integration:** provide menu bar actions, the optional global shortcut,
   custom URL actions, Start at login, and silent installer ejection. Interactive
   entry points feed into the app's shared action handling.
+- **Windows integration:** keep a hidden Win32 window for the tray, hotkeys, and
+  activation from additional launches. A session mutex keeps one process in charge
+  of workspace writes. File selections and allowlisted URL actions enter the same
+  handlers as on macOS. The per-user installer registers Explorer entries and the
+  URL scheme; Start at login is opt-in through the current user's Run key.
 - **Preferences and diagnostics:** persist local preferences and keep a bounded,
   in-memory event log available in the Application logs window.
 
@@ -1074,10 +1079,11 @@ window requirement. Menu, global shortcut, and `gatto://add-from-clipboard` invo
 that service. It snapshots the clipboard, waits for pending workspace writes,
 loads preferences, and saves a new draft to the chosen project as a direct child
 of the projects directory. Null `add_from_clipboard_project` uses Scratchpad and
-creates it if necessary. Staging needs no account or repository selection and
-never changes the clipboard. Opening the app shows the saved draft, including
-before account setup. The separate Draft from Clipboard menu and URL action are
-retired; focused Command+V still dispatches the normal paste action.
+creates it if necessary. All media import requires a saved account or
+organization. Add from Clipboard shows a system notification if setup is still
+needed. Once an owner is saved, staging can run without a repository selection.
+It leaves the clipboard intact and the saved draft appears when you open Gatto.
+Focused Command+V on Mac or Ctrl+V on Windows dispatches normal paste.
 
 `automatically_copy_add_from_clipboard` defaults to false. The default completion
 posts a native system notification with **Upload and copy**. With the preference

@@ -3,7 +3,11 @@ use std::path::{Path, PathBuf};
 pub(crate) mod art;
 pub(crate) mod replay;
 
-pub(crate) const POSTER_FONT: &str = "Helvetica Neue";
+pub(crate) const POSTER_FONT: &str = if cfg!(windows) {
+    "Segoe UI"
+} else {
+    "Helvetica Neue"
+};
 
 #[derive(Clone, Copy)]
 pub(crate) struct Score {
@@ -390,13 +394,23 @@ pub(crate) fn png_bytes(score: Score) -> anyhow::Result<Vec<u8>> {
     Ok(png.to_vec())
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+use crate::desktop::downloads_directory;
+
+#[cfg(windows)]
+#[path = "rooftops_score/windows.rs"]
+mod windows;
+
+#[cfg(windows)]
+pub(crate) use windows::png_bytes;
+
+#[cfg(not(any(target_os = "macos", windows)))]
 fn downloads_directory() -> anyhow::Result<PathBuf> {
-    anyhow::bail!("Score export requires macOS")
+    anyhow::bail!("Score export is unavailable on this platform")
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 pub(crate) fn png_bytes(_: Score) -> anyhow::Result<Vec<u8>> {
-    anyhow::bail!("Score export requires macOS")
+    anyhow::bail!("Score export is unavailable on this platform")
 }
 
 #[cfg(test)]
@@ -425,14 +439,13 @@ mod tests {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     #[gpui_kit::test]
     fn export_writes_a_readable_png_without_overwriting_previous_scores(
         _: &mut gpui_kit::TestAppContext,
     ) {
-        let directory =
-            std::env::temp_dir().join(format!("gatto-score-test-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().to_path_buf();
         let score = Score {
             coins: 41,
             deaths: 6,
@@ -441,22 +454,26 @@ mod tests {
             personal_best: Some(138.2),
         };
         let export_directory = directory.clone();
-        let first = std::thread::spawn(move || {
-            objc2::rc::autoreleasepool(|_| save_in(score, &export_directory))
-        })
-        .join()
-        .unwrap()
-        .unwrap();
+        let first = std::thread::spawn(move || save_in(score, &export_directory))
+            .join()
+            .unwrap()
+            .unwrap();
         let second = save_in(score, &directory).unwrap();
         assert_ne!(first, second);
         let bytes = std::fs::read(&first).unwrap();
         let decoded = image::load_from_memory(&bytes).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (3600, 2160));
         assert_eq!(bytes, std::fs::read(&second).unwrap());
+        // The title region should contain the light title ink, not just skyline.
+        let title = decoded.to_rgba8();
+        assert!(
+            (312..510).any(
+                |y| (160..1350).any(|x| { title.get_pixel(x, y).0 == [0xf3, 0xdd, 0xba, 255] })
+            )
+        );
         for path in [first, second] {
             std::fs::remove_file(path).unwrap();
         }
-        std::fs::remove_dir(directory).unwrap();
     }
 
     #[test]

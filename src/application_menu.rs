@@ -19,7 +19,8 @@ actions!(
         HelpRepository,
         HelpWalkthrough,
         HelpSetup,
-        HelpSupport
+        HelpSupport,
+        AddFromClipboard
     ]
 );
 
@@ -56,9 +57,15 @@ pub fn init(cx: &mut App) {
     // Unscoped actions work in every window, including focused text fields.
     cx.bind_keys([
         KeyBinding::new("cmd-w", CloseWindow, None),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-w", CloseWindow, None),
         KeyBinding::new("escape", DismissWindow, None),
         KeyBinding::new("cmd-q", Quit, None),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-q", Quit, None),
         KeyBinding::new("cmd-,", OpenPreferences, None),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-,", OpenPreferences, None),
     ]);
     cx.on_action(|_: &Quit, cx| request_quit(cx));
     cx.on_action(|_: &CloseWindow, cx| close_focused_window(false, cx));
@@ -69,6 +76,10 @@ pub fn init(cx: &mut App) {
         cx.foreground_executor()
             .spawn(async { show_about() })
             .detach();
+    });
+    #[cfg(windows)]
+    cx.on_action(|_: &CheckForUpdates, cx| {
+        cx.open_url("https://github.com/jeremyc2/Gatto/releases?q=windows-v");
     });
     cx.on_action(|_: &HelpRepository, cx| cx.open_url(REPOSITORY_URL));
     cx.on_action(|_: &HelpWalkthrough, cx| {
@@ -101,6 +112,30 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Support", HelpSupport),
         ]),
     ]);
+}
+
+#[cfg(windows)]
+pub(crate) fn show_about_windows(window: &mut Window, cx: &mut App) {
+    let details = format!(
+        "Version: {}\nCommit: {}\nLead developer: Jeremy Chandler\nRepository: {REPOSITORY_URL}",
+        env!("CARGO_PKG_VERSION"),
+        env!("GIT_COMMIT_HASH"),
+    );
+    let reply = window.prompt(
+        gpui_kit::PromptLevel::Info,
+        ABOUT_TITLE,
+        Some(&details),
+        &["OK", "Copy details", "Open repository"],
+        cx,
+    );
+    cx.spawn(async move |cx| match reply.await {
+        Ok(1) => {
+            cx.update(|cx| cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(details)))
+        }
+        Ok(2) => cx.update(|cx| cx.open_url(REPOSITORY_URL)),
+        _ => {}
+    })
+    .detach();
 }
 
 #[cfg(target_os = "macos")]

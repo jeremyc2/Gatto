@@ -12,6 +12,10 @@ pub enum MenuAction {
     Settings,
     CreateComposition,
     Update,
+    #[cfg(windows)]
+    CheckForUpdates,
+    #[cfg(windows)]
+    About,
     Quit,
 }
 
@@ -75,6 +79,10 @@ impl MenuBarController {
             id if *id == self.update_identifier() => Some(MenuAction::Update),
             6 => Some(MenuAction::Quit),
             7 => Some(MenuAction::CreateComposition),
+            #[cfg(windows)]
+            8 => Some(MenuAction::CheckForUpdates),
+            #[cfg(windows)]
+            9 => Some(MenuAction::About),
             _ => None,
         }
     }
