@@ -2,6 +2,34 @@
 
 [Overview](../README.md) · [Walkthrough](WALKTHROUGH.md) · [Support](../SUPPORT.md)
 
+## Windows 11 x64 preview
+
+1. Open the [Windows previews](https://github.com/jeremyc2/Gatto/releases?q=windows-v)
+   and download the latest `-setup.exe` under **Assets**. The installer is unsigned.
+   You can also extract the portable ZIP and open `Gatto.exe`; the ZIP does not
+   register Explorer commands or `gatto://` links.
+2. Install from your regular Windows account and open Gatto from Start. If Windows
+   reports a missing `VCRUNTIME140.dll`, install the
+   [Microsoft Visual C++ Redistributable for x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+3. Set your GitHub account or organization in App preferences to start importing
+   media. For uploads, install
+   [GitHub CLI for Windows](https://github.com/cli/cli/blob/trunk/docs/install_windows.md)
+   and run `gh auth login` in PowerShell. Restart Gatto if it was open when you
+   installed the CLI.
+
+On an installed copy, right-click supported media in Explorer and use **Open with
+→ Gatto** or **Show more options → Send to → Gatto**. Gatto stages the files for
+review. The tray icon can reopen the window, invoke **Add from Clipboard**, or
+quit the app. To start in the tray at sign-in, turn on **Start at login** in App
+preferences. A global clipboard shortcut can use two or more of Ctrl, Alt, and
+Shift; record it in the same preferences page.
+
+Use **Check for Windows updates…** in the app or tray menu to open the Windows
+releases. Quit Gatto from the tray before running a newer installer. Installers
+keep your projects and settings. To verify a download, compare
+`Get-FileHash -Algorithm SHA256 <downloaded-file>` in PowerShell with its entry
+in the release’s `SHA256SUMS`.
+
 ## 1. Install the app
 
 1. [Download Gatto for Apple Silicon](https://github.com/jeremyc2/Gatto/releases/latest).
@@ -114,8 +142,9 @@ installations work without extra configuration; see
 
 ## 3. Choose your account or organization
 
-On first launch, open **App preferences** from the settings icon or the menu bar.
-Gatto waits for an account or organization login before loading repositories.
+On first launch, open **App preferences** from the setup prompt. Gatto puts
+the cursor in the **GitHub account/organization** field at the top.
+Save a GitHub account or organization to load repositories and start adding media.
 Public release checks do not need GitHub CLI authentication.
 
 <img src="images/walkthrough/framed/01-first-run.png" alt="Gatto's first-run screen with Application logs, App preferences, and an Open app preferences button" width="800">

@@ -7,6 +7,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Add a Windows 11 x64 preview with a per-user installer, tray, global clipboard
+  hotkey, start at login, Explorer and `gatto://` integration, a Windows updates
+  link, software H.264/AAC compression, and Rooftops PNG score export.
+- Require a GitHub account or organization before adding media. Import attempts
+  during setup show a notification.
+- Put the GitHub account or organization first in App preferences and focus the
+  field when opening preferences during setup.
+
 ## [0.24.4] - 2026-11-12
 
 ### Fixed

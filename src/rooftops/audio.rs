@@ -5,10 +5,12 @@ mod death;
 mod output;
 mod synth;
 
+#[cfg(target_os = "macos")]
+use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
-    mpsc::{Receiver, SyncSender, sync_channel},
+    mpsc::SyncSender,
 };
 pub(super) use synth::Cue;
 
@@ -70,10 +72,10 @@ pub(super) struct Audio {
 impl Audio {
     pub(super) fn new(enabled: bool) -> Self {
         let controls = Arc::new(Controls::default());
-        let (wake, receiver) = sync_channel(1);
-        let (events, updates) = async_channel::bounded(1);
         #[cfg(target_os = "macos")]
         if enabled {
+            let (wake, receiver) = sync_channel(1);
+            let (events, updates) = async_channel::bounded(1);
             let capture = controls.clone();
             if let Err(error) = std::thread::Builder::new()
                 .name("rooftops-audio".into())
@@ -82,11 +84,18 @@ impl Audio {
                 eprintln!("Could not start Rooftops audio: {error}");
                 controls.unavailable.store(true, Ordering::Release);
             }
+            return Self {
+                controls,
+                wake: Some(wake),
+                events: Some(updates),
+            };
         }
+        #[cfg(not(target_os = "macos"))]
+        let _ = enabled;
         Self {
             controls,
-            wake: enabled.then_some(wake),
-            events: Some(updates),
+            wake: None,
+            events: None,
         }
     }
 

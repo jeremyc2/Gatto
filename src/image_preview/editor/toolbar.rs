@@ -85,7 +85,11 @@ impl ImagePreview {
                                             .small()
                                             .icon(IconName::Undo2)
                                             .disabled(!self.doc().is_some_and(Document::can_undo))
-                                            .tooltip("Undo · ⌘Z")
+                                            .tooltip(if cfg!(windows) {
+                                                "Undo · Ctrl+Z"
+                                            } else {
+                                                "Undo · ⌘Z"
+                                            })
                                             .accessibility_label("Undo")
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.history(false, cx)
@@ -97,7 +101,11 @@ impl ImagePreview {
                                             .small()
                                             .icon(IconName::Redo2)
                                             .disabled(!self.doc().is_some_and(Document::can_redo))
-                                            .tooltip("Redo · ⇧⌘Z")
+                                            .tooltip(if cfg!(windows) {
+                                                "Redo · Ctrl+Shift+Z"
+                                            } else {
+                                                "Redo · ⇧⌘Z"
+                                            })
                                             .accessibility_label("Redo")
                                             .on_click(
                                                 cx.listener(|this, _, _, cx| {

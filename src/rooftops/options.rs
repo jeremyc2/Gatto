@@ -4,6 +4,7 @@ use gpui_kit::component::{
     Icon, IconName,
     slider::{Slider, SliderEvent, SliderValue},
 };
+use gpui_kit::prelude::FluentBuilder as _;
 
 #[derive(Clone, Copy)]
 pub(super) enum Preference {
@@ -513,8 +514,10 @@ impl Rooftops {
                     .text_color(rgb(GOLD))
                     .child("Rooftops"),
             )
-            .child(self.volume_row(Volume::Music, "Music", window, cx))
-            .child(self.volume_row(Volume::Effects, "Sound effects", window, cx))
+            .when(cfg!(target_os = "macos"), |card| {
+                card.child(self.volume_row(Volume::Music, "Music", window, cx))
+                    .child(self.volume_row(Volume::Effects, "Sound effects", window, cx))
+            })
             .child(self.option_row("rooftops-ghost", "Ghost cat", Preference::Ghost, window, cx))
             .child(self.option_row(
                 "rooftops-animations",
@@ -523,7 +526,9 @@ impl Rooftops {
                 window,
                 cx,
             ));
-        if let Some(message) = self.audio.error() {
+        if cfg!(target_os = "macos")
+            && let Some(message) = self.audio.error()
+        {
             card = card.child(
                 div()
                     .text_sm()

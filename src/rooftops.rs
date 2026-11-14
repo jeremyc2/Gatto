@@ -2944,7 +2944,9 @@ mod tests {
         });
         for selector in [
             "rooftops-options",
+            #[cfg(target_os = "macos")]
             "rooftops-music",
+            #[cfg(target_os = "macos")]
             "rooftops-effects",
             "rooftops-ghost",
             "rooftops-animations",
@@ -2974,8 +2976,16 @@ mod tests {
             assert_eq!(
                 game.preferences,
                 Preferences {
-                    music_volume: 0,
-                    effects_volume: 0,
+                    music_volume: if cfg!(windows) {
+                        Preferences::default().music_volume
+                    } else {
+                        0
+                    },
+                    effects_volume: if cfg!(windows) {
+                        Preferences::default().effects_volume
+                    } else {
+                        0
+                    },
                     ghost: false,
                     animations: false
                 }
@@ -2991,6 +3001,7 @@ mod tests {
         });
     }
 
+    #[cfg(target_os = "macos")]
     #[gpui_kit::test]
     fn slider_labels_and_padding_never_preview_audio(cx: &mut gpui_kit::TestAppContext) {
         use gpui_kit::{Modifiers, MouseButton};
@@ -3071,6 +3082,7 @@ mod tests {
         });
     }
 
+    #[cfg(target_os = "macos")]
     #[gpui_kit::test]
     fn dragging_music_previews_only_music_and_releasing_outside_keeps_play_frozen(
         cx: &mut gpui_kit::TestAppContext,
@@ -3116,6 +3128,7 @@ mod tests {
         });
     }
 
+    #[cfg(target_os = "macos")]
     #[gpui_kit::test]
     fn music_handle_endcaps_start_preview(cx: &mut gpui_kit::TestAppContext) {
         use gpui_kit::{Modifiers, MouseButton};
@@ -3163,6 +3176,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
     #[gpui_kit::test]
     fn effects_release_requires_changed_volume_inside_outside_and_muted(
         cx: &mut gpui_kit::TestAppContext,
@@ -3227,6 +3241,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
     #[gpui_kit::test]
     fn options_keep_keyboard_focus_inside_and_escape_returns_to_the_game(
         cx: &mut gpui_kit::TestAppContext,

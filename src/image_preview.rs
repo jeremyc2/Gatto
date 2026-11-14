@@ -561,7 +561,11 @@ impl ImagePreview {
                     .ghost()
                     .small()
                     .icon(IconName::Minus)
-                    .tooltip("Zoom out · ⌘−")
+                    .tooltip(if cfg!(windows) {
+                        "Zoom out · Ctrl+−"
+                    } else {
+                        "Zoom out · ⌘−"
+                    })
                     .accessibility_label("Zoom out")
                     .on_click(
                         cx.listener(|this, _, window, cx| this.zoom_by(1. / ZOOM_STEP, window, cx)),
@@ -586,7 +590,11 @@ impl ImagePreview {
                     .ghost()
                     .small()
                     .icon(IconName::Plus)
-                    .tooltip("Zoom in · ⌘+")
+                    .tooltip(if cfg!(windows) {
+                        "Zoom in · Ctrl++"
+                    } else {
+                        "Zoom in · ⌘+"
+                    })
                     .accessibility_label("Zoom in")
                     .on_click(
                         cx.listener(|this, _, window, cx| this.zoom_by(ZOOM_STEP, window, cx)),
@@ -807,9 +815,17 @@ pub fn init_keybindings(cx: &mut App) {
     editor::init_text_keybindings(cx);
     cx.bind_keys([
         KeyBinding::new("cmd-=", ZoomIn, Some(KEY_CONTEXT)),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-=", ZoomIn, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-+", ZoomIn, Some(KEY_CONTEXT)),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-+", ZoomIn, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd--", ZoomOut, Some(KEY_CONTEXT)),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl--", ZoomOut, Some(KEY_CONTEXT)),
         KeyBinding::new("cmd-0", FitImage, Some(KEY_CONTEXT)),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-0", FitImage, Some(KEY_CONTEXT)),
         KeyBinding::new("shift-0", ActualSize, Some(KEY_CONTEXT)),
         KeyBinding::new("shift-1", FitImage, Some(KEY_CONTEXT)),
         KeyBinding::new("left", PreviousImage, Some(KEY_CONTEXT)),

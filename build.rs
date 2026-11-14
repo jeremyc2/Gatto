@@ -2,6 +2,18 @@ use std::{env, process::Command};
 
 fn main() {
     build_native_platform();
+    #[cfg(windows)]
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rerun-if-changed=packaging/windows/Gatto.rc");
+        println!("cargo:rerun-if-changed=packaging/windows/Gatto.ico");
+        embed_resource::compile_for(
+            "packaging/windows/Gatto.rc",
+            ["Gatto"],
+            embed_resource::ParamsIncludeDirs(["packaging/windows"]),
+        )
+        .manifest_required()
+        .expect("Could not embed the Windows app icon");
+    }
     println!("cargo:rerun-if-env-changed=GIT_COMMIT_HASH");
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/heads");

@@ -24,11 +24,23 @@ pub(super) fn init(cx: &mut gpui_kit::App) {
         KeyBinding::new("left", MoveLeft, Some("AnnotationText")),
         KeyBinding::new("right", MoveRight, Some("AnnotationText")),
         KeyBinding::new("cmd-c", CopyText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-c", CopyText, Some("AnnotationText")),
         KeyBinding::new("cmd-x", CutText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-x", CutText, Some("AnnotationText")),
         KeyBinding::new("cmd-v", PasteText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-v", PasteText, Some("AnnotationText")),
         KeyBinding::new("cmd-a", SelectAllText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-a", SelectAllText, Some("AnnotationText")),
         KeyBinding::new("cmd-z", UndoText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-z", UndoText, Some("AnnotationText")),
         KeyBinding::new("cmd-shift-z", RedoText, Some("AnnotationText")),
+        #[cfg(windows)]
+        KeyBinding::new("ctrl-shift-z", RedoText, Some("AnnotationText")),
     ]);
 }
 
@@ -265,7 +277,7 @@ impl TextInput {
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
         let modifiers = event.keystroke.modifiers;
-        let command = modifiers.platform;
+        let command = crate::theme::primary_modifier(modifiers);
         let range = self.range();
         let layout = self.mark.text_layout();
         let b = self.mark.label_edit_bounds().unwrap();

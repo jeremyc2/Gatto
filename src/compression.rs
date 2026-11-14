@@ -30,6 +30,7 @@ impl CompressionMode {
         }
     }
 
+    #[cfg(target_os = "macos")]
     pub fn provenance(self) -> crate::video::VideoCompression {
         match self {
             Self::Quality => crate::video::VideoCompression::H264Quality,
@@ -89,7 +90,13 @@ fn video_bitrate(
         seconds.is_finite() && seconds > 0.,
         "This video has no usable duration. Export it again as MP4."
     );
-    let audio = if has_audio { 64_000. } else { 0. };
+    // Media Foundation's lowest AAC setting is 96 kb/s. The macOS encoders
+    // both use 64 kb/s. Account for the platform's actual audio allocation.
+    let audio = if has_audio {
+        if cfg!(windows) { 96_000. } else { 64_000. }
+    } else {
+        0.
+    };
     let payload_bytes = limit.bytes() as f64 * 0.92;
     let rate = (payload_bytes * 8. / seconds - audio).min(12_000_000.)
         * if attempt == 1 { 1. } else { 0.7 };
@@ -109,8 +116,10 @@ pub fn compress(
     progress: impl Fn(Progress),
 ) -> Result<StagedAttachment> {
     control.check()?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
+        #[cfg(windows)]
+        let _ = mode;
         let original =
             std::fs::metadata(path).context("The original video is unavailable. Add it again.")?;
         ensure!(original.is_file(), "Choose a regular video file.");
@@ -126,12 +135,15 @@ pub fn compress(
                 attempt,
                 percent: 0,
             });
+            #[cfg(target_os = "macos")]
             match mode {
                 CompressionMode::Fast => {
                     native::transcode(path, &output, control, attempt, &report, limit)?
                 }
                 _ => software::transcode(path, &output, control, attempt, &report, limit, mode)?,
             }
+            #[cfg(windows)]
+            windows::transcode(path, &output, control, attempt, &report, limit)?;
             control.check()?;
             let current = std::fs::metadata(path)
                 .context("The source video was removed during compression. Add it again.")?;
@@ -151,7 +163,11 @@ pub fn compress(
                     .unwrap_or("video");
                 attachment.name = format!("{stem}.mp4");
                 attachment.title = attachment.name.clone();
-                attachment.compressed_with = Some(mode.provenance());
+                #[cfg(target_os = "macos")]
+                let provenance = mode.provenance();
+                #[cfg(windows)]
+                let provenance = crate::video::VideoCompression::H264;
+                attachment.compressed_with = Some(provenance);
                 control.check()?;
                 progress(Progress {
                     attempt,
@@ -167,10 +183,10 @@ pub fn compress(
             limit.megabytes()
         )
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (path, progress, limit, mode);
-        bail!("Video compression requires macOS.")
+        bail!("Video compression is unavailable on this platform.")
     }
 }
 
@@ -181,9 +197,13 @@ mod process;
 #[cfg(target_os = "macos")]
 mod software;
 
+#[cfg(windows)]
+mod windows;
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "macos")]
     use crate::model::MAX_ATTACHMENT_BYTES;
 
     #[test]

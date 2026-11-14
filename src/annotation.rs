@@ -1760,3 +1760,6 @@ mod tests {
         assert_eq!(doc.marks[0].style.color, 11);
     }
 }
+
+#[cfg(windows)]
+pub(crate) use text::score_label;

@@ -1862,7 +1862,11 @@ impl UploaderApp {
                                     .app_icon()
                                     .icon(AssetIconName::PanelLeftClose)
                                     .accessibility_label("Hide sidebar")
-                                    .tooltip("Hide sidebar · ⌘B")
+                                    .tooltip(if cfg!(windows) {
+                                        "Hide sidebar · Ctrl+B"
+                                    } else {
+                                        "Hide sidebar · ⌘B"
+                                    })
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.toggle_project_sidebar(cx)
                                     })),
@@ -2697,7 +2701,7 @@ mod tests {
         let field = cx.debug_bounds("project-name-field").unwrap().center();
         cx.simulate_mouse_down(field, MouseButton::Left, Modifiers::default());
         cx.simulate_mouse_up(field, MouseButton::Left, Modifiers::default());
-        cx.simulate_keystrokes("cmd-a");
+        cx.simulate_keystrokes(if cfg!(windows) { "ctrl-a" } else { "cmd-a" });
         cx.simulate_input("Renamed");
         let description = cx
             .debug_bounds("project-description-field")

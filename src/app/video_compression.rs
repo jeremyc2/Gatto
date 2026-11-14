@@ -73,6 +73,11 @@ impl UploaderApp {
                     .accessibility_label("About video uploads and compression"),
             )
             .content(|_, _, cx| {
+                if cfg!(windows) {
+                    return v_flex().id("compression-help-content").gap_2().text_xs()
+                        .child("Windows compresses oversized H.264 MP4 video in software and keeps AAC audio if present.")
+                        .child("100 MB video uploads may not be supported on all GitHub plans.");
+                }
                 let mut table = v_flex()
                     .id("compression-help-content")
                     .gap_3()

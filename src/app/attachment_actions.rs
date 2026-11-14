@@ -13,6 +13,8 @@ impl UploaderApp {
     ) -> impl IntoElement {
         let owner = cx.entity().downgrade();
         let saving = self.project_state.saving;
+        #[cfg(windows)]
+        let workspace_folder = self.project_state.storage_folder.clone();
         let can_annotate = self
             .staged_attachments
             .iter()
@@ -119,6 +121,14 @@ impl UploaderApp {
                                 }
                             });
                         }),
+                    );
+                }
+                #[cfg(windows)]
+                if let Some(folder) = &workspace_folder {
+                    let folder = folder.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new("Show workspace in Explorer")
+                            .on_click(move |_, _, cx| cx.reveal_path(&folder)),
                     );
                 }
                 let view = owner.clone();

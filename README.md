@@ -41,6 +41,8 @@ brew install --cask jeremyc2/gatto/gatto
 Follow the [setup guide](docs/SETUP.md) to install and connect your GitHub account,
 then the [walkthrough](docs/WALKTHROUGH.md) for your first upload.
 
+Windows 11 x64 support is experimental. See the [Windows installation guide](docs/SETUP.md#windows-11-x64-preview) for the preview installer.
+
 ## What you can do
 
 - Upload PNG, JPEG, GIF, WebP, MP4, MOV, and WebM.

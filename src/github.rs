@@ -23,6 +23,10 @@ const ATTACHMENT_ENDPOINT: &str = "https://uploads.github.com/user-attachments/a
 const AUTH_HELP: &str =
     "GitHub CLI not found or unauthenticated. Please run gh auth login in your terminal.";
 
+#[cfg(not(windows))]
+mod native;
+#[cfg(windows)]
+#[path = "github/windows.rs"]
 mod native;
 
 #[derive(Debug, Error)]
@@ -339,10 +343,14 @@ fn run_gh<const N: usize>(args: [&str; N], diagnostics: &Diagnostics) -> io::Res
         ));
     };
     diagnostics.info(format!("Using GitHub CLI at {}.", path.display()));
-    let result = Command::new(&path)
-        .args(args)
-        .env("GH_PROMPT_DISABLED", "1")
-        .output();
+    let mut command = Command::new(&path);
+    command.args(args).env("GH_PROMPT_DISABLED", "1");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let result = command.output();
     if let Err(error) = &result {
         diagnostics.error(format!(
             "Could not run GitHub CLI at {}: {error}",
@@ -359,7 +367,7 @@ fn github_cli_path() -> Option<PathBuf> {
         .or_else(|| {
             env::var_os("PATH").and_then(|paths| {
                 env::split_paths(&paths)
-                    .map(|directory| directory.join("gh"))
+                    .map(|directory| directory.join(if cfg!(windows) { "gh.exe" } else { "gh" }))
                     .find(|path| path.is_file())
             })
         })
@@ -398,12 +406,18 @@ struct AttachmentResponse {
 mod tests {
     use super::*;
     use std::io::Read as _;
-    use std::os::unix::process::ExitStatusExt;
     use std::time::Instant;
 
     fn output(code: i32, stdout: &str, stderr: &str) -> Output {
+        #[cfg(unix)]
+        use std::os::unix::process::ExitStatusExt;
+        #[cfg(windows)]
+        use std::os::windows::process::ExitStatusExt;
         Output {
+            #[cfg(unix)]
             status: std::process::ExitStatus::from_raw(code << 8),
+            #[cfg(windows)]
+            status: std::process::ExitStatus::from_raw(code as u32),
             stdout: stdout.as_bytes().to_vec(),
             stderr: stderr.as_bytes().to_vec(),
         }
