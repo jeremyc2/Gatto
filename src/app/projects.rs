@@ -1862,7 +1862,11 @@ impl UploaderApp {
                                     .app_icon()
                                     .icon(AssetIconName::PanelLeftClose)
                                     .accessibility_label("Hide sidebar")
-                                    .tooltip("Hide sidebar · ⌘B")
+                                    .tooltip(if cfg!(windows) {
+                                        "Hide sidebar · Ctrl+B"
+                                    } else {
+                                        "Hide sidebar · ⌘B"
+                                    })
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.toggle_project_sidebar(cx)
                                     })),

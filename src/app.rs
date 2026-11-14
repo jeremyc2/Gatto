@@ -1285,7 +1285,7 @@ impl UploaderApp {
             match result {
                 Ok(attachment) => batch.processed.push(Ok(attachment)),
                 Err(error) => match error.downcast::<OversizedVideo>() {
-                    Ok(video) if cfg!(target_os = "macos") || cfg!(test) => {
+                    Ok(video) if cfg!(any(target_os = "macos", windows, test)) => {
                         self.pending_import = Some(batch);
                         self.prompt_compression(video, window, cx);
                         return;
@@ -2864,7 +2864,7 @@ impl UploaderApp {
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Enter a GitHub account/organization in App preferences to load its repositories.",
+                        "Add media below. To upload, set a GitHub account or organization in App preferences.",
                     ),
             )
             .child(
@@ -3273,7 +3273,11 @@ impl UploaderApp {
                                         .h(theme::ICON_CONTROL_SIZE)
                                         .min_w_0()
                                         .label("Copy all uploaded")
-                                        .tooltip("Copy all uploaded attachments · ⌘C")
+                                        .tooltip(if cfg!(windows) {
+                                            "Copy all uploaded attachments · Ctrl+C"
+                                        } else {
+                                            "Copy all uploaded attachments · ⌘C"
+                                        })
                                         .on_click(cx.listener(Self::copy_all_upload_markdown)),
                                 )
                             },
@@ -3380,7 +3384,7 @@ impl UploaderApp {
             .when(self.settings.owner.is_some(), |page| {
                 page.child(self.render_pinned_repositories(cx))
             })
-            .when(cfg!(target_os = "macos"), |page| page.child(
+            .when(cfg!(any(target_os = "macos", windows)), |page| page.child(
                 v_flex()
                     .gap_3()
                     .rounded_lg()
@@ -3426,6 +3430,10 @@ impl UploaderApp {
                         .child(div().font_semibold().text_sm().child("Video uploads"))
                         .child(self.video_upload_info()))
                     .when(cfg!(target_os = "macos"), |section| section.child(self.render_video_compression()))
+                    .when(cfg!(windows), |section| section.child(
+                        div().text_xs().text_color(cx.theme().muted_foreground)
+                            .child("Compress oversized H.264 MP4 videos to H.264/AAC with software encoding."),
+                    ))
                     .child(
                         Checkbox::new("allow-large-videos")
                             .label("Allow videos up to 100 MB")
@@ -3472,7 +3480,12 @@ impl UploaderApp {
                     .border_color(cx.theme().border)
                     .p_4()
                     .child(div().font_semibold().text_sm().child("General"))
-                    .when(cfg!(target_os = "macos"), |section| section.child(
+                    .when(cfg!(windows), |section| section.child(
+                        Button::new("check-windows-updates").app_secondary().self_start()
+                            .label("Check for Windows updates…")
+                            .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::application_menu::CheckForUpdates), cx)),
+                    ))
+                    .when(cfg!(any(target_os = "macos", windows)), |section| section.child(
                         Checkbox::new("start-at-login")
                             .label("Start at login")
                             .checked(self.settings.start_at_login)
@@ -3817,7 +3830,7 @@ impl Render for UploaderApp {
                                                 })
                                                 .when(self.settings.sidebar_collapsed, |row| row.child(
                                                     Button::new("show-project-sidebar").debug_selector(|| "show-project-sidebar".into()).app_icon().icon(AssetIconName::PanelLeftOpen)
-                                                        .accessibility_label("Show sidebar").tooltip("Show sidebar · ⌘B")
+                                                        .accessibility_label("Show sidebar").tooltip(if cfg!(windows) { "Show sidebar · Ctrl+B" } else { "Show sidebar · ⌘B" })
                                                         .on_click(cx.listener(|this, _, _, cx| this.toggle_project_sidebar(cx)))
                                                 ))
                                                 .child(
@@ -3840,6 +3853,26 @@ impl Render for UploaderApp {
                                                             this.show_settings(cx);
                                                         })),
                                                 )
+                                                .when(cfg!(windows), |row| row.child(
+                                                    Button::new("windows-app-menu")
+                                                        .app_icon()
+                                                        .icon(IconName::Ellipsis)
+                                                        .accessibility_label("Gatto menu")
+                                                        .dropdown_menu({
+                                                            let clipboard = self.settings.add_from_clipboard_available();
+                                                            move |mut menu, _, _| {
+                                                                use crate::application_menu as actions;
+                                                                if clipboard {
+                                                                    menu = menu.menu("Add from Clipboard", Box::new(actions::AddFromClipboard));
+                                                                }
+                                                                menu.menu(crate::image_composer::TITLE, Box::new(actions::CreateComposition))
+                                                                    .menu("Check for Windows updates…", Box::new(actions::CheckForUpdates))
+                                                                    .menu("About Gatto", Box::new(actions::OpenAbout))
+                                                                    .menu("Help", Box::new(actions::HelpWalkthrough))
+                                                                    .menu("Quit Gatto", Box::new(actions::Quit))
+                                                            }
+                                                        }),
+                                                ))
                                                 .child(
                                                     Button::new("workspace-information").debug_selector(|| "workspace-information".into())
                                                         .app_icon()
@@ -3851,14 +3884,10 @@ impl Render for UploaderApp {
                                         ),
                                 ),
                         )
-                        .when(needs_setup, |root| root.child(self.render_setup_prompt(cx))
-                            .when(!self.staged_attachments.is_empty(), |root| root.child(self.render_attachments(cx))))
-                        .when(!needs_setup, |root| {
-                            root.child(self.render_drop_zone(cx))
-                                .when(self.compression.is_some(), |root| {
-                                    root.child(self.render_compression(cx))
-                                })
-                                .when(self.combining_comparison, |root| {
+                        .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
+                        .child(self.render_drop_zone(cx))
+                        .when(self.compression.is_some(), |root| root.child(self.render_compression(cx)))
+                        .when(self.combining_comparison, |root| {
                                     root.child(
                                         div().id("comparison-processing").test_support().child(
                                             Attachment::new()
@@ -3870,9 +3899,8 @@ impl Render for UploaderApp {
                                                     .description(AttachmentDescription::new("Resizing and combining images"))),
                                         )
                                     )
-                                })
-                                .child(self.render_attachments(cx))
-                        }),
+                        })
+                        .child(self.render_attachments(cx)),
                 );
             let main = v_flex()
                 .flex_1()
@@ -4240,6 +4268,33 @@ mod tests {
             .set_len(file.as_file().metadata().unwrap().len() + crate::model::MAX_ATTACHMENT_BYTES)
             .unwrap();
         file
+    }
+
+    #[gpui_kit::test]
+    fn file_picker_is_available_before_account_setup(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| {
+                app.settings.owner = None;
+                app.load_state = LoadState::NeedsSetup;
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+        });
+        let zone = cx
+            .debug_bounds("image-drop-zone")
+            .expect("import without GitHub setup");
+        cx.simulate_mouse_down(
+            zone.center(),
+            gpui_kit::MouseButton::Left,
+            gpui_kit::Modifiers::default(),
+        );
+        cx.simulate_mouse_up(
+            zone.center(),
+            gpui_kit::MouseButton::Left,
+            gpui_kit::Modifiers::default(),
+        );
+        assert!(cx.did_prompt_for_paths());
     }
 
     #[gpui_kit::test]

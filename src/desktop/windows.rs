@@ -1,4 +1,4 @@
-use anyhow::{Context as _, Result, bail, ensure};
+use anyhow::{Context as _, Result, ensure};
 use chrono::{DateTime, Local};
 
 pub fn format_local_timestamp(milliseconds: u64) -> Option<String> {
@@ -13,34 +13,13 @@ pub fn format_local_timestamp(milliseconds: u64) -> Option<String> {
     )
 }
 
-pub fn install_file_service() -> Result<()> {
-    Ok(())
-}
+#[path = "windows/shell.rs"]
+mod shell;
+#[path = "windows/startup.rs"]
+mod startup;
 
-pub struct Hotkey;
-
-impl Hotkey {
-    pub fn register(_: &str, _: u32, _: u32, _: async_channel::Sender<u32>) -> Result<Self> {
-        bail!("Global shortcuts are unavailable in the Windows preview.")
-    }
-
-    pub fn unregister(&mut self) -> Result<()> {
-        Ok(())
-    }
-}
-
-// The Windows preview uses its main window as the entry point.
-pub struct Menu;
-
-impl Menu {
-    pub fn shortcut(&self, _: &str, _: &str, _: u32, _: bool) -> Result<()> {
-        Ok(())
-    }
-
-    pub fn update_state(&self, _: u32, _: u32) {}
-
-    pub fn add_from_clipboard_enabled(&self, _: bool) {}
-}
+pub use shell::{Desktop, Hotkey, Menu, launch_error, set_window_icon};
+pub use startup::{downloads_directory, set_start_at_login, starts_at_login};
 
 pub fn preview_video(path: &std::path::Path) -> Result<()> {
     use std::os::windows::ffi::OsStrExt as _;

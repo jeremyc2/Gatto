@@ -207,3 +207,6 @@ The saved scorecard:
 
 See the [contributor guide](../CONTRIBUTING.md#walkthrough-screenshots) to regenerate
 the game, results, and scorecard images alongside the app walkthrough.
+
+The Windows preview supports scorecard export and plays silently. Ghost and
+animation settings are available on both platforms.

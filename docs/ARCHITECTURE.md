@@ -1,8 +1,8 @@
 # Architecture
 
-Gatto is a single-process macOS menu bar application. GPUI owns the
-application and window lifecycle, while small modules isolate GitHub access,
-platform integration, persistent settings, and shared state.
+Gatto is a desktop app for macOS and Windows. GPUI owns the application and
+window lifecycle. Platform adapters isolate desktop integration, and shared
+modules handle GitHub access, projects, and persistent settings.
 
 The public website is a separate static Solid project in `web/`. Vite runs under
 Bun for development and builds; Bun prerenders its static HTML. It does not add
@@ -21,6 +21,11 @@ The application separates these responsibilities within a single local process:
 - **macOS integration:** provide menu bar actions, the optional global shortcut,
   custom URL actions, Start at login, and silent installer ejection. Interactive
   entry points feed into the app's shared action handling.
+- **Windows integration:** keep a hidden Win32 window for the tray, hotkeys, and
+  activation from additional launches. A session mutex keeps one process in charge
+  of workspace writes. File selections and allowlisted URL actions enter the same
+  handlers as on macOS. The per-user installer registers Explorer entries and the
+  URL scheme; Start at login is opt-in through the current user's Run key.
 - **Preferences and diagnostics:** persist local preferences and keep a bounded,
   in-memory event log available in the Application logs window.
 

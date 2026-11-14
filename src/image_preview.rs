@@ -561,7 +561,11 @@ impl ImagePreview {
                     .ghost()
                     .small()
                     .icon(IconName::Minus)
-                    .tooltip("Zoom out · ⌘−")
+                    .tooltip(if cfg!(windows) {
+                        "Zoom out · Ctrl+−"
+                    } else {
+                        "Zoom out · ⌘−"
+                    })
                     .accessibility_label("Zoom out")
                     .on_click(
                         cx.listener(|this, _, window, cx| this.zoom_by(1. / ZOOM_STEP, window, cx)),
@@ -586,7 +590,11 @@ impl ImagePreview {
                     .ghost()
                     .small()
                     .icon(IconName::Plus)
-                    .tooltip("Zoom in · ⌘+")
+                    .tooltip(if cfg!(windows) {
+                        "Zoom in · Ctrl++"
+                    } else {
+                        "Zoom in · ⌘+"
+                    })
                     .accessibility_label("Zoom in")
                     .on_click(
                         cx.listener(|this, _, window, cx| this.zoom_by(ZOOM_STEP, window, cx)),

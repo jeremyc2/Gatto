@@ -421,3 +421,6 @@ impl Layout {
             .collect()
     }
 }
+
+#[cfg(windows)]
+pub(crate) use windows::score_label;

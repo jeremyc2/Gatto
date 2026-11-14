@@ -258,6 +258,11 @@ impl AppSettings {
             install_launch_agent()?;
         }
 
+        #[cfg(windows)]
+        {
+            settings.start_at_login = crate::desktop::starts_at_login()?;
+        }
+
         if rewrite_clipboard_names && !cleanup_legacy {
             settings.save()?;
         }
@@ -271,6 +276,10 @@ impl AppSettings {
     fn parse(contents: &str) -> Result<Self> {
         let mut settings: Self = serde_json::from_str(contents)?;
         anyhow::ensure!(settings.version == 1, "Unsupported settings version");
+        #[cfg(windows)]
+        {
+            settings.video_compression = CompressionMode::Quality;
+        }
         if !UI_FONT_SIZES.contains(&settings.ui_font_size) {
             settings.ui_font_size = DEFAULT_UI_FONT_SIZE;
         }
@@ -290,16 +299,28 @@ impl AppSettings {
     }
 
     pub fn set_start_at_login(&mut self, enabled: bool) -> Result<()> {
+        #[cfg(windows)]
+        crate::desktop::set_start_at_login(enabled)?;
+        #[cfg(not(windows))]
         if enabled {
             install_launch_agent()?;
         } else {
             remove_launch_agent()?;
         }
+        let previous = self.start_at_login;
         self.start_at_login = enabled;
-        self.save()
+        if let Err(error) = self.save() {
+            self.start_at_login = previous;
+            #[cfg(windows)]
+            crate::desktop::set_start_at_login(previous)
+                .context("Could not restore the previous login entry")?;
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Upgrade an existing login item without enabling login startup for new users.
+    #[cfg(not(windows))]
     pub fn refresh_start_at_login() -> Result<()> {
         let path = launch_agent_path()?;
         if path.exists() {
@@ -311,7 +332,10 @@ impl AppSettings {
     /// Removes the complete local data directory and the login item.
     pub fn reset() -> Result<()> {
         #[cfg(windows)]
-        return clear_data_directory(&data_directory()?);
+        {
+            crate::desktop::set_start_at_login(false)?;
+            return clear_data_directory(&data_directory()?);
+        }
         #[cfg(not(windows))]
         clear_persistence(&data_directory()?, &launch_agent_path()?)
     }

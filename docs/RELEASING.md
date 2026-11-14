@@ -12,12 +12,27 @@ version from Cargo and uses the preview number you enter to form a tag such as
 `windows-v0.24.4-preview.1`. Use a new preview number for each release of the
 same version.
 
-The workflow builds and tests on a Windows x64 runner. It publishes an unsigned
-ZIP containing `Gatto.exe` and the license, plus a `SHA256SUMS` file. Select
-**Build the ZIP and checksum without publishing** to download these files from
-the run before creating a release. Publication uses GitHub's built-in token.
-Windows builds are prereleases and leave the macOS release in GitHub's **Latest**
-slot so the Sparkle update feed stays available.
+The workflow builds and tests on a Windows x64 runner. It produces an unsigned
+per-user installer, a portable ZIP with `Gatto.exe` and the license, and
+`SHA256SUMS` for both downloads. Select **Build the installer, ZIP, and checksums
+without publishing** to download the artifacts before creating a release.
+Publication uses GitHub's built-in token. Windows builds are prereleases and
+leave GitHub's **Latest** release available to the macOS updater.
+
+The job uses Inno Setup 6 from the runner to compile
+[`Gatto.iss`](../packaging/windows/Gatto.iss).
+For a local package, run the release build from
+[Contributing](../CONTRIBUTING.md#windows-preview-build), then run this from the repository root
+in PowerShell with Inno Setup 6 installed:
+
+```powershell
+./packaging/windows/package.ps1 -Preview 1 -Executable target/x86_64-pc-windows-msvc/release/Gatto.exe -ReleaseDirectory release
+```
+
+The installer registers Explorer and the `gatto://` scheme only for the current
+user and leaves default file handlers alone. It requires Gatto to be closed
+before replacing the executable and preserves Local AppData on uninstall.
+See [Windows setup](SETUP.md#windows-11-x64-preview).
 
 ## macOS prerequisites
 

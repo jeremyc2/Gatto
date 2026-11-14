@@ -2,6 +2,33 @@
 
 [Overview](../README.md) · [Walkthrough](WALKTHROUGH.md) · [Support](../SUPPORT.md)
 
+## Windows 11 x64 preview
+
+1. Open the [Windows previews](https://github.com/jeremyc2/Gatto/releases?q=windows-v)
+   and download the latest `-setup.exe` under **Assets**. The installer is unsigned.
+   You can also extract the portable ZIP and open `Gatto.exe`; the ZIP does not
+   register Explorer commands or `gatto://` links.
+2. Install from your regular Windows account and open Gatto from Start. If Windows
+   reports a missing `VCRUNTIME140.dll`, install the
+   [Microsoft Visual C++ Redistributable for x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+3. Import and annotate media without signing in. To upload, install
+   [GitHub CLI for Windows](https://github.com/cli/cli/blob/trunk/docs/install_windows.md),
+   run `gh auth login` in PowerShell, and set your account or organization in App
+   preferences. Restart Gatto after installing the CLI if the app was already running.
+
+On an installed copy, right-click supported media in Explorer and use **Open with
+→ Gatto** or **Show more options → Send to → Gatto**. Gatto stages the files for
+review. The tray icon can reopen the window, invoke **Add from Clipboard**, or
+quit the app. To start in the tray at sign-in, turn on **Start at login** in App
+preferences. A global clipboard shortcut can use two or more of Ctrl, Alt, and
+Shift; record it in the same preferences page.
+
+Use **Check for Windows updates…** in the app or tray menu to open the Windows
+releases. Quit Gatto from the tray before running a newer installer. Installers
+keep your projects and settings. To verify a download, compare
+`Get-FileHash -Algorithm SHA256 <downloaded-file>` in PowerShell with its entry
+in the release’s `SHA256SUMS`.
+
 ## 1. Install the app
 
 1. [Download Gatto for Apple Silicon](https://github.com/jeremyc2/Gatto/releases/latest).

@@ -391,8 +391,8 @@ fn stage_clipboard(
         .add_from_clipboard_directory()
         .context("Choose a project to use for Add from Clipboard first.")?;
     let summary = crate::projects::summary(&folder)?;
-    let mut clipboard =
-        clipboard.context("Copy an image or an image/video file in Finder first.")?;
+    let mut clipboard = clipboard
+        .context("Copy an image or a video file, or copy an image to the clipboard first.")?;
     let attachment = if let Some(image) = crate::model::take_clipboard_image(&mut clipboard) {
         StagedAttachment::from_clipboard(image)?
     } else if let Some(path) = clipboard.entries().iter().find_map(|entry| match entry {
@@ -401,7 +401,7 @@ fn stage_clipboard(
     }) {
         StagedAttachment::from_path(path.clone(), settings.video_upload_limit())?
     } else {
-        bail!("Copy a PNG, JPEG, GIF, or WebP image, or an image/video file in Finder first.");
+        bail!("Copy a PNG, JPEG, GIF, or WebP image, or copy an image or video file first.");
     };
     Ok(ClipboardUpdate {
         folder,

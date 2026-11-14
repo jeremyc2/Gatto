@@ -23,6 +23,7 @@ fn layout(
     size: f32,
     height: f32,
     width: Option<f32>,
+    attrs: &Attrs<'_>,
 ) -> Buffer {
     let mut buffer = Buffer::new(system, Metrics::new(size, height));
     buffer.set_wrap(if width.is_some() {
@@ -31,12 +32,7 @@ fn layout(
         Wrap::None
     });
     buffer.set_size(width, None);
-    buffer.set_text(
-        text,
-        &Attrs::new().family(Family::Name("Arial")),
-        Shaping::Advanced,
-        None,
-    );
+    buffer.set_text(text, attrs, Shaping::Advanced, None);
     buffer.shape_until_scroll(system, false);
     buffer
 }
@@ -46,7 +42,14 @@ pub(super) fn line_ranges(text: &str, size: f32, width: Option<f32>) -> Vec<Rang
         return std::iter::once(0..text.len()).collect();
     }
     FONTS.with_borrow_mut(|fonts| {
-        let buffer = layout(&mut fonts.system, text, size, line_height(size), width);
+        let buffer = layout(
+            &mut fonts.system,
+            text,
+            size,
+            line_height(size),
+            width,
+            &annotation_font(),
+        );
         let starts = buffer
             .layout_runs()
             .skip(1)
@@ -59,10 +62,30 @@ pub(super) fn line_ranges(text: &str, size: f32, width: Option<f32>) -> Vec<Rang
     })
 }
 
+fn annotation_font() -> Attrs<'static> {
+    Attrs::new().family(Family::Name("Arial"))
+}
+
 pub(super) fn shape_line(text: &str, size: f32, height: f32) -> Line {
+    shape(text, size, height, &annotation_font())
+}
+
+pub(crate) fn score_label(text: &str, size: f32, bold: bool) -> (f32, Option<Path>) {
+    let attrs = Attrs::new()
+        .family(Family::Name("Segoe UI"))
+        .weight(if bold {
+            cosmic_text::Weight::BOLD
+        } else {
+            cosmic_text::Weight::NORMAL
+        });
+    let line = shape(text, size, size * 1.25, &attrs);
+    (line.width, line.path)
+}
+
+fn shape(text: &str, size: f32, height: f32, attrs: &Attrs<'_>) -> Line {
     FONTS.with_borrow_mut(|fonts| {
         let Fonts { system, rasterizer } = fonts;
-        let buffer = layout(system, text, size, height, None);
+        let buffer = layout(system, text, size, height, None, attrs);
         let mut parts = TextParts::default();
         let mut bitmaps = Vec::new();
         let mut carets = Vec::new();
