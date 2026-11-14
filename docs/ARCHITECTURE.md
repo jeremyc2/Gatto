@@ -399,8 +399,9 @@ observer restores title-bar styling after GPUI's fullscreen transitions.
 
 On Windows, the uploader and App preferences share a GPUI Kit title bar above
 the content. GPUI's Windows backend maps its drag region and caption controls
-to Win32 non-client hit tests. Close reaches the main window's existing close
-callback. Utility windows use standard Windows title bars.
+to Win32 non-client hit tests. Right-clicking the caption opens the native
+system menu. Close reaches the main window's existing close callback. Utility
+windows use standard Windows title bars.
 
 Opening the main window loads Scratchpad and restores its repository without a
 GitHub request. A new Scratchpad starts without a repository selection.

@@ -3611,12 +3611,20 @@ impl UploaderApp {
     #[cfg(windows)]
     fn render_windows_title_bar(cx: &App) -> impl IntoElement {
         TitleBar::new()
+            .pl_0()
             .bg(cx.theme().sidebar)
             .border_color(cx.theme().sidebar_border)
             .child(
-                div()
+                h_flex()
+                    .size_full()
+                    .pl_3()
                     .text_sm()
                     .text_color(cx.theme().foreground)
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_up(MouseButton::Right, |event, window, cx| {
+                        cx.stop_propagation();
+                        window_limits::show_system_menu(window, event.position, cx);
+                    })
                     .child("Gatto"),
             )
     }
