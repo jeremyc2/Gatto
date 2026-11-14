@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.5] - 2026-11-14
+
 ### Added
 
 - Add a Windows 11 x64 preview with a per-user installer, tray, global clipboard
