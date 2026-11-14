@@ -1,42 +1,113 @@
-name: Windows build
+name: Windows release
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/windows.yml"
-      - "Cargo.*"
-      - "build.rs"
-      - "rust-toolchain.toml"
-      - "src/**"
-      - "schemas/**"
-      - "packaging/**"
-      - "tests/**"
   workflow_dispatch:
+    inputs:
+      preview:
+        description: Windows preview number for this Gatto version
+        type: string
+        default: "1"
+        required: true
+      build_only:
+        description: Build the ZIP and checksum without publishing
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: windows-build-${{ github.ref }}
-  cancel-in-progress: true
+  group: windows-release
+  cancel-in-progress: false
 
 jobs:
-  windows:
+  build:
     runs-on: windows-2025
+    outputs:
+      tag: ${{ steps.package.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Validate preview number
+        shell: pwsh
+        env:
+          PREVIEW_NUMBER: ${{ inputs.preview }}
+        run: |
+          if ($env:PREVIEW_NUMBER -cnotmatch '^[1-9][0-9]{0,5}$') {
+            throw 'Enter a preview number between 1 and 999999.'
+          }
       - name: Build the Windows executable
-        run: cargo build --locked --release --bin Gatto
-      - name: Upload the Windows executable
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: Gatto-windows-x64
-          path: target/release/Gatto.exe
-          if-no-files-found: error
-      - name: Test the Windows executable
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc --bin Gatto
+      - name: Test the Windows app
         # Keep GPUI's debug selectors while timing optimized editor code.
         env:
           CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS: "true"
-        run: cargo test --locked --release --bin Gatto
+        run: cargo test --locked --release --target x86_64-pc-windows-msvc --bin Gatto
+      - name: Package the Windows release
+        id: package
+        shell: pwsh
+        env:
+          PREVIEW_NUMBER: ${{ inputs.preview }}
+        run: |
+          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the Gatto version.' }
+          $version = ($metadata.packages | Where-Object name -eq 'gatto').version
+          if ($version -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw 'Expected a Gatto version in major.minor.patch format.'
+          }
+          $tag = "windows-v$version-preview.$env:PREVIEW_NUMBER"
+          $archive = "Gatto-windows-x64-v$version-preview.$env:PREVIEW_NUMBER.zip"
+          New-Item -ItemType Directory -Path package, release
+          Copy-Item target/x86_64-pc-windows-msvc/release/Gatto.exe, LICENSE -Destination package
+          Compress-Archive -Path package/Gatto.exe, package/LICENSE -DestinationPath "release/$archive"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath "release/$archive").Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content -Encoding ascii -LiteralPath release/SHA256SUMS
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+      - name: Save the release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: Gatto-windows-x64
+          path: release/
+          if-no-files-found: error
+
+  publish:
+    if: ${{ !inputs.build_only }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Gatto-windows-x64
+          path: release
+      - name: Publish the Windows prerelease
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          sha256sum --strict --check SHA256SUMS
+
+          status=0
+          git ls-remote --exit-code "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$RELEASE_TAG" || status=$?
+          case "$status" in
+            0) echo "Tag $RELEASE_TAG already exists. Choose a new preview number." >&2; exit 1 ;;
+            2) ;;
+            *) exit "$status" ;;
+          esac
+
+          cat > notes.md <<'NOTES'
+          Unsigned Windows 11 x64 preview. Extract the ZIP and open Gatto.exe.
+          If Windows reports that VCRUNTIME140.dll is missing, install the
+          [Microsoft Visual C++ Redistributable for x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+          GitHub CLI authentication is required to upload attachments.
+          NOTES
+
+          gh release create "$RELEASE_TAG" Gatto-windows-x64-*.zip SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" \
+            --title "Gatto Windows x64 ${RELEASE_TAG#windows-v}" \
+            --notes-file notes.md --prerelease --latest=false

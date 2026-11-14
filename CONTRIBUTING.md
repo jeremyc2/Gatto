@@ -406,11 +406,13 @@ PowerShell in the checkout, run:
 
 ```powershell
 cargo build --locked --release --bin Gatto
+$env:CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS = "true"
 cargo test --locked --release --bin Gatto
+Remove-Item Env:CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS
 ```
 
-Launch `target/release/Gatto.exe`. The Windows build workflow also publishes
-that executable as the `Gatto-windows-x64` artifact. On a clean Windows machine,
+Launch `target/release/Gatto.exe`. See [Windows preview releases](docs/RELEASING.md#windows-preview-releases)
+for the manual GitHub Actions workflow. On a clean Windows machine,
 install the [x64 Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
 if Windows reports that `VCRUNTIME140.dll` is missing. Install the Windows GitHub
 CLI and run `gh auth login` before testing uploads. Gatto stores the Windows

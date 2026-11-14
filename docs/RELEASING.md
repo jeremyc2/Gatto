@@ -1,11 +1,25 @@
 # Releasing Gatto
 
-Releases are built locally on macOS with `scripts/release.sh`. The script produces
+macOS releases are built locally with `scripts/release.sh`. The script produces
 a Developer ID signed and notarized Apple Silicon app and disk image, then
 publishes the DMG, signed Sparkle appcast, and checksums to GitHub Releases.
-There is no active release workflow in GitHub Actions.
 
-## Prerequisites
+## Windows preview releases
+
+Once the workflow is on the default branch, open **Actions → Windows release →
+Run workflow** and select a trusted branch or tag. The workflow reads Gatto's
+version from Cargo and uses the preview number you enter to form a tag such as
+`windows-v0.24.4-preview.1`. Use a new preview number for each release of the
+same version.
+
+The workflow builds and tests on a Windows x64 runner. It publishes an unsigned
+ZIP containing `Gatto.exe` and the license, plus a `SHA256SUMS` file. Select
+**Build the ZIP and checksum without publishing** to download these files from
+the run before creating a release. Publication uses GitHub's built-in token.
+Windows builds are prereleases and leave the macOS release in GitHub's **Latest**
+slot so the Sparkle update feed stays available.
+
+## macOS prerequisites
 
 - The [development tools](../CONTRIBUTING.md#development-setup) and an authenticated `gh`
   account with permission to create releases in this repository.
