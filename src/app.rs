@@ -104,7 +104,7 @@ pub(crate) fn uploader_window_options() -> WindowOptions {
     WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: Some("Gatto".into()),
-            appears_transparent: cfg!(target_os = "macos"),
+            appears_transparent: cfg!(any(target_os = "macos", windows)),
             traffic_light_position: Some(point(px(14.), px(12.))),
         }),
         app_owns_titlebar_drag: cfg!(target_os = "macos"),
@@ -3378,12 +3378,15 @@ impl UploaderApp {
     }
 
     fn render_settings(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
+        let page = v_flex()
             .id("settings-page")
             .size_full()
             .overflow_y_scroll()
             .track_scroll(&self.settings_scroll)
-            .child(self.render_settings_content(cx))
+            .child(self.render_settings_content(cx));
+        #[cfg(windows)]
+        let page = page.flex_1().min_h_0();
+        page
     }
 
     fn render_settings_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3605,6 +3608,14 @@ impl UploaderApp {
             })
     }
 
+    #[cfg(windows)]
+    fn render_windows_title_bar(cx: &App) -> impl IntoElement {
+        TitleBar::new()
+            .bg(cx.theme().sidebar)
+            .border_color(cx.theme().sidebar_border)
+            .child(div().text_sm().text_color(cx.theme().foreground).child("Gatto"))
+    }
+
     fn render_window_drag_region(id: &'static str, height: Pixels, cx: &App) -> impl IntoElement {
         div()
             .id(id)
@@ -3763,6 +3774,10 @@ impl Render for UploaderApp {
             })
             .size_full()
             .bg(cx.theme().background);
+        #[cfg(windows)]
+        let root = root.when(!window.is_fullscreen(), |root| {
+            root.child(Self::render_windows_title_bar(cx))
+        });
 
         if self.settings_open {
             root.pt(titlebar_height)
@@ -4022,17 +4037,18 @@ impl Render for UploaderApp {
                         })
                         .child(self.render_upload_button(upload_count, can_send, cx)),
                 );
-            root.child(
-                h_flex()
-                    .size_full()
-                    .items_stretch()
-                    .when(!sidebar_collapsed, |shell| {
-                        shell
-                            .bg(cx.theme().sidebar)
-                            .child(self.render_project_sidebar(titlebar_height, cx))
-                    })
-                    .child(main),
-            )
+            let shell = h_flex()
+                .size_full()
+                .items_stretch()
+                .when(!sidebar_collapsed, |shell| {
+                    shell
+                        .bg(cx.theme().sidebar)
+                        .child(self.render_project_sidebar(titlebar_height, cx))
+                })
+                .child(main);
+            #[cfg(windows)]
+            let shell = shell.flex_1().min_h_0();
+            root.child(shell)
             .when(titlebar_height > px(0.), |root| {
                 root.child(self.render_title_bar(titlebar_height, repository_in_title_bar, cx))
             })

@@ -381,7 +381,7 @@ actions open the main window and select the corresponding project.
 
 All app windows open through `theme::open_window`, which keeps GPUI's Root and
 view identity while installing shared native macOS styling in `window_limits.rs`.
-The main window extends its content into a transparent native title bar. Close,
+On macOS, the main window extends its content into a transparent native title bar. Close,
 minimize, and zoom sit above the Projects sidebar. Hiding the sidebar gives the
 workspace a single edge-to-edge background behind the window controls,
 scrolling content, and upload footer. In the collapsed view, the repository
@@ -396,6 +396,11 @@ reserves space for the native controls. In fullscreen the picker stays in the
 workspace header. Utility windows use a native title bar with a one-point
 divider below it. A bounds
 observer restores title-bar styling after GPUI's fullscreen transitions.
+
+On Windows, the uploader and App preferences share a GPUI Kit title bar above
+the content. GPUI's Windows backend maps its drag region and caption controls
+to Win32 non-client hit tests. Close reaches the main window's existing close
+callback. Utility windows use standard Windows title bars.
 
 Opening the main window loads Scratchpad and restores its repository without a
 GitHub request. A new Scratchpad starts without a repository selection.

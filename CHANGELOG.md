@@ -7,6 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Integrate the Windows uploader and App preferences title bar with Gatto's
+  theme, with minimize, maximize and restore, and close on the right.
+
 ## [0.24.5] - 2026-11-14
 
 ### Added
