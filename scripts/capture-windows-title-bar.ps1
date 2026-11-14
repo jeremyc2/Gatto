@@ -47,12 +47,26 @@ public static class CaptionTest {
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int key, out Rect rect, int size);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point point);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr SendMessageTimeout(
+        IntPtr hwnd, uint message, UIntPtr wparam, IntPtr lparam, uint flags, uint milliseconds, out IntPtr result);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
     [DllImport("user32.dll")] private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
 
     public static IntPtr FindByTitle(string title) => FindWindow(null, title);
     public static void Mouse(uint flags) => mouse_event(flags, 0, 0, 0, UIntPtr.Zero);
     public static void Key(byte key, uint flags) => keybd_event(key, 0, flags, UIntPtr.Zero);
+
+    public static int HitAtCursor(IntPtr window) {
+        Point cursor;
+        if (!GetCursorPos(out cursor)) throw new Exception("Cannot read the cursor position");
+        var coords = new IntPtr((cursor.Y << 16) | (cursor.X & 0xffff));
+        IntPtr hit;
+        if (SendMessageTimeout(window, 0x84, UIntPtr.Zero, coords, 2, 1000, out hit) == IntPtr.Zero) {
+            throw new Exception("WM_NCHITTEST timed out");
+        }
+        return hit.ToInt32();
+    }
 
     public static Rect Client(IntPtr window) {
         Rect rect;
@@ -111,6 +125,7 @@ function Move-ToCaption([IntPtr] $Window, [int] $FromRight) {
     $client = [CaptionTest]::Client($Window)
     $scale = [CaptionTest]::GetDpiForWindow($Window) / 96.0
     Move-Pointer ($client.Right - $FromRight * $scale) ($client.Top + 20 * $scale)
+    Move-Pointer ($client.Right - $FromRight * $scale - 1) ($client.Top + 20 * $scale)
 }
 
 function Capture-Window([IntPtr] $Window, [string] $Name) {
@@ -156,6 +171,8 @@ function Check-Interaction([string] $Name, [scriptblock] $Action) {
 function Check-Caption([IntPtr] $Window) {
     Check-Interaction 'Maximize and restore buttons' {
         Move-ToCaption $Window 51
+        $hit = [CaptionTest]::HitAtCursor($Window)
+        if ($hit -ne 9) { throw "Expected HTMAXBUTTON, received $hit" }
         Click-Pointer
         Start-Sleep -Milliseconds 650
         if (-not [CaptionTest]::IsZoomed($Window)) { throw 'Maximize did not take effect' }
@@ -209,33 +226,20 @@ function Check-Caption([IntPtr] $Window) {
         $after = [CaptionTest]::Client($Window)
         if ($before.Height -eq $after.Height) { throw 'Window height did not change' }
     }
-    Check-Interaction 'Caption context menu' {
-        Move-ToCaption $Window 215
-        Click-Pointer -Right
-        Start-Sleep -Milliseconds 400
-        $inMenu = [CaptionTest]::MenuFlags($Window) -band 8
-        Press-Key 0x1b
-        if (-not $inMenu) { throw 'Right-click did not open the system menu' }
-    }
     Check-Interaction 'Alt+Space system menu' {
         Press-Key 0x20 -Alt
         Start-Sleep -Milliseconds 400
         $inMenu = [CaptionTest]::MenuFlags($Window) -band 8
         Press-Key 0x1b
+        Start-Sleep -Milliseconds 500
         if (-not $inMenu) { throw 'Alt+Space did not open the system menu' }
-    }
-    Check-Interaction 'Caption close button' {
-        Move-ToCaption $Window 17
-        Click-Pointer
-        Start-Sleep -Milliseconds 550
-        if ([CaptionTest]::IsWindow($Window)) { throw 'Close did not destroy the window' }
     }
 }
 
 $null = [CaptionTest]::SetThreadDpiAwarenessContext([IntPtr](-4))
 $script:failed = $false
 Write-Result "Runner session $((Get-Process -Id $PID).SessionId)"
-foreach ($scenario in 'uploader', 'preferences', 'attachment-editor') {
+foreach ($scenario in 'uploader', 'caption-context-menu', 'caption-close', 'preferences', 'attachment-editor') {
     $env:GATTO_WINDOWS_CAPTURE = $scenario
     $title = if ($scenario -eq 'attachment-editor') { 'interface-review.png — Gatto preview' } else { 'Gatto' }
     $app = Start-Process $exe -PassThru
@@ -255,8 +259,33 @@ foreach ($scenario in 'uploader', 'preferences', 'attachment-editor') {
             }
         }
         if ($window -eq [IntPtr]::Zero) { throw "Timed out opening $title" }
-        Capture-Window $window $scenario
+        if ($scenario -notlike 'caption-*') { Capture-Window $window $scenario }
         if ($scenario -eq 'uploader') { Check-Caption $window }
+        if ($scenario -eq 'caption-context-menu') {
+            Check-Interaction 'Caption context menu' {
+                Start-Sleep -Milliseconds 500
+                Move-ToCaption $window 215
+                $hit = [CaptionTest]::HitAtCursor($window)
+                if ($hit -ne 2) { throw "Expected HTCAPTION, received $hit" }
+                Click-Pointer -Right
+                Start-Sleep -Milliseconds 600
+                $flags = [CaptionTest]::MenuFlags($window)
+                Write-Result "Caption right-click menu flags $flags"
+                if (-not ($flags -band 0x1c)) { throw 'Right-click did not open a menu' }
+                Press-Key 0x1b
+            }
+        }
+        if ($scenario -eq 'caption-close') {
+            Check-Interaction 'Caption close button' {
+                Start-Sleep -Milliseconds 500
+                Move-ToCaption $window 17
+                $hit = [CaptionTest]::HitAtCursor($window)
+                if ($hit -ne 20) { throw "Expected HTCLOSE, received $hit" }
+                Click-Pointer
+                Start-Sleep -Milliseconds 900
+                if ([CaptionTest]::IsWindow($window)) { throw 'Close did not destroy the window' }
+            }
+        }
         if ($scenario -eq 'preferences') {
             Check-Interaction 'Alt+F4 close' {
                 Press-Key 0x73 -Alt
