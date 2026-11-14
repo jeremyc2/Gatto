@@ -90,19 +90,38 @@ const SETTINGS_CONTROL_WIDTH: Pixels = px(400.);
 const TITLEBAR_HEIGHT: Pixels = px(40.);
 const TITLEBAR_PICKER_TOP: Pixels = px(6.);
 const SIDEBAR_TITLEBAR_HEIGHT: Pixels = px(34.);
+pub(crate) const MINIMUM_WINDOW_WIDTH: Pixels = if cfg!(windows) { px(780.) } else { px(700.) };
+
 // GPUI Kit sizes each of the three Windows controls to its title bar height.
 fn windows_caption_width() -> Pixels {
     gpui_kit::component::TITLE_BAR_HEIGHT * 3.
 }
 
+fn windows_caption_height(cx: &App) -> Pixels {
+    theme::CONTROL_HEIGHT
+        .to_pixels(cx.theme().font_size)
+        .max(px(28.))
+}
+
+fn windows_caption_inset(cx: &App) -> Pixels {
+    (WORKSPACE_GUTTER + WORKSPACE_PADDING).to_pixels(cx.theme().font_size) + px(1.)
+}
+
 pub(crate) fn default_window_width(cx: &App) -> Pixels {
-    (PROJECT_SIDEBAR_WIDTH
+    let font_size = cx.theme().font_size;
+    let width = PROJECT_SIDEBAR_WIDTH
         + px(2.) // The inset workspace has a one-point border on each side.
         + WORKSPACE_MARK_SIZE
         + (WORKSPACE_GUTTER + WORKSPACE_PADDING * 2. + rems(1.) + WORKSPACE_TITLE_WIDTH + WORKSPACE_HEADER_GAP)
-            .to_pixels(cx.theme().font_size)
-        + repository_picker::PICKER_WIDTH)
-        .ceil()
+            .to_pixels(font_size)
+        + repository_picker::PICKER_WIDTH;
+    if cfg!(windows) {
+        (width + windows_caption_width() + WORKSPACE_PADDING.to_pixels(font_size))
+            .ceil()
+            .max(MINIMUM_WINDOW_WIDTH)
+    } else {
+        width.ceil()
+    }
 }
 
 pub(crate) fn uploader_window_options() -> WindowOptions {
@@ -3402,6 +3421,7 @@ impl UploaderApp {
     }
 
     fn render_settings_heading(&self, fixed: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let caption_height = fixed.then(|| windows_caption_height(cx));
         h_flex()
             .justify_between()
             .items_center()
@@ -3409,7 +3429,8 @@ impl UploaderApp {
                 heading
                     .flex_none()
                     .px_6()
-                    .pr(windows_caption_width() + rems(1.5).to_pixels(cx.theme().font_size))
+                    .pr(windows_caption_inset(cx))
+                    .gap(WORKSPACE_PADDING)
                     .min_h(TITLEBAR_HEIGHT)
                     .py_1()
             })
@@ -3425,9 +3446,13 @@ impl UploaderApp {
             .child(
                 Button::new("close-settings")
                     .app_secondary()
+                    .when_some(caption_height, |button, height| button.h(height))
                     .label("Done")
                     .on_click(cx.listener(Self::close_settings)),
             )
+            .when_some(caption_height, |row, height| {
+                row.child(Self::render_windows_caption_controls(height, cx))
+            })
     }
 
     fn render_settings_content(
@@ -3654,13 +3679,14 @@ impl UploaderApp {
         region
     }
 
-    fn render_windows_caption_controls(top: Pixels, cx: &App) -> impl IntoElement {
-        div()
-            .absolute()
-            .top(top)
-            .right_0()
-            .w(windows_caption_width())
-            .child(TitleBar::new().pl_0().border_0().bg(cx.theme().transparent))
+    fn render_windows_caption_controls(height: Pixels, cx: &App) -> impl IntoElement {
+        div().flex_none().w(windows_caption_width()).child(
+            TitleBar::new()
+                .h(height)
+                .pl_0()
+                .border_0()
+                .bg(cx.theme().transparent),
+        )
     }
 
     fn render_window_drag_region(id: &'static str, height: Pixels, cx: &App) -> impl IntoElement {
@@ -3721,7 +3747,7 @@ impl UploaderApp {
                         .self_start()
                         .mt(TITLEBAR_PICKER_TOP)
                         .pr(WORKSPACE_PADDING)
-                        .child(self.render_repository_picker(false, cx)),
+                        .child(self.render_repository_picker(None, cx)),
                 )
             })
     }
@@ -3825,16 +3851,13 @@ impl Render for UploaderApp {
         if self.settings_open {
             root.pt(titlebar_height)
                 .child(self.render_settings(windows_caption, cx))
-                .when(windows_caption, |root| {
-                    let top = (TITLEBAR_HEIGHT - gpui_kit::component::TITLE_BAR_HEIGHT) / 2.;
-                    root.child(Self::render_windows_caption_controls(top, cx))
-                })
                 .when(titlebar_height > px(0.), |root| {
                     root.child(self.render_title_bar(titlebar_height, false, cx))
                 })
                 .into_any_element()
         } else {
             let sidebar_collapsed = self.settings.sidebar_collapsed;
+            let caption_height = windows_caption.then(|| windows_caption_height(cx));
             let titlebar_height = if sidebar_collapsed {
                 titlebar_height
             } else {
@@ -3861,7 +3884,13 @@ impl Render for UploaderApp {
                 .items_start()
                 .gap_4()
                 .when(windows_caption, |header| {
-                    header.flex_none().p(WORKSPACE_PADDING).pb_0()
+                    header
+                        .flex_none()
+                        .p(WORKSPACE_PADDING)
+                        .pb_0()
+                        .when(sidebar_collapsed, |header| {
+                            header.pr(windows_caption_inset(cx))
+                        })
                 })
                 .debug_selector(|| "workspace-header".into())
                 .child(
@@ -3900,19 +3929,18 @@ impl Render for UploaderApp {
                                 .gap_x(WORKSPACE_HEADER_GAP)
                                 .gap_y_2()
                                 .when(windows_caption, |row| {
-                                    row.flex_nowrap().items_center().pr(windows_caption_width())
+                                    row.flex_nowrap().items_center().gap_x(WORKSPACE_PADDING)
                                 })
                                 .child(
                                     v_flex()
                                         .flex_1()
                                         .flex_basis(WORKSPACE_TITLE_WIDTH)
                                         .min_w_0()
-                                        .when(windows_caption, |title| {
+                                        .when_some(caption_height, |title, height| {
                                             Self::windows_drag_region(
                                                 title
                                                     .min_w(WINDOWS_WORKSPACE_TITLE_MIN)
-                                                    .h(theme::CONTROL_HEIGHT
-                                                        .to_pixels(cx.theme().font_size))
+                                                    .h(height)
                                                     .justify_center(),
                                             )
                                         })
@@ -3941,9 +3969,12 @@ impl Render for UploaderApp {
                                                     .max_w(repository_picker::PICKER_WIDTH)
                                             })
                                             .child(
-                                                self.render_repository_picker(windows_caption, cx),
+                                                self.render_repository_picker(caption_height, cx),
                                             ),
                                     )
+                                })
+                                .when_some(caption_height, |row, height| {
+                                    row.child(Self::render_windows_caption_controls(height, cx))
                                 }),
                         )
                         .child(
@@ -4179,30 +4210,15 @@ impl Render for UploaderApp {
                 })
                 .child(main);
             root.child(shell)
-                .when(windows_caption, |root| {
-                    let font_size = cx.theme().font_size;
-                    let workspace_inset = if sidebar_collapsed {
-                        px(0.)
-                    } else {
-                        WORKSPACE_GUTTER.to_pixels(font_size) + px(1.)
-                    };
-                    let top = (workspace_inset
-                        + WORKSPACE_PADDING.to_pixels(font_size)
-                        + (theme::CONTROL_HEIGHT.to_pixels(font_size)
-                            - gpui_kit::component::TITLE_BAR_HEIGHT)
-                            / 2.)
-                        .max(px(0.));
-                    root.when(!sidebar_collapsed, |root| {
-                        root.child(Self::windows_drag_region(
-                            div()
-                                .absolute()
-                                .top_0()
-                                .left_0()
-                                .w(PROJECT_SIDEBAR_WIDTH)
-                                .h(SIDEBAR_TITLEBAR_HEIGHT),
-                        ))
-                    })
-                    .child(Self::render_windows_caption_controls(top, cx))
+                .when(windows_caption && !sidebar_collapsed, |root| {
+                    root.child(Self::windows_drag_region(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .w(PROJECT_SIDEBAR_WIDTH)
+                            .h(SIDEBAR_TITLEBAR_HEIGHT),
+                    ))
                 })
                 .when(titlebar_height > px(0.), |root| {
                     root.child(self.render_title_bar(titlebar_height, repository_in_title_bar, cx))

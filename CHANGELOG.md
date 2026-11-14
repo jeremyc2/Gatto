@@ -11,6 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Integrate the workspace header and App preferences with the Windows caption
   controls, and use Gatto's dark colors for native utility window title bars.
+  Increase the Windows uploader's default and minimum widths.
 
 ## [0.24.5] - 2026-11-14
 

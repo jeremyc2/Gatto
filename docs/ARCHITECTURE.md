@@ -398,10 +398,13 @@ divider below it. A bounds
 observer restores title-bar styling after GPUI's fullscreen transitions.
 
 On Windows, the workspace title and repository picker share a row with the
-caption buttons. The header stays above the scrolling workspace, with the
-mascot and tools alongside. App preferences puts its heading and Done button
-in the caption row. GPUI's Windows backend maps the drag regions and caption
-controls to Win32 non-client hit tests. Right-clicking a drag region opens the
+caption buttons. The picker and caption buttons share a height and centerline.
+The header stays above the scrolling workspace, with the mascot and tools
+alongside. App preferences puts its heading and Done button in the caption row
+with the same right inset. The main window opens wider and has a 780-point
+minimum width to give the header controls room. GPUI's Windows backend maps
+the drag regions and caption controls to Win32 non-client hit tests.
+Right-clicking a drag region opens the
 native system menu. Close reaches the main window's existing close callback.
 Utility windows use native Windows title bars with Gatto's dark theme colors.
 

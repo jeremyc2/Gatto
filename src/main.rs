@@ -586,7 +586,7 @@ impl MainWindow {
             )
         };
         let controller = self.clone();
-        let minimum_size = size(px(700.), px(600.));
+        let minimum_size = size(app::MINIMUM_WINDOW_WIDTH, px(600.));
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(
                 size(app::default_window_width(cx), minimum_size.height),

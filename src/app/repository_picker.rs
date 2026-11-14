@@ -339,7 +339,7 @@ impl UploaderApp {
 
     pub(super) fn render_repository_picker(
         &self,
-        fill_trigger: bool,
+        header_height: Option<Pixels>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let label = self.selected_repository.as_ref().map_or_else(
@@ -350,7 +350,7 @@ impl UploaderApp {
             "repository-picker-trigger",
             "Repository",
             label,
-            fill_trigger,
+            header_height,
             cx,
         )
         .anchor(gpui_kit::Anchor::TopRight)
@@ -404,7 +404,7 @@ impl UploaderApp {
                 "pinned-repository-trigger",
                 "Pinned repositories",
                 label,
-                false,
+                None,
                 cx,
             ))
     }
@@ -414,7 +414,7 @@ impl UploaderApp {
         trigger_id: &'static str,
         heading: &'static str,
         label: String,
-        fill_trigger: bool,
+        header_height: Option<Pixels>,
         cx: &mut Context<Self>,
     ) -> Popover {
         let picker = self.repository_picker.clone();
@@ -422,7 +422,7 @@ impl UploaderApp {
         let loading = self.load_state == LoadState::Loading;
         Popover::new(format!("{trigger_id}-popover"))
             .w(PICKER_WIDTH)
-            .when(fill_trigger, |popover| {
+            .when(header_height.is_some(), |popover| {
                 popover.trigger_style(div().w_full().style().clone())
             })
             .p_0()
@@ -457,7 +457,7 @@ impl UploaderApp {
                     .accessibility_label(format!("{heading}. {label}"))
                     .app_secondary()
                     .w(PICKER_WIDTH)
-                    .when(fill_trigger, |trigger| trigger.w_full())
+                    .when_some(header_height, |trigger, height| trigger.w_full().h(height))
                     .justify_between()
                     .child(div().min_w_0().truncate().child(label)),
             )
