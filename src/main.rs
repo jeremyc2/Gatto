@@ -53,12 +53,6 @@ use crate::{
 };
 
 fn main() {
-    #[cfg(all(windows, feature = "walkthrough-screenshots"))]
-    if let Ok(scenario) = std::env::var("GATTO_WINDOWS_CAPTURE") {
-        app::run_windows_capture(&scenario);
-        return;
-    }
-
     #[cfg(not(windows))]
     let login_launch = std::env::args_os()
         .skip(1)
