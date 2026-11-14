@@ -8,15 +8,19 @@ publishes the DMG, signed Sparkle appcast, and checksums to GitHub Releases.
 
 Once the workflow is on the default branch, open **Actions → Windows release →
 Run workflow** and select a trusted branch or tag. The workflow reads Gatto's
-version from Cargo and uses the preview number you enter to form a tag such as
-`windows-v0.24.4-preview.1`. Use a new preview number for each release of the
-same version.
+version from Cargo and picks the next preview number from the existing Windows
+tags for that version. The first tag for a version ends in `preview.1`. If
+`windows-v0.24.4-preview.9` already exists, the next tag is
+`windows-v0.24.4-preview.10`.
 
 The workflow builds and tests on a Windows x64 runner. It produces an unsigned
 per-user installer, a portable ZIP with `Gatto.exe` and the license, and
 `SHA256SUMS` for both downloads. Select **Build the installer, ZIP, and checksums
 without publishing** to download the artifacts before creating a release.
-Publication uses GitHub's built-in token. Windows builds are prereleases and
+Build-only runs use the next preview number in their filenames without reserving it.
+Publication creates the tag before uploading the release. If publication fails
+after the tag is created, the next run moves on to the next preview number.
+The workflow uses GitHub's built-in token. Windows builds are prereleases and
 leave GitHub's **Latest** release available to the macOS updater.
 
 The job uses Inno Setup 6 from the runner to compile
@@ -26,7 +30,7 @@ For a local package, run the release build from
 in PowerShell with Inno Setup 6 installed:
 
 ```powershell
-./packaging/windows/package.ps1 -Preview 1 -Executable target/x86_64-pc-windows-msvc/release/Gatto.exe -ReleaseDirectory release
+./packaging/windows/package.ps1 -Executable target/x86_64-pc-windows-msvc/release/Gatto.exe -ReleaseDirectory release
 ```
 
 The installer registers Explorer and the `gatto://` scheme only for the current
