@@ -397,11 +397,13 @@ workspace header. Utility windows use a native title bar with a one-point
 divider below it. A bounds
 observer restores title-bar styling after GPUI's fullscreen transitions.
 
-On Windows, the uploader and App preferences share a GPUI Kit title bar above
-the content. GPUI's Windows backend maps its drag region and caption controls
-to Win32 non-client hit tests. Right-clicking the caption opens the native
-system menu. Close reaches the main window's existing close callback. Utility
-windows use standard Windows title bars.
+On Windows, the workspace title and repository picker share a row with the
+caption buttons. The header stays above the scrolling workspace, with the
+mascot and tools alongside. App preferences puts its heading and Done button
+in the caption row. GPUI's Windows backend maps the drag regions and caption
+controls to Win32 non-client hit tests. Right-clicking a drag region opens the
+native system menu. Close reaches the main window's existing close callback.
+Utility windows use native Windows title bars with Gatto's dark theme colors.
 
 Opening the main window loads Scratchpad and restores its repository without a
 GitHub request. A new Scratchpad starts without a repository selection.

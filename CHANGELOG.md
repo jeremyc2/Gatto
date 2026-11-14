@@ -9,8 +9,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- Integrate the Windows uploader and App preferences title bar with Gatto's
-  theme, with minimize, maximize and restore, and close on the right.
+- Integrate the workspace header and App preferences with the Windows caption
+  controls, and use Gatto's dark colors for native utility window title bars.
 
 ## [0.24.5] - 2026-11-14
 

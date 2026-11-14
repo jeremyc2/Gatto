@@ -90,7 +90,45 @@ fn native_color(color: gpui_kit::Hsla) -> objc2::rc::Retained<objc2_app_kit::NSC
     )
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+pub fn style_window<V: 'static>(
+    _: &gpui_kit::Entity<V>,
+    window: &mut Window,
+    full_size_content: bool,
+    cx: &mut App,
+) {
+    use gpui_kit::component::ActiveTheme as _;
+    use windows::Win32::Graphics::Dwm::{
+        DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DwmSetWindowAttribute,
+    };
+
+    if full_size_content {
+        return;
+    }
+    let Some(hwnd) = native_window(window) else {
+        return;
+    };
+    for (attribute, color) in [
+        (DWMWA_CAPTION_COLOR, cx.theme().sidebar),
+        (DWMWA_TEXT_COLOR, cx.theme().foreground),
+    ] {
+        let color = color.to_rgb();
+        let colorref = (color.r * 255.).round() as u32
+            | ((color.g * 255.).round() as u32) << 8
+            | ((color.b * 255.).round() as u32) << 16;
+        // SAFETY: Window supplies a live HWND and these attributes take a COLORREF.
+        let _ = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                attribute,
+                (&raw const colorref).cast(),
+                size_of::<u32>() as u32,
+            )
+        };
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn style_window<V: 'static>(_: &gpui_kit::Entity<V>, _: &mut Window, _: bool, _: &mut App) {}
 
 /// Counts minimized and occluded windows as open. GPUI visibility tracks
