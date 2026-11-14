@@ -31,5 +31,10 @@ $checksums = foreach ($asset in @($archive, $setup)) {
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $release $asset)).Hash.ToLowerInvariant()
     "$hash  $asset"
 }
-$checksums | Set-Content -Encoding ascii -LiteralPath (Join-Path $release 'SHA256SUMS')
+# Explicit LF: the publish job verifies these exact bytes on Linux.
+[System.IO.File]::WriteAllText(
+    (Join-Path $release 'SHA256SUMS'),
+    ($checksums -join "`n") + "`n",
+    [System.Text.Encoding]::ASCII
+)
 if ($env:GITHUB_OUTPUT) { "tag=$tag" >> $env:GITHUB_OUTPUT }
