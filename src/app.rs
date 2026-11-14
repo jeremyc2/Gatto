@@ -263,6 +263,7 @@ pub struct UploaderApp {
     attachment_bounds: Rc<RefCell<HashMap<u64, Bounds<gpui_kit::Pixels>>>>,
     project_bounds: Rc<RefCell<HashMap<PathBuf, Bounds<gpui_kit::Pixels>>>>,
     main_scroll: gpui_kit::ScrollHandle,
+    settings_scroll: gpui_kit::ScrollHandle,
     reorder_revision: u64,
     project_state: projects::ProjectState,
     persist_preferences: bool,
@@ -388,6 +389,7 @@ impl UploaderApp {
             attachment_bounds: Rc::default(),
             project_bounds: Rc::default(),
             main_scroll: gpui_kit::ScrollHandle::new(),
+            settings_scroll: gpui_kit::ScrollHandle::new(),
             reorder_revision: 0,
             project_state: projects::ProjectState::default(),
             persist_preferences: persist_repository_selection,
@@ -768,6 +770,21 @@ impl UploaderApp {
         }
         self.settings_open = true;
         cx.notify();
+    }
+
+    pub(crate) fn open_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.has_import_setup() {
+            self.show_settings(cx);
+        } else {
+            self.show_account_settings(window, cx);
+        }
+    }
+
+    fn show_account_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_settings(cx);
+        self.settings_scroll.set_offset(point(px(0.), px(0.)));
+        self.owner_input
+            .update(cx, |input, cx| input.focus(window, cx));
     }
 
     pub(crate) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2903,10 +2920,11 @@ impl UploaderApp {
             )
             .child(
                 Button::new("setup-open-settings")
+                    .debug_selector(|| "setup-open-settings".into())
                     .app_primary()
                     .label("Open app preferences")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.show_settings(cx);
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.show_account_settings(window, cx);
                     })),
             )
     }
@@ -3360,6 +3378,7 @@ impl UploaderApp {
             .id("settings-page")
             .size_full()
             .overflow_y_scroll()
+            .track_scroll(&self.settings_scroll)
             .child(self.render_settings_content(cx))
     }
 
@@ -3386,9 +3405,10 @@ impl UploaderApp {
                             .on_click(cx.listener(Self::close_settings)),
                     ),
             )
-            .child(self.render_ui_size_setting(cx))
             .child(
                 v_flex()
+                    .id("github-account-settings")
+                    .debug_selector(|| "github-account-settings".into())
                     .gap_3()
                     .rounded_lg()
                     .border_1()
@@ -3415,6 +3435,7 @@ impl UploaderApp {
                             .on_click(cx.listener(Self::save_owner)),
                     ),
             )
+            .child(self.render_ui_size_setting(cx))
             .when(self.settings.owner.is_some(), |page| {
                 page.child(self.render_pinned_repositories(cx))
             })
@@ -3884,12 +3905,13 @@ impl Render for UploaderApp {
                                                 )
                                                 .child(
                                                     Button::new("open-settings")
+                                                        .debug_selector(|| "open-settings".into())
                                                         .app_icon()
                                                         .icon(IconName::Settings)
                                                         .accessibility_label("App preferences")
                                                         .tooltip("App preferences")
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.show_settings(cx);
+                                                        .on_click(cx.listener(|this, _, window, cx| {
+                                                            this.open_preferences(window, cx);
                                                         })),
                                                 )
                                                 .when(cfg!(windows), |row| row.child(
@@ -4333,6 +4355,46 @@ mod tests {
         });
         assert!(cx.debug_bounds("account-setup").is_none());
         assert!(cx.debug_bounds("image-drop-zone").is_some());
+    }
+
+    #[gpui_kit::test]
+    fn setup_buttons_open_preferences_with_the_account_field_focused(cx: &mut TestAppContext) {
+        let (view, cx) = upload_window(cx);
+        for button in ["setup-open-settings", "open-settings"] {
+            cx.update(|window, cx| {
+                view.update(cx, |app, cx| {
+                    app.settings.owner = None;
+                    app.owner_input
+                        .update(cx, |input, cx| input.set_value("", window, cx));
+                    app.show_main_page(window, cx);
+                });
+                window.draw(cx).clear(cx);
+            });
+            let location = cx.debug_bounds(button).unwrap().center();
+            cx.simulate_mouse_down(
+                location,
+                gpui_kit::MouseButton::Left,
+                gpui_kit::Modifiers::default(),
+            );
+            cx.simulate_mouse_up(
+                location,
+                gpui_kit::MouseButton::Left,
+                gpui_kit::Modifiers::default(),
+            );
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let app = view.read(cx);
+                assert!(app.settings_open);
+                assert!(app.owner_input.read(cx).focus_handle(cx).is_focused(window));
+            });
+            let account = cx.debug_bounds("github-account-settings").unwrap();
+            let font_size = cx.debug_bounds("interface-size-16").unwrap();
+            assert!(account.bottom() < font_size.top());
+            cx.simulate_keystrokes("a c m e");
+            cx.update(|_, cx| {
+                assert_eq!(view.read(cx).owner_input.read(cx).value().as_ref(), "acme")
+            });
+        }
     }
 
     #[gpui_kit::test]

@@ -142,7 +142,8 @@ installations work without extra configuration; see
 
 ## 3. Choose your account or organization
 
-On first launch, open **App preferences** from the settings icon or the menu bar.
+On first launch, open **App preferences** from the setup prompt. Gatto puts
+the cursor in the **GitHub account/organization** field at the top.
 Save a GitHub account or organization to load repositories and start adding media.
 Public release checks do not need GitHub CLI authentication.
 

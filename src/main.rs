@@ -673,8 +673,10 @@ fn perform_action(action: MenuAction, main: &MainWindow, cx: &mut App) {
             service.start(cx, main.clipboard_save_barrier(cx), main.clipboard_store());
         }
         MenuAction::Settings => {
-            let (_, view) = main.show(cx);
-            view.update(cx, |this, cx| this.show_settings(cx));
+            let (handle, view) = main.show(cx);
+            let _ = handle.update(cx, |_, window, cx| {
+                view.update(cx, |this, cx| this.open_preferences(window, cx));
+            });
         }
         MenuAction::CreateComposition => main.show_composer(None, cx),
         MenuAction::Update => {
