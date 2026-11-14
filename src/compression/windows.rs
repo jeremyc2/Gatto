@@ -7,10 +7,7 @@ use ::windows::{
         Foundation::{FreeLibrary, HMODULE},
         Media::MediaFoundation::*,
         System::{
-            Com::{
-                COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize,
-                StructuredStorage::PropVariantToUInt64,
-            },
+            Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize},
             LibraryLoader::{GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
         },
     },
@@ -22,6 +19,7 @@ const VIDEO: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 const AUDIO: u32 = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
 const ALL: u32 = MF_SOURCE_READER_ALL_STREAMS.0 as u32;
 const ANY: u32 = MF_SOURCE_READER_ANY_STREAM.0 as u32;
+#[cfg(test)]
 const SOURCE: u32 = MF_SOURCE_READER_MEDIASOURCE.0 as u32;
 const TICKS_PER_SECOND: f64 = 10_000_000.;
 const AAC_BYTES_PER_SECOND: u32 = 12_000;
@@ -206,11 +204,12 @@ fn output<T: ::windows::core::Interface>(write: impl FnOnce(*mut Raw) -> HRESULT
     Ok(unsafe { T::from_raw(raw) })
 }
 
+#[cfg(test)]
 fn duration(reader: &IMFSourceReader) -> Result<u64> {
     // SAFETY: Media Foundation owns these attributes and returns an owned value.
     unsafe {
         let value = reader.GetPresentationAttribute(SOURCE, &MF_PD_DURATION)?;
-        Ok(PropVariantToUInt64(&value)?)
+        Ok(::windows::Win32::System::Com::StructuredStorage::PropVariantToUInt64(&value)?)
     }
 }
 
@@ -230,7 +229,9 @@ pub(super) fn transcode(
     );
     let media = MediaFoundation::start()?;
     let reader = media.reader(source)?;
-    let ticks = duration(&reader)?;
+    let ticks = crate::video::mp4_duration_ticks(source)
+        .context("Could not read the original MP4 playback duration")?;
+    let end_time = ticks as i64;
 
     // SAFETY: COM is initialized on this worker, all interfaces are owned, and
     // every out parameter is valid until its call returns.
@@ -285,7 +286,16 @@ pub(super) fn transcode(
         encoded_video.SetUINT32(&MF_MT_AVG_BITRATE, bitrate)?;
         encoded_video.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
         encoded_video.SetUINT64(&MF_MT_FRAME_SIZE, frame)?;
-        encoded_video.SetUINT64(&MF_MT_FRAME_RATE, video.GetUINT64(&MF_MT_FRAME_RATE)?)?;
+        let rate = video.GetUINT64(&MF_MT_FRAME_RATE)?;
+        let (numerator, denominator) = (rate >> 32, u64::from(rate as u32));
+        ensure!(
+            numerator > 0 && denominator > 0,
+            "The MP4 has no usable frame rate"
+        );
+        let frame_duration = (10_000_000 * denominator / numerator).max(1) as i64;
+        encoded_video.SetUINT64(&MF_MT_FRAME_RATE, rate)?;
+        // Baseline avoids encoder reordering and extra terminal frame padding.
+        encoded_video.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base.0 as u32)?;
         encoded_video.SetUINT64(
             &MF_MT_PIXEL_ASPECT_RATIO,
             video
@@ -347,7 +357,8 @@ pub(super) fn transcode(
                 !has(MF_SOURCE_READERF_ERROR),
                 "Windows could not read this MP4."
             );
-            let (stream, output) = if video_stream == Some(index) {
+            let is_video = video_stream == Some(index);
+            let (stream, output) = if is_video {
                 (&mut video_stream, video_output)
             } else if audio_stream == Some(index) {
                 (
@@ -360,14 +371,27 @@ pub(super) fn transcode(
             // A current type notification alone can also accompany the first
             // decoded samples. The sink verifies that subsequent samples fit.
             if let Some(sample) = sample {
-                writer
-                    .WriteSample(output, &sample)
-                    .context("Could not encode an MP4 sample")?;
-            } else if has(MF_SOURCE_READERF_STREAMTICK) {
+                if time < end_time {
+                    let mut length = sample.GetSampleDuration().unwrap_or(0);
+                    if length <= 0 && is_video {
+                        length = frame_duration;
+                    }
+                    if length > 0 {
+                        // Respect the movie duration even when the sample's
+                        // decode timeline extends past the edit list.
+                        sample.SetSampleDuration(length.min(end_time.saturating_sub(time)))?;
+                    }
+                    sample.SetSampleTime(time)?;
+                    writer
+                        .WriteSample(output, &sample)
+                        .context("Could not encode an MP4 sample")?;
+                }
+            } else if has(MF_SOURCE_READERF_STREAMTICK) && time < end_time {
                 writer.SendStreamTick(output, time)?;
             }
             if has(MF_SOURCE_READERF_ENDOFSTREAM) {
                 *stream = None;
+                writer.NotifyEndOfSegment(output)?;
                 // Do not ask the source reader for this stream again.
                 reader.SetStreamSelection(index, false)?;
             }
@@ -435,7 +459,13 @@ mod tests {
         )?;
         let media = MediaFoundation::start()?;
         let file = media.reader(&output)?;
-        assert!((duration(&file)? as f64 / TICKS_PER_SECOND - 2.).abs() < 0.15);
+        let input_seconds = crate::video::mp4_duration_ticks(&input)? as f64 / TICKS_PER_SECOND;
+        let output_seconds = crate::video::mp4_duration_ticks(&output)? as f64 / TICKS_PER_SECOND;
+        let reported_seconds = duration(&file)? as f64 / TICKS_PER_SECOND;
+        assert!(
+            (output_seconds - input_seconds).abs() < 0.10,
+            "MP4 presentation duration: input={input_seconds}s output={output_seconds}s (Media Foundation reports {reported_seconds}s)"
+        );
         // SAFETY: Tests inspect the finalized file with the worker initialized.
         unsafe {
             let video = file.GetNativeMediaType(VIDEO, 0)?;
