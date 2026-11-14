@@ -30,6 +30,7 @@ impl CompressionMode {
         }
     }
 
+    #[cfg(target_os = "macos")]
     pub fn provenance(self) -> crate::video::VideoCompression {
         match self {
             Self::Quality => crate::video::VideoCompression::H264Quality,
@@ -118,10 +119,7 @@ pub fn compress(
     #[cfg(any(target_os = "macos", windows))]
     {
         #[cfg(windows)]
-        let mode = {
-            let _ = mode;
-            CompressionMode::Quality
-        };
+        let _ = mode;
         let original =
             std::fs::metadata(path).context("The original video is unavailable. Add it again.")?;
         ensure!(original.is_file(), "Choose a regular video file.");
@@ -165,7 +163,11 @@ pub fn compress(
                     .unwrap_or("video");
                 attachment.name = format!("{stem}.mp4");
                 attachment.title = attachment.name.clone();
-                attachment.compressed_with = Some(mode.provenance());
+                #[cfg(target_os = "macos")]
+                let provenance = mode.provenance();
+                #[cfg(windows)]
+                let provenance = crate::video::VideoCompression::H264;
+                attachment.compressed_with = Some(provenance);
                 control.check()?;
                 progress(Progress {
                     attempt,
@@ -201,6 +203,7 @@ mod windows;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "macos")]
     use crate::model::MAX_ATTACHMENT_BYTES;
 
     #[test]

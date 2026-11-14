@@ -39,11 +39,6 @@ jobs:
           }
       - name: Build the Windows executable
         run: cargo build --locked --release --target x86_64-pc-windows-msvc --bin Gatto
-      - name: Test the Windows app
-        # Keep GPUI's debug selectors while timing optimized editor code.
-        env:
-          CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS: "true"
-        run: cargo test --locked --release --target x86_64-pc-windows-msvc --bin Gatto
       - name: Package the Windows release
         id: package
         shell: pwsh
@@ -57,9 +52,30 @@ jobs:
           path: release/
           if-no-files-found: error
 
+  test:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Ensure Media Foundation is available
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:SystemRoot/System32/mfreadwrite.dll")) {
+            $result = Install-WindowsFeature Server-Media-Foundation
+            if (-not $result.Success -or -not (Test-Path "$env:SystemRoot/System32/mfreadwrite.dll")) {
+              throw 'Media Foundation is required to test video compression.'
+            }
+          }
+      - name: Test the Windows app
+        # Keep GPUI's debug selectors while timing optimized editor code.
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS: "true"
+        run: cargo test --locked --release --target x86_64-pc-windows-msvc --bin Gatto
+
   publish:
     if: ${{ github.event_name == 'workflow_dispatch' && !inputs.build_only }}
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
     permissions:
       contents: write

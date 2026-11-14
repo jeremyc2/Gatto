@@ -846,9 +846,11 @@ impl UploaderApp {
     ) {
         self.diagnostics.error(error.into());
         window.push_notification(
-            Notification::error(
-                "The menu bar could not be set up. See Application logs for details.",
-            ),
+            Notification::error(if cfg!(windows) {
+                "The tray icon could not be set up. See Application logs for details."
+            } else {
+                "The menu bar could not be set up. See Application logs for details."
+            }),
             cx,
         );
     }
@@ -1195,7 +1197,7 @@ impl UploaderApp {
         cx.notify();
     }
 
-    /// Finder/open-document requests stage for review even before GitHub setup.
+    /// Desktop open requests stage for review even before GitHub setup.
     pub fn stage_opened_files(
         &mut self,
         paths: Vec<PathBuf>,

@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 //! Bounded video snapshots and container checks. Playback/codec validation belongs
-//! to the macOS video application; container validation never transcodes media.
+//! to the default video player; container validation never transcodes media.
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -17,7 +17,7 @@ use crate::model::{VideoUploadLimit, validate_size};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VideoCompression {
-    // Older projects stored the codec without the H.264 encoding mode.
+    // Windows and older macOS projects store the codec without an encoder mode.
     H264,
     H264Fast,
     H264Quality,

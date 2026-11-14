@@ -274,13 +274,13 @@ fn main() {
         ) {
             Ok(menu_bar) => menu_bar,
             Err(error) => {
-                diagnostics.error(format!("Menu bar setup failed: {error}"));
+                diagnostics.error(format!("Desktop menu setup failed: {error}"));
                 if !login_launch || cfg!(windows) {
                     let (handle, view) = controller.show(cx);
                     let _ = handle.update(cx, |_, window, cx| {
                         view.update(cx, |this, cx| {
                             this.report_menu_bar_error(
-                                format!("Menu bar setup failed: {error}"),
+                                format!("Desktop menu setup failed: {error}"),
                                 window,
                                 cx,
                             );
