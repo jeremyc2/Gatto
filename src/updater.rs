@@ -7,8 +7,10 @@ use crate::{diagnostics::Diagnostics, menu_bar::MenuBarController, settings::Rel
 pub enum UpdateState {
     #[default]
     Idle,
+    #[cfg(any(target_os = "macos", test, feature = "walkthrough-screenshots"))]
     Available,
     Installing,
+    #[cfg(target_os = "macos")]
     Failed,
 }
 
@@ -85,6 +87,7 @@ impl Updater {
         let _ = (entity, diagnostics, menu);
     }
 
+    #[cfg(target_os = "macos")]
     fn receive(&mut self, code: isize, message: String, cx: &mut Context<Self>) {
         if code == 5 {
             if self.state == UpdateState::Idle {
@@ -105,11 +108,10 @@ impl Updater {
     }
 
     pub fn install(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.state, UpdateState::Available | UpdateState::Failed) {
-            return;
-        }
         #[cfg(target_os = "macos")]
-        if let Some(bridge) = &self.native {
+        if matches!(self.state, UpdateState::Available | UpdateState::Failed)
+            && let Some(bridge) = &self.native
+        {
             // Block new uploads in this turn, before the native event channel runs.
             self.state = UpdateState::Installing;
             self.message = "Downloading update; Gatto will restart when ready".into();
@@ -120,6 +122,7 @@ impl Updater {
         let _ = cx;
     }
 
+    #[cfg(not(windows))]
     pub fn check_for_updates(&self) -> bool {
         #[cfg(target_os = "macos")]
         if let Some(bridge) = &self.native {

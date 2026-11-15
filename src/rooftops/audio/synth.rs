@@ -4,6 +4,8 @@
 
 use std::f32::consts::TAU;
 
+use super::Cue;
+
 pub(super) const SAMPLE_RATE: f32 = 48_000.;
 const VOICES: usize = 64;
 const CHORDS: [[u8; 5]; 8] = [
@@ -29,19 +31,6 @@ const MOTIFS: [[i8; 16]; 4] = [
     [4, -1, 3, -1, -1, -1, 2, -1, 1, -1, -1, -1, 0, -1, -1, 2],
 ];
 const SCALE: [u8; 7] = [0, 3, 5, 7, 10, 12, 15];
-
-#[derive(Clone, Copy)]
-pub(in crate::rooftops) enum Cue {
-    Coin,
-    Return,
-    Shutters,
-}
-
-impl Cue {
-    pub(super) fn bit(self) -> u32 {
-        1 << self as u32
-    }
-}
 
 #[derive(Clone, Copy, Default)]
 enum Instrument {
@@ -607,6 +596,7 @@ mod tests {
         let mut difference = 0_f64;
         for level in 0..4 {
             synth.scene(level, false);
+            synth.thruster(level == 0);
             synth.cues(7);
             for _ in 0..48_000 * 8 {
                 let frame = synth.next(true, 100, 100);

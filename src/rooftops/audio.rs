@@ -1,8 +1,10 @@
 //! Atomic game controls and a dedicated native-audio owner thread.
 
+#[cfg(any(target_os = "macos", test, feature = "walkthrough-screenshots"))]
 mod death;
 #[cfg(target_os = "macos")]
 mod output;
+#[cfg(any(target_os = "macos", test, feature = "walkthrough-screenshots"))]
 mod synth;
 
 #[cfg(target_os = "macos")]
@@ -12,7 +14,19 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     mpsc::SyncSender,
 };
-pub(super) use synth::Cue;
+
+#[derive(Clone, Copy)]
+pub(super) enum Cue {
+    Coin,
+    Return,
+    Shutters,
+}
+
+impl Cue {
+    fn bit(self) -> u32 {
+        1 << self as u32
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct Scene {
@@ -33,7 +47,9 @@ struct Controls {
     // 0: no request, 1: cancel/mute, 2..101: selected volume + 1.
     preview: AtomicU32,
     previewing: AtomicBool,
+    #[cfg(target_os = "macos")]
     rendered_frames: AtomicU64,
+    #[cfg(target_os = "macos")]
     render_errors: AtomicU32,
     epoch: AtomicU64,
     retry: AtomicU64,
@@ -53,7 +69,9 @@ impl Default for Controls {
             cues: AtomicU32::new(0),
             preview: AtomicU32::new(0),
             previewing: AtomicBool::new(false),
+            #[cfg(target_os = "macos")]
             rendered_frames: AtomicU64::new(0),
+            #[cfg(target_os = "macos")]
             render_errors: AtomicU32::new(0),
             epoch: AtomicU64::new(0),
             retry: AtomicU64::new(0),
@@ -157,7 +175,7 @@ impl Audio {
         self.controls.cues.load(Ordering::Relaxed)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "macos"))]
     pub(super) fn test_preview(&self) -> u32 {
         self.controls.preview.load(Ordering::Acquire)
     }
@@ -179,7 +197,7 @@ impl Audio {
         self.controls.retry.fetch_add(1, Ordering::AcqRel);
         self.wake();
     }
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "macos"))]
     pub(super) fn test_output(&self) -> (bool, u32, u32) {
         (
             self.controls.active.load(Ordering::Acquire),

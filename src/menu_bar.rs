@@ -91,8 +91,10 @@ impl MenuBarController {
             bar.menu.update_state(
                 match state {
                     UpdateState::Idle => 0,
+                    #[cfg(any(target_os = "macos", test, feature = "walkthrough-screenshots"))]
                     UpdateState::Available => 1,
                     UpdateState::Installing => 2,
+                    #[cfg(target_os = "macos")]
                     UpdateState::Failed => 3,
                 },
                 self.update_identifier(),

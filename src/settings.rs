@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::compression::CompressionMode;
@@ -21,7 +21,9 @@ pub const SCHEMA_URL: &str =
 fn settings_schema() -> String {
     SCHEMA_URL.into()
 }
+#[cfg(not(windows))]
 const LAUNCH_AGENT_NAME: &str = "com.jeremy-chandler.gatto.plist";
+#[cfg(not(windows))]
 const LAUNCH_AGENT_LABEL: &str = "com.jeremy-chandler.gatto";
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -34,6 +36,7 @@ pub enum ReleaseChannel {
 }
 
 impl ReleaseChannel {
+    #[cfg(target_os = "macos")]
     pub fn key(self) -> &'static str {
         match self {
             Self::Stable => "stable",
@@ -365,6 +368,7 @@ fn settings_path() -> Result<PathBuf> {
     Ok(data_directory()?.join("settings.json"))
 }
 
+#[cfg(not(windows))]
 fn launch_agent_path() -> Result<PathBuf> {
     Ok(home_directory()?
         .join("Library/LaunchAgents")
@@ -387,15 +391,17 @@ fn write_settings(settings: &AppSettings, path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(windows))]
 fn home_directory() -> Result<PathBuf> {
     let home = env::var_os("HOME").context("The HOME environment variable is not set")?;
     let path = PathBuf::from(home);
     if !path.is_absolute() {
-        bail!("The HOME environment variable is not an absolute path");
+        anyhow::bail!("The HOME environment variable is not an absolute path");
     }
     Ok(path)
 }
 
+#[cfg(not(windows))]
 fn install_launch_agent() -> Result<()> {
     let path = launch_agent_path()?;
     let directory = path
@@ -407,6 +413,7 @@ fn install_launch_agent() -> Result<()> {
     write_launch_agent(&path, &current_executable()?)
 }
 
+#[cfg(not(windows))]
 fn current_executable() -> Result<String> {
     let executable = env::current_exe().context("Could not locate the app executable")?;
     Ok(executable
@@ -416,6 +423,7 @@ fn current_executable() -> Result<String> {
         .into_owned())
 }
 
+#[cfg(not(windows))]
 fn refresh_launch_agent(path: &Path, executable: &str) -> Result<()> {
     let plist = login_agent_plist(executable);
     let legacy = plist.replace(&format!("<string>{LOGIN_ARGUMENT}</string>\n"), "");
@@ -427,6 +435,7 @@ fn refresh_launch_agent(path: &Path, executable: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(windows))]
 fn login_agent_plist(executable: &str) -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -450,6 +459,7 @@ fn login_agent_plist(executable: &str) -> String {
     )
 }
 
+#[cfg(not(windows))]
 fn write_launch_agent(path: &Path, executable: &str) -> Result<()> {
     let plist = login_agent_plist(executable);
     if fs::read_to_string(path).ok().as_deref() != Some(&plist) {
@@ -462,11 +472,13 @@ fn write_launch_agent(path: &Path, executable: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(windows))]
 fn remove_launch_agent() -> Result<()> {
     let path = launch_agent_path()?;
     remove_file_if_present(&path).with_context(|| format!("Could not remove {}", path.display()))
 }
 
+#[cfg(any(not(windows), test))]
 fn clear_persistence(data_directory: &Path, launch_agent_path: &Path) -> Result<()> {
     clear_data_directory(data_directory)?;
     remove_file_if_present(launch_agent_path)
@@ -485,6 +497,7 @@ fn clear_data_directory(data_directory: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(not(windows), test))]
 fn remove_file_if_present(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -493,6 +506,7 @@ fn remove_file_if_present(path: &Path) -> Result<()> {
     }
 }
 
+#[cfg(not(windows))]
 fn escape_xml(value: &str) -> String {
     value
         .replace('&', "&amp;")

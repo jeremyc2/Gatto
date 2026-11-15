@@ -3996,6 +3996,7 @@ impl Render for UploaderApp {
                                             .app_icon()
                                             .label(match update.state {
                                                 UpdateState::Installing => "Updating…",
+                                                #[cfg(target_os = "macos")]
                                                 UpdateState::Failed => "↻ Update",
                                                 _ => "↑ Update",
                                             })
