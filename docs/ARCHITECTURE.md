@@ -47,26 +47,64 @@ are no cleanup dialogs, download deletions, or additional persistent settings.
 Each installed launch can retry cleanup; once ejected, later launches do nothing.
 
 Rooftops uses native GPUI elements and the embedded gold-kitten coin sprite.
+`rooftops/menu.rs` draws a harbor with a suspension bridge inspired by the
+Brooklyn Bridge. A damped pointer-controlled camera projects the bridge onto
+the 2D canvas and positions the skyline and boats at different depths. The
+menu fits a centered 900 × 560 composition to the window with uniform scaling.
+`rooftops/menu/bridge.rs` projects the roadways, stone foundations, tower arches,
+raised promenade, and cable saddles together. The tower legs, footing caps,
+and solid deck ends meet at shared front and rear vertices. Diagonal braces
+meet the steel chords at each pier. The sloped stone beneath the near leg
+flares from the leg's corners and draws in front of the steel at the joint.
+Cached meshes draw around the traffic lanes and show outgoing main cables and
+stays where they cross the facing masonry. Hangers end on steel rails in the open spans.
+Reduce Motion holds the centered view.
+The shoreline, docks, boats, and pier footings share a water plane. The rear
+tug turns within the center span using the actual footing extents and cruises
+at a third of the speed of the ferry and sailboat. These two boats follow
+spaced routes in front of the bridge. Water shading follows the projected edges
+of each footing.
+[Tower elevation and plan](https://www.archives.gov/files/historical-docs/doc-content/images/brooklyn-bridge-tower.pdf)
+and [NYC DOT promenade drawings](https://www.nyc.gov/html/dot/downloads/pdf/brooklyn-bridge-promenade.pdf).
+Vehicle bodies and tires use the same projection as the pavement, with the
+tire bottoms on the road plane. Each lane's pavement covers the base of its
+rear jamb, and the nearer tower leg occludes vehicles as they enter the arch.
+Boats, water, and traffic use the menu animation clock. The landmarks sit on a
+raised street behind the quay. Each landmark uses one cached tile with complete
+floors and a street entrance. The menu moon and its water glints share a
+horizontal position.
+The landmark silhouettes use the
+Empire State Building's stepped facade and mast and the Chrysler Building's
+arched steel crown. [Empire State Building architecture](https://www.esbnyc.com/about/architecture-design)
+and [Chrysler Building designation](https://s-media.nyc.gov/agencies/lpc/lp/0992.pdf).
 `rooftops/arrival.rs` draws its opening
 flight, sputtering jetpack, and abandoned empty pack with the same native shapes.
-Neighborhood facade geometry and the scorecard's static artwork are cached per
-window/size; camera movement changes placement rather than rebuilding materials.
-The player and ghost share a union silhouette path, preventing layered opacity
-from exposing body overlaps during invulnerable respawn flashes.
+Masonry, window trim, and reusable apartment interiors are generated from
+shapes and held as in-memory sprite tiles. A bounded set of resident poses
+serves every window. The facade renderer repeats tiles through the visible
+height. The player and ghost cache union silhouettes by pose and apply their
+positions and opacity during painting, including during respawn flashes.
 The arrival has its own active-window clock, outside gameplay physics, scoring,
-and replay recording. Movement skips it; Reduce Motion shows the landed state,
-and replaying a completed run starts directly on the roof.
-New runs hold gameplay physics and the shared score/replay clock until the first
-movement or jump input; opening, landing, focusing, and restarting alone do not
-start the clock. The first gameplay input establishes its time origin.
+and replay recording. Movement skips it. Reduce Motion shows the landed state.
+Each level holds gameplay physics and the shared score/replay clock until the
+first movement or jump input. The HUD puts the neighborhood above the held
+clock and the running time above the neighborhood during play.
+
+`rooftops/achievements.rs` draws the main menu's scrollable medals using cached
+illustrations with silver and gold finishes. The game records stunt medals as
+they happen and evaluates the run medals at completion. Earned medals merge
+into the scorecard data file, including when a run does not beat the saved
+best time.
 
 `rooftops/options.rs` holds play while a focused options card is open. Its music,
 effects volume sliders, ghost and animation preferences share the existing
-CBOR file with best times and replays. Debounced background preference writes
+CBOR file with discovery, the best time, ghost replay, and fastest complete
+scorecard. The menu and pause panel edit the same two audio levels. Debounced background preference writes
 use atomic revisions and the same atomic replacement lock as completion writes;
 ticket reservation never waits on disk I/O. `rooftops/audio/` synthesizes a
-long-form stereo score and gameplay cues, feeding macOS AVAudioEngine through a
-source-node render block. A dedicated owner thread handles native graph
+long-form stereo score and gameplay cues. macOS AVAudioEngine pulls from a
+source node and event-driven WASAPI plays the same mix on Windows. A dedicated
+owner thread handles native graph
 startup, suspension and recovery. The UI communicates through atomic controls; the
 audio callback uses fixed voice storage and preallocated delay/waveform storage.
 Options can audition the music bus from its handle/track without advancing

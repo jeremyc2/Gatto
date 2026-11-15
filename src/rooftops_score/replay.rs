@@ -8,6 +8,8 @@ use std::{
     },
 };
 
+use super::Score;
+use super::achievements::Achievements;
 use anyhow::{Context as _, Result, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -272,6 +274,16 @@ pub(crate) struct GameData {
     pub replay: Option<Replay>,
     #[serde(default)]
     pub preferences: Preferences,
+    #[serde(default)]
+    pub scorecard: Option<Score>,
+    #[serde(default)]
+    pub achievements: Achievements,
+}
+
+#[derive(Default)]
+pub(crate) struct SavedProgress {
+    pub discovered: bool,
+    pub scorecard: Option<Score>,
 }
 
 impl Default for GameData {
@@ -281,6 +293,8 @@ impl Default for GameData {
             personal_best: None,
             replay: None,
             preferences: Preferences::default(),
+            scorecard: None,
+            achievements: Achievements::default(),
         }
     }
 }
@@ -290,22 +304,45 @@ impl GameData {
         Ok(crate::settings::data_directory()?.join("rooftops.cbor"))
     }
 
-    pub fn has_completed(path: &Path) -> bool {
+    pub fn saved_progress(path: &Path) -> SavedProgress {
         #[derive(Deserialize)]
         struct Header {
             version: u32,
-            personal_best: Option<f64>,
+            #[serde(default)]
+            scorecard: Option<Score>,
         }
-        // Ignore the replay payload when preferences only need the completion flag.
-        std::fs::File::open(path)
+        let Ok(file) = std::fs::File::open(path) else {
+            return SavedProgress {
+                discovered: path.exists(),
+                scorecard: None,
+            };
+        };
+        // App preferences need the card, so skip the ghost replay payload.
+        let scorecard = ciborium::from_reader::<Header, _>(std::io::BufReader::new(file))
             .ok()
-            .and_then(|file| ciborium::from_reader::<Header, _>(std::io::BufReader::new(file)).ok())
-            .is_some_and(|header| {
-                matches!(header.version, 1 | FORMAT_VERSION)
-                    && header
-                        .personal_best
-                        .is_some_and(|seconds| seconds.is_finite() && seconds > 0.)
-            })
+            .filter(|header| matches!(header.version, 1 | FORMAT_VERSION))
+            .and_then(|header| header.scorecard)
+            .filter(|score| score.valid());
+        SavedProgress {
+            discovered: true,
+            scorecard,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn has_completed(path: &Path) -> bool {
+        Self::read(path).is_ok_and(|data| data.personal_best.is_some())
+    }
+
+    pub fn discover(path: &Path, generation: u64) -> Result<bool> {
+        let _io = SAVE_IO
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Rooftops save lock unavailable"))?;
+        if Self::save_generation(path)? != generation || path.try_exists()? {
+            return Ok(false);
+        }
+        Self::write(path, &Self::default())?;
+        Ok(true)
     }
 
     pub fn save_generation(path: &Path) -> Result<u64> {
@@ -366,6 +403,13 @@ impl GameData {
             data.replay.as_ref().is_none_or(Replay::valid),
             "Invalid ghost recording"
         );
+        data.scorecard = data.scorecard.filter(|score| score.valid());
+        if let Some(seconds) = data.personal_best {
+            data.achievements.record_finish_time(seconds);
+        }
+        if let Some(score) = data.scorecard {
+            data.achievements.record_score(score);
+        }
         ensure!(
             data.replay.as_ref().is_none_or(|replay| data
                 .personal_best
@@ -377,23 +421,56 @@ impl GameData {
 
     #[cfg(test)]
     pub fn save_progress(path: &Path, seconds: f64, replay: Option<&Replay>) -> Result<Self> {
-        Self::save_progress_inner(path, seconds, replay, None)?
+        Self::save_progress_inner(path, seconds, replay, None, None)?
             .context("Missing saved Rooftops data")
     }
 
+    #[cfg(test)]
     pub fn save_if_current(
         path: &Path,
         seconds: f64,
         replay: Option<&Replay>,
         generation: u64,
     ) -> Result<()> {
-        Self::save_progress_inner(path, seconds, replay, Some(generation)).map(|_| ())
+        Self::save_progress_inner(path, seconds, replay, None, Some(generation)).map(|_| ())
+    }
+
+    pub fn save_completion(
+        path: &Path,
+        score: Score,
+        replay: Option<&Replay>,
+        achievements: Achievements,
+        generation: u64,
+    ) -> Result<bool> {
+        ensure!(score.valid(), "Invalid Rooftops scorecard");
+        Ok(Self::save_progress_inner(
+            path,
+            score.seconds,
+            replay,
+            Some((score, achievements)),
+            Some(generation),
+        )?
+        .is_some())
+    }
+
+    pub fn save_achievements(path: &Path, unlocked: Achievements, generation: u64) -> Result<bool> {
+        let _io = SAVE_IO
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Rooftops save lock unavailable"))?;
+        if Self::save_generation(path)? != generation {
+            return Ok(false);
+        }
+        let mut data = Self::read(path).unwrap_or_default();
+        data.achievements = data.achievements.union(unlocked);
+        Self::write(path, &data)?;
+        Ok(true)
     }
 
     fn save_progress_inner(
         path: &Path,
         seconds: f64,
         replay: Option<&Replay>,
+        completion: Option<(Score, Achievements)>,
         expected: Option<u64>,
     ) -> Result<Option<Self>> {
         let _io = SAVE_IO
@@ -415,6 +492,16 @@ impl GameData {
             "Invalid completed replay"
         );
         let mut data = Self::read(path).unwrap_or_default();
+        if let Some((scorecard, achievements)) = completion {
+            data.achievements = data.achievements.union(achievements);
+            data.achievements.record_score(scorecard);
+            if data
+                .scorecard
+                .is_none_or(|best| scorecard.seconds < best.seconds)
+            {
+                data.scorecard = Some(scorecard);
+            }
+        }
         data.personal_best = Some(data.personal_best.map_or(seconds, |best| best.min(seconds)));
         if let Some(replay) = replay
             && data
@@ -442,6 +529,52 @@ impl GameData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rooftops_score::achievements::Achievement;
+
+    #[test]
+    fn achievement_saves_merge_with_slower_results_and_obey_reset_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rooftops.cbor");
+        let generation = GameData::save_generation(&path).unwrap();
+        let mut stunt = Achievements::default();
+        stunt.insert(Achievement::DoubleFeature);
+        let best = Score {
+            coins: 10,
+            deaths: 2,
+            kills: 3,
+            seconds: 64.,
+            personal_best: None,
+        };
+        GameData::save_completion(&path, best, None, Achievements::default(), generation).unwrap();
+        assert!(GameData::save_achievements(&path, stunt, generation).unwrap());
+        let slower = Score {
+            coins: 0,
+            deaths: 0,
+            kills: 0,
+            seconds: 91.,
+            personal_best: Some(64.),
+        };
+        GameData::save_completion(&path, slower, None, Achievements::default(), generation)
+            .unwrap();
+        let saved = GameData::read(&path).unwrap();
+        assert_eq!(saved.scorecard, Some(best));
+        for award in [
+            Achievement::DoubleFeature,
+            Achievement::HomeByMoonlight,
+            Achievement::NightExpress,
+            Achievement::Pacifist,
+            Achievement::EmptyPaws,
+            Achievement::AllNineIntact,
+        ] {
+            assert!(saved.achievements.contains(award), "{}", award.label());
+        }
+        GameData::reset(&path).unwrap();
+        assert!(!GameData::save_achievements(&path, stunt, generation).unwrap());
+        assert_eq!(
+            GameData::read(&path).unwrap().achievements,
+            Achievements::default()
+        );
+    }
 
     #[test]
     fn preferences_round_trip_without_losing_records_or_accepting_stale_clicks() {
@@ -472,6 +605,60 @@ mod tests {
         assert_eq!(loaded.preferences, first);
         assert_eq!(loaded.personal_best, Some(30.));
         assert_eq!(loaded.replay.unwrap().seconds, 30.);
+    }
+
+    #[test]
+    fn scorecard_keeps_the_fastest_complete_stats_and_cannot_restore_a_reset() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rooftops.cbor");
+        let generation = GameData::save_generation(&path).unwrap();
+        assert!(!GameData::saved_progress(&path).discovered);
+        assert!(GameData::discover(&path, generation).unwrap());
+        assert!(GameData::saved_progress(&path).discovered);
+        assert!(GameData::saved_progress(&path).scorecard.is_none());
+
+        let score = Score {
+            coins: 13,
+            deaths: 4,
+            kills: 3,
+            seconds: 30.,
+            personal_best: None,
+        };
+        let slower = Score {
+            seconds: 38.,
+            coins: 29,
+            ..score
+        };
+        let best = Score {
+            seconds: 27.,
+            deaths: 0,
+            ..score
+        };
+        for card in [score, slower, best, score] {
+            assert!(
+                GameData::save_completion(
+                    &path,
+                    card,
+                    Some(&replay(card.seconds)),
+                    Achievements::default(),
+                    generation
+                )
+                .unwrap()
+            );
+        }
+        assert!(!GameData::discover(&path, generation).unwrap());
+        assert_eq!(GameData::saved_progress(&path).scorecard, Some(best));
+        let file = GameData::read(&path).unwrap();
+        assert_eq!(file.scorecard, Some(best));
+        assert_eq!(file.replay.unwrap().seconds, best.seconds);
+
+        GameData::reset(&path).unwrap();
+        assert!(!GameData::discover(&path, generation).unwrap());
+        assert!(
+            !GameData::save_completion(&path, best, None, Achievements::default(), generation)
+                .unwrap()
+        );
+        assert!(!GameData::saved_progress(&path).discovered);
     }
 
     #[test]
@@ -667,7 +854,7 @@ mod tests {
             version: 1,
             personal_best: Some(30.),
             replay: Some(replay(30.)),
-            preferences: Preferences::default(),
+            ..GameData::default()
         };
         let mut bytes = Vec::new();
         ciborium::into_writer(&legacy, &mut bytes).unwrap();

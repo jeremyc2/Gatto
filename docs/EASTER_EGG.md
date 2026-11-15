@@ -1,19 +1,21 @@
 # Rooftops Easter egg
 
-Rooftops is a black-cat platformer with three levels. Closing the game window
-resets the run and returns to the app.
+Rooftops is a black-cat platformer with three levels. Choose **Play** from the
+harbor main menu to begin. Closing the game window resets the run. Reopening
+returns to the main menu.
 
 ![A black cat jumping toward cat-face coins above illuminated apartments](images/walkthrough/framed/rooftops-1.png)
 
 ## Controls
 
 - **← →** move.
-- **Space** jumps. Hold for a higher jump; release for a shorter hop.
+- **Space** starts the game from the main menu or jumps during play. Hold Space
+  for a higher jump and release it for a shorter hop.
 - **Escape** closes the options panel when it is open. Otherwise it closes the
   game window and resets the run.
-- At the doorway, **Space** opens the next level. On the results screen, click
-  **Play again** or press **Space** to start a new run.
-- **Exit**, immediately beside **Play again**, closes the game window and resets
+- At the doorway, **Space** opens the next level. On a scorecard, choose
+  **Main menu** or press **Space** to return to the harbor.
+- **Exit**, immediately beside **Main menu**, closes the game window and resets
   the run while retaining your personal best.
 
 The opening message and arrow/jump hints disappear immediately on the first
@@ -22,12 +24,16 @@ Space advances the level. Arrow input does not advance the level or hide its hin
 
 ## Options and sound
 
-The gear icon at the top right opens **Options**. The game, opening, level slide,
+**Settings** on the main menu and **Options** during play use the same saved
+**Music** and **Sound effects** levels. Music volume applies to both the harbor
+theme and the level soundtracks.
+
+During play, the gear icon at the top right opens **Options**. The game, opening, level slide,
 timer and ghost clock all hold their place while the panel is open. Choose
 **Continue** or press **Escape** to return. Movement keys held before opening
 the panel are released, so the cat waits for fresh input when you return.
-Closing the window also clears Options and any sound audition. Reopening starts
-the arrival with keyboard control restored.
+Choose **Main menu** to end the current run and return to the harbor.
+Closing the window clears Options and any sound audition.
 
 - **Music** adjusts the synthesized nighttime soundtrack from 0–100%; 0 is off.
   Each neighborhood has its own lead voice: soft keys, rounded mallets, then
@@ -57,7 +63,7 @@ the arrival with keyboard control restored.
 
 Choices save automatically in `~/.gatto/rooftops.cbor`, alongside the best time
 and ghost, including before the first complete run. They survive closing the
-game, Play again and restarting Gatto. Older game files receive enabled defaults
+game, starting a new run and restarting Gatto. Older game files receive enabled defaults
 without losing their current records. Reset Rooftops restores these choices to
 their defaults along with clearing the best time and ghost.
 
@@ -78,10 +84,8 @@ animation; the empty pack and opening message still explain the journey.
 The first building starts with dark, closed windows and lights up exactly when
 the cat touches down. Skipping the opening starts with its windows lit.
 This first roof has neither a house nor a checkpoint lantern.
-**Play again** starts directly on the roof without replaying the opening.
 The clock and ghost wait for your first **←**, **→**, or **Space** gameplay input
-on each new run, including after **Play again**. Once started, standing still
-counts toward your time.
+at the start of each level. Once started, standing still counts toward your time.
 
 Jump across the rooftops to reach the lit doorway. Later levels have narrower
 roofs, wider gaps, and more enemies.
@@ -91,9 +95,9 @@ windows and animated residents throughout:
 
 | Level | Buildings |
 | ----- | --------- |
-| 1 | [Warm brownstone and red brick](images/walkthrough/framed/rooftops-1.png), with bracketed cornices and green wooden shutters. |
-| 2 | [Green-gray cast-iron lofts](images/walkthrough/framed/rooftops-2.png), with narrow columns, bolted beams and ribbed metal shutters. |
-| 3 | [Pale stone towers](images/walkthrough/framed/rooftops-phase-3.png), with stepped cornices, geometric trim and recessed blinds. |
+| Brownstones | [Warm brownstone and red brick](images/walkthrough/framed/rooftops-1.png), with bracketed cornices and green wooden shutters. |
+| SoHo | [Green-gray cast-iron lofts](images/walkthrough/framed/rooftops-2.png), with narrow columns, bolted beams and ribbed metal shutters. |
+| Midtown | [Pale stone towers](images/walkthrough/framed/rooftops-phase-3.png), with stepped cornices, geometric trim and recessed blinds. |
 
 The shared building at each level boundary keeps its previous neighborhood's
 materials and matching rooftop shelter while the next area's buildings slide into view. Window openings,
@@ -130,11 +134,14 @@ level 2, and a waxing gibbous moon with a narrow dark crescent for level 3.
 The small purple counters at the top left use a simple coin, a smooth symmetric
 skull for deaths, and crossed swords for defeated enemies. Their shared flat
 style keeps the counters visually consistent. Each count starts at zero and
-carries across levels. The large floating clock at the top center counts total
-active play time upward from 0:00; it pauses when the window loses focus and between levels.
+carries across levels. While the timer is held, the neighborhood name appears
+above the smaller clock. During play, the clock is larger with the neighborhood
+name below it. The clock counts total active play time from 0:00 and pauses on
+focus loss and between levels.
 
 Collect the cat-face coins by touching them. They are optional, and your total
-carries between levels. Land on rats or owls to defeat them and bounce upward.
+carries between levels. Land on enemies to defeat them and bounce upward. SoHo
+has bats and Midtown has owls.
 Touching an enemy from the side or falling returns you to the last lit checkpoint
 lantern, or to the starting roof if you have not reached one. Collected coins
 remain yours. During the brief invulnerable return, the cat flashes as a single
@@ -164,7 +171,23 @@ Dark windows have closed blinds or shutters; lit windows leave the residents
 fully visible. Three skyline layers scroll at different speeds
 to create the parallax effect.
 
-![A mid-level owl encounter above narrow rooftops](images/walkthrough/framed/rooftops-2.png)
+![A flying enemy above narrow rooftops](images/walkthrough/framed/rooftops-2.png)
+
+## Achievements
+
+Open **Achievements** from the main menu and scroll to see all eight illustrated
+medals. Double Feature unlocks when you bounce from an owl or bat onto a rat in
+one jump. Borrowed Lift unlocks when an enemy bounce carries you to the next
+rooftop. Both save when you earn them. The other medals unlock on a complete run.
+
+| Medal | Goal |
+| --- | --- |
+| Home by Moonlight | Finish all three levels. |
+| Clean Sweep | Finish with every coin and every enemy defeated. |
+| Pacifist | Finish without defeating an enemy. |
+| Night Express | Finish with a time of 1:15 or faster. |
+| All Nine Intact | Finish without dying. |
+| Empty Paws | Finish without collecting a coin. |
 
 ## Results
 
@@ -177,7 +200,7 @@ enemies defeated, and completion time, alongside the final rooftop home and its
 sleeping cat under “Home at last.” Zs animate on the results screen; the exported
 PNG captures a fixed frame. The footer shows `personal best: <time>`
 when the current run is slower than the saved best, displaying that faster saved
-time. First runs, ties, and new records have no personal-best footer. **Play again**, **Exit**,
+time. First runs, ties, and new records have no personal-best footer. **Main menu**
 and **Download scorecard** share the same height, padding, and styling, with
 widths that fit their labels.
 The best time and its complete ghost replay are saved together in
@@ -187,10 +210,12 @@ Records from the earlier course retain their best time and completion status.
 Their ghost is retired because the shared starting rooftops changed geometry;
 the next complete run records a ghost for the current course.
 
-After completing Rooftops, **App preferences → General** includes **Reset Rooftops**
-before **Reset app**.
-Clicking it immediately clears the best time and ghost, restarts any open game
-from level 1, and hides the button until you complete all three levels again.
+Opening Rooftops adds a **Rooftops** section above **General** in App preferences.
+After a run saves its results, **Scorecard** opens the fastest saved card
+from this section or the game’s main menu. Older saves retain their time and
+ghost records. A new completion supplies the stats for a viewable card.
+**Reset Rooftops** clears saved results, achievements, the ghost, and options, returns any
+open game to its main menu, and hides the preferences section.
 The full **Reset app** action also clears Rooftops progress along with all other
 local app data; see [reset and uninstall](../SUPPORT.md#reset-and-uninstall).
 
@@ -208,5 +233,5 @@ The saved scorecard:
 See the [contributor guide](../CONTRIBUTING.md#walkthrough-screenshots) to regenerate
 the game, results, and scorecard images alongside the app walkthrough.
 
-The Windows preview supports scorecard export and plays silently. Ghost and
-animation settings are available on both platforms.
+Procedural audio, scorecard export, ghost, and animation settings are available
+on macOS and Windows.

@@ -167,7 +167,12 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
         }
         return Ok(());
     }
-    if std::env::args().any(|arg| arg == "--audit-rooftops" || arg == "--audit-rooftops-gpu") {
+    if std::env::args().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--audit-rooftops" | "--audit-rooftops-gpu" | "--audit-rooftops-resize"
+        )
+    }) {
         return audit_rooftops(output_directory);
     }
     if std::env::args().any(|arg| arg == "--rooftops-form-edges") {
@@ -184,6 +189,71 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
             &output_directory.join("rooftops-options.png"),
             RooftopsCapture::Options,
         );
+    }
+    if std::env::args().any(|arg| arg == "--rooftops-menu") {
+        return render_rooftops(
+            &output_directory.join("rooftops-menu.png"),
+            RooftopsCapture::Menu(0., [0., 0.]),
+        );
+    }
+    if std::env::args().any(|arg| arg == "--rooftops-achievements") {
+        for (file, capture) in [
+            (
+                "rooftops-menu-with-scorecard.png",
+                RooftopsCapture::MenuWithScorecard { hovered: false },
+            ),
+            (
+                "rooftops-menu-scorecard-hover.png",
+                RooftopsCapture::MenuWithScorecard { hovered: true },
+            ),
+            (
+                "rooftops-achievements.png",
+                RooftopsCapture::Achievements { scrolled: false },
+            ),
+            (
+                "rooftops-achievements-scrolled.png",
+                RooftopsCapture::Achievements { scrolled: true },
+            ),
+        ] {
+            render_rooftops(&output_directory.join(file), capture)?;
+        }
+        return Ok(());
+    }
+    if std::env::args().any(|arg| arg == "--check-rooftops-menu-resize") {
+        return check_rooftops_menu_resize(output_directory);
+    }
+    if std::env::args().any(|arg| arg == "--rooftops-bridge") {
+        for (index, time) in [0., 0.65, 1.1, 3.45, 4.1, 4.65, 34.9]
+            .into_iter()
+            .enumerate()
+        {
+            render_rooftops(
+                &output_directory.join(format!("rooftops-bridge-{index}.png")),
+                RooftopsCapture::Menu(time, [0., 0.]),
+            )?;
+        }
+        for (side, aim) in [("left", [1., 0.85]), ("right", [-1., -0.85])] {
+            render_rooftops(
+                &output_directory.join(format!("rooftops-bridge-{side}.png")),
+                RooftopsCapture::Menu(0., aim),
+            )?;
+        }
+        for (side, time, aim) in [("west", 9.2, [-1., -1.]), ("east", 42., [1., 1.])] {
+            render_rooftops(
+                &output_directory.join(format!("rooftops-harbor-{side}-passage.png")),
+                RooftopsCapture::Menu(time, aim),
+            )?;
+        }
+        for (side, time) in ["west", "east"]
+            .into_iter()
+            .zip(rooftops::tug_turnarounds())
+        {
+            render_rooftops(
+                &output_directory.join(format!("rooftops-tug-{side}-turn.png")),
+                RooftopsCapture::Menu(time, [0., 0.]),
+            )?;
+        }
+        return Ok(());
     }
     if std::env::args().any(|arg| arg == "--check-rooftops-audio") {
         return rooftops::audio::check_output();
@@ -820,6 +890,9 @@ fn check_pixelation_edges(output: &std::path::Path) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 enum RooftopsCapture {
+    Menu(f32, [f32; 2]),
+    MenuWithScorecard { hovered: bool },
+    Achievements { scrolled: bool },
     Options,
     OptionsAt(u8),
     Level(usize, bool),
@@ -831,6 +904,28 @@ enum RooftopsCapture {
 #[cfg(target_os = "macos")]
 fn render_rooftops(output: &std::path::Path, capture: RooftopsCapture) -> Result<()> {
     let check_form = matches!(&capture, RooftopsCapture::OptionsAt(_));
+    let image = capture_rooftops(capture, [960., 600.])?;
+    image.save(output)?;
+    if check_form {
+        let ratio = image.width() as f32 / 960.;
+        let x = (342. * ratio) as u32;
+        let border = ((190. * ratio) as u32..(220. * ratio) as u32)
+            .any(|y| image.get_pixel(x, y).0[..3] == [139, 123, 255]);
+        anyhow::ensure!(!border, "Outer form border intersects the slider endpoint");
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn capture_rooftops(
+    capture: RooftopsCapture,
+    [width, height]: [f32; 2],
+) -> Result<image::RgbaImage> {
+    let scroll_achievements = matches!(&capture, RooftopsCapture::Achievements { scrolled: true });
+    let hover_scorecard = matches!(
+        &capture,
+        RooftopsCapture::MenuWithScorecard { hovered: true }
+    );
     let platform = gpui_kit::platform::current_platform(true);
     let mut cx = HeadlessAppContext::with_platform(
         platform.text_system(),
@@ -843,7 +938,7 @@ fn render_rooftops(output: &std::path::Path, capture: RooftopsCapture) -> Result
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
                     origin: Default::default(),
-                    size: size(px(960.), px(600.)),
+                    size: size(px(width), px(height)),
                 })),
                 focus: false,
                 show: false,
@@ -852,6 +947,15 @@ fn render_rooftops(output: &std::path::Path, capture: RooftopsCapture) -> Result
             cx,
             |window, cx| {
                 cx.new(|cx| match capture {
+                    RooftopsCapture::Menu(time, aim) => {
+                        rooftops::Rooftops::for_menu_preview(window, cx, time, aim)
+                    }
+                    RooftopsCapture::MenuWithScorecard { .. } => {
+                        rooftops::Rooftops::for_achievements_preview(window, cx, false)
+                    }
+                    RooftopsCapture::Achievements { .. } => {
+                        rooftops::Rooftops::for_achievements_preview(window, cx, true)
+                    }
                     RooftopsCapture::Options => rooftops::Rooftops::for_options_preview(window, cx),
                     RooftopsCapture::OptionsAt(value) => {
                         rooftops::Rooftops::for_options_endpoint_preview(window, cx, value)
@@ -874,18 +978,76 @@ fn render_rooftops(output: &std::path::Path, capture: RooftopsCapture) -> Result
     })?;
     cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
     cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
-    let image = cx
-        .capture_screenshot(handle)
-        .context("GPUI's Metal screenshot renderer is unavailable")?;
-    image.save(output)?;
-    if check_form {
-        let ratio = image.width() as f32 / 960.;
-        let x = (342. * ratio) as u32;
-        let border = ((190. * ratio) as u32..(220. * ratio) as u32)
-            .any(|y| image.get_pixel(x, y).0[..3] == [139, 123, 255]);
-        anyhow::ensure!(!border, "Outer form border intersects the slider endpoint");
+    if hover_scorecard {
+        cx.update_window(handle, |_, window, cx| {
+            let position = window.find("rooftops-menu-scorecard").bounds().center();
+            window.dispatch_event(
+                gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent {
+                    position,
+                    ..Default::default()
+                }),
+                cx,
+            );
+        })?;
     }
+    if scroll_achievements {
+        use gpui_kit::{PlatformInput, ScrollDelta, ScrollEvent, point};
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_event(
+                PlatformInput::Scroll(ScrollEvent {
+                    position: point(px(width * 0.5), px(height * 0.62)),
+                    delta: ScrollDelta::Lines(point(0., -60.)),
+                    ..Default::default()
+                }),
+                cx,
+            );
+        })?;
+    }
+    cx.update_window(handle, |_, window, cx| window.render_frame(cx))?;
+    cx.capture_screenshot(handle)
+        .context("GPUI's Metal screenshot renderer is unavailable")
+}
+
+#[cfg(target_os = "macos")]
+fn check_rooftops_menu_resize(output: &std::path::Path) -> Result<()> {
+    let capture = |size| capture_rooftops(RooftopsCapture::Menu(0., [0., 0.]), size);
+    let reference = capture([900., 560.])?;
+    reference.save(output.join("rooftops-menu-reference.png"))?;
+    let mut failures = Vec::new();
+    for (shape, size) in [("wide", [1320., 560.]), ("tall", [900., 860.])] {
+        let image = capture(size)?;
+        image.save(output.join(format!("rooftops-menu-{shape}.png")))?;
+        let dx = (image.width() - reference.width()) / 2;
+        let dy = (image.height() - reference.height()) / 2;
+        let scale = reference.width() / 900;
+        let mut changed = 0;
+        let mut pixels = 0;
+        for [left, right] in [[45, 170], [720, 850]] {
+            for y in 58 * scale..370 * scale {
+                for x in left * scale..right * scale {
+                    let from = reference.get_pixel(x, y);
+                    let to = image.get_pixel(x + dx, y + dy);
+                    if from.0[..3]
+                        .iter()
+                        .zip(&to.0[..3])
+                        .any(|(a, b)| a.abs_diff(*b) > 8)
+                    {
+                        changed += 1;
+                    }
+                    pixels += 1;
+                }
+            }
+        }
+        println!("{shape}: {changed} of {pixels} pixels changed in the landmark regions");
+        if changed * 100 > pixels {
+            failures.push(shape);
+        }
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "Rooftops landmark regions changed with viewport aspect: {failures:?}"
+    );
+    capture([1125., 700.])?.save(output.join("rooftops-menu-scaled.png"))?;
     Ok(())
 }
 
@@ -1105,85 +1267,120 @@ fn render_image_editor(output: &std::path::Path) -> Result<()> {
 #[cfg(target_os = "macos")]
 fn audit_rooftops(output: &std::path::Path) -> Result<()> {
     use std::time::Instant;
-    let readback = std::env::args().any(|arg| arg == "--audit-rooftops-gpu");
+    let resized = std::env::args().any(|arg| arg == "--audit-rooftops-resize");
+    let readback = resized || std::env::args().any(|arg| arg == "--audit-rooftops-gpu");
     let frames = if readback { 90 } else { 330 };
     let mut reports = Vec::new();
-    for (width, height) in [(960., 600.), (1440., 800.)] {
-        for (scene, level, results) in [
-            ("level", 0, false),
-            ("level", 1, false),
-            ("level", 2, false),
-            ("results", 2, true),
-            ("slide-1", 0, false),
-            ("slide-2", 1, false),
-            ("arrival", 0, false),
-            ("options", 0, false),
-        ] {
-            let platform = gpui_kit::platform::current_platform(true);
-            let mut cx = HeadlessAppContext::with_platform(
-                platform.text_system(),
-                Arc::new(gpui_kit::assets::AllAssets),
-                gpui_kit::platform::current_headless_renderer,
-            );
-            let (handle, game) = cx.update(|cx| {
-                gpui_kit::init(cx);
-                crate::theme::open_window(
-                    WindowOptions {
-                        window_bounds: Some(WindowBounds::Windowed(Bounds {
-                            origin: Default::default(),
-                            size: size(px(width), px(height)),
-                        })),
-                        focus: false,
-                        show: false,
-                        ..Default::default()
-                    },
-                    cx,
-                    |window, cx| {
-                        cx.new(|cx| match scene {
-                            "slide-1" | "slide-2" => rooftops::Rooftops::for_checkpoint_preview(
-                                window,
-                                cx,
-                                level,
-                                Some(0.575),
-                            ),
-                            "arrival" => rooftops::Rooftops::for_arrival_preview(window, cx, 0.6),
-                            "options" => rooftops::Rooftops::for_options_preview(window, cx),
-                            _ => rooftops::Rooftops::for_preview(window, cx, level, results),
-                        })
-                    },
-                )
+    let cases: Vec<_> = if resized {
+        vec![
+            (960., 600., "level", 0, false),
+            (800., 1120., "level", 0, false),
+            (800., 1120., "level", 1, false),
+            (800., 1120., "level", 2, false),
+            (800., 1120., "scaled", 0, false),
+            (680., 1320., "level", 0, false),
+            (1600., 1200., "level", 0, false),
+            (960., 600., "respawn", 0, false),
+            (800., 1120., "respawn", 0, false),
+            (1324., 600., "menu", 0, false),
+            (1252., 600., "menu", 0, false),
+            (900., 860., "menu", 0, false),
+        ]
+    } else {
+        [(960., 600.), (1440., 800.)]
+            .into_iter()
+            .flat_map(|(width, height)| {
+                [
+                    ("level", 0, false),
+                    ("level", 1, false),
+                    ("level", 2, false),
+                    ("results", 2, true),
+                    ("slide-1", 0, false),
+                    ("slide-2", 1, false),
+                    ("arrival", 0, false),
+                    ("options", 0, false),
+                ]
+                .map(|(scene, level, results)| (width, height, scene, level, results))
+            })
+            .collect()
+    };
+    for (width, height, scene, level, results) in cases {
+        let platform = gpui_kit::platform::current_platform(true);
+        let mut cx = HeadlessAppContext::with_platform(
+            platform.text_system(),
+            Arc::new(gpui_kit::assets::AllAssets),
+            gpui_kit::platform::current_headless_renderer,
+        );
+        let (handle, game) = cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: Default::default(),
+                        size: size(px(width), px(height)),
+                    })),
+                    focus: false,
+                    show: false,
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| {
+                    cx.new(|cx| match scene {
+                        "menu" => rooftops::Rooftops::for_menu_preview(window, cx, 0., [0., 0.]),
+                        "respawn" => rooftops::Rooftops::for_respawn_preview(window, cx),
+                        "slide-1" | "slide-2" => rooftops::Rooftops::for_checkpoint_preview(
+                            window,
+                            cx,
+                            level,
+                            Some(0.575),
+                        ),
+                        "arrival" => rooftops::Rooftops::for_arrival_preview(window, cx, 0.6),
+                        "options" => rooftops::Rooftops::for_options_preview(window, cx),
+                        _ => rooftops::Rooftops::for_preview(window, cx, level, results),
+                    })
+                },
+            )
+        })?;
+        let mut samples = Vec::with_capacity(300);
+        for frame in 0..frames {
+            let started = Instant::now();
+            cx.update_window(handle, |_, window, cx| {
+                game.update(cx, |game, cx| {
+                    game.audit_frame(frame, scene == "scaled", cx)
+                });
+                window.render_frame(cx);
             })?;
-            let mut samples = Vec::with_capacity(300);
-            for frame in 0..frames {
-                let started = Instant::now();
-                cx.update_window(handle, |_, window, cx| {
-                    game.update(cx, |game, cx| game.audit_frame(frame, cx));
-                    window.render_frame(cx);
-                })?;
-                cx.run_until_parked();
-                if readback {
-                    std::hint::black_box(cx.capture_screenshot(handle)?);
-                }
-                if frame >= 30 {
-                    samples.push(started.elapsed().as_secs_f64() * 1000.);
-                }
+            cx.run_until_parked();
+            if readback {
+                std::hint::black_box(cx.capture_screenshot(handle)?);
             }
-            samples.sort_by(f64::total_cmp);
-            let report = serde_json::json!({
-                "viewport": [width, height], "scene": scene, "level": level + 1, "results": results,
-                "gpu_readback": readback, "frames": samples.len(), "p50_ms": samples[samples.len() / 2], "p95_ms": samples[samples.len() * 95 / 100],
-                "p99_ms": samples[samples.len() * 99 / 100], "max_ms": samples[samples.len() - 1],
-                "over_16_67_ms": samples.iter().filter(|&&ms| ms > 1000. / 60.).count(),
-            });
-            println!("{report}");
-            reports.push(report);
+            if frame >= 30 {
+                samples.push(started.elapsed().as_secs_f64() * 1000.);
+            }
         }
+        samples.sort_by(f64::total_cmp);
+        if resized {
+            cx.capture_screenshot(handle)?.save(output.join(format!(
+                "rooftops-{scene}-{}-{width}x{height}.png",
+                level + 1
+            )))?;
+        }
+        let report = serde_json::json!({
+            "viewport": [width, height], "scene": scene, "level": level + 1, "results": results,
+            "gpu_readback": readback, "frames": samples.len(), "p50_ms": samples[samples.len() / 2], "p95_ms": samples[samples.len() * 95 / 100],
+            "p99_ms": samples[samples.len() * 99 / 100], "max_ms": samples[samples.len() - 1],
+            "over_16_67_ms": samples.iter().filter(|&&ms| ms > 1000. / 60.).count(),
+        });
+        println!("{report}");
+        reports.push(report);
     }
     if !readback {
         rooftops::audio::audit(output)?;
     }
     std::fs::write(
-        output.join(if readback {
+        output.join(if resized {
+            "rooftops-resize-frames.json"
+        } else if readback {
             "rooftops-metal-frames.json"
         } else {
             "rooftops-frames.json"

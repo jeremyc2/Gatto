@@ -543,7 +543,7 @@ mod tests {
     fn escape_closes_rooftops(cx: &mut TestAppContext) {
         let closed = observe_close(cx);
         let (_, cx) = cx.add_window_view(|window, cx| {
-            let view = cx.new(|cx| crate::rooftops::Rooftops::new(window, cx));
+            let view = cx.new(|cx| crate::rooftops::Rooftops::new(window, cx, None));
             window.focus(&view.read(cx).focus_handle(cx), cx);
             window.activate_window();
             gpui_kit::base::Root::new(view, window, cx)

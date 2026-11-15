@@ -4,7 +4,7 @@
 
 use std::f32::consts::TAU;
 
-use super::Cue;
+use super::{Cue, FINALE, MENU};
 
 pub(super) const SAMPLE_RATE: f32 = 48_000.;
 const VOICES: usize = 64;
@@ -31,6 +31,22 @@ const MOTIFS: [[i8; 16]; 4] = [
     [4, -1, 3, -1, -1, -1, 2, -1, 1, -1, -1, -1, 0, -1, -1, 2],
 ];
 const SCALE: [u8; 7] = [0, 3, 5, 7, 10, 12, 15];
+const HARBOR_CHORDS: [[u8; 5]; 8] = [
+    [50, 57, 60, 64, 65], // Dm9
+    [46, 53, 57, 60, 62], // Bbmaj9
+    [53, 57, 60, 64, 67], // Fmaj9
+    [48, 55, 58, 62, 64], // C9
+    [43, 50, 57, 58, 65], // Gm9
+    [45, 52, 55, 58, 61], // A7b9
+    [52, 58, 62, 65, 67], // Em7b5
+    [49, 55, 58, 64, 67], // C#dim7(add E)
+];
+const HARBOR_SECTIONS: [[usize; 8]; 4] = [
+    [0, 1, 2, 3, 4, 1, 6, 5],
+    [0, 4, 1, 2, 0, 3, 6, 5],
+    [4, 3, 2, 1, 4, 6, 7, 5],
+    [1, 2, 3, 0, 4, 1, 6, 5],
+];
 
 #[derive(Clone, Copy, Default)]
 enum Instrument {
@@ -143,8 +159,8 @@ impl Synth {
     }
 
     pub(super) fn scene(&mut self, level: usize, resting: bool) {
-        let level = level.min(3);
-        if level == 3 && self.target_level != 3 {
+        let level = level.min(MENU);
+        if level == FINALE && self.target_level != FINALE {
             self.finale_entry = true;
         }
         self.target_level = level;
@@ -206,6 +222,10 @@ impl Synth {
                 }
             }
             self.level = self.target_level;
+        }
+        if self.level == MENU {
+            self.schedule_harbor();
+            return;
         }
         let beat = 60. / [88., 100., 108., 84.][self.level];
         let transpose = [0, 3, 5, 0][self.level];
@@ -334,9 +354,103 @@ impl Synth {
             self.note(Instrument::Brush, 57., 0.11, 0.025, (-0.2, 0.), false);
         }
         let swing = if self.step % 4 < 2 { 0.28 } else { 0.22 };
-        self.until_step += (beat * swing * SAMPLE_RATE) as f64;
+        self.advance_step(16, beat * swing);
+    }
+
+    fn schedule_harbor(&mut self) {
+        // A 64-bar nocturne in three. Each 16-bar section changes the harmony
+        // and arrangement, with a quieter return before the next chorus.
+        const BEAT: f32 = 60. / 72.;
+        const MELODIES: [[Option<usize>; 6]; 4] = [
+            [Some(2), None, None, Some(3), Some(4), None],
+            [None, Some(4), Some(3), None, Some(1), Some(2)],
+            [Some(4), None, Some(2), Some(3), None, Some(1)],
+            [Some(3), None, Some(2), None, None, Some(1)],
+        ];
+        let section = (self.bar / 16) % HARBOR_SECTIONS.len();
+        let chorus = self.bar / 64;
+        let bar = self.bar % 16;
+        let chord = HARBOR_CHORDS[HARBOR_SECTIONS[section][bar / 2]];
+        let driving = section == 1 || section == 2;
+        if self.step == 0 || (self.step == 4 && driving) {
+            let note = chord[if self.step == 0 { 0 } else { 1 }];
+            self.note(
+                Instrument::Bass,
+                f32::from(note - 12),
+                BEAT * 1.9,
+                0.085,
+                (-0.16, 0.),
+                false,
+            );
+        }
+        if (self.step == 0 && bar.is_multiple_of(2)) || (self.step == 2 && driving) {
+            for (index, note) in chord[1..].iter().enumerate() {
+                self.note(
+                    Instrument::Keys,
+                    f32::from(*note + 12),
+                    BEAT * 2.8,
+                    0.036,
+                    (index as f32 * 0.24 - 0.36, index as f32 * 0.032),
+                    false,
+                );
+            }
+        }
+        let phrase = (section + bar / 4 + chorus) % MELODIES.len();
+        if (driving || bar % 4 != 3)
+            && let Some(degree) = MELODIES[phrase][self.step]
+        {
+            let note = chord[degree] + if section == 2 { 24 } else { 12 };
+            let accent = 0.041 + self.random() * 0.009;
+            self.note(
+                if section == 2 {
+                    Instrument::Bell
+                } else {
+                    Instrument::Celesta
+                },
+                f32::from(note),
+                BEAT * 1.55,
+                accent,
+                (0.31, 0.024),
+                false,
+            );
+        }
+        if self.step == 0 && bar.is_multiple_of(2) {
+            for note in [chord[2], chord[3]] {
+                self.note(
+                    Instrument::Pad,
+                    f32::from(note),
+                    BEAT * 5.9,
+                    0.025,
+                    (-0.24, 0.),
+                    false,
+                );
+            }
+        }
+        if driving && (self.step == 2 || self.step == 4) {
+            self.note(Instrument::Brush, 51., 0.21, 0.024, (-0.34, 0.032), false);
+        }
+        if bar % 4 == 3 && self.step == 5 {
+            self.note(
+                Instrument::Mallet,
+                f32::from(chord[1] + 12),
+                BEAT * 0.8,
+                0.028,
+                (-0.48, 0.),
+                false,
+            );
+        }
+        let lilt = if self.step.is_multiple_of(2) {
+            0.53
+        } else {
+            0.47
+        };
+        self.advance_step(6, BEAT * lilt);
+    }
+
+    fn advance_step(&mut self, steps: usize, seconds: f32) {
+        self.until_step += (seconds * SAMPLE_RATE) as f64;
         self.step += 1;
-        if self.step == 16 {
+        if self.step == steps {
             self.step = 0;
             self.bar += 1;
         }
@@ -356,7 +470,7 @@ impl Synth {
         if bits & Cue::Coin.bit() != 0 {
             // Reference: metal rings near 7.3 / 9.8 / 12.1 kHz over contact taps,
             // followed by uneven, fading bounces. Trim the quiet leading 0.11 s.
-            let center = [9800., 9950., 9650., 9800.][self.target_level];
+            let center = [9800., 9950., 9650., 9800.][self.target_level.min(FINALE)];
             for (delay, strength) in [
                 (0., 1.),
                 (0.09, 0.47),
@@ -391,7 +505,7 @@ impl Synth {
         }
         if bits & Cue::Shutters.bit() != 0 {
             // Relay contact, then a short shutter mechanism flutter.
-            let note = [57., 61., 54., 57.][self.target_level];
+            let note = [57., 61., 54., 57.][self.target_level.min(FINALE)];
             for (delay, amplitude) in [(0., 0.13), (0.024, 0.075), (0.052, 0.045)] {
                 self.note(Instrument::Click, note, 0.065, amplitude, (0., delay), true);
             }
@@ -499,7 +613,7 @@ impl Synth {
                 }
                 Instrument::Click => {
                     (noise * 0.6 + phase.sin() * 0.4)
-                        * (-age * [110., 135., 90., 110.][self.level]).exp()
+                        * (-age * [110., 135., 90., 110.][self.level.min(FINALE)]).exp()
                 }
             };
             let sample = wave * attack * release * voice.amplitude;
@@ -543,7 +657,7 @@ impl Synth {
 pub(super) fn audit(directory: &std::path::Path) -> anyhow::Result<()> {
     use std::time::Instant;
     let mut reports = Vec::new();
-    for level in 0..4 {
+    for level in 0..=MENU {
         let mut synth = Synth::new(0x676174746f);
         synth.scene(level, level == 3);
         let blocks = 48_000 * 180 / 512;
@@ -594,7 +708,7 @@ mod tests {
         let mut energy = [0_f64; 2];
         let mut peak = 0_f32;
         let mut difference = 0_f64;
-        for level in 0..4 {
+        for level in 0..=MENU {
             synth.scene(level, false);
             synth.thruster(level == 0);
             synth.cues(7);

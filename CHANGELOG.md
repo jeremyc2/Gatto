@@ -7,11 +7,52 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Play Rooftops music and sound effects on Windows through native audio.
+- Add a harbor main menu with its own procedural score and shared volume controls.
+- Add eight illustrated Rooftops achievements and save earned medals across runs.
+- Add the Empire State and Chrysler buildings, bridge traffic, a tugboat, a
+  sailboat, and a cursor-driven camera to the Rooftops harbor. Return to the
+  harbor from the pause panel.
+- Open the fastest saved Rooftops scorecard from the main menu or App
+  preferences. Return from either scorecard with **Main menu**. Reveal Rooftops
+  preferences on discovery and hide them on reset.
+
 ### Changed
 
+- Stack the Rooftops menu buttons at an equal width and label the saved card
+  **Scorecard**. Use bats in SoHo and keep the owls in Midtown.
+- Keep outlined Rooftops buttons translucent on hover with fully opaque text.
+  Redraw the achievement medals with gold seals and clearer unlocked states.
+- Remove Exit from the Rooftops scorecard.
+- Slow the Rooftops tugboat and extend its route between the bridge piers.
+- Show the neighborhood above the held clock. On the first movement or jump
+  in each level, make the running clock prominent. Name the levels Brownstones,
+  SoHo, and Midtown.
 - Integrate the workspace header and App preferences with the Windows caption
   controls, and use Gatto's dark colors for native utility window title bars.
   Increase the Windows uploader's default and minimum widths.
+
+### Fixed
+
+- Keep Rooftops stars in place when resizing, connect the ferry wake to its stern,
+  and continue apartment windows through the bottom of tall game windows.
+- Center and evenly space background window grids in Rooftops.
+- Seat the harbor bridge cables on the towers and align traffic with the two
+  roadway arches beneath the raised promenade. Give the piers solid stone
+  foundations with shading that follows the waterline.
+- Join the bridge towers, stone bases, and steel deck at shared corners. Carry
+  the masonry into the arches and connect the diagonal bracing at each pier.
+  Keep the sloped footing visible under the tower legs and the
+  pavement visible under vehicles through both arches.
+- Give harbor boats room to pass the bridge and add a waterfront with a
+  seawall and docks below the skyline. Give the landmark buildings street-level
+  entrances behind the quay.
+- Scale the harbor menu as one composition when resizing so landmark floors
+  and their entrances stay intact. Refine the bridge bearings and move the
+  landmarks farther inland.
+- Reduce repeated facade, resident, and cat drawing work during play and respawns.
 
 ## [0.24.5] - 2026-11-14
 

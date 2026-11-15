@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+pub(crate) mod achievements;
 pub(crate) mod art;
 pub(crate) mod replay;
 
@@ -9,7 +10,7 @@ pub(crate) const POSTER_FONT: &str = if cfg!(windows) {
     "Helvetica Neue"
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub(crate) struct Score {
     pub coins: usize,
     pub deaths: usize,
@@ -189,6 +190,14 @@ pub(crate) fn poster_text(score: Score) -> Vec<PosterText> {
 }
 
 impl Score {
+    fn valid(self) -> bool {
+        self.seconds.is_finite()
+            && self.seconds > 0.
+            && self
+                .personal_best
+                .is_none_or(|best| best.is_finite() && best > 0.)
+    }
+
     pub fn time_label(self) -> String {
         time_label(self.seconds)
     }

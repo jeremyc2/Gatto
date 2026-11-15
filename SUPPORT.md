@@ -76,8 +76,8 @@ Gatto writes these per-user files:
 - `~/.gatto/settings.json`: account or organization, repository favorites, pinned
   project folders, the project used for Add from Clipboard, shortcut, copy preferences,
   and large-video opt-in. Repository selections live only in project manifests.
-- `~/.gatto/rooftops.cbor`: Rooftops' lowest completion time and fastest completed
-  ghost replay. Delete this file to clear both.
+- `~/.gatto/rooftops.cbor`: Rooftops discovery, options, best time, ghost replay,
+  and scorecard. **App preferences → Rooftops → Reset Rooftops** clears this data.
 - `~/Library/LaunchAgents/com.jeremy-chandler.gatto.plist`: Start at login executable path.
 
 Scratchpad saves to `~/.gatto/projects/Scratchpad`. New projects use named subfolders in

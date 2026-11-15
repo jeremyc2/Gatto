@@ -4,7 +4,6 @@ use gpui_kit::component::{
     Icon, IconName,
     slider::{Slider, SliderEvent, SliderValue},
 };
-use gpui_kit::prelude::FluentBuilder as _;
 
 #[derive(Clone, Copy)]
 pub(super) enum Preference {
@@ -42,7 +41,7 @@ impl Rooftops {
         self.audio.suspend();
     }
 
-    fn toggle_options(
+    pub(super) fn toggle_options(
         &mut self,
         _: &gpui_kit::ClickEvent,
         window: &mut Window,
@@ -52,8 +51,9 @@ impl Rooftops {
             self.persist_options(cx, 0);
         }
         if !self.options_open {
+            let music_volume = self.preferences.music_volume;
             self.music_slider.update(cx, |state, cx| {
-                state.set_value(f32::from(self.preferences.music_volume), window, cx)
+                state.set_value(f32::from(music_volume), window, cx)
             });
             self.effects_slider.update(cx, |state, cx| {
                 state.set_value(f32::from(self.preferences.effects_volume), window, cx)
@@ -71,13 +71,15 @@ impl Rooftops {
         cx.notify();
     }
 
-    pub(super) fn dismiss_options(
+    pub(super) fn dismiss_overlay(
         &mut self,
         _: &crate::application_menu::DismissWindow,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.options_open {
+        if self.achievements_open {
+            self.close_achievements(window, cx);
+        } else if self.options_open {
             self.persist_options(cx, 0);
             self.set_options_open(false);
             window.focus(&self.focus, cx);
@@ -145,14 +147,8 @@ impl Rooftops {
     pub(super) fn sync_music_preview(&self, active: bool) {
         self.audio.sync(
             audio::Scene {
-                active,
-                level: if self.run.home && self.run.level + 1 == LEVELS {
-                    3
-                } else {
-                    self.run.level
-                },
-                resting: self.run.home || self.slide.is_some(),
                 thruster: false,
+                ..self.audio_scene(active)
             },
             Preferences {
                 effects_volume: 0,
@@ -188,7 +184,7 @@ impl Rooftops {
         cx.notify();
     }
 
-    fn persist_options(&mut self, cx: &mut Context<Self>, delay_ms: u64) {
+    pub(super) fn persist_options(&mut self, cx: &mut Context<Self>, delay_ms: u64) {
         if !self.preferences_dirty {
             return;
         }
@@ -209,11 +205,12 @@ impl Rooftops {
                     }
                     let result = cx.background_spawn(async move { write.save() }).await;
                     let _ = this.update(cx, |this, cx| {
-                        if this.preferences == preferences {
+                        if this.preferences_dirty && this.preferences == preferences {
                             match result {
                                 Ok(true) => {
                                     this.preferences_dirty = false;
                                     this.preferences_message = None;
+                                    cx.emit(Saved(this.best_scorecard));
                                 }
                                 Ok(false) => return,
                                 Err(error) => {
@@ -514,10 +511,8 @@ impl Rooftops {
                     .text_color(rgb(GOLD))
                     .child("Rooftops"),
             )
-            .when(cfg!(target_os = "macos"), |card| {
-                card.child(self.volume_row(Volume::Music, "Music", window, cx))
-                    .child(self.volume_row(Volume::Effects, "Sound effects", window, cx))
-            })
+            .child(self.volume_row(Volume::Music, "Music", window, cx))
+            .child(self.volume_row(Volume::Effects, "Sound effects", window, cx))
             .child(self.option_row("rooftops-ghost", "Ghost cat", Preference::Ghost, window, cx))
             .child(self.option_row(
                 "rooftops-animations",
@@ -526,9 +521,7 @@ impl Rooftops {
                 window,
                 cx,
             ));
-        if cfg!(target_os = "macos")
-            && let Some(message) = self.audio.error()
-        {
+        if let Some(message) = self.audio.error() {
             card = card.child(
                 div()
                     .text_sm()
@@ -544,12 +537,27 @@ impl Rooftops {
                     .child(message.clone()),
             );
         }
-        card = card.child(
-            score_button("rooftops-continue", "Continue", cx)
-                .debug_selector(|| "rooftops-continue".into())
-                .w_full()
-                .on_click(cx.listener(Self::toggle_options)),
-        );
+        let continue_button = score_button(
+            "rooftops-continue",
+            if self.menu_open { "Done" } else { "Continue" },
+            cx,
+        )
+        .debug_selector(|| "rooftops-continue".into())
+        .on_click(cx.listener(Self::toggle_options));
+        if !self.menu_open && self.displayed_score().is_none() {
+            card = card.child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        menu::menu_button("rooftops-pause-main-menu", "Main menu", cx)
+                            .flex_1()
+                            .on_click(cx.listener(Self::open_main_menu)),
+                    )
+                    .child(continue_button.flex_1()),
+            );
+        } else {
+            card = card.child(continue_button.w_full());
+        }
         scene = scene.child(
             div()
                 .absolute()

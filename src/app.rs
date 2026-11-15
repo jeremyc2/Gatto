@@ -319,7 +319,7 @@ pub struct UploaderApp {
     header_mark: Arc<Image>,
     rooftops_window: Option<AnyWindowHandle>,
     rooftops_view: Option<Entity<crate::rooftops::Rooftops>>,
-    rooftops_completed: bool,
+    rooftops_progress: crate::rooftops_score::replay::SavedProgress,
     rooftops_data_path: Option<PathBuf>,
     _rooftops_subscription: Option<Subscription>,
     focus_handle: FocusHandle,
@@ -389,9 +389,10 @@ impl UploaderApp {
         let rooftops_data_path = persist_repository_selection
             .then(|| crate::rooftops_score::replay::GameData::path().ok())
             .flatten();
-        let rooftops_completed = rooftops_data_path
+        let rooftops_progress = rooftops_data_path
             .as_deref()
-            .is_some_and(crate::rooftops_score::replay::GameData::has_completed);
+            .map(crate::rooftops_score::replay::GameData::saved_progress)
+            .unwrap_or_default();
         let mut this = Self {
             owner_input,
             ui_size_slider,
@@ -448,7 +449,7 @@ impl UploaderApp {
             )),
             rooftops_window: None,
             rooftops_view: None,
-            rooftops_completed,
+            rooftops_progress,
             rooftops_data_path,
             _rooftops_subscription: None,
             focus_handle: cx.focus_handle(),
@@ -791,6 +792,7 @@ impl UploaderApp {
     }
 
     pub fn show_settings(&mut self, cx: &mut Context<Self>) {
+        self.refresh_rooftops_progress();
         self.diagnostics.info("Opened application preferences.");
         if !self.settings_open {
             self.repository_picker_open = false;
@@ -2490,11 +2492,11 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        if !self.rooftops_completed {
+        if !self.rooftops_progress.discovered {
             return Ok(());
         }
         self.clear_rooftops_progress(cx)?;
-        self.diagnostics.info("Reset Rooftops best time and ghost.");
+        self.diagnostics.info("Reset Rooftops saved data.");
         window.push_notification(Notification::success("Rooftops reset."), cx);
         cx.notify();
         Ok(())
@@ -2507,7 +2509,7 @@ impl UploaderApp {
         if let Some(game) = &self.rooftops_view {
             game.update(cx, |game, cx| game.reset_progress(cx));
         }
-        self.rooftops_completed = false;
+        self.rooftops_progress = Default::default();
         Ok(())
     }
 
@@ -2515,7 +2517,14 @@ impl UploaderApp {
     #[allow(dead_code)]
     pub(crate) fn for_rooftops_preferences(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut app = Self::for_walkthrough(WalkthroughScenario::Preferences, window, cx);
-        app.rooftops_completed = true;
+        app.rooftops_progress.discovered = true;
+        app.rooftops_progress.scorecard = Some(crate::rooftops_score::Score {
+            coins: 40,
+            deaths: 3,
+            kills: 7,
+            seconds: 121.,
+            personal_best: None,
+        });
         app
     }
 
@@ -2526,11 +2535,25 @@ impl UploaderApp {
     ) {
         self._rooftops_subscription = Some(cx.subscribe(
             game,
-            |this, game, _: &crate::rooftops::Completed, cx| {
-                this.rooftops_completed = game.read(cx).has_completed();
+            |this, _, saved: &crate::rooftops::Saved, cx| {
+                this.rooftops_progress.discovered = true;
+                if let Some(score) = saved.0
+                    && this
+                        .rooftops_progress
+                        .scorecard
+                        .is_none_or(|best| score.seconds < best.seconds)
+                {
+                    this.rooftops_progress.scorecard = Some(score);
+                }
                 cx.notify();
             },
         ));
+    }
+
+    fn refresh_rooftops_progress(&mut self) {
+        if let Some(path) = &self.rooftops_data_path {
+            self.rooftops_progress = crate::rooftops_score::replay::GameData::saved_progress(path);
+        }
     }
 
     fn set_release_channel(
@@ -2633,9 +2656,42 @@ impl UploaderApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.show_rooftops(None, window, cx);
+    }
+
+    fn open_rooftops_scorecard(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(scorecard) = self.rooftops_progress.scorecard {
+            self.show_rooftops(Some(scorecard), window, cx);
+        }
+    }
+
+    fn show_rooftops(
+        &mut self,
+        scorecard: Option<crate::rooftops_score::Score>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_rooftops_progress();
+        let discover = !self.rooftops_progress.discovered;
         if let Some(handle) = self.rooftops_window
+            && let Some(game) = &self.rooftops_view
             && handle
-                .update(cx, |_, window, _| window.activate_window())
+                .update(cx, |_, window, cx| {
+                    game.update(cx, |game, cx| {
+                        if let Some(scorecard) = scorecard {
+                            game.show_scorecard(scorecard, window, cx);
+                        }
+                        if discover {
+                            game.discover(cx);
+                        }
+                    });
+                    window.activate_window();
+                })
                 .is_ok()
         {
             return;
@@ -2649,13 +2705,27 @@ impl UploaderApp {
             cx,
             |window, cx| {
                 window.set_window_title("Rooftops");
-                let game = cx.new(|cx| crate::rooftops::Rooftops::new(window, cx));
+                let game = cx.new(|cx| {
+                    crate::rooftops::Rooftops::new(window, cx, self.rooftops_data_path.clone())
+                });
                 window.focus(&game.read(cx).focus_handle(cx), cx);
                 game
             },
         ) {
             Ok((handle, game)) => {
                 self.observe_rooftops(&game, cx);
+                handle
+                    .update(cx, |_, window, cx| {
+                        game.update(cx, |game, cx| {
+                            if let Some(scorecard) = scorecard {
+                                game.show_scorecard(scorecard, window, cx);
+                            }
+                            if discover {
+                                game.discover(cx);
+                            }
+                        });
+                    })
+                    .ok();
                 self.rooftops_view = Some(game);
                 self.rooftops_window = Some(handle);
             }
@@ -3445,6 +3515,7 @@ impl UploaderApp {
             )
             .child(
                 Button::new("close-settings")
+                    .debug_selector(|| "close-settings".into())
                     .app_secondary()
                     .when_some(caption_height, |button, height| button.h(height))
                     .label("Done")
@@ -3593,6 +3664,32 @@ impl UploaderApp {
                         section.child(div().text_xs().child(self.updater.read(cx).message.clone()))
                     }),
             ))
+            .when(self.rooftops_progress.discovered, |page| page.child(
+                v_flex()
+                    .debug_selector(|| "rooftops-settings".into())
+                    .gap_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .p_4()
+                    .child(div().font_semibold().text_sm().child("Rooftops"))
+                    .child(h_flex().gap_2().flex_wrap()
+                        .when(self.rooftops_progress.scorecard.is_some(), |actions| actions.child(
+                            Button::new("view-rooftops-scorecard")
+                                .debug_selector(|| "view-rooftops-scorecard".into())
+                                .app_secondary().label("Scorecard")
+                                .on_click(cx.listener(Self::open_rooftops_scorecard)),
+                        ))
+                        .child(Button::new("reset-rooftops").debug_selector(|| "reset-rooftops".into())
+                            .app_secondary().label("Reset Rooftops")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if let Err(error) = this.reset_rooftops(window, cx) {
+                                    this.diagnostics.error(format!("Could not reset Rooftops: {error}"));
+                                    window.push_notification(Notification::error(format!("Could not reset Rooftops: {error}")), cx);
+                                }
+                            }))),
+                    ),
+            ))
             .child(
                 v_flex()
                     .gap_3()
@@ -3624,16 +3721,6 @@ impl UploaderApp {
                     )
                     .child(h_flex().gap_2().flex_wrap()
                         .child(Button::new("delete-all-projects").app_secondary().label("Delete all projects").on_click(cx.listener(|this, _, window, cx| this.delete_all_projects(window, cx))))
-                        .when(self.rooftops_completed, |actions| actions.child(
-                            Button::new("reset-rooftops").debug_selector(|| "reset-rooftops".into())
-                                .app_secondary().label("Reset Rooftops")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    if let Err(error) = this.reset_rooftops(window, cx) {
-                                        this.diagnostics.error(format!("Could not reset Rooftops: {error}"));
-                                        window.push_notification(Notification::error(format!("Could not reset Rooftops: {error}")), cx);
-                                    }
-                                })),
-                        ))
                         .child(Button::new("reset-app").debug_selector(|| "reset-app".into())
                             .app_secondary().label("Reset app").on_click(cx.listener(Self::confirm_reset)))),
 
@@ -4256,9 +4343,7 @@ mod tests {
     use super::*;
 
     #[gpui_kit::test]
-    fn rooftops_reset_is_hidden_until_completion_and_clears_saved_progress(
-        cx: &mut TestAppContext,
-    ) {
+    fn rooftops_preferences_follow_discovery_scorecard_and_reset(cx: &mut TestAppContext) {
         use crate::rooftops_score::replay::GameData;
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("rooftops.cbor");
@@ -4271,31 +4356,54 @@ mod tests {
             });
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(cx.debug_bounds("close-settings").is_some());
         assert!(cx.debug_bounds("reset-rooftops").is_none());
-        GameData::save_progress(&path, 120., None).unwrap();
+        assert!(cx.debug_bounds("view-rooftops-scorecard").is_none());
+        cx.update(|window, cx| {
+            view.update(cx, |app, cx| app.show_rooftops(None, window, cx));
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let reset = cx
+            .debug_bounds("reset-rooftops")
+            .expect("opening the game reveals reset");
+        assert!(cx.debug_bounds("view-rooftops-scorecard").is_none());
+        let reset_app = cx
+            .debug_bounds("reset-app")
+            .expect("full reset is always available");
+        assert!(reset.bottom() < reset_app.top());
+
+        let score = crate::rooftops_score::Score {
+            coins: 15,
+            deaths: 2,
+            kills: 4,
+            seconds: 120.,
+            personal_best: None,
+        };
+        GameData::save_completion(
+            &path,
+            score,
+            None,
+            Default::default(),
+            GameData::save_generation(&path).unwrap(),
+        )
+        .unwrap();
         cx.update(|window, cx| {
             view.update(cx, |app, cx| {
-                app.rooftops_completed = GameData::has_completed(&path);
+                app.refresh_rooftops_progress();
+                assert_eq!(app.rooftops_progress.scorecard, Some(score));
                 cx.notify();
             });
             window.draw(cx).clear(cx);
         });
-        let reset = cx
-            .debug_bounds("reset-rooftops")
-            .expect("a completed game reveals reset");
-        let reset_app = cx
-            .debug_bounds("reset-app")
-            .expect("full reset is always available");
-        assert!(
-            reset.right() < reset_app.left(),
-            "Rooftops reset precedes full app reset"
-        );
+        assert!(cx.debug_bounds("view-rooftops-scorecard").is_some());
+        let reset = cx.debug_bounds("reset-rooftops").unwrap();
         cx.simulate_mouse_down(reset.center(), MouseButton::Left, Modifiers::default());
         cx.simulate_mouse_up(reset.center(), MouseButton::Left, Modifiers::default());
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
             assert!(!window.has_active_dialog(cx));
-            assert!(!view.read(cx).rooftops_completed);
+            assert!(!view.read(cx).rooftops_progress.discovered);
         });
         assert!(!path.exists());
         assert!(cx.debug_bounds("reset-rooftops").is_none());

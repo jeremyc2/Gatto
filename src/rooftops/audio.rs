@@ -1,19 +1,36 @@
 //! Atomic game controls and a dedicated native-audio owner thread.
 
-#[cfg(any(target_os = "macos", test, feature = "walkthrough-screenshots"))]
+#[cfg(any(
+    target_os = "macos",
+    windows,
+    test,
+    feature = "walkthrough-screenshots"
+))]
 mod death;
 #[cfg(target_os = "macos")]
 mod output;
-#[cfg(any(target_os = "macos", test, feature = "walkthrough-screenshots"))]
+#[cfg(any(
+    target_os = "macos",
+    windows,
+    test,
+    feature = "walkthrough-screenshots"
+))]
 mod synth;
+#[cfg(windows)]
+mod windows;
 
 #[cfg(target_os = "macos")]
-use std::sync::mpsc::{Receiver, sync_channel};
+use std::sync::mpsc::Receiver;
+#[cfg(any(target_os = "macos", windows))]
+use std::sync::mpsc::sync_channel;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
     mpsc::SyncSender,
 };
+
+pub(super) const FINALE: usize = 3;
+pub(super) const MENU: usize = 4;
 
 #[derive(Clone, Copy)]
 pub(super) enum Cue {
@@ -81,6 +98,51 @@ impl Default for Controls {
     }
 }
 
+#[cfg(any(target_os = "macos", windows))]
+impl Controls {
+    fn render(
+        &self,
+        synth: &mut synth::Synth,
+        frames: usize,
+        mut write: impl FnMut(usize, [f32; 2]),
+    ) -> bool {
+        let active = self.active.load(Ordering::Acquire);
+        let music = self.music.load(Ordering::Relaxed).min(100) as u8;
+        let effects = self.effects.load(Ordering::Relaxed).min(100) as u8;
+        synth.scene(
+            self.level.load(Ordering::Relaxed),
+            self.resting.load(Ordering::Relaxed),
+        );
+        synth.thruster(self.thruster.load(Ordering::Relaxed));
+        synth.cues(self.cues.swap(0, Ordering::Relaxed));
+        let preview = self.preview.swap(0, Ordering::AcqRel);
+        if preview > 0 {
+            synth.preview_effects((preview - 1).min(100) as u8);
+        }
+        let mut has_signal = false;
+        for index in 0..frames {
+            let frame = synth.next(active, music, effects);
+            let preview = synth.preview_sample();
+            let samples = frame.map(|sample| sample + preview);
+            write(index, samples);
+            has_signal |= samples != [0.; 2];
+        }
+        self.previewing.store(synth.previewing(), Ordering::Release);
+        #[cfg(target_os = "macos")]
+        self.rendered_frames
+            .fetch_add(frames as u64, Ordering::Relaxed);
+        has_signal
+    }
+}
+
+#[cfg(any(target_os = "macos", windows))]
+fn new_synth() -> synth::Synth {
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0x676174746f, |time| time.as_nanos() as u64);
+    synth::Synth::new(seed)
+}
+
 pub(super) struct Audio {
     controls: Arc<Controls>,
     wake: Option<SyncSender<()>>,
@@ -90,7 +152,7 @@ pub(super) struct Audio {
 impl Audio {
     pub(super) fn new(enabled: bool) -> Self {
         let controls = Arc::new(Controls::default());
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         if enabled {
             let (wake, receiver) = sync_channel(1);
             let (events, updates) = async_channel::bounded(1);
@@ -108,7 +170,7 @@ impl Audio {
                 events: Some(updates),
             };
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", windows)))]
         let _ = enabled;
         Self {
             controls,
@@ -317,6 +379,9 @@ fn worker(controls: Arc<Controls>, receiver: Receiver<()>, events: async_channel
     drop(output);
 }
 
+#[cfg(windows)]
+use windows::worker;
+
 #[cfg(all(feature = "walkthrough-screenshots", target_os = "macos"))]
 #[allow(dead_code)]
 pub(crate) fn check_output() -> anyhow::Result<()> {
@@ -428,16 +493,17 @@ pub(crate) fn check_output() -> anyhow::Result<()> {
 #[allow(dead_code)]
 pub(crate) fn write_previews(directory: &std::path::Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(directory)?;
-    for level in 0..4 {
-        let path = directory.join(if level == 3 {
-            "rooftops-scorecard.wav".into()
-        } else {
-            format!("rooftops-music-{}.wav", level + 1)
+    for level in 0..=MENU {
+        let path = directory.join(match level {
+            FINALE => "rooftops-scorecard.wav".into(),
+            MENU => "rooftops-menu.wav".into(),
+            _ => format!("rooftops-music-{}.wav", level + 1),
         });
         let mut synth = synth::Synth::new(0x676174746f);
-        synth.scene(level, level == 3);
-        write_wav(&path, 48_000 * 48, |index| {
-            let fade = ((48_000 * 48 - index) as f32 / 48_000.).min(1.);
+        synth.scene(level, level == FINALE);
+        let frames = 48_000 * if level == MENU { 166 } else { 48 };
+        write_wav(&path, frames, |index| {
+            let fade = ((frames - index) as f32 / 48_000.).min(1.);
             synth.next(true, 75, 55).map(|sample| sample * fade)
         })?;
     }

@@ -23,6 +23,11 @@ key. Resting destinations use a softer, sparser arrangement. The final scorecard
 has a separate 84 BPM celesta voice, a gentle ascending arrival figure and its
 own progression.
 
+The main menu plays a 64-bar harbor theme in 3/4 at 72 BPM. Four sections
+change the harmony and instrumentation over 160 seconds. Brushed accents,
+strummed keys, the celesta and an upper-register bell response share the
+game's instruments. Phrase order changes on later passes through the form.
+
 Effects are limited to the sputtering intro thruster (following the visible
 flame envelope), the cat's death, coin collection and apartment shutters
 opening. The shutter cue follows closed-to-open apartment windows, including
@@ -93,15 +98,24 @@ graph every 500 ms. Failures appear in Options; retries are bounded to a fresh
 activation or volume change. Node shutdown stops and detaches the source before
 releasing its render block. Closing the game releases its output graph without
 waiting on the drawing thread.
+
+On Windows, `audio/windows.rs` uses shared-mode WASAPI through the existing
+Windows bindings. The owner thread waits on the native render event, fills
+available stereo Float32 frames, and releases the stream after the fade to
+silence. The endpoint converts the stream to the hardware format. Playback
+reopens the default endpoint after invalidation and keeps the synth's position
+while the window is inactive. [Microsoft's rendering contract](https://learn.microsoft.com/en-us/windows/win32/coreaudio/rendering-a-stream)
+defines how the client checks padding and writes the available frames.
 Screenshots and ordinary automated tests never start device playback.
 
 ## Options and persistence
 
 The top-right gear opens a dark card titled “Rooftops,” with Music, Sound effects,
 Ghost cat and Animations controls, plus Continue. Music and Sound effects are
-separate 0–100% sliders (0 is off), defaulting to 75% and 55%. Arrow keys adjust
-by one point, Shift+arrow by five, and Home/End select the endpoints. Labels do
-not use “pause” or “menu.” Outer form borders are absent; keyboard focus changes
+separate 0–100% sliders (0 is off), defaulting to 75% and 55%. The main menu's
+Settings card edits the same saved Music and Sound effects levels.
+Arrow keys adjust by one point, Shift+arrow by five, and Home/End select the
+endpoints. Outer form borders are absent. Keyboard focus changes
 label color, while slider handles retain their hover/drag highlights.
 Opening it clears held input, jump buffering and frame catch-up, and
 suspends game physics, scenery, transitions, replay time and audio. Escape
@@ -120,8 +134,7 @@ The beep has its own fixed sample counter and envelope; it does not resume the
 score or gameplay. It wakes the existing audio owner only as needed, without
 UI timers or allocations in the callback. Dismissal and deactivation cancel it.
 The retained-window close handler clears audition/adjustment state and restores
-the game focus handle before hiding. Without that focus reset, reopening after
-Options left input and the intro waiting on an unmounted control.
+the game focus handle before returning to the main menu on reopen.
 
 `Preferences` is an additive, defaulted field in the existing CBOR game data.
 Preference writes run in the background. Slider movement reserves atomic

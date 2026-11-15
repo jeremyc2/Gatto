@@ -1,7 +1,4 @@
-use super::{
-    Controls,
-    synth::{SAMPLE_RATE, Synth},
-};
+use super::{Controls, new_synth, synth::SAMPLE_RATE};
 use anyhow::{Context as _, Result};
 use block2::RcBlock;
 use objc2::{AnyThread as _, rc::Retained, runtime::Bool};
@@ -19,10 +16,7 @@ pub(super) struct Output {
 
 impl Output {
     pub(super) fn new(controls: Arc<Controls>) -> Result<Self> {
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0x676174746f, |time| time.as_nanos() as u64);
-        let synth = Mutex::new(Synth::new(seed));
+        let synth = Mutex::new(new_synth());
         let render = RcBlock::new(
             move |mut silent: NonNull<Bool>,
                   _: NonNull<AudioTimeStamp>,
@@ -51,9 +45,6 @@ impl Output {
                         controls.render_errors.fetch_add(1, Ordering::Relaxed);
                         return -50;
                     }
-                    controls
-                        .rendered_frames
-                        .fetch_add(u64::from(frames), Ordering::Relaxed);
                     let left = std::slice::from_raw_parts_mut(
                         buffers[0].mData.cast::<f32>(),
                         frames as usize,
@@ -70,30 +61,11 @@ impl Output {
                         *silent.as_mut() = Bool::YES;
                         return 0;
                     };
-                    let active = controls.active.load(Ordering::Acquire);
-                    let music = controls.music.load(Ordering::Relaxed).min(100) as u8;
-                    let effects = controls.effects.load(Ordering::Relaxed).min(100) as u8;
-                    synth.scene(
-                        controls.level.load(Ordering::Relaxed),
-                        controls.resting.load(Ordering::Relaxed),
-                    );
-                    synth.thruster(controls.thruster.load(Ordering::Relaxed));
-                    synth.cues(controls.cues.swap(0, Ordering::Relaxed));
-                    let preview = controls.preview.swap(0, Ordering::AcqRel);
-                    if preview > 0 {
-                        synth.preview_effects((preview - 1).min(100) as u8);
-                    }
-                    let mut has_signal = false;
-                    for (left, right) in left.iter_mut().zip(right) {
-                        let frame = synth.next(active, music, effects);
-                        let preview = synth.preview_sample();
-                        *left = frame[0] + preview;
-                        *right = frame[1] + preview;
-                        has_signal |= *left != 0. || *right != 0.;
-                    }
-                    controls
-                        .previewing
-                        .store(synth.previewing(), Ordering::Release);
+                    let has_signal =
+                        controls.render(&mut synth, frames as usize, |index, frame| {
+                            left[index] = frame[0];
+                            right[index] = frame[1];
+                        });
                     *silent.as_mut() = Bool::new(!has_signal);
                 }
                 0
@@ -138,7 +110,7 @@ impl Output {
     }
 
     pub(super) fn pause(&self) {
-        // Called on the UI thread after the render block's fade has finished.
+        // Called on the audio owner after the render block's fade has finished.
         unsafe {
             self.engine.pause();
         }

@@ -270,7 +270,7 @@ at rest and with each half hovered independently.
 Use `--control-hover` for checked and unchecked checkbox states, a labeled settings
 checkbox, and an outlined button with the app's shared hover treatment.
 Use these alongside the matching tasks in the walkthrough. Game captures show an
-early coin jump, a mid-level owl encounter, and the results screen in `rooftops-1.png` through
+early coin jump, a mid-level flying enemy encounter, and the results screen in `rooftops-1.png` through
 `rooftops-3.png`; the scorecard is `rooftops-score.png`.
 
 For a focused Rooftops check, run
@@ -288,12 +288,20 @@ doorway, the start and midpoint of the slide, the light turning on, and the next
 level's standing cat. It also captures the grand final home before arrival.
 
 Use `--rooftops-preferences` with the same screenshot command to capture the
-preferences page with Reset Rooftops unlocked using an in-memory example.
+preferences section with a sample saved scorecard. Use `--rooftops-menu` to
+capture the harbor main menu. Use `--rooftops-achievements` to capture the
+medal grid and the saved Scorecard button at rest and on hover. Use
+`--rooftops-bridge` to capture both lanes through the towers, both extremes of
+the pointer-controlled camera, and both ends of the tug's route.
+Use `--check-rooftops-menu-resize` to capture the centered, wide, tall, and
+uniformly scaled menu. It compares the landmark regions at matching zoom
+across window shapes and fails if their appearance changes.
 
 Use `--rooftops-options` to capture the in-game options card. Use
 `--rooftops-audio` with an ignored output directory such as
-`target/rooftops-audio-preview` to synthesize four 48-second stereo WAV previews (three neighborhoods and the scorecard);
-the same command writes standalone death, coin and shutter WAVs. Use
+`target/rooftops-audio-preview` to synthesize stereo WAV previews of the three
+neighborhoods, scorecard, and harbor theme. The same command writes standalone
+death, coin and shutter WAVs. Use
 `--rooftops-effects` to regenerate only those effect previews. These
 inspection files are never bundled with the app. `--check-rooftops-audio`
 opens the real macOS output graph briefly with silence and an inaudible
@@ -314,6 +322,10 @@ plus three minutes of 512-frame audio blocks per score. It writes
 `rooftops-frames.json` and `rooftops-audio.json` in the output directory.
 Use `--audit-rooftops-gpu` to include Metal rendering and synchronized pixel
 readback, measuring 60 warmed frames per scene into `rooftops-metal-frames.json`.
+Use `--audit-rooftops-resize` to time and capture tall and large gameplay
+viewports, respawns, the moving harbor camera at wide and tall sizes, and a
+fixed-aspect comparison.
+It writes `rooftops-resize-frames.json`.
 Neither measurement counts dropped presentations on a physical display.
 
 Check pixelation edges with the same native renderer:

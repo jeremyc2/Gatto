@@ -3,15 +3,23 @@ use std::{
     time::Instant,
 };
 
+mod achievements;
 mod arrival;
 pub(crate) mod audio;
+mod menu;
 mod neighborhood;
 mod options;
+mod rooms;
+
+#[cfg(all(target_os = "macos", feature = "walkthrough-screenshots"))]
+#[allow(unused_imports)]
+pub(crate) use menu::tug_turnarounds;
 
 use gpui_kit::component::slider::{SliderEvent, SliderState};
 use neighborhood::Neighborhood;
 
 use crate::rooftops_score::Score;
+use crate::rooftops_score::achievements::{Achievement, Achievements};
 use crate::rooftops_score::art::{self, StatIcon};
 use crate::rooftops_score::replay::{Frame, GameData, Pose, Preferences, Recording, Replay};
 use gpui_kit::component::{
@@ -273,10 +281,11 @@ struct Coin {
     collected: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum EnemyKind {
     Rat,
     Owl,
+    Bat,
 }
 
 #[derive(Clone)]
@@ -297,7 +306,7 @@ impl Enemy {
                 roof.x + roof.width * 0.5 + swing * (roof.width * 0.5 - 28.),
                 roof.y - 11.,
             ),
-            EnemyKind::Owl => (
+            EnemyKind::Owl | EnemyKind::Bat => (
                 roof.x + roof.width * 0.55 + swing * 70.,
                 roof.y - 78. + (time * 2.1 + self.phase).sin() * 20.,
             ),
@@ -312,6 +321,48 @@ struct Input {
     jump: bool,
 }
 
+#[derive(Clone, Copy, Default)]
+enum JumpChain {
+    #[default]
+    None,
+    Jumped,
+    BouncedOffFlyer,
+}
+
+#[derive(Clone, Default)]
+struct Stunts {
+    jump: JumpChain,
+    bounced_from: Option<usize>,
+    unlocked: Achievements,
+}
+
+impl Stunts {
+    fn stomp(&mut self, enemy: &Enemy) {
+        match (self.jump, enemy.kind) {
+            (JumpChain::Jumped, EnemyKind::Owl | EnemyKind::Bat) => {
+                self.jump = JumpChain::BouncedOffFlyer;
+            }
+            (JumpChain::BouncedOffFlyer, EnemyKind::Rat) => {
+                self.unlocked.insert(Achievement::DoubleFeature);
+            }
+            _ => {}
+        }
+        self.bounced_from = Some(enemy.roof);
+    }
+
+    fn land(&mut self, roof: usize) {
+        if self.bounced_from.is_some_and(|from| from + 1 == roof) {
+            self.unlocked.insert(Achievement::BorrowedLift);
+        }
+        self.clear_flight();
+    }
+
+    fn clear_flight(&mut self) {
+        self.jump = JumpChain::None;
+        self.bounced_from = None;
+    }
+}
+
 #[derive(Clone)]
 struct Run {
     level: usize,
@@ -322,6 +373,7 @@ struct Run {
     roofs: Vec<Roof>,
     coins: Vec<Coin>,
     enemies: Vec<Enemy>,
+    stunts: Stunts,
     x: f32,
     y: f32, // Feet, rather than the sprite's top edge.
     vx: f32,
@@ -342,12 +394,13 @@ struct Run {
 }
 
 impl Run {
+    #[cfg(any(test, feature = "walkthrough-screenshots"))]
     fn new() -> Self {
         Self::for_level(0)
     }
 
     fn for_arrival() -> Self {
-        let mut run = Self::new();
+        let mut run = Self::for_level(0);
         run.lit[0] = false;
         run
     }
@@ -391,7 +444,11 @@ impl Run {
             if level > 0 && i % 5 == 2 {
                 enemies.push(Enemy {
                     roof: i,
-                    kind: EnemyKind::Owl,
+                    kind: if level == 1 {
+                        EnemyKind::Bat
+                    } else {
+                        EnemyKind::Owl
+                    },
                     defeated: false,
                     phase: i as f32,
                     speed: 0.8 + level as f32 * 0.25,
@@ -407,6 +464,7 @@ impl Run {
             roofs,
             coins,
             enemies,
+            stunts: Stunts::default(),
             x: START_X,
             y,
             vx: 0.,
@@ -433,6 +491,7 @@ impl Run {
             let score = self.score();
             let time = self.time;
             let doorway_coin_collected = self.coins.last().is_some_and(|coin| coin.collected);
+            let stunts = self.stunts.unlocked;
             *self = Self::for_level(next);
             if next != 0 {
                 self.banked_coins = score.coins;
@@ -440,6 +499,7 @@ impl Run {
                 self.banked_kills = score.kills;
                 self.elapsed = score.seconds;
                 self.time = time;
+                self.stunts.unlocked = stunts;
                 if doorway_coin_collected {
                     self.coins.remove(0);
                 }
@@ -485,6 +545,8 @@ impl Run {
             self.buffer = 0.;
             self.coyote = 0.;
             self.jumps += 1;
+            self.stunts.jump = JumpChain::Jumped;
+            self.stunts.bounced_from = None;
         }
 
         let previous_y = self.y;
@@ -503,6 +565,7 @@ impl Run {
                 if (self.x - x).abs() < 25. && self.y > top && self.y - 30. < y + 11. {
                     if self.vy > 0. && previous_y <= top + 5. {
                         enemy.defeated = true;
+                        self.stunts.stomp(enemy);
                         self.y = top;
                         self.vy = if self.input.jump { -JUMP } else { -410. };
                         self.coyote = 0.;
@@ -525,6 +588,7 @@ impl Run {
                     self.y = roof.y;
                     self.vy = 0.;
                     self.ground = Some(i);
+                    self.stunts.land(i);
                     if previous_ground != Some(i) {
                         self.squash = 1.;
                         self.lit[i] = true;
@@ -574,6 +638,24 @@ impl Run {
         if !self.home {
             self.elapsed += elapsed;
         }
+    }
+
+    fn completion_achievements(&self, score: Score) -> Achievements {
+        static TOTALS: LazyLock<[usize; 2]> = LazyLock::new(|| {
+            let (coins, enemies) = (0..LEVELS)
+                .map(Run::for_level)
+                .fold((0, 0), |(coins, enemies), run| {
+                    (coins + run.coins.len(), enemies + run.enemies.len())
+                });
+            // At each handoff two course segments share the doorway coin.
+            [coins - (LEVELS - 1), enemies]
+        });
+        let mut unlocked = self.stunts.unlocked;
+        unlocked.record_score(score);
+        if [score.coins, score.kills] == *TOTALS {
+            unlocked.insert(Achievement::CleanSweep);
+        }
+        unlocked
     }
 
     fn ghost_frame(&self) -> Frame {
@@ -647,6 +729,7 @@ impl Run {
     }
 
     fn respawn(&mut self) {
+        self.stunts.clear_flight();
         let roof = self.roofs[self.checkpoint];
         self.x = if self.checkpoint == 0 {
             START_X
@@ -691,6 +774,17 @@ impl LevelSlide {
 
 pub struct Rooftops {
     run: Run,
+    menu_open: bool,
+    menu_time: f32,
+    menu_camera: menu::Aim,
+    menu_aim: menu::Aim,
+    menu_bridge: menu::BridgeArt,
+    achievements: Achievements,
+    achievements_open: bool,
+    achievements_focus: FocusHandle,
+    hud_changed: Option<Instant>,
+    viewing_scorecard: Option<Score>,
+    best_scorecard: Option<Score>,
     arrival: Option<f32>,
     slide: Option<LevelSlide>,
     started: bool,
@@ -706,6 +800,8 @@ pub struct Rooftops {
     _volume_subscriptions: [Subscription; 2],
     audio: audio::Audio,
     facade_art: neighborhood::FacadeArt,
+    cat_art: CatArt,
+    room_art: rooms::RoomArt,
     poster_art: Option<(f32, Arc<[gpui_kit::PaintQuad]>)>,
     focus: FocusHandle,
     options_focus: FocusHandle,
@@ -725,19 +821,31 @@ pub struct Rooftops {
     saving: bool,
     #[cfg(feature = "walkthrough-screenshots")]
     preview: bool,
+    #[cfg(feature = "walkthrough-screenshots")]
+    fixed_preview_aspect: bool,
     _activation: Subscription,
     _blur: Subscription,
 }
 
-pub(crate) struct Completed;
-impl EventEmitter<Completed> for Rooftops {}
+pub(crate) struct Saved(pub Option<Score>);
+impl EventEmitter<Saved> for Rooftops {}
 
 impl Rooftops {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self::new_with_records(window, cx, !cfg!(test))
+    pub(crate) fn new(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        best_path: Option<std::path::PathBuf>,
+    ) -> Self {
+        Self::new_with_records(window, cx, best_path, !cfg!(test), true)
     }
 
-    fn new_with_records(window: &mut Window, cx: &mut Context<Self>, remember: bool) -> Self {
+    fn new_with_records(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        best_path: Option<std::path::PathBuf>,
+        audio_enabled: bool,
+        menu_open: bool,
+    ) -> Self {
         let focus = cx.focus_handle();
         let activation = cx.observe_window_activation(window, |this, _, cx| {
             this.run.input = Input::default();
@@ -762,21 +870,10 @@ impl Rooftops {
         let game = cx.entity().downgrade();
         window.on_window_should_close(cx, move |window, cx| {
             let _ = game.update(cx, |game, cx| {
-                game.run = Run::for_arrival();
-                game.arrival = Some(0.);
-                game.slide = None;
-                game.started = false;
+                game.persist_options(cx, 0);
+                game.return_to_menu();
                 game.set_options_open(false);
                 window.focus(&game.focus, cx);
-                game.audio.stop();
-                game.run_personal_best = game.personal_best;
-                game.ghost_replay = game.best_replay.clone();
-                game.recording = Recording::new(game.run.ghost_frame());
-                game.last_frame = None;
-                game.remainder = 0.;
-                game.camera = 0.;
-                game.save_message = None;
-                game.completion_recorded = false;
                 #[cfg(feature = "walkthrough-screenshots")]
                 {
                     game.preview = false;
@@ -785,7 +882,6 @@ impl Rooftops {
             });
             crate::window_limits::close(window)
         });
-        let best_path = remember.then(|| GameData::path().ok()).flatten();
         let stored = best_path
             .as_deref()
             .map(|path| {
@@ -818,7 +914,7 @@ impl Rooftops {
         let best_replay = stored.replay.map(Arc::new);
         let run = Run::for_arrival();
         let recording = Recording::new(run.ghost_frame());
-        let mut audio = audio::Audio::new(remember);
+        let mut audio = audio::Audio::new(audio_enabled);
         if let Some(events) = audio.take_events() {
             cx.spawn(async move |this, cx| {
                 while events.recv().await.is_ok() {
@@ -831,6 +927,17 @@ impl Rooftops {
         }
         Self {
             run,
+            menu_open,
+            menu_time: 0.,
+            menu_camera: menu::Aim::default(),
+            menu_aim: menu::Aim::default(),
+            menu_bridge: menu::BridgeArt::default(),
+            achievements: stored.achievements,
+            achievements_open: false,
+            achievements_focus: cx.focus_handle(),
+            hud_changed: None,
+            viewing_scorecard: None,
+            best_scorecard: stored.scorecard,
             arrival: Some(0.),
             slide: None,
             started: false,
@@ -846,6 +953,8 @@ impl Rooftops {
             _volume_subscriptions: [music_subscription, effects_subscription],
             audio,
             facade_art: neighborhood::FacadeArt::default(),
+            cat_art: CatArt::default(),
+            room_art: rooms::RoomArt::default(),
             poster_art: None,
             focus,
             options_focus: cx.focus_handle(),
@@ -865,9 +974,121 @@ impl Rooftops {
             saving: false,
             #[cfg(feature = "walkthrough-screenshots")]
             preview: false,
+            #[cfg(feature = "walkthrough-screenshots")]
+            fixed_preview_aspect: false,
             _activation: activation,
             _blur: blur,
         }
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn for_menu_preview(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        time: f32,
+        [x, y]: [f32; 2],
+    ) -> Self {
+        let mut game = Self::new_with_records(window, cx, None, false, true);
+        game.preview = true;
+        game.menu_time = time;
+        game.menu_camera = menu::Aim::new(x, y);
+        game
+    }
+
+    #[cfg(all(target_os = "macos", feature = "walkthrough-screenshots"))]
+    #[allow(dead_code)]
+    pub(crate) fn for_achievements_preview(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        open: bool,
+    ) -> Self {
+        let mut game = Self::for_menu_preview(window, cx, 0., [0., 0.]);
+        let score = Score {
+            coins: 18,
+            deaths: 0,
+            kills: 3,
+            seconds: 73.4,
+            personal_best: None,
+        };
+        game.best_scorecard = Some(score);
+        game.achievements.record_score(score);
+        game.achievements.insert(Achievement::DoubleFeature);
+        game.achievements_open = open;
+        if open {
+            window.focus(&game.achievements_focus, cx);
+        }
+        game
+    }
+
+    pub(crate) fn discover(&self, cx: &mut Context<Self>) {
+        if let Some(path) = self.best_path.clone() {
+            self.save_game(path, cx, |path, generation| {
+                GameData::discover(path, generation)
+            });
+        }
+    }
+
+    fn save_game(
+        &self,
+        path: std::path::PathBuf,
+        cx: &mut Context<Self>,
+        save: impl FnOnce(&std::path::Path, u64) -> anyhow::Result<bool> + Send + 'static,
+    ) {
+        let generation = match GameData::save_generation(&path) {
+            Ok(generation) => generation,
+            Err(error) => {
+                eprintln!("Could not save Rooftops data: {error}");
+                return;
+            }
+        };
+        let file = path.clone();
+        let task = cx.background_spawn(async move {
+            save(&file, generation)
+                .map(|saved| saved.then(|| GameData::saved_progress(&file).scorecard))
+        });
+        cx.spawn(async move |game, cx| match task.await {
+            Ok(Some(scorecard)) => {
+                let _ = game.update(cx, |game, cx| {
+                    if GameData::save_generation(&path).ok() == Some(generation) {
+                        if let Some(score) = scorecard
+                            && game
+                                .best_scorecard
+                                .is_none_or(|best| score.seconds < best.seconds)
+                        {
+                            game.best_scorecard = Some(score);
+                        }
+                        cx.emit(Saved(game.best_scorecard));
+                        cx.notify();
+                    }
+                });
+            }
+            Ok(None) => {}
+            Err(error) => eprintln!("Could not save Rooftops data: {error:#}"),
+        })
+        .detach();
+    }
+
+    pub(crate) fn show_scorecard(
+        &mut self,
+        score: Score,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.menu_open = false;
+        self.achievements_open = false;
+        self.menu_time = 0.;
+        self.viewing_scorecard = Some(score);
+        self.save_message = None;
+        self.set_options_open(false);
+        self.audio.stop();
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn displayed_score(&self) -> Option<Score> {
+        self.viewing_scorecard
+            .or_else(|| (self.run.home && self.run.level + 1 == LEVELS).then(|| self.score()))
     }
 
     #[cfg(feature = "walkthrough-screenshots")]
@@ -878,7 +1099,7 @@ impl Rooftops {
         level: usize,
         show_results: bool,
     ) -> Self {
-        let mut game = Self::new_with_records(window, cx, false);
+        let mut game = Self::new_with_records(window, cx, None, false, false);
         game.preview = true;
         game.arrival = None;
         game.started = true;
@@ -908,7 +1129,7 @@ impl Rooftops {
                 let owl = run
                     .enemies
                     .iter()
-                    .find(|enemy| enemy.roof == 7 && matches!(enemy.kind, EnemyKind::Owl))
+                    .find(|enemy| enemy.roof == 7 && matches!(enemy.kind, EnemyKind::Bat))
                     .unwrap();
                 let (x, y) = owl.position(&run.roofs, run.time);
                 run.x = x;
@@ -967,7 +1188,7 @@ impl Rooftops {
         cx: &mut Context<Self>,
         time: f32,
     ) -> Self {
-        let mut game = Self::new_with_records(window, cx, false);
+        let mut game = Self::new_with_records(window, cx, None, false, false);
         game.preview = true;
         game.arrival = (time < arrival::DURATION).then_some(time);
         game.run.lit[0] = time >= arrival::LANDING;
@@ -982,7 +1203,7 @@ impl Rooftops {
         level: usize,
         slide_time: Option<f32>,
     ) -> Self {
-        let mut game = Self::new_with_records(window, cx, false);
+        let mut game = Self::new_with_records(window, cx, None, false, false);
         game.preview = true;
         game.arrival = None;
         game.started = true;
@@ -1085,25 +1306,41 @@ impl Rooftops {
 
     #[cfg(feature = "walkthrough-screenshots")]
     #[allow(dead_code)]
-    pub(crate) fn audit_frame(&mut self, frame: usize, cx: &mut Context<Self>) {
+    pub(crate) fn for_respawn_preview(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut game = Self::for_preview(window, cx, 0, false);
+        game.run.checkpoint = 3;
+        game.run.lit[..=3].fill(true);
+        game.run.respawn();
+        game.camera = (game.run.x - 300.).max(0.);
+        game
+    }
+
+    #[cfg(feature = "walkthrough-screenshots")]
+    #[allow(dead_code)]
+    pub(crate) fn audit_frame(&mut self, frame: usize, fixed_aspect: bool, cx: &mut Context<Self>) {
         self.run.time = frame as f32 / 60.;
+        self.menu_time = self.run.time;
+        self.fixed_preview_aspect = fixed_aspect;
+        if self.menu_open {
+            // Include the moving camera in the menu render timings.
+            self.menu_camera = menu::Aim::new(self.menu_time.sin(), (self.menu_time * 0.7).sin());
+        }
         cx.notify();
     }
 
     fn save_score(&mut self, _: &gpui_kit::ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if self.saving || !self.run.home || self.run.level + 1 != LEVELS {
+        let Some(score) = self.displayed_score().filter(|_| !self.saving) else {
             return;
-        }
+        };
         self.saving = true;
         self.save_message = None;
-        let score = self.score();
         let task = cx.background_spawn(async move { score.save() });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 this.saving = false;
                 // A restarted game must not receive the previous run's notice.
-                if this.run.home && this.run.elapsed == score.seconds {
+                if this.displayed_score() == Some(score) {
                     this.save_message = Some(match result {
                         Ok(path) => format!(
                             "Saved {} to Downloads",
@@ -1119,7 +1356,13 @@ impl Rooftops {
         cx.notify();
     }
 
-    fn results(&mut self, cx: &mut Context<Self>, width: f32, height: f32) -> gpui_kit::Div {
+    fn results(
+        &mut self,
+        score: Score,
+        cx: &mut Context<Self>,
+        width: f32,
+        height: f32,
+    ) -> gpui_kit::Div {
         let scale = ((width - 48.) / 900.).min((height - 100.) / 540.).max(0.1);
         if self
             .poster_art
@@ -1161,13 +1404,14 @@ impl Rooftops {
                     if self.reduced_motion(cx) {
                         1.2
                     } else {
-                        self.run.time
+                        self.viewing_scorecard
+                            .map_or(self.run.time, |_| self.menu_time)
                     },
                     1.1,
                 ),
                 scale,
             ));
-        for item in crate::rooftops_score::poster_text(self.score()) {
+        for item in crate::rooftops_score::poster_text(score) {
             let label = div()
                 .absolute()
                 .left(px(item.x * scale))
@@ -1193,18 +1437,9 @@ impl Rooftops {
                 .justify_between()
                 .items_center()
                 .child(
-                    h_flex()
-                        .gap_3()
-                        .child(
-                            score_button("play-rooftops-again", "Play again", cx)
-                                .debug_selector(|| "play-rooftops-again".into())
-                                .on_click(cx.listener(Self::play_again)),
-                        )
-                        .child(
-                            score_button("exit-rooftops", "Exit", cx)
-                                .debug_selector(|| "exit-rooftops".into())
-                                .on_click(cx.listener(Self::exit_game)),
-                        ),
+                    score_button("rooftops-main-menu", "Main menu", cx)
+                        .debug_selector(|| "rooftops-main-menu".into())
+                        .on_click(cx.listener(Self::open_main_menu)),
                 )
                 .child(
                     score_button("save-rooftops-score", "Download scorecard", cx)
@@ -1227,58 +1462,68 @@ impl Rooftops {
     fn continue_from_home(&mut self) {
         self.finish_arrival();
         let restart = self.run.level + 1 == LEVELS;
-        let previous = (!restart).then(|| self.run.clone());
-        let previous_camera = self.camera;
         if restart {
-            self.started = false;
-            self.audio.stop();
-            self.run_personal_best = self.personal_best;
-            self.ghost_replay = self.best_replay.clone();
+            self.return_to_menu();
+            return;
         }
+        let previous = self.run.clone();
+        let previous_camera = self.camera;
+        self.started = false;
+        self.hud_changed = None;
         self.last_frame = None;
         self.remainder = 0.;
         self.save_message = None;
         self.completion_recorded = false;
         self.camera = 0.;
         self.run.jump_down();
-        if let Some(previous) = previous {
-            let offset = START_X - previous.destination();
-            self.slide = Some(LevelSlide {
-                previous,
-                time: 0.,
-                camera_start: previous_camera + offset,
-            });
-            self.camera = self.slide.as_ref().unwrap().camera();
-        } else {
-            self.slide = None;
-        }
-        if restart {
-            self.recording = Recording::new(self.run.ghost_frame());
-        } else {
-            self.recording.capture(self.run.ghost_frame());
-        }
+        let offset = START_X - previous.destination();
+        self.slide = Some(LevelSlide {
+            previous,
+            time: 0.,
+            camera_start: previous_camera + offset,
+        });
+        self.camera = previous_camera + offset;
+        self.recording.capture(self.run.ghost_frame());
     }
 
-    pub(crate) fn reset_progress(&mut self, cx: &mut Context<Self>) {
+    fn reset_run(&mut self) {
         self.run = Run::for_arrival();
         self.arrival = Some(0.);
         self.slide = None;
         self.started = false;
-        self.options_open = false;
-        self.preferences = Preferences::default();
-        self.preferences_dirty = false;
-        self.preferences_message = None;
+        self.hud_changed = None;
+        self.menu_open = false;
+        self.achievements_open = false;
+        self.viewing_scorecard = None;
         self.audio.stop();
-        self.personal_best = None;
-        self.run_personal_best = None;
-        self.best_replay = None;
-        self.ghost_replay = None;
+        self.run_personal_best = self.personal_best;
+        self.ghost_replay = self.best_replay.clone();
         self.recording = Recording::new(self.run.ghost_frame());
         self.last_frame = None;
         self.remainder = 0.;
         self.camera = 0.;
         self.completion_recorded = false;
         self.save_message = None;
+    }
+
+    fn return_to_menu(&mut self) {
+        self.reset_run();
+        self.menu_open = true;
+        self.menu_time = 0.;
+        self.menu_camera = menu::Aim::default();
+        self.menu_aim = menu::Aim::default();
+    }
+
+    pub(crate) fn reset_progress(&mut self, cx: &mut Context<Self>) {
+        self.personal_best = None;
+        self.best_replay = None;
+        self.best_scorecard = None;
+        self.achievements = Achievements::default();
+        self.return_to_menu();
+        self.set_options_open(false);
+        self.preferences = Preferences::default();
+        self.preferences_dirty = false;
+        self.preferences_message = None;
         #[cfg(feature = "walkthrough-screenshots")]
         {
             self.preview = false;
@@ -1286,39 +1531,41 @@ impl Rooftops {
         cx.notify();
     }
 
-    pub(crate) fn has_completed(&self) -> bool {
-        self.personal_best.is_some()
-    }
-
-    fn play_again(
+    fn open_main_menu(
         &mut self,
         _: &gpui_kit::ClickEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.run.home && self.run.level + 1 == LEVELS {
-            self.continue_from_home();
+        if !self.menu_open {
+            self.persist_options(cx, 0);
+            self.set_options_open(false);
+            self.return_to_menu();
             window.focus(&self.focus, cx);
             cx.notify();
         }
     }
 
-    fn exit_game(&mut self, _: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        // Use the normal close request so the run resets through the window's
-        // cleanup callback and retains the native macOS teardown workaround.
-        window.defer(cx, |window, cx| {
-            crate::window_limits::request_close(window, cx)
-        });
-    }
-
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.options_open || !self.focus.is_focused(window) {
+        if self.options_open || self.achievements_open || !self.focus.is_focused(window) {
             return;
         }
         if event.keystroke.modifiers.platform
             || event.keystroke.modifiers.control
             || event.keystroke.modifiers.alt
         {
+            return;
+        }
+        if self.menu_open || self.displayed_score().is_some() {
+            if event.keystroke.key == "space" && !event.is_held {
+                if self.menu_open {
+                    self.reset_run();
+                } else {
+                    self.return_to_menu();
+                }
+                cx.stop_propagation();
+                cx.notify();
+            }
             return;
         }
         match event.keystroke.key.as_str() {
@@ -1345,7 +1592,11 @@ impl Rooftops {
     }
 
     fn key_up(&mut self, event: &KeyUpEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.options_open || !self.focus.is_focused(window) {
+        if self.options_open
+            || self.menu_open
+            || self.viewing_scorecard.is_some()
+            || !self.focus.is_focused(window)
+        {
             return;
         }
         match event.keystroke.key.as_str() {
@@ -1374,6 +1625,7 @@ impl Rooftops {
         self.finish_slide();
         if !self.started {
             self.started = true;
+            self.hud_changed = Some(now);
             self.last_frame = Some(now);
             self.remainder = 0.;
         }
@@ -1439,7 +1691,8 @@ impl Rooftops {
             return;
         }
         self.completion_recorded = true;
-        let seconds = self.run.elapsed;
+        let score = self.score();
+        let seconds = score.seconds;
         if !seconds.is_finite() || seconds <= 0. {
             return;
         }
@@ -1456,26 +1709,26 @@ impl Rooftops {
         if faster_replay {
             self.best_replay = replay.clone();
         }
-        cx.emit(Completed);
-        if !faster_time && !faster_replay {
-            return;
-        }
+        let unlocked = self
+            .achievements
+            .union(self.run.completion_achievements(score));
+        self.achievements = unlocked;
         if let Some(path) = self.best_path.clone() {
-            let generation = match GameData::save_generation(&path) {
-                Ok(generation) => generation,
-                Err(error) => {
-                    eprintln!("Could not save Rooftops data: {error}");
-                    return;
-                }
-            };
-            cx.background_spawn(async move {
-                if let Err(error) =
-                    GameData::save_if_current(&path, seconds, replay.as_deref(), generation)
-                {
-                    eprintln!("Could not save Rooftops data: {error}");
-                }
-            })
-            .detach();
+            self.save_game(path, cx, move |path, generation| {
+                GameData::save_completion(path, score, replay.as_deref(), unlocked, generation)
+            });
+        }
+    }
+
+    fn record_stunts(&mut self, cx: &mut Context<Self>) {
+        let unlocked = self.achievements.union(self.run.stunts.unlocked);
+        if unlocked != self.achievements {
+            self.achievements = unlocked;
+            if let Some(path) = self.best_path.clone() {
+                self.save_game(path, cx, move |path, generation| {
+                    GameData::save_achievements(path, unlocked, generation)
+                });
+            }
         }
     }
 
@@ -1484,12 +1737,30 @@ impl Rooftops {
         if self.preview {
             return;
         }
-        let active =
-            window.is_window_active() && self.focus.is_focused(window) && !self.options_open;
+        let active = window.is_window_active()
+            && !self.options_open
+            && !self.achievements_open
+            && (self.menu_open
+                || self.displayed_score().is_some()
+                || self.focus.is_focused(window));
         if self.options_open && self.music_preview {
             self.sync_music_preview(window.is_window_active());
         } else {
             self.sync_audio(active);
+        }
+        if self.menu_open || self.viewing_scorecard.is_some() {
+            if active && !self.reduced_motion(cx) {
+                let now = Instant::now();
+                if let Some(last) = self.last_frame.replace(now) {
+                    let elapsed = now.duration_since(last).as_secs_f32().min(0.05);
+                    self.menu_time += elapsed;
+                    self.menu_camera.follow(self.menu_aim, elapsed);
+                }
+                window.request_animation_frame();
+            } else {
+                self.last_frame = None;
+            }
+            return;
         }
         if self.slide.is_some() && active {
             if self.reduced_motion(cx) {
@@ -1529,6 +1800,7 @@ impl Rooftops {
         }
         self.recording.capture(self.run.ghost_frame());
         self.record_completion(cx);
+        self.record_stunts(cx);
         let end = self.run.roofs.last().unwrap().x + self.run.roofs.last().unwrap().width;
         let target = (self.run.x - view_width * 0.34).clamp(0., end - view_width.min(end));
         if self.run.returns != returns || self.run.jumps == 0 || self.reduced_motion(cx) {
@@ -1547,19 +1819,33 @@ impl Rooftops {
         !self.preferences.animations || cx.reduce_motion()
     }
 
+    fn audio_scene(&self, active: bool) -> audio::Scene {
+        let results = self.displayed_score().is_some();
+        audio::Scene {
+            active,
+            level: if self.menu_open {
+                audio::MENU
+            } else if results {
+                audio::FINALE
+            } else {
+                self.run.level
+            },
+            resting: results || self.run.home || self.slide.is_some(),
+            thruster: !self.menu_open && !results && self.arrival.is_some_and(arrival::flames_on),
+        }
+    }
+
     fn sync_audio(&self, active: bool) {
         self.audio.sync(
-            audio::Scene {
-                active,
-                level: if self.run.home && self.run.level + 1 == LEVELS {
-                    3
+            self.audio_scene(active),
+            Preferences {
+                effects_volume: if self.menu_open {
+                    0
                 } else {
-                    self.run.level
+                    self.preferences.effects_volume
                 },
-                resting: self.run.home || self.slide.is_some(),
-                thruster: self.arrival.is_some_and(arrival::flames_on),
+                ..self.preferences
             },
-            self.preferences,
         );
     }
 }
@@ -1639,10 +1925,7 @@ fn cat_coin(x: f32, y: f32, scale: f32, artwork: &Arc<Image>) -> impl IntoElemen
         .h(px(28. * scale))
 }
 
-type Joint = (f32, f32);
-
-// One native GPUI element paints the connected discs, avoiding a separate
-// layout node for every point along every limb. No canvas or image cache needed.
+// Batch decorative quads into one layout node.
 struct NativeArt<Q = Vec<gpui_kit::PaintQuad>> {
     quads: Q,
 }
@@ -1700,40 +1983,6 @@ impl<Q: AsRef<[gpui_kit::PaintQuad]> + 'static> gpui_kit::Element for NativeArt<
             quad.bounds.origin += bounds.origin;
             window.paint_quad(quad);
         }
-    }
-}
-
-fn limb(a: Joint, b: Joint, widths: (f32, f32), ink: u32, scale: f32) -> gpui_kit::Div {
-    let mut quads = Vec::with_capacity(24);
-    append_limb(&mut quads, a, b, widths, ink, scale);
-    div().absolute().child(NativeArt { quads })
-}
-
-fn append_limb(
-    quads: &mut Vec<gpui_kit::PaintQuad>,
-    a: Joint,
-    b: Joint,
-    widths: (f32, f32),
-    ink: u32,
-    scale: f32,
-) {
-    let distance = (b.0 - a.0).hypot(b.1 - a.1);
-    let steps = (distance / 1.1).ceil().max(1.) as usize;
-    for i in 0..=steps {
-        let t = i as f32 / steps as f32;
-        let diameter = widths.0 + (widths.1 - widths.0) * t;
-        quads.push(native_quad(
-            [
-                a.0 + (b.0 - a.0) * t - diameter * 0.5,
-                a.1 + (b.1 - a.1) * t - diameter * 0.5,
-                diameter,
-                diameter,
-            ],
-            ink,
-            1.,
-            diameter * 0.5,
-            scale,
-        ));
     }
 }
 
@@ -1800,7 +2049,54 @@ fn stat_counter(icon: impl IntoElement, count: usize) -> gpui_kit::Div {
         )
 }
 
-fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32, level: usize) -> gpui_kit::Div {
+#[derive(Clone, Copy)]
+struct Star {
+    x: f32,
+    y: f32,
+    size: f32,
+    phase: f32,
+}
+
+fn visible_stars(width: f32, camera: f32) -> impl Iterator<Item = Star> {
+    const STRIP_WIDTH: f32 = 160.;
+    const STARS_PER_STRIP: u64 = 13;
+    let shift = camera * 0.06;
+    let first = ((shift - 2.4) / STRIP_WIDTH).floor() as i64;
+    let last = ((shift + width) / STRIP_WIDTH).floor() as i64;
+    (first..=last).flat_map(move |strip| {
+        (0..STARS_PER_STRIP).filter_map(move |index| {
+            // A fixed world-space strip stays put when the viewport width changes.
+            let key = (strip as u64)
+                .wrapping_mul(STARS_PER_STRIP)
+                .wrapping_add(index);
+            let mut bits = key.wrapping_add(0x9e3779b97f4a7c15);
+            bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+            bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
+            bits ^= bits >> 31;
+            let fraction = |shift| ((bits >> shift) as u16) as f32 / 65536.;
+            let x = (strip as f32 + fraction(0)) * STRIP_WIDTH - shift;
+            let size = if bits >> 60 <= 1 { 2.4 } else { 1.2 };
+            (x + size > 0. && x < width).then_some(Star {
+                x,
+                y: fraction(16) * 270.,
+                size,
+                phase: fraction(32) * std::f32::consts::TAU,
+            })
+        })
+    })
+}
+
+#[derive(Clone, Copy)]
+enum BackdropView {
+    Course { camera: f32, level: usize },
+    Harbor(menu::View),
+}
+
+fn backdrop(w: f32, h: f32, time: f32, scale: f32, view: BackdropView) -> gpui_kit::Div {
+    let (star_camera, moon_phase, building_bottom) = match view {
+        BackdropView::Course { camera, level } => (camera, Some(level), h),
+        BackdropView::Harbor(_) => (145., None, h * menu::HORIZON),
+    };
     let mut quads = Vec::with_capacity(600);
     for band in 0..10 {
         quads.push(native_quad(
@@ -1811,33 +2107,69 @@ fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32, level: usize) ->
             scale,
         ));
     }
-    for i in 0..75 {
-        let x = ((i * 173 + 31) as f32 - camera * 0.06).rem_euclid(w);
-        let y = ((i * 79 + 19) % 270) as f32;
-        let d = if i % 9 == 0 { 2.4 } else { 1.2 };
+    for Star { x, y, size, phase } in visible_stars(w, star_camera) {
         quads.push(native_quad(
-            [x, y, d, d],
+            [x, y, size, size],
             0xc2c3e1,
-            0.22 + 0.35 * ((time * 0.7 + i as f32).sin() * 0.5 + 0.5),
-            d * 0.5,
+            0.22 + 0.35 * ((time * 0.7 + phase).sin() * 0.5 + 0.5),
+            size * 0.5,
             scale,
         ));
     }
     let moon = w - 155.;
+    let mut skyline = div().absolute().inset_0().child(NativeArt { quads });
+    const WINDOW_SPAN: f32 = 66.;
+    const WINDOW_TILE_HEIGHT: f32 = 108.;
+    static WINDOWS: LazyLock<[[neighborhood::Tile; 4]; 2]> = LazyLock::new(|| {
+        [0.13, 0.27].map(|glow| {
+            std::array::from_fn(|phase| {
+                neighborhood::Tile::draw([0., 0., WINDOW_SPAN, WINDOW_TILE_HEIGHT], |tile| {
+                    for row in 0..4 {
+                        for col in 0..4 {
+                            let value = (phase * 11 + row * 7 + col * (5 + row) + col * col) % 13;
+                            let brightness = 0.42 + value as f32 * 0.052;
+                            tile.rounded(
+                                [col as f32 * 20., row as f32 * 27., 6., 10.],
+                                0.,
+                                0xd9b49b,
+                                glow * brightness,
+                            );
+                        }
+                    }
+                })
+            })
+        })
+    });
     for layer in 0..3 {
+        let mut quads = Vec::new();
+        let mut windows = Vec::new();
         let parallax = [0.12, 0.26, 0.43][layer];
         let spacing = [112., 98., 125.][layer];
+        let offset_x = match view {
+            BackdropView::Course { camera, .. } => -camera * parallax,
+            BackdropView::Harbor(_) => -145. * parallax,
+        };
         let base = [365., 440., 510.][layer];
         let color = [0x1b2034, 0x24263d, 0x2c2b43][layer];
-        let first = (camera * parallax / spacing).floor() as usize;
-        for i in first..first + (w / spacing) as usize + 3 {
-            let x = i as f32 * spacing - camera * parallax;
+        let first = (-offset_x / spacing).floor() as i64;
+        for i in first..first + (w / spacing) as i64 + 3 {
+            let left = i as f32 * spacing + offset_x;
+            let ([x, foot], zoom) = match view {
+                BackdropView::Course { .. } => ([left, building_bottom], 1.),
+                BackdropView::Harbor(camera) => {
+                    camera.billboard(left, [290., 219., 160.][layer], building_bottom)
+                }
+            };
             if x > w {
                 break;
             }
-            let tall = 55. + ((i * 73 + layer * 41) % 130) as f32;
+            let tall = 55. + (i * 73 + layer as i64 * 41).rem_euclid(130) as f32;
+            let top = foot + (base - tall - building_bottom) * zoom;
+            if top >= building_bottom {
+                continue;
+            }
             let mut building = native_quad(
-                [x, base - tall, spacing - 9., tall + h - base],
+                [x, top, (spacing - 9.) * zoom, building_bottom - top],
                 color,
                 1.,
                 3.,
@@ -1847,413 +2179,82 @@ fn backdrop(w: f32, h: f32, camera: f32, time: f32, scale: f32, level: usize) ->
             building.corner_radii.bottom_right = px(0.);
             quads.push(building);
             quads.push(native_quad(
-                [x + 13., base - tall - 9., spacing - 35., 10.],
+                [
+                    x + 13. * zoom,
+                    top - 9. * zoom,
+                    (spacing - 35.) * zoom,
+                    10. * zoom,
+                ],
                 color,
                 1.,
                 0.,
                 scale,
             ));
             if i % 3 == 0 {
-                let mut tower =
-                    native_quad([x + 35., base - tall - 30., 21., 24.], color, 1., 7., scale);
+                let mut tower = native_quad(
+                    [x + 35. * zoom, top - 30. * zoom, 21. * zoom, 24. * zoom],
+                    color,
+                    1.,
+                    7.,
+                    scale,
+                );
                 tower.corner_radii.bottom_left = px(0.);
                 tower.corner_radii.bottom_right = px(0.);
                 quads.push(tower);
                 quads.push(native_quad(
-                    [x + 41., base - tall - 46., 2., 17.],
+                    [x + 41. * zoom, top - 46. * zoom, 2. * zoom, 17. * zoom],
                     color,
                     1.,
                     0.,
                     scale,
                 ));
             }
-            for row in 0..(tall / 27.) as usize {
-                for col in 0..3 {
-                    if (i + row * 3 + col).is_multiple_of(4) {
-                        continue;
-                    }
-                    quads.push(native_quad(
-                        [
-                            x + 15. + col as f32 * 24.,
-                            base - tall + 17. + row as f32 * 27.,
-                            6.,
-                            10.,
-                        ],
-                        0xd9b49b,
-                        if layer == 0 { 0.13 } else { 0.27 },
-                        0.,
-                        scale,
-                    ));
-                }
+            if top + 17. * zoom < building_bottom {
+                windows.push((
+                    x + (spacing - 9. - WINDOW_SPAN) * 0.5 * zoom,
+                    top + 17. * zoom,
+                    zoom,
+                    i.rem_euclid(4) as usize,
+                ));
             }
         }
-    }
-    div()
-        .absolute()
-        .size_full()
-        .child(NativeArt { quads })
-        .child(vector_art(art::moon_paths(moon, 58., 84., level), scale))
-}
-
-fn elbow(a: Joint, b: Joint, length: f32, bend: f32) -> Joint {
-    let dx = b.0 - a.0;
-    let dy = b.1 - a.1;
-    let distance = dx.hypot(dy).max(0.01);
-    let offset = (length * length - distance * distance * 0.25)
-        .max(0.)
-        .sqrt()
-        * bend;
-    (
-        (a.0 + b.0) * 0.5 - dy / distance * offset,
-        (a.1 + b.1) * 0.5 + dx / distance * offset,
-    )
-}
-
-struct Resident {
-    shoulder: Joint,
-    hip: Joint,
-    hands: [Joint; 2],
-    feet: [Joint; 2],
-    facing: f32,
-    seated: bool,
-}
-
-fn resident(pose: Resident, ink: u32, scale: f32) -> gpui_kit::Div {
-    let Resident {
-        shoulder,
-        hip,
-        hands,
-        feet,
-        facing,
-        seated,
-    } = pose;
-    let head = (shoulder.0 + facing * 0.6, shoulder.1 - 7.);
-    // A whole resident shares one layout node instead of one node per limb.
-    let mut quads = Vec::with_capacity(192);
-    for (i, foot) in feet.into_iter().enumerate() {
-        let pelvis = (hip.0 + (i as f32 - 0.5) * 2.5, hip.1);
-        let knee = elbow(pelvis, foot, 10., if seated { -facing } else { facing });
-        append_limb(&mut quads, pelvis, knee, (4.1, 3.), ink, scale);
-        append_limb(&mut quads, knee, foot, (3., 1.9), ink, scale);
-        append_limb(
-            &mut quads,
-            foot,
-            (foot.0 + facing * 3., foot.1 + 0.3),
-            (2.2, 2.5),
-            ink,
-            scale,
+        skyline = skyline.child(NativeArt { quads }).child(
+            gpui_kit::canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    let tiles = &WINDOWS[usize::from(layer != 0)];
+                    for (x, y, zoom, phase) in windows {
+                        let tile_scale = scale * zoom;
+                        let position =
+                            bounds.origin + gpui_kit::point(px(x * scale), px(y * scale));
+                        let clip = gpui_kit::Bounds::new(
+                            position,
+                            gpui_kit::size(
+                                px(WINDOW_SPAN * tile_scale),
+                                px((building_bottom - y) * scale),
+                            ),
+                        );
+                        for row in
+                            0..((building_bottom - y) / (zoom * WINDOW_TILE_HEIGHT)).ceil() as usize
+                        {
+                            let origin = position
+                                + gpui_kit::point(
+                                    px(0.),
+                                    px(row as f32 * WINDOW_TILE_HEIGHT * tile_scale),
+                                );
+                            tiles[phase].paint(origin, tile_scale, clip, window);
+                        }
+                    }
+                },
+            )
+            .absolute()
+            .inset_0(),
         );
     }
-    append_limb(&mut quads, shoulder, hip, (7.5, 5.8), ink, scale);
-    append_limb(
-        &mut quads,
-        (head.0, head.1 + 2.),
-        shoulder,
-        (2.6, 3.),
-        ink,
-        scale,
-    );
-    quads.push(native_quad(
-        [head.0 - 2.5, head.1 - 3.3, 5., 6.8],
-        ink,
-        1.,
-        2.3,
-        scale,
-    ));
-    quads.push(native_quad(
-        [head.0 + facing * 2. - 1., head.1 - 0.3, 2., 2.],
-        ink,
-        1.,
-        1.,
-        scale,
-    ));
-    let mut hair = native_quad([head.0 - 2.8, head.1 - 3.6, 5.4, 2.8], ink, 1., 2., scale);
-    hair.corner_radii.bottom_left = px(0.);
-    hair.corner_radii.bottom_right = px(0.);
-    quads.push(hair);
-    for (i, hand) in hands.into_iter().enumerate() {
-        let socket = (shoulder.0 + (i as f32 - 0.5) * 3., shoulder.1 + 0.6);
-        let joint = elbow(socket, hand, 7.5, if i == 0 { -1. } else { 1. });
-        append_limb(&mut quads, socket, joint, (3.2, 2.3), ink, scale);
-        append_limb(&mut quads, joint, hand, (2.3, 1.6), ink, scale);
-        quads.push(native_quad(
-            [hand.0 - 1.1, hand.1 - 1.1, 2.2, 2.2],
-            ink,
-            1.,
-            1.1,
-            scale,
-        ));
+    match moon_phase {
+        Some(level) => skyline.child(vector_art(art::moon_paths(moon, 58., 84., level), scale)),
+        None => skyline.child(vector_art(menu::moon(), scale)),
     }
-    div().absolute().child(NativeArt { quads })
-}
-
-fn window_frame(
-    lit: bool,
-    neighborhood: Neighborhood,
-    covering: Arc<[gpui_kit::PaintQuad]>,
-    scale: f32,
-) -> gpui_kit::Div {
-    let mut window = div()
-        .absolute()
-        .w(px(66. * scale))
-        .h(px(62. * scale))
-        .rounded_t(px(3. * scale))
-        .overflow_hidden()
-        .border_2()
-        .border_color(rgb(neighborhood.frame_color(lit)));
-    if !lit {
-        window = window.child(NativeArt { quads: covering });
-    }
-    window
-}
-
-fn apartment(
-    x: f32,
-    y: f32,
-    seed: usize,
-    lit: bool,
-    time: f32,
-    facade: (Neighborhood, &mut neighborhood::FacadeArt),
-    scale: f32,
-) -> impl IntoElement {
-    let (neighborhood, cache) = facade;
-    let covering = cache.covering(neighborhood, seed);
-    let surround_quads = cache.surround(neighborhood, seed, lit);
-    let ink = 0x39303d;
-    let light = [0xd4b58b, 0xc9b69a, 0xdac39b, 0xd1aa8c][seed % 4];
-    let mut room = div()
-        .absolute()
-        .left(px(x * scale))
-        .top(px(y * scale))
-        .w(px(66. * scale))
-        .h(px(64. * scale));
-    let surround = || {
-        div().absolute().inset_0().child(NativeArt {
-            quads: surround_quads.clone(),
-        })
-    };
-    if !lit {
-        return room
-            .child(block(0., 0., 66., 62., 0x141b2c, scale).rounded_t(px(3. * scale)))
-            .child(window_frame(false, neighborhood, covering.clone(), scale))
-            .child(surround());
-    }
-    let wave = (time * 1.5 + seed as f32).sin();
-    let mut interior = div()
-        .relative()
-        .w(px(66. * scale))
-        .h(px(62. * scale))
-        .overflow_hidden()
-        .rounded_t(px(3. * scale))
-        .bg(rgb(light))
-        .child(block(0., 56., 66., 6., 0x8e746e, scale))
-        .child(block(0., 0., 66., 14., 0xffe0ac, scale).opacity(0.13));
-    match seed % 6 {
-        0 => {
-            // A planted stance and a long handle make the vacuuming pose readable.
-            let base = 46. + wave * 2.;
-            let grip = (base - 14., 31.);
-            interior = interior
-                .child(limb((8., 56.), (base - 12., 56.), (0.8, 0.8), ink, scale))
-                .child(limb(
-                    (base - 12., 56.),
-                    (base - 8., 51.),
-                    (0.8, 0.8),
-                    ink,
-                    scale,
-                ))
-                .child(resident(
-                    Resident {
-                        shoulder: (24. + wave * 0.3, 24.),
-                        hip: (22., 36.),
-                        hands: [grip, (20., 37.)],
-                        feet: [(18., 56.), (28., 56.)],
-                        facing: 1.,
-                        seated: false,
-                    },
-                    ink,
-                    scale,
-                ))
-                .child(limb(
-                    (base - 3., 52.),
-                    (base - 10., 39.),
-                    (5.5, 7.),
-                    ink,
-                    scale,
-                ))
-                .child(limb(
-                    (base - 3., 52.),
-                    (base - 16., 27.),
-                    (1.7, 1.7),
-                    ink,
-                    scale,
-                ))
-                .child(limb(
-                    (base - 16., 27.),
-                    (base - 12., 27.),
-                    (2.3, 2.3),
-                    ink,
-                    scale,
-                ))
-                .child(block(base - 7., 52., 17., 4., ink, scale).rounded(px(1.5 * scale)))
-                .child(circle(base - 5., 54., 3., ink, scale))
-                .child(circle(base + 6., 54., 3., ink, scale));
-        }
-        1 => {
-            // Wrists move over the keyboard while the seated legs stay planted.
-            interior = interior
-                .child(block(37., 29., 25., 13., ink, scale).rounded_t(px(3. * scale)))
-                .child(block(34., 41., 28., 3., ink, scale))
-                .child(block(35., 41., 26., 1.5, light, scale))
-                .child(block(39., 44., 2., 13., ink, scale))
-                .child(block(59., 44., 2., 13., ink, scale))
-                .child(block(14., 44., 17., 3., ink, scale))
-                .child(block(17., 47., 2., 10., ink, scale))
-                .child(resident(
-                    Resident {
-                        shoulder: (23., 29.),
-                        hip: (22., 43.),
-                        hands: [(33., 39. + wave * 0.3), (35., 40. - wave * 0.3)],
-                        feet: [(32., 56.), (28., 56.)],
-                        facing: 1.,
-                        seated: true,
-                    },
-                    ink,
-                    scale,
-                ));
-            for key in 0..7 {
-                interior = interior.child(block(36. + key as f32 * 3.5, 41., 1., 1., ink, scale));
-            }
-        }
-        2 => {
-            let hand = (31. + wave * 0.35, 33. + wave * 0.25);
-            interior = interior
-                .child(resident(
-                    Resident {
-                        shoulder: (43., 23.),
-                        hip: (44., 36.),
-                        hands: [hand, (34., 35.)],
-                        feet: [(40., 56.), (46., 56.)],
-                        facing: -1.,
-                        seated: false,
-                    },
-                    ink,
-                    scale,
-                ))
-                .child(block(hand.0 - 7., hand.1, 8., 6., ink, scale).rounded(px(2. * scale)))
-                .child(limb(
-                    (hand.0 - 6., hand.1 + 3.),
-                    (20., 37.),
-                    (2., 1.2),
-                    ink,
-                    scale,
-                ))
-                .child(block(8., 48., 14., 9., ink, scale).rounded_b(px(3. * scale)))
-                .child(limb((15., 50.), (15., 31.), (1.4, 1.1), ink, scale));
-            for leaf in 0..4 {
-                let y = 32. + leaf as f32 * 4.;
-                interior = interior.child(limb(
-                    (15., y + 3.),
-                    (if leaf % 2 == 0 { 9. } else { 21. }, y),
-                    (3.8, 1.),
-                    ink,
-                    scale,
-                ));
-            }
-            for drop in 0..2 {
-                interior = interior.child(circle(
-                    20.,
-                    39. + (time * 7. + drop as f32 * 4.).rem_euclid(7.),
-                    1.,
-                    ink,
-                    scale,
-                ));
-            }
-        }
-        3 => {
-            // The spoon traces a small ellipse; the elbow follows the wrist.
-            let hand = (
-                30. + wave * 0.8,
-                33. + (time * 1.5 + seed as f32).cos() * 0.4,
-            );
-            interior = interior
-                .child(block(7., 43., 26., 14., ink, scale))
-                .child(block(11., 37., 15., 7., ink, scale).rounded_b(px(3. * scale)))
-                .child(block(24., 38., 7., 1.5, ink, scale))
-                .child(resident(
-                    Resident {
-                        shoulder: (42., 23.),
-                        hip: (45., 36.),
-                        hands: [hand, (35., 34.)],
-                        feet: [(41., 56.), (48., 56.)],
-                        facing: -1.,
-                        seated: false,
-                    },
-                    ink,
-                    scale,
-                ))
-                .child(limb(hand, (23. + wave * 0.8, 41.), (1., 1.), ink, scale))
-                .child(block(10., 47., 20., 7., light, scale).opacity(0.2))
-                .child(circle(11., 44., 1.5, light, scale))
-                .child(circle(16., 44., 1.5, light, scale));
-            for puff in 0..3 {
-                let rise = (time * 5. + puff as f32 * 5.).rem_euclid(14.);
-                interior = interior.child(
-                    circle(14. + rise * 0.2, 30. - rise, 3., ink, scale)
-                        .opacity((1. - rise / 14.) * 0.25),
-                );
-            }
-        }
-        4 => {
-            // Weight shifts over planted feet; shoulders counter the hip sway.
-            interior = interior
-                .child(resident(
-                    Resident {
-                        shoulder: (33. - wave * 0.7, 22.),
-                        hip: (33. + wave * 0.8, 36.),
-                        hands: [(21., 20. + wave), (45., 17. - wave)],
-                        feet: [(27., 55.), (40., 56.)],
-                        facing: 1.,
-                        seated: false,
-                    },
-                    ink,
-                    scale,
-                ))
-                .child(block(3., 44., 15., 4., ink, scale))
-                .child(block(5., 48., 2., 9., ink, scale))
-                .child(block(14., 48., 2., 9., ink, scale))
-                .child(limb((7., 41.), (15., 41.), (2., 2.), ink, scale))
-                .child(limb((15., 39.), (12., 42.), (1., 1.), ink, scale));
-        }
-        _ => {
-            // A forward lean brings the eye to the eyepiece; feet remain grounded.
-            interior = interior
-                .child(resident(
-                    Resident {
-                        shoulder: (29., 30.),
-                        hip: (22., 37.),
-                        hands: [(39., 33. + wave * 0.2), (36., 37.)],
-                        feet: [(17., 56.), (28., 56.)],
-                        facing: 1.,
-                        seated: false,
-                    },
-                    ink,
-                    scale,
-                ))
-                .child(limb((33., 23.), (55., 17.), (5., 7.), ink, scale))
-                .child(limb((44., 22.), (44., 39.), (2., 2.), ink, scale))
-                .child(limb((44., 38.), (36., 56.), (1.5, 1.), ink, scale))
-                .child(limb((44., 38.), (53., 56.), (1.5, 1.), ink, scale))
-                .child(limb((44., 38.), (44., 57.), (1.5, 1.), ink, scale));
-        }
-    }
-    room = room.child(
-        interior
-            .child(block(0., 0., 4., 56., ink, scale).opacity(0.14))
-            .child(block(62., 0., 4., 56., ink, scale).opacity(0.14))
-            .child(window_frame(true, neighborhood, covering, scale)),
-    );
-    room.child(surround())
 }
 
 fn enemy_sprite(enemy: &Enemy, x: f32, y: f32, time: f32, scale: f32) -> impl IntoElement {
@@ -2301,6 +2302,36 @@ fn enemy_sprite(enemy: &Enemy, x: f32, y: f32, time: f32, scale: f32) -> impl In
                 .child(block(13., 8., 2., 3., 0x292031, scale))
                 .child(block(22., 8., 2., 3., 0x292031, scale))
                 .child(block(17., 14., 3., 4., 0xe6a47c, scale));
+        }
+        EnemyKind::Bat => {
+            let flap = (time * 12. + enemy.phase).sin() * 5.;
+            sprite = sprite
+                .child(vector_art(
+                    vec![art::ArtPath {
+                        points: vec![
+                            [18., 10.],
+                            [9., 6.],
+                            [-9., 5. + flap],
+                            [-3., 18. + flap],
+                            [3., 14.],
+                            [10., 20.],
+                            [18., 16.],
+                            [25., 20.],
+                            [32., 14.],
+                            [39., 18. + flap],
+                            [45., 5. + flap],
+                            [27., 6.],
+                        ],
+                        ink: 0x81648c,
+                        opacity: 1.,
+                    }],
+                    scale,
+                ))
+                .child(circle(11., 6., 14., 0x513d61, scale))
+                .child(block(12., 2., 4., 9., 0x695075, scale).rounded_t(px(2. * scale)))
+                .child(block(20., 2., 4., 9., 0x695075, scale).rounded_t(px(2. * scale)))
+                .child(block(14., 10., 2., 2., 0xffc397, scale))
+                .child(block(20., 10., 2., 2., 0xffc397, scale));
         }
     }
     sprite
@@ -2366,25 +2397,19 @@ fn silhouette(x: f32, y: f32, facing: f32, gait: f32, squash: f32, scale: f32) -
 fn player_sprite(
     pose: Pose,
     camera: f32,
-    gait: f32,
-    squash: f32,
     opacity: f32,
     scale: f32,
-) -> impl IntoElement {
-    let pose = Pose {
-        gait,
-        squash,
-        ..pose
-    };
+    art: &mut CatArt,
+) -> impl IntoElement + use<> {
     let head = if pose.facing > 0. { 21. } else { 0. };
     let near = head + if pose.facing > 0. { 2. } else { 13. };
     let x = pose.x - camera - 20.;
-    let y = pose.y - 36. + squash * 5.;
+    let y = pose.y - 36. + pose.squash * 5.;
     // The body is one union fill: transparent overlaps never darken the cat.
     div()
         .absolute()
         .inset_0()
-        .child(cat_shape(pose, camera, scale, 0x05070d, opacity))
+        .child(art.sprite(pose, camera, scale, 0x05070d, opacity))
         .child(block(x + near + 1., y + 6., 2., 3., 0x71506e, scale).opacity(opacity))
         .child(
             block(
@@ -2414,7 +2439,7 @@ pub(crate) fn respawn_probe() -> impl IntoElement {
     div()
         .size_full()
         .bg(rgb(SKY))
-        .child(player_sprite(pose, 0., 0., 0., 0.5, 3.))
+        .child(player_sprite(pose, 0., 0.5, 3., &mut CatArt::default()))
 }
 
 fn scene_shapes(shapes: Vec<crate::rooftops_score::PosterShape>, scale: f32) -> gpui_kit::Div {
@@ -2452,93 +2477,145 @@ fn shelter(
     ))
 }
 
-fn ghost_sprite(pose: Pose, camera: f32, scale: f32) -> impl IntoElement {
-    cat_shape(pose, camera, scale, 0xb8abff, 0.28)
+type CatMesh = gpui_kit::Path<gpui_kit::Pixels>;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct CatPose {
+    right: bool,
+    home: bool,
+    gait: i8,
+    squash: u8,
 }
 
-fn cat_shape(pose: Pose, camera: f32, scale: f32, ink: u32, opacity: f32) -> impl IntoElement {
-    gpui_kit::canvas(
-        move |_, _, _| (),
-        move |bounds, _, window, _| {
-            let mut parts = Vec::with_capacity(12);
-            let x = pose.x - camera;
-            let y = pose.y;
-            if pose.home {
-                parts.extend([
-                    [x - 11., y - 14., 37., 14., 7.],
-                    [x + 13., y - 19., 16., 16., 8.],
-                    [x + 20., y - 20., 4., 7., 0.],
-                ]);
-            } else {
-                let x = x - 20.;
-                let compression = pose.squash * 5.;
-                let y = y - 36. + compression;
-                let head = if pose.facing > 0. { 21. } else { 0. };
-                let body = if pose.facing > 0. { 3. } else { 12. };
-                let near = head + if pose.facing > 0. { 2. } else { 13. };
-                let far = head + if pose.facing > 0. { 5. } else { 11. };
-                parts.extend([
-                    [x + body, y + 15., 27. + compression, 18. - compression, 9.],
-                    [x + head, y + 7., 19., 20., 7.],
-                    [x + far, y + 4., 3., 8., 1.5],
-                    [x + near, y + 1., 4., 11., 2.],
-                    [x + body + 4., y + 29. - compression, 6., 6. + pose.gait, 3.],
-                    [
-                        x + body + 19.,
-                        y + 29. - compression,
-                        6.,
-                        6. - pose.gait,
-                        3.,
-                    ],
-                ]);
-                let tail = if pose.facing > 0. {
-                    body + 2.
-                } else {
-                    body + 21.
-                };
-                for i in 0..5 {
-                    parts.push([
-                        x + tail - pose.facing * i as f32 * 3.,
-                        y + 22. - i as f32 * 2.8 + if i == 0 { 0. } else { pose.gait * 0.25 },
-                        7.,
-                        7.,
-                        3.5,
-                    ]);
-                }
-            }
-            // Nonzero winding unions the overlapping parts into one translucent fill.
-            let mut path = gpui_kit::PathBuilder::fill().with_style(gpui_kit::PathStyle::Fill(
-                gpui_kit::FillOptions::default().with_fill_rule(gpui_kit::FillRule::NonZero),
-            ));
-            for [x, y, w, h, radius] in parts {
-                let r = radius.min(w * 0.5).min(h * 0.5);
-                let mut points = Vec::with_capacity(52);
-                for (cx, cy, angle) in [
-                    (x + w - r, y + r, -std::f32::consts::FRAC_PI_2),
-                    (x + w - r, y + h - r, 0.),
-                    (x + r, y + h - r, std::f32::consts::FRAC_PI_2),
-                    (x + r, y + r, std::f32::consts::PI),
-                ] {
-                    for i in 0..=12 {
-                        let a = angle + i as f32 / 12. * std::f32::consts::FRAC_PI_2;
-                        points.push(
-                            bounds.origin
-                                + gpui_kit::point(
-                                    px((cx + r * a.cos()) * scale),
-                                    px((cy + r * a.sin()) * scale),
-                                ),
-                        );
+#[derive(Default)]
+struct CatArt(std::collections::HashMap<CatPose, Arc<CatMesh>>);
+
+impl CatArt {
+    fn sprite(
+        &mut self,
+        pose: Pose,
+        camera: f32,
+        scale: f32,
+        ink: u32,
+        opacity: f32,
+    ) -> impl IntoElement + use<> {
+        // Keep subpixel pose steps, with a bounded cache shared by the ghost
+        // and player. Position, scale and flash opacity are applied at paint.
+        let key = CatPose {
+            right: pose.facing > 0.,
+            home: pose.home,
+            gait: (pose.gait.clamp(-3., 3.) * 4.).round() as i8,
+            squash: (pose.squash.clamp(0., 1.) * 12.).round() as u8,
+        };
+        let mesh = if let Some(mesh) = self.0.get(&key) {
+            Some(mesh.clone())
+        } else {
+            shape_cat(Pose {
+                gait: f32::from(key.gait) / 4.,
+                squash: f32::from(key.squash) / 12.,
+                facing: if key.right { 1. } else { -1. },
+                ..pose
+            })
+            .map(|mesh| {
+                let mesh = Arc::new(mesh);
+                self.0.insert(key, mesh.clone());
+                mesh
+            })
+        };
+        gpui_kit::canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                if let Some(mesh) = mesh {
+                    let mut path = (*mesh).clone();
+                    let origin = bounds.origin
+                        + gpui_kit::point(px((pose.x - camera) * scale), px(pose.y * scale));
+                    let translate = |point: gpui_kit::Point<gpui_kit::Pixels>| {
+                        origin + gpui_kit::point(point.x * scale, point.y * scale)
+                    };
+                    path.bounds.origin = translate(path.bounds.origin);
+                    path.bounds.size.width *= scale;
+                    path.bounds.size.height *= scale;
+                    for vertex in &mut path.vertices {
+                        vertex.xy_position = translate(vertex.xy_position);
                     }
+                    window.paint_path(path, gpui_kit::Hsla::from(rgb(ink)).opacity(opacity));
                 }
-                path.add_polygon(&points, true);
+            },
+        )
+        .absolute()
+        .inset_0()
+    }
+}
+
+fn shape_cat(pose: Pose) -> Option<CatMesh> {
+    let mut parts = Vec::with_capacity(12);
+    let x = 0.;
+    let y = 0.;
+    if pose.home {
+        parts.extend([
+            [x - 11., y - 14., 37., 14., 7.],
+            [x + 13., y - 19., 16., 16., 8.],
+            [x + 20., y - 20., 4., 7., 0.],
+        ]);
+    } else {
+        let x = x - 20.;
+        let compression = pose.squash * 5.;
+        let y = y - 36. + compression;
+        let head = if pose.facing > 0. { 21. } else { 0. };
+        let body = if pose.facing > 0. { 3. } else { 12. };
+        let near = head + if pose.facing > 0. { 2. } else { 13. };
+        let far = head + if pose.facing > 0. { 5. } else { 11. };
+        parts.extend([
+            [x + body, y + 15., 27. + compression, 18. - compression, 9.],
+            [x + head, y + 7., 19., 20., 7.],
+            [x + far, y + 4., 3., 8., 1.5],
+            [x + near, y + 1., 4., 11., 2.],
+            [x + body + 4., y + 29. - compression, 6., 6. + pose.gait, 3.],
+            [
+                x + body + 19.,
+                y + 29. - compression,
+                6.,
+                6. - pose.gait,
+                3.,
+            ],
+        ]);
+        let tail = if pose.facing > 0. {
+            body + 2.
+        } else {
+            body + 21.
+        };
+        for i in 0..5 {
+            parts.push([
+                x + tail - pose.facing * i as f32 * 3.,
+                y + 22. - i as f32 * 2.8 + if i == 0 { 0. } else { pose.gait * 0.25 },
+                7.,
+                7.,
+                3.5,
+            ]);
+        }
+    }
+    // Nonzero winding unions the overlapping parts into one translucent fill.
+    let mut path = gpui_kit::PathBuilder::fill().with_style(gpui_kit::PathStyle::Fill(
+        gpui_kit::FillOptions::default().with_fill_rule(gpui_kit::FillRule::NonZero),
+    ));
+    for [x, y, w, h, radius] in parts {
+        let r = radius.min(w * 0.5).min(h * 0.5);
+        let at = |x, y| gpui_kit::point(px(x), px(y));
+        path.move_to(at(x + r, y));
+        for (edge, corner) in [
+            (at(x + w - r, y), at(x + w, y + r)),
+            (at(x + w, y + h - r), at(x + w - r, y + h)),
+            (at(x + r, y + h), at(x, y + h - r)),
+            (at(x, y + r), at(x + r, y)),
+        ] {
+            path.line_to(edge);
+            if r > 0. {
+                path.arc_to(at(r, r), px(0.), false, true, corner);
             }
-            if let Ok(path) = path.build() {
-                window.paint_path(path, gpui_kit::Hsla::from(rgb(ink)).opacity(opacity));
-            }
-        },
-    )
-    .absolute()
-    .inset_0()
+        }
+        path.close();
+    }
+    path.build().ok()
 }
 
 fn course_buildings(
@@ -2548,8 +2625,9 @@ fn course_buildings(
     drift: f32,
     scale: f32,
     omit_last: bool,
-    cache: &mut neighborhood::FacadeArt,
+    art: (&mut neighborhood::FacadeArt, &mut rooms::RoomArt),
 ) -> gpui_kit::Div {
+    let (cache, interiors) = art;
     let (w, h) = viewport;
     let mut scene = div().absolute().inset_0();
     for (i, roof) in run.roofs.iter().enumerate() {
@@ -2559,32 +2637,41 @@ fn course_buildings(
         }
         let (identity_level, seed) = run.roof_identity(i);
         let neighborhood = Neighborhood::for_level(identity_level);
-        scene = scene.child(div().absolute().left(px(x * scale)).child(NativeArt {
-            quads: cache.surface(neighborhood, *roof, seed, run.lit[i]),
-        }));
-        let columns = ((roof.width - 20.) / 74.).floor().max(1.) as usize;
-        let spacing = (roof.width - 20.) / columns as f32;
-        for row in 0..4 {
-            let wy = roof.y + 32. + row as f32 * 82.;
-            if wy > h {
-                break;
-            }
-            for col in 0..columns {
-                let wx = x + 10. + spacing * (col as f32 + 0.5) - 33.;
+        scene = scene.child(cache.wall(neighborhood, *roof, seed, run.lit[i], x, h));
+        let rooms = neighborhood::Apartments::new(roof.width);
+        let mut tiles = Vec::new();
+        for (row, wy) in neighborhood::Apartments::rows(roof.y, h) {
+            for col in 0..rooms.columns {
+                let wx = x + rooms.window_x(col);
                 if wx + 72. < 0. || wx - 3. > w {
                     continue;
                 }
-                scene = scene.child(apartment(
-                    wx,
-                    wy,
-                    seed * 7 + row * 3 + col,
-                    run.lit[i],
-                    drift,
-                    (neighborhood, cache),
-                    scale,
-                ));
+                let room_seed = seed * 7 + row * 3 + col;
+                if run.lit[i] {
+                    let interior = if row < 4 {
+                        interiors.interior(room_seed, drift)
+                    } else {
+                        interiors.still(seed * 7 + row * 5 + col)
+                    };
+                    tiles.push(([wx, wy], interior));
+                    tiles.push(([wx, wy], cache.open_frame(neighborhood, room_seed)));
+                } else {
+                    tiles.push(([wx, wy], cache.closed_room(neighborhood, room_seed)));
+                }
             }
         }
+        scene = scene.child(
+            gpui_kit::canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    for (position, tile) in tiles {
+                        tile.paint_at(bounds.origin, position, scale, window);
+                    }
+                },
+            )
+            .absolute()
+            .inset_0(),
+        );
         if i != run.roofs.len() - 1 && !(i == 0 && run.level > 0) {
             // Chimneys stay behind the cat and do not change the collision surface.
             let (brick, coping) = neighborhood.chimney_colors(seed, run.lit[i]);
@@ -2638,10 +2725,15 @@ impl Render for Rooftops {
         let width = f32::from(viewport.width);
         let height = f32::from(viewport.height);
         let scale = (width / 900.).min(height / 560.).max(0.1);
+        #[cfg(feature = "walkthrough-screenshots")]
+        let (width, height) = if self.fixed_preview_aspect {
+            (900. * scale, 560. * scale)
+        } else {
+            (width, height)
+        };
         let w = width / scale;
         let h = height / scale;
         self.advance(window, cx, w);
-        self.facade_art.resize(h, scale);
         let run = &self.run;
         let drift = if self.reduced_motion(cx) {
             1.2
@@ -2658,28 +2750,51 @@ impl Render for Rooftops {
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
             .on_key_up(cx.listener(Self::key_up))
-            .on_action(cx.listener(Self::dismiss_options))
+            .on_action(cx.listener(Self::dismiss_overlay))
             .on_mouse_down(
                 gpui_kit::MouseButton::Left,
                 cx.listener(|this, _, window, cx| window.focus(&this.focus, cx)),
             );
+        #[cfg(feature = "walkthrough-screenshots")]
+        if self.fixed_preview_aspect {
+            scene = scene
+                .w(px(width))
+                .h(px(height))
+                .left((viewport.width - px(width)) * 0.5)
+                .top((viewport.height - px(height)) * 0.5);
+        }
 
-        if run.home && run.level + 1 == LEVELS {
+        if self.menu_open {
+            let scene = scene
+                .on_mouse_move(cx.listener(Self::aim_menu_camera))
+                .child(self.main_menu(viewport, cx));
+            return if self.achievements_open {
+                self.with_achievements(scene, window, cx)
+            } else if self.options_open {
+                self.with_options(scene, window, cx)
+            } else {
+                scene
+            };
+        }
+        self.facade_art.resize(h, scale);
+        if let Some(score) = self.displayed_score() {
             let scene = scene
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(self.results(cx, width, height));
+                .child(self.results(score, cx, width, height));
             return self.with_options(scene, window, cx);
         }
 
         scene = scene.child(backdrop(
             w,
             h,
-            camera + course_progress(run.level, START_X),
             drift,
             scale,
-            run.level,
+            BackdropView::Course {
+                camera: camera + course_progress(run.level, START_X),
+                level: run.level,
+            },
         ));
 
         if let Some(slide) = &self.slide {
@@ -2690,7 +2805,7 @@ impl Render for Rooftops {
                 drift,
                 scale,
                 true,
-                &mut self.facade_art,
+                (&mut self.facade_art, &mut self.room_art),
             ));
         }
         scene = scene.child(course_buildings(
@@ -2700,7 +2815,7 @@ impl Render for Rooftops {
             drift,
             scale,
             false,
-            &mut self.facade_art,
+            (&mut self.facade_art, &mut self.room_art),
         ));
 
         // Keep the visible outgoing course until it has slid off screen. Its
@@ -2774,7 +2889,10 @@ impl Render for Rooftops {
             if let Some(gap) = ghost_gap(run, ghost, camera, w) {
                 scene = scene.child(ghost_gap_indicator(gap, height));
             } else {
-                scene = scene.child(ghost_sprite(ghost.pose, camera, scale));
+                scene = scene.child(
+                    self.cat_art
+                        .sprite(ghost.pose, camera, scale, 0xb8abff, 0.28),
+                );
             }
         }
 
@@ -2803,14 +2921,16 @@ impl Render for Rooftops {
                         .opacity(if airborne { 0.18 } else { 0.45 }),
                 )
                 .child(player_sprite(
-                    run.ghost_frame().pose,
-                    camera,
-                    gait,
-                    if self.reduced_motion(cx) {
-                        0.
-                    } else {
-                        run.squash
+                    Pose {
+                        gait,
+                        squash: if self.reduced_motion(cx) {
+                            0.
+                        } else {
+                            run.squash
+                        },
+                        ..run.ghost_frame().pose
                     },
+                    camera,
                     if run.invulnerable == 0. {
                         1.
                     } else if self.reduced_motion(cx) {
@@ -2821,6 +2941,7 @@ impl Render for Rooftops {
                         1.
                     },
                     scale,
+                    &mut self.cat_art,
                 ));
         }
         if run.level == 0 {
@@ -2852,24 +2973,7 @@ impl Render for Rooftops {
                         score.kills,
                     )),
             )
-            .child(
-                div()
-                    .absolute()
-                    .top(px(16.))
-                    .left_0()
-                    .w_full()
-                    .flex()
-                    .justify_center()
-                    .child(
-                        div()
-                            .font_family(crate::rooftops_score::POSTER_FONT)
-                            .text_size(px(70.))
-                            .line_height(px(87.5))
-                            .font_semibold()
-                            .text_color(rgb(art::PURPLE))
-                            .child(score.time_label()),
-                    ),
-            );
+            .child(self.clock_hud(window, cx));
         if run.home {
             scene = scene.child(
                 div()
@@ -2885,16 +2989,366 @@ impl Render for Rooftops {
     }
 }
 
+impl Rooftops {
+    fn clock_hud(&self, window: &mut Window, cx: &App) -> gpui_kit::Div {
+        let focused = window.is_window_active() && self.focus.is_focused(window);
+        #[cfg(feature = "walkthrough-screenshots")]
+        let focused = focused || self.preview;
+        let name_first = !self.started || self.run.home || self.options_open || !focused;
+        let (name_first, opacity) = if !name_first
+            && !self.reduced_motion(cx)
+            && let Some(start) = self.hud_changed
+        {
+            let t = (start.elapsed().as_secs_f32() / 0.24).min(1.);
+            if t < 1. && window.is_window_active() {
+                window.request_animation_frame();
+            }
+            // Fade the entire stack through the swap so the labels never cross.
+            (t < 0.5, (2. * t - 1.).abs())
+        } else {
+            (name_first, 1.)
+        };
+        let name = Neighborhood::for_level(self.run.level).title().to_owned();
+        let time = self.run.score().time_label();
+        let (primary, secondary, primary_color, secondary_color) = if name_first {
+            (name, time, GOLD, art::PURPLE)
+        } else {
+            (time, name, art::PURPLE, GOLD)
+        };
+        let label = |text, size, line, color| {
+            div()
+                .line_height(px(line))
+                .text_size(px(size))
+                .text_color(rgb(color))
+                .child(text)
+        };
+        v_flex()
+            .absolute()
+            .top(px(16.))
+            .left_0()
+            .w_full()
+            .items_center()
+            .font_family(crate::rooftops_score::POSTER_FONT)
+            .font_semibold()
+            .opacity(opacity)
+            .child(label(
+                primary,
+                if name_first { 42. } else { 70. },
+                if name_first { 52. } else { 80. },
+                primary_color,
+            ))
+            .child(label(secondary, 20., 26., secondary_color))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn gameplay(window: &mut Window, cx: &mut Context<Rooftops>) -> Rooftops {
+        Rooftops::new_with_records(window, cx, None, false, false)
+    }
+
+    #[gpui_kit::test]
+    fn harbor_actions_are_stacked_and_achievements_escape_restores_menu_focus(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::{Modifiers, MouseButton};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::application_menu::init(cx);
+        });
+        let (game, cx) = cx.add_window_view(|window, cx| Rooftops::new(window, cx, None));
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let [play, settings, achievements] =
+            ["rooftops-play", "rooftops-options", "rooftops-achievements"]
+                .map(|id| cx.debug_bounds(id).unwrap());
+        assert_eq!(play.size.width, settings.size.width);
+        assert_eq!(settings.size.width, achievements.size.width);
+        assert_eq!(play.origin.x, achievements.origin.x);
+        assert!(play.bottom() < settings.top() && settings.bottom() < achievements.top());
+        cx.simulate_mouse_down(
+            achievements.center(),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.simulate_mouse_up(
+            achievements.center(),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(game.read(cx).achievements_open);
+        });
+        assert!(cx.debug_bounds("rooftops-achievements-grid").is_some());
+        cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| {
+            let game = game.read(cx);
+            assert!(game.menu_open && !game.achievements_open);
+            assert!(game.focus.is_focused(window));
+        });
+    }
+
+    #[test]
+    fn stunts_require_a_continuous_jump_and_a_landing_on_the_next_roof() {
+        for (level, species) in [(1, EnemyKind::Bat), (2, EnemyKind::Owl)] {
+            let mut run = Run::for_level(level);
+            let flyer = run
+                .enemies
+                .iter()
+                .position(|enemy| enemy.roof == 12 && enemy.kind == species)
+                .unwrap();
+            let rat = run
+                .enemies
+                .iter()
+                .position(|enemy| enemy.roof == 12 && matches!(enemy.kind, EnemyKind::Rat))
+                .unwrap();
+            let stomp = |run: &mut Run, index: usize| {
+                let (x, y) = run.enemies[index].position(&run.roofs, run.time + STEP);
+                (run.x, run.y) = (x, y - 13.);
+                (run.vx, run.vy, run.ground) = (0., 410., None);
+                run.step();
+                assert!(run.enemies[index].defeated);
+            };
+            run.jump_down();
+            run.step();
+            let mut broken = run.clone();
+            stomp(&mut broken, flyer);
+            broken.respawn();
+            broken.invulnerable = 0.;
+            stomp(&mut broken, rat);
+            assert!(!broken.stunts.unlocked.contains(Achievement::DoubleFeature));
+
+            stomp(&mut run, flyer);
+            stomp(&mut run, rat);
+            assert!(run.stunts.unlocked.contains(Achievement::DoubleFeature));
+            let roof = run.roofs[13];
+            (run.x, run.y, run.vx, run.vy) = (roof.x + 40., roof.y - 1., 0., 250.);
+            run.step();
+            assert!(run.stunts.unlocked.contains(Achievement::BorrowedLift));
+        }
+    }
+
+    #[test]
+    fn authored_flyer_and_rat_encounters_allow_double_feature() {
+        for (level, start_steering) in [(1, 16), (2, 25)] {
+            let mut run = Run::for_level(level);
+            let roof = run.roofs[12];
+            let flyer = run
+                .enemies
+                .iter()
+                .position(|enemy| enemy.roof == 12 && enemy.kind != EnemyKind::Rat)
+                .unwrap();
+            let rat = run
+                .enemies
+                .iter()
+                .find(|enemy| enemy.roof == 12 && enemy.kind == EnemyKind::Rat)
+                .unwrap()
+                .clone();
+            (run.x, run.y, run.ground) = (roof.x + 8., roof.y, Some(12));
+            run.jump_down();
+            for step in 0..180 {
+                let steer = if run.enemies[flyer].defeated {
+                    let height = (roof.y - 22. - run.y).max(0.);
+                    let arrival =
+                        (-run.vy + (run.vy * run.vy + 2. * GRAVITY * height).sqrt()) / GRAVITY;
+                    let target = rat.position(&run.roofs, run.time + STEP + arrival).0;
+                    let braking = run.vx * run.vx.abs() / 4400.;
+                    let distance = target - run.x - braking;
+                    if distance.abs() < 6. {
+                        0.
+                    } else {
+                        distance.signum()
+                    }
+                } else if step >= start_steering {
+                    1.
+                } else {
+                    0.
+                };
+                run.input.left = steer < 0.;
+                run.input.right = steer > 0.;
+                run.step();
+                if run.stunts.unlocked.contains(Achievement::DoubleFeature) {
+                    break;
+                }
+            }
+            assert!(
+                run.stunts.unlocked.contains(Achievement::DoubleFeature),
+                "level {level}"
+            );
+            assert_eq!((run.jumps, run.returns), (1, 0));
+        }
+    }
+
+    #[test]
+    fn clean_sweep_counts_shared_gold_once_and_requires_every_enemy() {
+        let mut run = Run::new();
+        run.elapsed = 75.;
+        loop {
+            run.coins.iter_mut().for_each(|coin| coin.collected = true);
+            run.enemies
+                .iter_mut()
+                .for_each(|enemy| enemy.defeated = true);
+            run.home = true;
+            if run.level + 1 == LEVELS {
+                break;
+            }
+            run.jump_down();
+        }
+        let score = run.score();
+        let awards = run.completion_achievements(score);
+        assert!(awards.contains(Achievement::CleanSweep));
+        assert!(awards.contains(Achievement::NightExpress));
+        assert!(awards.contains(Achievement::AllNineIntact));
+        run.enemies[0].defeated = false;
+        assert!(
+            !run.completion_achievements(run.score())
+                .contains(Achievement::CleanSweep)
+        );
+        let late = run.completion_achievements(Score {
+            seconds: 76.,
+            ..score
+        });
+        assert!(!late.contains(Achievement::NightExpress));
+    }
+
+    #[gpui_kit::test]
+    fn pause_volume_persists_in_the_reopened_menu_and_saved_scorecard_is_available(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::{Modifiers, MouseButton};
+
+        fn click(cx: &mut gpui_kit::VisualTestContext, id: &'static str) {
+            let center = cx.debug_bounds(id).unwrap().center();
+            cx.simulate_mouse_down(center, MouseButton::Left, Modifiers::default());
+            cx.simulate_mouse_up(center, MouseButton::Left, Modifiers::default());
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+        }
+
+        cx.update(gpui_kit::init);
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("rooftops.cbor");
+        let score = Score {
+            coins: 19,
+            deaths: 2,
+            kills: 5,
+            seconds: 81.,
+            personal_best: None,
+        };
+        GameData::save_completion(
+            &path,
+            score,
+            None,
+            Default::default(),
+            GameData::save_generation(&path).unwrap(),
+        )
+        .unwrap();
+        let save_path = path.clone();
+        {
+            let (view, game_cx) =
+                cx.add_window_view(move |window, cx| Rooftops::new(window, cx, Some(save_path)));
+            game_cx.update(|window, cx| window.draw(cx).clear(cx));
+            click(game_cx, "rooftops-menu-scorecard");
+            game_cx.update(|_, cx| assert_eq!(view.read(cx).displayed_score(), Some(score)));
+            assert!(
+                game_cx
+                    .debug_bounds("download-rooftops-scorecard")
+                    .is_some()
+            );
+            click(game_cx, "rooftops-main-menu");
+            assert!(game_cx.debug_bounds("rooftops-play").is_some());
+            click(game_cx, "rooftops-play");
+            game_cx.update(|_, cx| {
+                view.update(cx, |game, _| {
+                    assert!(!game.menu_open);
+                    game.run.elapsed = 12.;
+                });
+            });
+            click(game_cx, "rooftops-options");
+
+            for (index, key) in [(0, "home"), (1, "end")] {
+                game_cx.update(|window, cx| {
+                    let focus = view.read(cx).volume_focus[index].clone();
+                    window.focus(&focus, cx);
+                });
+                game_cx.simulate_keystrokes(key);
+            }
+            click(game_cx, "rooftops-pause-main-menu");
+            game_cx.update(|window, cx| {
+                let game = view.read(cx);
+                assert!(game.menu_open && !game.options_open);
+                assert!(game.focus.is_focused(window));
+                assert_eq!(game.run.elapsed, 0.);
+            });
+            click(game_cx, "rooftops-options");
+            assert!(game_cx.debug_bounds("rooftops-pause-main-menu").is_none());
+            game_cx.simulate_close();
+            game_cx.run_until_parked();
+        }
+
+        let (reopened, game_cx) =
+            cx.add_window_view(move |window, cx| Rooftops::new(window, cx, Some(path)));
+        game_cx.update(|window, cx| window.draw(cx).clear(cx));
+        click(game_cx, "rooftops-options");
+        game_cx.update(|_, cx| {
+            let game = reopened.read(cx);
+            assert!(game.menu_open && game.options_open);
+            assert_eq!(game.preferences.music_volume, 0);
+            assert_eq!(game.preferences.effects_volume, 100);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn harbor_camera_tracks_pointer_and_respects_reduced_motion(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::{Modifiers, point};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_reduce_motion(false);
+        });
+        let (view, cx) = cx.add_window_view(|window, cx| Rooftops::new(window, cx, None));
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let pointer = point(px(20.), px(30.));
+        cx.simulate_mouse_move(pointer, None, Modifiers::default());
+        let target = cx.update(|_, cx| {
+            let position = view.read(cx).menu_aim;
+            assert_ne!(position, menu::Aim::default());
+            position
+        });
+        cx.update(|window, cx| {
+            view.update(cx, |game, cx| {
+                game.menu_time += 25.;
+                cx.notify();
+            });
+            window.draw(cx).clear(cx);
+            assert_eq!(view.read(cx).menu_aim, target);
+            cx.set_reduce_motion(true);
+        });
+        cx.simulate_mouse_move(point(px(210.), px(250.)), None, Modifiers::default());
+        cx.update(|_, cx| assert_eq!(view.read(cx).menu_aim, target));
+    }
+
+    #[test]
+    fn resizing_the_sky_reveals_stars_without_rearranging_visible_ones() {
+        let positions = |width| {
+            visible_stars(width, 152.)
+                .map(|star| (star.x, star.y, star.size, star.phase))
+                .filter(|&(x, _, _, _)| x < 900.)
+                .collect::<Vec<_>>()
+        };
+        let first = positions(900.);
+        assert!(first.len() > 55);
+        for width in [960., 1168., 1235., 1700.] {
+            assert_eq!(positions(width), first);
+        }
+    }
 
     #[gpui_kit::test]
     fn options_freeze_play_and_transitions_and_resume_without_held_inputs(
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 let start = Instant::now();
@@ -2936,7 +3390,7 @@ mod tests {
     ) {
         use gpui_kit::{Modifiers, MouseButton};
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|window, cx| {
             let focus = view.read(cx).focus.clone();
             window.focus(&focus, cx);
@@ -2944,9 +3398,7 @@ mod tests {
         });
         for selector in [
             "rooftops-options",
-            #[cfg(target_os = "macos")]
             "rooftops-music",
-            #[cfg(target_os = "macos")]
             "rooftops-effects",
             "rooftops-ghost",
             "rooftops-animations",
@@ -2976,18 +3428,10 @@ mod tests {
             assert_eq!(
                 game.preferences,
                 Preferences {
-                    music_volume: if cfg!(windows) {
-                        Preferences::default().music_volume
-                    } else {
-                        0
-                    },
-                    effects_volume: if cfg!(windows) {
-                        Preferences::default().effects_volume
-                    } else {
-                        0
-                    },
+                    music_volume: 0,
+                    effects_volume: 0,
                     ghost: false,
-                    animations: false
+                    animations: false,
                 }
             );
             assert_eq!(game.run.x, START_X);
@@ -3006,7 +3450,7 @@ mod tests {
     fn slider_labels_and_padding_never_preview_audio(cx: &mut gpui_kit::TestAppContext) {
         use gpui_kit::{Modifiers, MouseButton};
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|window, cx| {
             window.activate_window();
             view.update(cx, |game, cx| {
@@ -3050,7 +3494,7 @@ mod tests {
     ) {
         cx.update(gpui_kit::init);
         let (root, cx) = cx.add_window_view(|window, cx| {
-            let game = cx.new(|cx| Rooftops::new(window, cx));
+            let game = cx.new(|cx| gameplay(window, cx));
             gpui_kit::base::Root::new(game, window, cx)
         });
         let game = cx.update(|window, cx| {
@@ -3069,6 +3513,8 @@ mod tests {
             window.draw(cx).clear(cx);
         });
         cx.executor().run_until_parked();
+        assert!(cx.debug_bounds("rooftops-play").is_some());
+        cx.simulate_keystrokes("space");
         cx.simulate_keystrokes("right");
         cx.update(|window, cx| {
             let game = game.read(cx);
@@ -3089,7 +3535,7 @@ mod tests {
     ) {
         use gpui_kit::{Modifiers, MouseButton};
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         let track = cx.update(|window, cx| {
             view.update(cx, |game, cx| {
                 game.run.elapsed = 13.;
@@ -3133,7 +3579,7 @@ mod tests {
     fn music_handle_endcaps_start_preview(cx: &mut gpui_kit::TestAppContext) {
         use gpui_kit::{Modifiers, MouseButton};
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|window, cx| {
             window.activate_window();
             view.update(cx, |game, _| game.set_options_open(true));
@@ -3183,7 +3629,7 @@ mod tests {
     ) {
         use gpui_kit::{Modifiers, MouseButton};
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|window, cx| {
             window.activate_window();
             view.update(cx, |game, _| {
@@ -3251,7 +3697,7 @@ mod tests {
             crate::application_menu::init(cx);
         });
         let (root, cx) = cx.add_window_view(|window, cx| {
-            let game = cx.new(|cx| Rooftops::new(window, cx));
+            let game = cx.new(|cx| gameplay(window, cx));
             window.activate_window();
             gpui_kit::base::Root::new(game, window, cx)
         });
@@ -3391,7 +3837,7 @@ mod tests {
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, cx| {
                 let finish_run = |game: &mut Rooftops, cx: &mut Context<Rooftops>, seconds: f64| {
@@ -3433,7 +3879,7 @@ mod tests {
                     "a partial run cannot be saved as a replay"
                 );
                 game.reset_progress(cx);
-                assert!(!game.has_completed());
+                assert!(game.personal_best.is_none());
                 assert!(game.best_replay.is_none() && game.ghost_replay.is_none());
                 assert!(game.run_personal_best.is_none());
                 assert_eq!(game.run.level, 0);
@@ -3444,13 +3890,14 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn play_again_button_and_space_restart_completed_runs(cx: &mut gpui_kit::TestAppContext) {
+    fn main_menu_button_and_space_leave_completed_runs(cx: &mut gpui_kit::TestAppContext) {
         use gpui_kit::{Modifiers, MouseButton};
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         for click_button in [true, false] {
             cx.update(|window, cx| {
                 view.update(cx, |game, cx| {
+                    game.menu_open = false;
                     game.run = Run::for_level(LEVELS - 1);
                     game.run.home = true;
                     game.run.elapsed = 143.6;
@@ -3473,20 +3920,15 @@ mod tests {
             });
             if click_button {
                 let button = cx
-                    .debug_bounds("play-rooftops-again")
-                    .expect("play-again button must be visible");
+                    .debug_bounds("rooftops-main-menu")
+                    .expect("Main menu button must be visible");
                 let download = cx
                     .debug_bounds("download-rooftops-scorecard")
                     .expect("scorecard button must be visible");
-                let exit = cx
-                    .debug_bounds("exit-rooftops")
-                    .expect("Exit must be visible");
+                assert!(cx.debug_bounds("exit-rooftops").is_none());
                 assert_eq!(button.size.height, download.size.height);
-                assert_eq!(button.size.height, exit.size.height);
                 assert_eq!(button.origin.y, download.origin.y);
-                assert_eq!(button.origin.y, exit.origin.y);
-                assert!(exit.left() > button.right());
-                assert!(exit.right() < download.left());
+                assert!(button.right() < download.left());
                 cx.simulate_mouse_down(button.center(), MouseButton::Left, Modifiers::default());
                 cx.simulate_mouse_up(button.center(), MouseButton::Left, Modifiers::default());
             } else {
@@ -3498,7 +3940,7 @@ mod tests {
                 assert!(!game.run.home);
                 assert_eq!(game.run.coin_count(), 0);
                 assert_eq!(game.run.elapsed, 0.);
-                assert!(!game.started, "restarting waits for gameplay input");
+                assert!(game.menu_open && !game.started);
                 assert_eq!(game.camera, 0.);
                 assert!(game.save_message.is_none());
                 assert_eq!(game.personal_best, Some(138.2));
@@ -3512,7 +3954,7 @@ mod tests {
                         game.active_frame(now + std::time::Duration::from_secs(10), true)
                             .is_none()
                     );
-                    assert_eq!(game.run.elapsed, 0., "idle time after Play again is free");
+                    assert_eq!(game.run.elapsed, 0., "idle time on the main menu is free");
                 });
             });
         }
@@ -3521,7 +3963,7 @@ mod tests {
     #[gpui_kit::test]
     fn personal_best_requires_all_levels_and_survives_restarts(cx: &mut gpui_kit::TestAppContext) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, cx| {
                 game.run.elapsed = 50.;
@@ -3566,7 +4008,7 @@ mod tests {
     #[gpui_kit::test]
     fn closing_resets_the_game_and_retains_the_same_window(cx: &mut gpui_kit::TestAppContext) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 game.run.elapsed = 123.;
@@ -3591,7 +4033,7 @@ mod tests {
     #[gpui_kit::test]
     fn play_time_excludes_pauses_and_completion(cx: &mut gpui_kit::TestAppContext) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 let start = Instant::now();
@@ -3616,7 +4058,7 @@ mod tests {
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 let start = Instant::now();
@@ -3663,7 +4105,7 @@ mod tests {
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|window, cx| {
             window.activate_window();
             view.update(cx, |game, _| {
@@ -3707,7 +4149,7 @@ mod tests {
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 let start = Instant::now();
@@ -3871,7 +4313,7 @@ mod tests {
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         cx.update(|_, cx| {
             view.update(cx, |game, _| {
                 game.begin_play(Instant::now());
@@ -3928,6 +4370,12 @@ mod tests {
                 let resume = start + std::time::Duration::from_secs(30);
                 game.active_frame(resume, true);
                 game.active_frame(resume + std::time::Duration::from_secs(1), true);
+                assert_eq!(
+                    game.run.elapsed, 42.,
+                    "the clock waits for player input after the slide"
+                );
+                game.begin_play(resume + std::time::Duration::from_secs(1));
+                game.active_frame(resume + std::time::Duration::from_secs(2), true);
                 assert_eq!(game.run.elapsed, 43.);
             });
         });
@@ -3938,7 +4386,7 @@ mod tests {
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.update(gpui_kit::init);
-        let (view, cx) = cx.add_window_view(Rooftops::new);
+        let (view, cx) = cx.add_window_view(gameplay);
         for key in ["left", "right"] {
             cx.update(|window, cx| {
                 view.update(cx, |game, cx| {
@@ -4050,6 +4498,7 @@ mod tests {
 
     #[test]
     fn every_level_geometry_is_reachable_with_right_and_space() {
+        let mut ticks = 0;
         for level in 0..LEVELS {
             let mut run = Run::for_level(level);
             // Validate jump geometry independently of enemy timing. Enemy damage
@@ -4073,6 +4522,7 @@ mod tests {
                     run.jump_down();
                 }
                 run.step();
+                ticks += 1;
                 if run.home {
                     break;
                 }
@@ -4094,6 +4544,11 @@ mod tests {
             assert_eq!(run.coin_count(), if run.level == 0 { 0 } else { coins });
             assert!(run.coins.iter().all(|coin| !coin.collected));
         }
+        let seconds = f64::from(ticks) * f64::from(STEP);
+        assert!(
+            seconds < crate::rooftops_score::achievements::NIGHT_EXPRESS_SECONDS - 12.,
+            "clean geometry route took {seconds:.2}s"
+        );
     }
 
     #[test]
@@ -4234,7 +4689,7 @@ mod tests {
     fn arrow_press_and_release_and_space_reach_the_view(cx: &mut gpui_kit::TestAppContext) {
         cx.update(gpui_kit::init);
         let (view, cx) = cx.add_window_view(|window, cx| {
-            let game = Rooftops::new(window, cx);
+            let game = gameplay(window, cx);
             window.focus(&game.focus, cx);
             game
         });

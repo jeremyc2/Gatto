@@ -6,9 +6,9 @@ the neighborhood while the large illuminated rooms remain the visual focus.
 
 | Level | Facades | Window details |
 | ----- | ------- | -------------- |
-| 1 — Brownstone blocks | Warm brownstone and red brick, staggered joints, stone courses and projecting bracketed cornices. Neighboring buildings vary subtly in hue and block size. | Painted green louvred shutters, stone lintels with small keystones and broad sills. Open shutters fold into the narrow spaces beside the rooms. |
-| 2 — Loft district | Green-gray cast-iron framing, fine masonry infill, narrow columns and repeated bolted floor beams. | Ribbed metal shutters, thin iron surrounds and small column capitals. The open bays keep the same clear view of the residents. |
-| 3 — Stone towers | Pale warm-gray dressed blocks, stepped cornices, fluted corner piers and small geometric spandrel details. | Recessed horizontal blinds, dark bronze side edges and layered stone lintels. |
+| 1 — Brownstones | Warm brownstone and red brick, staggered joints, stone courses and projecting bracketed cornices. Neighboring buildings vary subtly in hue and block size. | Painted green louvred shutters, stone lintels with small keystones and broad sills. Open shutters fold into the narrow spaces beside the rooms. |
+| 2 — SoHo | Green-gray cast-iron framing, fine masonry infill, narrow columns and repeated bolted floor beams. | Ribbed metal shutters, thin iron surrounds and small column capitals. The open bays keep the same clear view of the residents. |
+| 3 — Midtown | Pale warm-gray dressed blocks, stepped cornices, fluted corner piers and small geometric spandrel details. | Recessed horizontal blinds, dark bronze side edges and layered stone lintels. |
 
 Palettes and coverings are authored for the game's night lighting. The room
 opening stays 66 × 62 world units, with the same spacing, warm interior colors,
@@ -27,8 +27,12 @@ the next neighborhood. Both sides are visible during the slide, making the
 change of area part of the existing continuity sequence. Each small rooftop
 shelter uses the supporting building's wall, coping and frame palette; its open
 doorway has no handle. The shared shelter retains that palette into the next
-level. Static facade, shutter and surround geometry is cached per game window
-and discarded on resize; camera movement changes only its placement.
+level. Windows and architectural trim repeat through all visible floors.
+The top four floors animate. Lower floors use still poses from the same
+resident activities. The renderer generates the room artwork, shutters and
+repeating masonry at runtime and reuses their tiles across window sizes.
+Facade trim extends to the next floor boundary, so small height changes reuse
+the same geometry.
 
 Gameplay heights, widths, rooftop gaps, enemy kinds and enemy timing are
 independent of this appearance layer. Controls and capture commands live in
@@ -42,7 +46,7 @@ independent of this appearance layer. Controls and capture commands live in
   These inform the first level's warm masonry and roofline details.
 - Its [361 Broadway designation report](https://s-media.nyc.gov/agencies/lpc/lp/1225.pdf)
   describes repeated cast-iron bays, columns and concentrated ornamental details.
-  These inform the second level's repeated metal framing.
+  These inform the second level's repeated metal framing and its SoHo name.
 - Its [East Midtown landmark announcement](https://www.nyc.gov/site/lpc/about/pr2016/11-22.page)
   describes limestone, brick, terra cotta, continuous piers and ornamental setbacks
   on the Hotel Lexington. These inform the final level's stone palette and
