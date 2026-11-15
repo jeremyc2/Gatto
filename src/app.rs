@@ -3680,13 +3680,17 @@ impl UploaderApp {
     }
 
     fn render_windows_caption_controls(height: Pixels, cx: &App) -> impl IntoElement {
-        div().flex_none().w(windows_caption_width()).child(
-            TitleBar::new()
-                .h(height)
-                .pl_0()
-                .border_0()
-                .bg(cx.theme().transparent),
-        )
+        div()
+            .flex_none()
+            .w(windows_caption_width())
+            .debug_selector(|| "windows-caption-controls".into())
+            .child(
+                TitleBar::new()
+                    .h(height)
+                    .pl_0()
+                    .border_0()
+                    .bg(cx.theme().transparent),
+            )
     }
 
     fn render_window_drag_region(id: &'static str, height: Pixels, cx: &App) -> impl IntoElement {
@@ -5510,6 +5514,7 @@ mod tests {
         cx.update(|_, cx| assert!(view.read(cx).repository_picker_open));
     }
 
+    #[cfg(not(windows))]
     #[gpui_kit::test]
     fn workspace_title_leaves_room_for_wrapped_names_above_the_controls(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
@@ -5546,14 +5551,30 @@ mod tests {
     fn workspace_controls_span_below_the_title_and_picker_during_updates(cx: &mut TestAppContext) {
         let (view, cx) = upload_window(cx);
         for font_size in crate::settings::UI_FONT_SIZES {
-            for sidebar_collapsed in [false, true] {
+            let (default_width, caption_height) = cx.update(|_, cx| {
+                theme::set_ui_font_size(font_size, cx);
+                (default_window_width(cx), windows_caption_height(cx))
+            });
+            let widths: &[Pixels] = if cfg!(windows) {
+                &[default_width, MINIMUM_WINDOW_WIDTH]
+            } else {
+                &[default_width]
+            };
+            for (width, sidebar_collapsed) in widths
+                .iter()
+                .copied()
+                .flat_map(|width| [(width, false), (width, true)])
+            {
                 cx.update(|window, cx| {
-                    theme::set_ui_font_size(font_size, cx);
-                    window.resize(size(default_window_width(cx), px(600.)));
+                    window.resize(size(width, px(600.)));
                     window.bounds_changed(cx);
                     view.update(cx, |app, cx| {
                         app.load_state = LoadState::Ready;
                         app.settings.sidebar_collapsed = sidebar_collapsed;
+                        if cfg!(windows) {
+                            app.project_state.title =
+                                Some("A long workspace name that exceeds the caption row".into());
+                        }
                         app.updater.update(cx, |updater, cx| {
                             updater.state = UpdateState::Installing;
                             cx.notify();
@@ -5572,7 +5593,19 @@ mod tests {
                 assert!(controls.top() > title.bottom());
                 assert_eq!(update.top(), info.top(), "font size {font_size}");
                 assert!(info.right() <= controls.right());
-                if !sidebar_collapsed {
+                if cfg!(windows) {
+                    let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
+                    let caption = cx.debug_bounds("windows-caption-controls").unwrap();
+                    assert_eq!(title.top(), picker.top());
+                    assert_eq!(title.size.height, caption_height);
+                    assert_eq!(picker.top(), caption.top());
+                    assert_eq!(picker.bottom(), caption.bottom());
+                    assert_eq!(picker.size.height, caption_height);
+                    assert!(title.right() < picker.left());
+                    assert!(picker.right() < caption.left());
+                    assert_eq!(controls.right(), caption.right());
+                    assert!(controls.top() > caption.bottom());
+                } else if !sidebar_collapsed {
                     let picker = cx.debug_bounds("repository-picker-trigger").unwrap();
                     assert_eq!(title.top(), picker.top());
                     assert_eq!(controls.right(), picker.right());

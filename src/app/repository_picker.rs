@@ -502,6 +502,7 @@ mod tests {
         cx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
+    #[cfg(not(windows))]
     #[gpui_kit::test]
     fn repository_picker_wraps_below_the_title_when_it_does_not_fit(cx: &mut TestAppContext) {
         let (view, cx) = super::super::tests::upload_window(cx);
@@ -593,6 +594,10 @@ mod tests {
             });
             window.draw(cx).clear(cx);
         });
+        assert_eq!(
+            cx.debug_bounds("repository-picker-trigger").unwrap(),
+            trigger
+        );
         cx.simulate_mouse_up(trigger.center(), MouseButton::Left, Modifiers::default());
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert!(cx.debug_bounds("repository-picker-loading").is_some());
@@ -666,7 +671,10 @@ mod tests {
         });
         assert_eq!(
             cx.debug_bounds("pinned-repository-trigger").unwrap().size,
-            trigger.size
+            size(
+                PICKER_WIDTH,
+                cx.update(|_, cx| theme::CONTROL_HEIGHT.to_pixels(cx.theme().font_size))
+            )
         );
         click(cx, "pinned-repository-trigger");
         assert!(cx.debug_bounds("pin-repository-unavailable").is_some());
