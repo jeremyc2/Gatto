@@ -83,28 +83,52 @@ const WORKSPACE_PADDING: Rems = rems(0.5);
 const PROJECT_SIDEBAR_WIDTH: Pixels = px(220.);
 const WORKSPACE_MARK_SIZE: Pixels = px(72.);
 const WORKSPACE_TITLE_WIDTH: Rems = rems(8.25);
+const WINDOWS_WORKSPACE_TITLE_MIN: Pixels = px(128.);
 const WORKSPACE_HEADER_GAP: Rems = rems(1.);
 const SETTINGS_CONTROL_WIDTH: Pixels = px(400.);
 // Leave room for the native buttons and the draggable title bar above GPUI controls.
 const TITLEBAR_HEIGHT: Pixels = px(40.);
 const TITLEBAR_PICKER_TOP: Pixels = px(6.);
 const SIDEBAR_TITLEBAR_HEIGHT: Pixels = px(34.);
+pub(crate) const MINIMUM_WINDOW_WIDTH: Pixels = if cfg!(windows) { px(780.) } else { px(700.) };
+
+// GPUI Kit sizes each of the three Windows controls to its title bar height.
+fn windows_caption_width() -> Pixels {
+    gpui_kit::component::TITLE_BAR_HEIGHT * 3.
+}
+
+fn windows_caption_height(cx: &App) -> Pixels {
+    theme::CONTROL_HEIGHT
+        .to_pixels(cx.theme().font_size)
+        .max(px(28.))
+}
+
+fn windows_caption_inset(cx: &App) -> Pixels {
+    (WORKSPACE_GUTTER + WORKSPACE_PADDING).to_pixels(cx.theme().font_size) + px(1.)
+}
 
 pub(crate) fn default_window_width(cx: &App) -> Pixels {
-    (PROJECT_SIDEBAR_WIDTH
+    let font_size = cx.theme().font_size;
+    let width = PROJECT_SIDEBAR_WIDTH
         + px(2.) // The inset workspace has a one-point border on each side.
         + WORKSPACE_MARK_SIZE
         + (WORKSPACE_GUTTER + WORKSPACE_PADDING * 2. + rems(1.) + WORKSPACE_TITLE_WIDTH + WORKSPACE_HEADER_GAP)
-            .to_pixels(cx.theme().font_size)
-        + repository_picker::PICKER_WIDTH)
-        .ceil()
+            .to_pixels(font_size)
+        + repository_picker::PICKER_WIDTH;
+    if cfg!(windows) {
+        (width + windows_caption_width() + WORKSPACE_PADDING.to_pixels(font_size))
+            .ceil()
+            .max(MINIMUM_WINDOW_WIDTH)
+    } else {
+        width.ceil()
+    }
 }
 
 pub(crate) fn uploader_window_options() -> WindowOptions {
     WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: Some("Gatto".into()),
-            appears_transparent: cfg!(target_os = "macos"),
+            appears_transparent: cfg!(any(target_os = "macos", windows)),
             traffic_light_position: Some(point(px(14.), px(12.))),
         }),
         app_owns_titlebar_drag: cfg!(target_os = "macos"),
@@ -3377,16 +3401,65 @@ impl UploaderApp {
             )
     }
 
-    fn render_settings(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
+    fn render_settings(&self, fixed_heading: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let page = v_flex()
             .id("settings-page")
             .size_full()
             .overflow_y_scroll()
             .track_scroll(&self.settings_scroll)
-            .child(self.render_settings_content(cx))
+            .when(fixed_heading, |page| page.flex_1().min_h_0())
+            .child(self.render_settings_content(!fixed_heading, cx));
+        if fixed_heading {
+            v_flex()
+                .size_full()
+                .child(self.render_settings_heading(true, cx))
+                .child(page)
+                .into_any_element()
+        } else {
+            page.into_any_element()
+        }
     }
 
-    fn render_settings_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_settings_heading(&self, fixed: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let caption_height = fixed.then(|| windows_caption_height(cx));
+        h_flex()
+            .justify_between()
+            .items_center()
+            .when(fixed, |heading| {
+                heading
+                    .flex_none()
+                    .px_6()
+                    .pr(windows_caption_inset(cx))
+                    .gap(WORKSPACE_PADDING)
+                    .min_h(TITLEBAR_HEIGHT)
+                    .py_1()
+            })
+            .child(
+                div()
+                    .font_semibold()
+                    .text_lg()
+                    .when(fixed, |title| {
+                        Self::windows_drag_region(title.flex_1().py_1())
+                    })
+                    .child("App preferences"),
+            )
+            .child(
+                Button::new("close-settings")
+                    .app_secondary()
+                    .when_some(caption_height, |button, height| button.h(height))
+                    .label("Done")
+                    .on_click(cx.listener(Self::close_settings)),
+            )
+            .when_some(caption_height, |row, height| {
+                row.child(Self::render_windows_caption_controls(height, cx))
+            })
+    }
+
+    fn render_settings_content(
+        &self,
+        show_heading: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let owner_is_saved = parse_owner(&self.owner_input.read(cx).value())
             .is_ok_and(|owner| self.settings.owner.as_deref() == Some(owner.as_str()));
         let channel = self.settings.release_channel;
@@ -3397,18 +3470,7 @@ impl UploaderApp {
             .p_6()
             .pt_1()
             .gap_5()
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .child(div().font_semibold().text_lg().child("App preferences"))
-                    .child(
-                        Button::new("close-settings")
-                            .app_secondary()
-                            .label("Done")
-                            .on_click(cx.listener(Self::close_settings)),
-                    ),
-            )
+            .when(show_heading, |page| page.child(self.render_settings_heading(false, cx)))
             .child(
                 v_flex()
                     .id("github-account-settings")
@@ -3605,6 +3667,28 @@ impl UploaderApp {
             })
     }
 
+    fn windows_drag_region(region: gpui_kit::Div) -> gpui_kit::Div {
+        #[cfg(windows)]
+        let region = region
+            .window_control_area(gpui_kit::WindowControlArea::Drag)
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_mouse_up(MouseButton::Right, |event, window, cx| {
+                cx.stop_propagation();
+                window_limits::show_system_menu(window, event.position, cx);
+            });
+        region
+    }
+
+    fn render_windows_caption_controls(height: Pixels, cx: &App) -> impl IntoElement {
+        div().flex_none().w(windows_caption_width()).child(
+            TitleBar::new()
+                .h(height)
+                .pl_0()
+                .border_0()
+                .bg(cx.theme().transparent),
+        )
+    }
+
     fn render_window_drag_region(id: &'static str, height: Pixels, cx: &App) -> impl IntoElement {
         div()
             .id(id)
@@ -3663,7 +3747,7 @@ impl UploaderApp {
                         .self_start()
                         .mt(TITLEBAR_PICKER_TOP)
                         .pr(WORKSPACE_PADDING)
-                        .child(self.render_repository_picker(cx)),
+                        .child(self.render_repository_picker(None, cx)),
                 )
             })
     }
@@ -3678,6 +3762,7 @@ impl Focusable for UploaderApp {
 impl Render for UploaderApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let needs_setup = self.settings.owner.is_none();
+        let windows_caption = cfg!(windows) && !window.is_fullscreen();
         let titlebar_height = if cfg!(target_os = "macos") && !window.is_fullscreen() {
             TITLEBAR_HEIGHT.max(
                 theme::CONTROL_HEIGHT.to_pixels(cx.theme().font_size) + TITLEBAR_PICKER_TOP * 2.,
@@ -3763,16 +3848,16 @@ impl Render for UploaderApp {
             })
             .size_full()
             .bg(cx.theme().background);
-
         if self.settings_open {
             root.pt(titlebar_height)
-                .child(self.render_settings(cx))
+                .child(self.render_settings(windows_caption, cx))
                 .when(titlebar_height > px(0.), |root| {
                     root.child(self.render_title_bar(titlebar_height, false, cx))
                 })
                 .into_any_element()
         } else {
             let sidebar_collapsed = self.settings.sidebar_collapsed;
+            let caption_height = windows_caption.then(|| windows_caption_height(cx));
             let titlebar_height = if sidebar_collapsed {
                 titlebar_height
             } else {
@@ -3793,6 +3878,199 @@ impl Render for UploaderApp {
                 )
             });
             let root = root.on_action(cx.listener(Self::copy_upload_markdown));
+            let header = h_flex()
+                .w_full()
+                .min_w_0()
+                .items_start()
+                .gap_4()
+                .when(windows_caption, |header| {
+                    header
+                        .flex_none()
+                        .p(WORKSPACE_PADDING)
+                        .pb_0()
+                        .when(sidebar_collapsed, |header| {
+                            header.pr(windows_caption_inset(cx))
+                        })
+                })
+                .debug_selector(|| "workspace-header".into())
+                .child(
+                    div()
+                        .id("rooftops-entry")
+                        .flex_shrink_0()
+                        .rounded_full()
+                        .cursor_pointer()
+                        .hover(|style| {
+                            style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
+                                BoxShadow::new(px(0.), px(0.), cx.theme().primary.opacity(0.18))
+                                    .blur_radius(px(16.))
+                                    .spread_radius(px(2.)),
+                            ])
+                        })
+                        .on_click(cx.listener(Self::open_rooftops))
+                        .child(
+                            img(self.header_mark.clone())
+                                .size(WORKSPACE_MARK_SIZE)
+                                .flex_shrink_0()
+                                .object_fit(ObjectFit::Contain),
+                        ),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_2()
+                        .debug_selector(|| "workspace-content".into())
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .min_w_0()
+                                .items_start()
+                                .flex_wrap()
+                                .gap_x(WORKSPACE_HEADER_GAP)
+                                .gap_y_2()
+                                .when(windows_caption, |row| {
+                                    row.flex_nowrap().items_center().gap_x(WORKSPACE_PADDING)
+                                })
+                                .child(
+                                    v_flex()
+                                        .flex_1()
+                                        .flex_basis(WORKSPACE_TITLE_WIDTH)
+                                        .min_w_0()
+                                        .when_some(caption_height, |title, height| {
+                                            Self::windows_drag_region(
+                                                title
+                                                    .min_w(WINDOWS_WORKSPACE_TITLE_MIN)
+                                                    .h(height)
+                                                    .justify_center(),
+                                            )
+                                        })
+                                        .debug_selector(|| "workspace-title".into())
+                                        .child(
+                                            div()
+                                                .text_2xl()
+                                                .line_height(gpui_kit::relative(1.25))
+                                                .font_semibold()
+                                                // Trim the outer half-leading only;
+                                                // wrapped lines keep their full spacing.
+                                                .my(rems(-0.1875))
+                                                .when(windows_caption, |title| title.truncate())
+                                                .child(workspace_title),
+                                        ),
+                                )
+                                .when(!needs_setup && !repository_in_title_bar, |row| {
+                                    row.child(
+                                        h_flex()
+                                            .flex_none()
+                                            .when(windows_caption, |picker| {
+                                                picker
+                                                    .flex_1()
+                                                    .flex_basis(repository_picker::PICKER_WIDTH)
+                                                    .min_w(px(96.))
+                                                    .max_w(repository_picker::PICKER_WIDTH)
+                                            })
+                                            .child(
+                                                self.render_repository_picker(caption_height, cx),
+                                            ),
+                                    )
+                                })
+                                .when_some(caption_height, |row, height| {
+                                    row.child(Self::render_windows_caption_controls(height, cx))
+                                }),
+                        )
+                        .child(
+                            h_flex()
+                                .debug_selector(|| "workspace-controls".into())
+                                .w_full()
+                                .min_w_0()
+                                .gap_1p5()
+                                .flex_wrap()
+                                .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
+                                    let update = self.updater.read(cx);
+                                    row.child(
+                                        Button::new("install-update")
+                                            .debug_selector(|| "install-update".into())
+                                            .app_icon()
+                                            .label(match update.state {
+                                                UpdateState::Installing => "Updating…",
+                                                UpdateState::Failed => "↻ Update",
+                                                _ => "↑ Update",
+                                            })
+                                            .disabled(
+                                                self.uploading
+                                                    || self.import_busy()
+                                                    || update.state == UpdateState::Installing,
+                                            )
+                                            .accessibility_label("Install update and restart Gatto")
+                                            .tooltip(update.message.clone())
+                                            .on_click(|_, window, cx| {
+                                                window.dispatch_action(
+                                                    Box::new(
+                                                        crate::application_menu::InstallUpdate,
+                                                    ),
+                                                    cx,
+                                                );
+                                            }),
+                                    )
+                                })
+                                .when(self.settings.sidebar_collapsed, |row| {
+                                    row.child(
+                                        Button::new("show-project-sidebar")
+                                            .debug_selector(|| "show-project-sidebar".into())
+                                            .app_icon()
+                                            .icon(AssetIconName::PanelLeftOpen)
+                                            .accessibility_label("Show sidebar")
+                                            .tooltip(if cfg!(windows) {
+                                                "Show sidebar · Ctrl+B"
+                                            } else {
+                                                "Show sidebar · ⌘B"
+                                            })
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.toggle_project_sidebar(cx)
+                                            })),
+                                    )
+                                })
+                                .child(
+                                    Button::new("open-logs")
+                                        .app_icon()
+                                        .icon(AssetIconName::Logs)
+                                        .accessibility_label("Application logs")
+                                        .tooltip("App logs")
+                                        .on_click(cx.listener(Self::open_log_window)),
+                                )
+                                .child(
+                                    Button::new("open-settings")
+                                        .debug_selector(|| "open-settings".into())
+                                        .app_icon()
+                                        .icon(IconName::Settings)
+                                        .accessibility_label("App preferences")
+                                        .tooltip("App preferences")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.open_preferences(window, cx);
+                                        })),
+                                )
+                                .map(|row| {
+                                    #[cfg(windows)]
+                                    let row = row.child(self.render_windows_app_menu());
+                                    row
+                                })
+                                .child(
+                                    Button::new("workspace-information")
+                                        .debug_selector(|| "workspace-information".into())
+                                        .app_icon()
+                                        .icon(AssetIconName::CircleQuestionMark)
+                                        .accessibility_label("Project information")
+                                        .tooltip("Project information")
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.open_project_info(window, cx)
+                                        })),
+                                ),
+                        ),
+                );
+            let (fixed_header, scrolling_header) = if windows_caption {
+                (Some(header), None)
+            } else {
+                (None, Some(header))
+            };
             let content = v_flex()
                 .id("main-page")
                 .flex_1()
@@ -3805,177 +4083,69 @@ impl Render for UploaderApp {
                         .flex_none()
                         .gap(WORKSPACE_PADDING)
                         .p(WORKSPACE_PADDING)
-                        .when(sidebar_collapsed && titlebar_height > px(0.), |content| content.pt_0())
+                        .when(sidebar_collapsed && titlebar_height > px(0.), |content| {
+                            content.pt_0()
+                        })
                         .when(!sidebar_collapsed && titlebar_height > px(0.), |content| {
                             // Keep this hit region inside the scrolling content so it
                             // cannot cover controls that scroll up to the top edge.
+                            content.child(div().absolute().top_0().left_0().w_full().child(
+                                Self::render_window_drag_region(
+                                    "workspace-padding-drag",
+                                    WORKSPACE_PADDING.to_pixels(cx.theme().font_size),
+                                    cx,
+                                ),
+                            ))
+                        })
+                        .when_some(self.project_state.error.clone(), |content, error| {
                             content.child(
-                                div().absolute().top_0().left_0().w_full()
-                                    .child(Self::render_window_drag_region(
-                                        "workspace-padding-drag",
-                                        WORKSPACE_PADDING.to_pixels(cx.theme().font_size),
-                                        cx,
-                                    )),
+                                v_flex()
+                                    .gap_2()
+                                    .child(
+                                        div().text_sm().text_color(cx.theme().danger).child(error),
+                                    )
+                                    .child(
+                                        Button::new("retry-project-save")
+                                            .app_secondary()
+                                            .label("Retry save")
+                                            .disabled(self.project_state.saving)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                if this.project_state.storage_folder.is_none()
+                                                    && this.persist_preferences
+                                                {
+                                                    this.initialize_workspaces(window, cx);
+                                                } else {
+                                                    this.save_project(cx);
+                                                }
+                                            })),
+                                    ),
                             )
                         })
-                        .when_some(self.project_state.error.clone(), |content, error| content.child(
-                            v_flex().gap_2().child(div().text_sm().text_color(cx.theme().danger).child(error))
-                                .child(Button::new("retry-project-save").app_secondary().label("Retry save").disabled(self.project_state.saving)
-                                    .on_click(cx.listener(|this, _, window, cx| { if this.project_state.storage_folder.is_none() && this.persist_preferences { this.initialize_workspaces(window, cx); } else { this.save_project(cx); } })))
-
-                        ))
-                        .child(
-                            h_flex()
-                                .w_full()
-                                .min_w_0()
-                                .items_start()
-                                .gap_4()
-                                .debug_selector(|| "workspace-header".into())
-                                .child(
-                                    div()
-                                        .id("rooftops-entry")
-                                        .flex_shrink_0()
-                                        .rounded_full()
-                                        .cursor_pointer()
-                                        .hover(|style| {
-                                            style.bg(cx.theme().primary.opacity(0.06)).shadow(vec![
-                                                BoxShadow::new(
-                                                    px(0.),
-                                                    px(0.),
-                                                    cx.theme().primary.opacity(0.18),
-                                                )
-                                                .blur_radius(px(16.))
-                                                .spread_radius(px(2.)),
-                                            ])
-                                        })
-                                        .on_click(cx.listener(Self::open_rooftops))
-                                        .child(
-                                            img(self.header_mark.clone())
-                                                .size(WORKSPACE_MARK_SIZE)
-                                                .flex_shrink_0()
-                                                .object_fit(ObjectFit::Contain),
-                                        ),
-                                )
-                                .child(
-                                    v_flex()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .gap_2()
-                                        .debug_selector(|| "workspace-content".into())
-                                        .child(
-                                            h_flex()
-                                                .w_full()
-                                                .min_w_0()
-                                                .items_start()
-                                                .flex_wrap()
-                                                .gap_x(WORKSPACE_HEADER_GAP)
-                                                .gap_y_2()
-                                                .child(
-                                                    v_flex()
-                                                        .flex_1()
-                                                        .flex_basis(WORKSPACE_TITLE_WIDTH)
-                                                        .min_w_0()
-                                                        .debug_selector(|| "workspace-title".into())
-                                                        .child(
-                                                            div()
-                                                                .text_2xl()
-                                                                .line_height(gpui_kit::relative(1.25))
-                                                                .font_semibold()
-                                                                // Trim the outer half-leading only;
-                                                                // wrapped lines keep their full spacing.
-                                                                .my(rems(-0.1875))
-                                                                .child(workspace_title),
-                                                        ),
-                                                )
-                                                .when(!needs_setup && !repository_in_title_bar, |row| {
-                                                    row.child(
-                                                        h_flex()
-                                                            .flex_none()
-                                                            .child(self.render_repository_picker(cx)),
-                                                    )
-                                                }),
-                                        )
-                                        .child(
-                                            h_flex()
-                                                .debug_selector(|| "workspace-controls".into())
-                                                .w_full()
-                                                .min_w_0()
-                                                .gap_1p5()
-                                                .flex_wrap()
-                                                .when(self.updater.read(cx).state != UpdateState::Idle, |row| {
-                                                    let update = self.updater.read(cx);
-                                                    row.child(Button::new("install-update")
-                                                        .debug_selector(|| "install-update".into())
-                                                        .app_icon()
-                                                        .label(match update.state {
-                                                            UpdateState::Installing => "Updating…",
-                                                            UpdateState::Failed => "↻ Update",
-                                                            _ => "↑ Update",
-                                                        })
-                                                        .disabled(self.uploading || self.import_busy() || update.state == UpdateState::Installing)
-                                                        .accessibility_label("Install update and restart Gatto")
-                                                        .tooltip(update.message.clone())
-                                                        .on_click(|_, window, cx| {
-                                                            window.dispatch_action(Box::new(crate::application_menu::InstallUpdate), cx);
-                                                        }))
-                                                })
-                                                .when(self.settings.sidebar_collapsed, |row| row.child(
-                                                    Button::new("show-project-sidebar").debug_selector(|| "show-project-sidebar".into()).app_icon().icon(AssetIconName::PanelLeftOpen)
-                                                        .accessibility_label("Show sidebar").tooltip(if cfg!(windows) { "Show sidebar · Ctrl+B" } else { "Show sidebar · ⌘B" })
-                                                        .on_click(cx.listener(|this, _, _, cx| this.toggle_project_sidebar(cx)))
-                                                ))
-                                                .child(
-                                                    Button::new("open-logs")
-                                                        .app_icon()
-                                                        .icon(AssetIconName::Logs)
-                                                        .accessibility_label("Application logs")
-                                                        .tooltip("App logs")
-                                                        .on_click(
-                                                            cx.listener(Self::open_log_window),
-                                                        ),
-                                                )
-                                                .child(
-                                                    Button::new("open-settings")
-                                                        .debug_selector(|| "open-settings".into())
-                                                        .app_icon()
-                                                        .icon(IconName::Settings)
-                                                        .accessibility_label("App preferences")
-                                                        .tooltip("App preferences")
-                                                        .on_click(cx.listener(|this, _, window, cx| {
-                                                            this.open_preferences(window, cx);
-                                                        })),
-                                                )
-                                                .map(|row| {
-                                                    #[cfg(windows)]
-                                                    let row = row.child(self.render_windows_app_menu());
-                                                    row
-                                                })
-                                                .child(
-                                                    Button::new("workspace-information").debug_selector(|| "workspace-information".into())
-                                                        .app_icon()
-                                                        .icon(AssetIconName::CircleQuestionMark)
-                                                        .accessibility_label("Project information")
-                                                        .tooltip("Project information")
-                                                        .on_click(cx.listener(|this, _, window, cx| this.open_project_info(window, cx))),
-                                                ),
-                                        ),
-                                ),
-                        )
+                        .when_some(scrolling_header, |content, header| content.child(header))
                         .when(needs_setup, |root| root.child(self.render_setup_prompt(cx)))
                         .when(!needs_setup, |root| root.child(self.render_drop_zone(cx)))
-                        .when(self.compression.is_some(), |root| root.child(self.render_compression(cx)))
+                        .when(self.compression.is_some(), |root| {
+                            root.child(self.render_compression(cx))
+                        })
                         .when(self.combining_comparison, |root| {
-                                    root.child(
-                                        div().id("comparison-processing").test_support().child(
-                                            Attachment::new()
-                                                .large().w_full()
-                                                .status(AttachmentStatus::Processing)
-                                                .media(AttachmentMedia::new())
-                                                .content(AttachmentContent::new()
-                                                    .title(AttachmentTitle::new("Preparing comparison…"))
-                                                    .description(AttachmentDescription::new("Resizing and combining images"))),
-                                        )
-                                    )
+                            root.child(
+                                div().id("comparison-processing").test_support().child(
+                                    Attachment::new()
+                                        .large()
+                                        .w_full()
+                                        .status(AttachmentStatus::Processing)
+                                        .media(AttachmentMedia::new())
+                                        .content(
+                                            AttachmentContent::new()
+                                                .title(AttachmentTitle::new(
+                                                    "Preparing comparison…",
+                                                ))
+                                                .description(AttachmentDescription::new(
+                                                    "Resizing and combining images",
+                                                )),
+                                        ),
+                                ),
+                            )
                         })
                         .child(self.render_attachments(cx)),
                 );
@@ -3996,6 +4166,7 @@ impl Render for UploaderApp {
                         ])
                         .overflow_hidden()
                 })
+                .when_some(fixed_header, |main, header| main.child(header))
                 .child(content)
                 .child(
                     h_flex()
@@ -4022,21 +4193,37 @@ impl Render for UploaderApp {
                         })
                         .child(self.render_upload_button(upload_count, can_send, cx)),
                 );
-            root.child(
-                h_flex()
-                    .size_full()
-                    .items_stretch()
-                    .when(!sidebar_collapsed, |shell| {
-                        shell
-                            .bg(cx.theme().sidebar)
-                            .child(self.render_project_sidebar(titlebar_height, cx))
-                    })
-                    .child(main),
-            )
-            .when(titlebar_height > px(0.), |root| {
-                root.child(self.render_title_bar(titlebar_height, repository_in_title_bar, cx))
-            })
-            .into_any_element()
+            let shell = h_flex()
+                .size_full()
+                .items_stretch()
+                .when(!sidebar_collapsed, |shell| {
+                    shell
+                        .bg(cx.theme().sidebar)
+                        .child(self.render_project_sidebar(
+                            if windows_caption {
+                                SIDEBAR_TITLEBAR_HEIGHT
+                            } else {
+                                titlebar_height
+                            },
+                            cx,
+                        ))
+                })
+                .child(main);
+            root.child(shell)
+                .when(windows_caption && !sidebar_collapsed, |root| {
+                    root.child(Self::windows_drag_region(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .w(PROJECT_SIDEBAR_WIDTH)
+                            .h(SIDEBAR_TITLEBAR_HEIGHT),
+                    ))
+                })
+                .when(titlebar_height > px(0.), |root| {
+                    root.child(self.render_title_bar(titlebar_height, repository_in_title_bar, cx))
+                })
+                .into_any_element()
         }
     }
 }

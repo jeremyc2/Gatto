@@ -337,26 +337,36 @@ impl UploaderApp {
         format!("Search {owner} repositories…")
     }
 
-    pub(super) fn render_repository_picker(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_repository_picker(
+        &self,
+        header_height: Option<Pixels>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let label = self.selected_repository.as_ref().map_or_else(
             || self.repository_search_label(),
             |repository| repository.name.clone(),
         );
-        self.render_repository_popover("repository-picker-trigger", "Repository", label, cx)
-            .anchor(gpui_kit::Anchor::TopRight)
-            .when(self.load_state == LoadState::Failed, |popover| {
-                popover.child(
-                    h_flex().px_2().pb_2().child(
-                        Button::new("retry-repositories")
-                            .debug_selector(|| "retry-repositories".into())
-                            .app_secondary()
-                            .label("Retry loading repositories")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.load_repositories(window, cx);
-                            })),
-                    ),
-                )
-            })
+        self.render_repository_popover(
+            "repository-picker-trigger",
+            "Repository",
+            label,
+            header_height,
+            cx,
+        )
+        .anchor(gpui_kit::Anchor::TopRight)
+        .when(self.load_state == LoadState::Failed, |popover| {
+            popover.child(
+                h_flex().px_2().pb_2().child(
+                    Button::new("retry-repositories")
+                        .debug_selector(|| "retry-repositories".into())
+                        .app_secondary()
+                        .label("Retry loading repositories")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.load_repositories(window, cx);
+                        })),
+                ),
+            )
+        })
     }
 
     pub(super) fn render_pinned_repositories(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -394,6 +404,7 @@ impl UploaderApp {
                 "pinned-repository-trigger",
                 "Pinned repositories",
                 label,
+                None,
                 cx,
             ))
     }
@@ -403,6 +414,7 @@ impl UploaderApp {
         trigger_id: &'static str,
         heading: &'static str,
         label: String,
+        header_height: Option<Pixels>,
         cx: &mut Context<Self>,
     ) -> Popover {
         let picker = self.repository_picker.clone();
@@ -410,6 +422,9 @@ impl UploaderApp {
         let loading = self.load_state == LoadState::Loading;
         Popover::new(format!("{trigger_id}-popover"))
             .w(PICKER_WIDTH)
+            .when(header_height.is_some(), |popover| {
+                popover.trigger_style(div().w_full().style().clone())
+            })
             .p_0()
             .bg(cx.theme().sidebar)
             .open(self.repository_picker_open)
@@ -442,6 +457,7 @@ impl UploaderApp {
                     .accessibility_label(format!("{heading}. {label}"))
                     .app_secondary()
                     .w(PICKER_WIDTH)
+                    .when_some(header_height, |trigger, height| trigger.w_full().h(height))
                     .justify_between()
                     .child(div().min_w_0().truncate().child(label)),
             )

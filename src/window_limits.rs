@@ -90,7 +90,45 @@ fn native_color(color: gpui_kit::Hsla) -> objc2::rc::Retained<objc2_app_kit::NSC
     )
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+pub fn style_window<V: 'static>(
+    _: &gpui_kit::Entity<V>,
+    window: &mut Window,
+    full_size_content: bool,
+    cx: &mut App,
+) {
+    use gpui_kit::component::ActiveTheme as _;
+    use windows::Win32::Graphics::Dwm::{
+        DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DwmSetWindowAttribute,
+    };
+
+    if full_size_content {
+        return;
+    }
+    let Some(hwnd) = native_window(window) else {
+        return;
+    };
+    for (attribute, color) in [
+        (DWMWA_CAPTION_COLOR, cx.theme().sidebar),
+        (DWMWA_TEXT_COLOR, cx.theme().foreground),
+    ] {
+        let color = color.to_rgb();
+        let colorref = (color.r * 255.).round() as u32
+            | ((color.g * 255.).round() as u32) << 8
+            | ((color.b * 255.).round() as u32) << 16;
+        // SAFETY: Window supplies a live HWND and these attributes take a COLORREF.
+        let _ = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                attribute,
+                (&raw const colorref).cast(),
+                size_of::<u32>() as u32,
+            )
+        };
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 pub fn style_window<V: 'static>(_: &gpui_kit::Entity<V>, _: &mut Window, _: bool, _: &mut App) {}
 
 /// Counts minimized and occluded windows as open. GPUI visibility tracks
@@ -139,27 +177,95 @@ pub fn request_close(window: &Window, cx: &App) {
 }
 
 #[cfg(windows)]
-pub fn request_close(window: &Window, _: &App) {
+fn native_window(window: &Window) -> Option<windows::Win32::Foundation::HWND> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+
+    let RawWindowHandle::Win32(handle) = HasWindowHandle::window_handle(window).ok()?.as_raw()
+    else {
+        return None;
+    };
+    Some(HWND(handle.hwnd.get() as _))
+}
+
+#[cfg(windows)]
+pub fn request_close(window: &Window, _: &App) {
     use windows::Win32::{
-        Foundation::{HWND, LPARAM, WPARAM},
+        Foundation::{LPARAM, WPARAM},
         UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE},
     };
 
-    if let Ok(handle) = HasWindowHandle::window_handle(window)
-        && let RawWindowHandle::Win32(handle) = handle.as_raw()
-    {
+    if let Some(hwnd) = native_window(window) {
         // SAFETY: The window owns the HWND. WM_CLOSE carries no pointers and
         // lets GPUI's normal close callback validate and flush pending work.
-        let _ = unsafe {
-            PostMessageW(
-                Some(HWND(handle.hwnd.get() as _)),
-                WM_CLOSE,
-                WPARAM(0),
-                LPARAM(0),
-            )
-        };
+        let _ = unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) };
     }
+}
+
+/// Opens the native system menu for the uploader's custom caption.
+#[cfg(windows)]
+pub fn show_system_menu(window: &Window, position: gpui_kit::Point<gpui_kit::Pixels>, cx: &App) {
+    use windows::Win32::{
+        Foundation::{LPARAM, POINT, WPARAM},
+        Graphics::Gdi::ClientToScreen,
+        UI::WindowsAndMessaging::{
+            EnableMenuItem, GetSystemMenu, IsZoomed, MF_BYCOMMAND, MF_ENABLED, MF_GRAYED,
+            PostMessageW, SC_MAXIMIZE, SC_MOVE, SC_RESTORE, SC_SIZE, TPM_RETURNCMD,
+            TPM_RIGHTBUTTON, TrackPopupMenu, WM_SYSCOMMAND,
+        },
+    };
+
+    let Some(hwnd) = native_window(window) else {
+        return;
+    };
+    let scale = window.scale_factor();
+    let mut anchor = POINT {
+        x: (position.x.as_f32() * scale).round() as i32,
+        y: (position.y.as_f32() * scale).round() as i32,
+    };
+    // SAFETY: Window supplies a live HWND and the output point is stack-owned.
+    if !unsafe { ClientToScreen(hwnd, &mut anchor) }.as_bool() {
+        return;
+    }
+
+    // The native menu runs a modal message loop. Let the GPUI event update
+    // finish before that loop starts dispatching messages back to the app.
+    cx.foreground_executor()
+        .spawn(async move {
+            // SAFETY: The foreground executor runs on the owning UI thread.
+            // GetSystemMenu can fail if the window has closed, and Windows owns
+            // the returned menu for the lifetime of the window.
+            unsafe {
+                let menu = GetSystemMenu(hwnd, false);
+                if menu.is_invalid() {
+                    return;
+                }
+                let maximized = IsZoomed(hwnd).as_bool();
+                for (command, enabled) in [
+                    (SC_RESTORE, maximized),
+                    (SC_MOVE, !maximized),
+                    (SC_SIZE, !maximized),
+                    (SC_MAXIMIZE, !maximized),
+                ] {
+                    let state = if enabled { MF_ENABLED } else { MF_GRAYED };
+                    let _ = EnableMenuItem(menu, command, MF_BYCOMMAND | state);
+                }
+                let command = TrackPopupMenu(
+                    menu,
+                    TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                    anchor.x,
+                    anchor.y,
+                    None,
+                    hwnd,
+                    None,
+                );
+                if command.0 != 0 {
+                    let _ =
+                        PostMessageW(Some(hwnd), WM_SYSCOMMAND, WPARAM(command.0 as _), LPARAM(0));
+                }
+            }
+        })
+        .detach();
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
