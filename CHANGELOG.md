@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.6] - 2026-11-15
+
 ### Added
 
 - Play Rooftops music and sound effects on Windows through native audio.
