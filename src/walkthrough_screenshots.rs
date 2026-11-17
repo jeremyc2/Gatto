@@ -190,6 +190,17 @@ fn generate_captures(output_directory: &std::path::Path) -> Result<()> {
             RooftopsCapture::Options,
         );
     }
+    if std::env::args().any(|arg| arg == "--rooftops-flight") {
+        const FPS: f32 = 60.;
+        let frames = (rooftops::Rooftops::FLIGHT_PREVIEW_DURATION * FPS).ceil() as u32;
+        for index in 0..frames {
+            render_rooftops(
+                &output_directory.join(format!("flight-{index:03}.png")),
+                RooftopsCapture::Flight(index as f32 / FPS),
+            )?;
+        }
+        return Ok(());
+    }
     if std::env::args().any(|arg| arg == "--rooftops-menu") {
         return render_rooftops(
             &output_directory.join("rooftops-menu.png"),
@@ -891,6 +902,7 @@ fn check_pixelation_edges(output: &std::path::Path) -> Result<()> {
 #[cfg(target_os = "macos")]
 enum RooftopsCapture {
     Menu(f32, [f32; 2]),
+    Flight(f32),
     MenuWithScorecard { hovered: bool },
     Achievements { scrolled: bool },
     Options,
@@ -947,6 +959,9 @@ fn capture_rooftops(
             cx,
             |window, cx| {
                 cx.new(|cx| match capture {
+                    RooftopsCapture::Flight(time) => {
+                        rooftops::Rooftops::for_flight_preview(window, cx, time)
+                    }
                     RooftopsCapture::Menu(time, aim) => {
                         rooftops::Rooftops::for_menu_preview(window, cx, time, aim)
                     }
@@ -1298,6 +1313,7 @@ fn audit_rooftops(output: &std::path::Path) -> Result<()> {
                     ("slide-1", 0, false),
                     ("slide-2", 1, false),
                     ("arrival", 0, false),
+                    ("flight", 0, false),
                     ("options", 0, false),
                 ]
                 .map(|(scene, level, results)| (width, height, scene, level, results))
@@ -1335,6 +1351,7 @@ fn audit_rooftops(output: &std::path::Path) -> Result<()> {
                             Some(0.575),
                         ),
                         "arrival" => rooftops::Rooftops::for_arrival_preview(window, cx, 0.6),
+                        "flight" => rooftops::Rooftops::for_flight_preview(window, cx, 0.),
                         "options" => rooftops::Rooftops::for_options_preview(window, cx),
                         _ => rooftops::Rooftops::for_preview(window, cx, level, results),
                     })

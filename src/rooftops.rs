@@ -39,6 +39,7 @@ const SPEED: f32 = 310.;
 const GRAVITY: f32 = 1450.;
 const JUMP: f32 = 535.;
 const SKY: u32 = 0x101322;
+const COURSE_MOON_DIAMETER: f32 = 94.;
 const GOLD: u32 = 0xffdba0;
 const START_X: f32 = 105.;
 const DESTINATION_INSET: f32 = 140.;
@@ -778,7 +779,8 @@ pub struct Rooftops {
     menu_time: f32,
     menu_camera: menu::Aim,
     menu_aim: menu::Aim,
-    menu_bridge: menu::BridgeArt,
+    harbor_art: menu::HarborArt,
+    menu_flight: Option<menu::Flight>,
     achievements: Achievements,
     achievements_open: bool,
     achievements_focus: FocusHandle,
@@ -864,7 +866,9 @@ impl Rooftops {
             this.remainder = 0.;
             this.music_preview = false;
             this.effects_adjustment = None;
-            this.audio.suspend();
+            if !this.achievements_open {
+                this.audio.suspend();
+            }
             cx.notify();
         });
         let game = cx.entity().downgrade();
@@ -931,7 +935,8 @@ impl Rooftops {
             menu_time: 0.,
             menu_camera: menu::Aim::default(),
             menu_aim: menu::Aim::default(),
-            menu_bridge: menu::BridgeArt::default(),
+            harbor_art: menu::HarborArt::default(),
+            menu_flight: None,
             achievements: stored.achievements,
             achievements_open: false,
             achievements_focus: cx.focus_handle(),
@@ -993,6 +998,27 @@ impl Rooftops {
         game.preview = true;
         game.menu_time = time;
         game.menu_camera = menu::Aim::new(x, y);
+        game
+    }
+
+    #[cfg(all(target_os = "macos", feature = "walkthrough-screenshots"))]
+    #[allow(dead_code)]
+    pub(crate) const FLIGHT_PREVIEW_DURATION: f32 = menu::Flight::DURATION + 0.65;
+
+    #[cfg(all(target_os = "macos", feature = "walkthrough-screenshots"))]
+    #[allow(dead_code)]
+    pub(crate) fn for_flight_preview(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        time: f32,
+    ) -> Self {
+        let mut game = Self::for_menu_preview(window, cx, 0., [0., 0.]);
+        game.reset_run();
+        if time < menu::Flight::DURATION {
+            game.menu_flight = Some(menu::Flight::for_preview(time));
+        } else {
+            game.arrival = Some(time - menu::Flight::DURATION);
+        }
         game
     }
 
@@ -1076,6 +1102,7 @@ impl Rooftops {
         cx: &mut Context<Self>,
     ) {
         self.menu_open = false;
+        self.menu_flight = None;
         self.achievements_open = false;
         self.menu_time = 0.;
         self.viewing_scorecard = Some(score);
@@ -1318,8 +1345,13 @@ impl Rooftops {
     #[cfg(feature = "walkthrough-screenshots")]
     #[allow(dead_code)]
     pub(crate) fn audit_frame(&mut self, frame: usize, fixed_aspect: bool, cx: &mut Context<Self>) {
-        self.run.time = frame as f32 / 60.;
-        self.menu_time = self.run.time;
+        let time = frame as f32 / 60.;
+        if self.menu_flight.is_some() {
+            self.menu_flight = Some(menu::Flight::for_preview(time));
+        } else {
+            self.run.time = time;
+            self.menu_time = time;
+        }
         self.fixed_preview_aspect = fixed_aspect;
         if self.menu_open {
             // Include the moving camera in the menu render timings.
@@ -1493,9 +1525,9 @@ impl Rooftops {
         self.started = false;
         self.hud_changed = None;
         self.menu_open = false;
+        self.menu_flight = None;
         self.achievements_open = false;
         self.viewing_scorecard = None;
-        self.audio.stop();
         self.run_personal_best = self.personal_best;
         self.ghost_replay = self.best_replay.clone();
         self.recording = Recording::new(self.run.ghost_frame());
@@ -1506,7 +1538,28 @@ impl Rooftops {
         self.save_message = None;
     }
 
+    fn play_from_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.menu_open || self.options_open || self.achievements_open {
+            return;
+        }
+        self.reset_run();
+        if self.reduced_motion(cx) {
+            self.finish_arrival();
+        } else {
+            self.menu_flight = Some(menu::Flight::default());
+        }
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn finish_menu_flight(&mut self) {
+        if self.menu_flight.take().is_some() {
+            self.last_frame = None;
+        }
+    }
+
     fn return_to_menu(&mut self) {
+        self.audio.stop();
         self.reset_run();
         self.menu_open = true;
         self.menu_time = 0.;
@@ -1559,7 +1612,7 @@ impl Rooftops {
         if self.menu_open || self.displayed_score().is_some() {
             if event.keystroke.key == "space" && !event.is_held {
                 if self.menu_open {
-                    self.reset_run();
+                    self.play_from_menu(window, cx);
                 } else {
                     self.return_to_menu();
                 }
@@ -1621,6 +1674,7 @@ impl Rooftops {
         if self.run.home {
             return;
         }
+        self.finish_menu_flight();
         self.finish_arrival();
         self.finish_slide();
         if !self.started {
@@ -1640,6 +1694,12 @@ impl Rooftops {
             .last_frame
             .replace(now)
             .map_or(0., |last| now.duration_since(last).as_secs_f64());
+        if let Some(flight) = &mut self.menu_flight {
+            if flight.advance(elapsed as f32) {
+                self.finish_menu_flight();
+            }
+            return None;
+        }
         if let Some(slide) = &mut self.slide {
             slide.time += (elapsed as f32).min(0.05);
             self.camera = slide.camera();
@@ -1739,7 +1799,6 @@ impl Rooftops {
         }
         let active = window.is_window_active()
             && !self.options_open
-            && !self.achievements_open
             && (self.menu_open
                 || self.displayed_score().is_some()
                 || self.focus.is_focused(window));
@@ -1749,7 +1808,7 @@ impl Rooftops {
             self.sync_audio(active);
         }
         if self.menu_open || self.viewing_scorecard.is_some() {
-            if active && !self.reduced_motion(cx) {
+            if active && !self.achievements_open && !self.reduced_motion(cx) {
                 let now = Instant::now();
                 if let Some(last) = self.last_frame.replace(now) {
                     let elapsed = now.duration_since(last).as_secs_f32().min(0.05);
@@ -1762,14 +1821,11 @@ impl Rooftops {
             }
             return;
         }
-        if self.slide.is_some() && active {
+        if active && (self.menu_flight.is_some() || self.slide.is_some() || self.arrival.is_some())
+        {
             if self.reduced_motion(cx) {
+                self.finish_menu_flight();
                 self.finish_slide();
-            }
-            window.request_animation_frame();
-        }
-        if self.arrival.is_some() && active {
-            if self.reduced_motion(cx) {
                 self.finish_arrival();
             }
             window.request_animation_frame();
@@ -1820,10 +1876,11 @@ impl Rooftops {
     }
 
     fn audio_scene(&self, active: bool) -> audio::Scene {
+        let harbor = self.menu_open || self.menu_flight.is_some();
         let results = self.displayed_score().is_some();
         audio::Scene {
             active,
-            level: if self.menu_open {
+            level: if harbor {
                 audio::MENU
             } else if results {
                 audio::FINALE
@@ -1831,7 +1888,7 @@ impl Rooftops {
                 self.run.level
             },
             resting: results || self.run.home || self.slide.is_some(),
-            thruster: !self.menu_open && !results && self.arrival.is_some_and(arrival::flames_on),
+            thruster: !harbor && !results && self.arrival.is_some_and(arrival::flames_on),
         }
     }
 
@@ -1839,7 +1896,7 @@ impl Rooftops {
         self.audio.sync(
             self.audio_scene(active),
             Preferences {
-                effects_volume: if self.menu_open {
+                effects_volume: if self.menu_open || self.menu_flight.is_some() {
                     0
                 } else {
                     self.preferences.effects_volume
@@ -2086,17 +2143,7 @@ fn visible_stars(width: f32, camera: f32) -> impl Iterator<Item = Star> {
     })
 }
 
-#[derive(Clone, Copy)]
-enum BackdropView {
-    Course { camera: f32, level: usize },
-    Harbor(menu::View),
-}
-
-fn backdrop(w: f32, h: f32, time: f32, scale: f32, view: BackdropView) -> gpui_kit::Div {
-    let (star_camera, moon_phase, building_bottom) = match view {
-        BackdropView::Course { camera, level } => (camera, Some(level), h),
-        BackdropView::Harbor(_) => (145., None, h * menu::HORIZON),
-    };
+fn sky(w: f32, h: f32, time: f32, scale: f32, star_camera: f32) -> gpui_kit::Div {
     let mut quads = Vec::with_capacity(600);
     for band in 0..10 {
         quads.push(native_quad(
@@ -2116,8 +2163,51 @@ fn backdrop(w: f32, h: f32, time: f32, scale: f32, view: BackdropView) -> gpui_k
             scale,
         ));
     }
+    div().absolute().inset_0().child(NativeArt { quads })
+}
+
+#[derive(Clone, Copy)]
+struct SkylineRow {
+    parallax: f32,
+    spacing: f32,
+    base: f32,
+    ink: u32,
+}
+
+impl SkylineRow {
+    fn height_variation(index: i64, layer: usize) -> f32 {
+        (index * 73 + layer as i64 * 41).rem_euclid(130) as f32
+    }
+
+    fn top(self, index: i64, layer: usize) -> f32 {
+        self.base - 55. - Self::height_variation(index, layer)
+    }
+}
+
+const SKYLINE_ROWS: [SkylineRow; 3] = [
+    SkylineRow {
+        parallax: 0.12,
+        spacing: 112.,
+        base: 365.,
+        ink: 0x1b2034,
+    },
+    SkylineRow {
+        parallax: 0.26,
+        spacing: 98.,
+        base: 440.,
+        ink: 0x24263d,
+    },
+    SkylineRow {
+        parallax: 0.43,
+        spacing: 125.,
+        base: 510.,
+        ink: 0x2c2b43,
+    },
+];
+
+fn backdrop(w: f32, h: f32, time: f32, scale: f32, camera: f32, level: usize) -> gpui_kit::Div {
     let moon = w - 155.;
-    let mut skyline = div().absolute().inset_0().child(NativeArt { quads });
+    let mut skyline = sky(w, h, time, scale, camera);
     const WINDOW_SPAN: f32 = 66.;
     const WINDOW_TILE_HEIGHT: f32 = 108.;
     static WINDOWS: LazyLock<[[neighborhood::Tile; 4]; 2]> = LazyLock::new(|| {
@@ -2140,80 +2230,55 @@ fn backdrop(w: f32, h: f32, time: f32, scale: f32, view: BackdropView) -> gpui_k
             })
         })
     });
-    for layer in 0..3 {
+    for (layer, row) in SKYLINE_ROWS.into_iter().enumerate() {
+        let SkylineRow {
+            parallax,
+            spacing,
+            ink: color,
+            ..
+        } = row;
         let mut quads = Vec::new();
         let mut windows = Vec::new();
-        let parallax = [0.12, 0.26, 0.43][layer];
-        let spacing = [112., 98., 125.][layer];
-        let offset_x = match view {
-            BackdropView::Course { camera, .. } => -camera * parallax,
-            BackdropView::Harbor(_) => -145. * parallax,
-        };
-        let base = [365., 440., 510.][layer];
-        let color = [0x1b2034, 0x24263d, 0x2c2b43][layer];
+        let offset_x = -camera * parallax;
+
         let first = (-offset_x / spacing).floor() as i64;
         for i in first..first + (w / spacing) as i64 + 3 {
-            let left = i as f32 * spacing + offset_x;
-            let ([x, foot], zoom) = match view {
-                BackdropView::Course { .. } => ([left, building_bottom], 1.),
-                BackdropView::Harbor(camera) => {
-                    camera.billboard(left, [290., 219., 160.][layer], building_bottom)
-                }
-            };
+            let x = i as f32 * spacing + offset_x;
             if x > w {
                 break;
             }
-            let tall = 55. + (i * 73 + layer as i64 * 41).rem_euclid(130) as f32;
-            let top = foot + (base - tall - building_bottom) * zoom;
-            if top >= building_bottom {
+            let top = row.top(i, layer);
+            if top >= h {
                 continue;
             }
-            let mut building = native_quad(
-                [x, top, (spacing - 9.) * zoom, building_bottom - top],
-                color,
-                1.,
-                3.,
-                scale,
-            );
+            let mut building = native_quad([x, top, spacing - 9., h - top], color, 1., 3., scale);
             building.corner_radii.bottom_left = px(0.);
             building.corner_radii.bottom_right = px(0.);
             quads.push(building);
             quads.push(native_quad(
-                [
-                    x + 13. * zoom,
-                    top - 9. * zoom,
-                    (spacing - 35.) * zoom,
-                    10. * zoom,
-                ],
+                [x + 13., top - 9., spacing - 35., 10.],
                 color,
                 1.,
                 0.,
                 scale,
             ));
             if i % 3 == 0 {
-                let mut tower = native_quad(
-                    [x + 35. * zoom, top - 30. * zoom, 21. * zoom, 24. * zoom],
-                    color,
-                    1.,
-                    7.,
-                    scale,
-                );
+                let mut tower = native_quad([x + 35., top - 30., 21., 24.], color, 1., 7., scale);
                 tower.corner_radii.bottom_left = px(0.);
                 tower.corner_radii.bottom_right = px(0.);
                 quads.push(tower);
                 quads.push(native_quad(
-                    [x + 41. * zoom, top - 46. * zoom, 2. * zoom, 17. * zoom],
+                    [x + 41., top - 46., 2., 17.],
                     color,
                     1.,
                     0.,
                     scale,
                 ));
             }
-            if top + 17. * zoom < building_bottom {
+            if top + 17. < h {
                 windows.push((
-                    x + (spacing - 9. - WINDOW_SPAN) * 0.5 * zoom,
-                    top + 17. * zoom,
-                    zoom,
+                    x + (spacing - 9. - WINDOW_SPAN) * 0.5,
+                    top + 17.,
                     i.rem_euclid(4) as usize,
                 ));
             }
@@ -2223,26 +2288,20 @@ fn backdrop(w: f32, h: f32, time: f32, scale: f32, view: BackdropView) -> gpui_k
                 |_, _, _| (),
                 move |bounds, _, window, _| {
                     let tiles = &WINDOWS[usize::from(layer != 0)];
-                    for (x, y, zoom, phase) in windows {
-                        let tile_scale = scale * zoom;
+                    for (x, y, phase) in windows {
                         let position =
                             bounds.origin + gpui_kit::point(px(x * scale), px(y * scale));
                         let clip = gpui_kit::Bounds::new(
                             position,
-                            gpui_kit::size(
-                                px(WINDOW_SPAN * tile_scale),
-                                px((building_bottom - y) * scale),
-                            ),
+                            gpui_kit::size(px(WINDOW_SPAN * scale), px((h - y) * scale)),
                         );
-                        for row in
-                            0..((building_bottom - y) / (zoom * WINDOW_TILE_HEIGHT)).ceil() as usize
-                        {
+                        for row in 0..((h - y) / WINDOW_TILE_HEIGHT).ceil() as usize {
                             let origin = position
                                 + gpui_kit::point(
                                     px(0.),
-                                    px(row as f32 * WINDOW_TILE_HEIGHT * tile_scale),
+                                    px(row as f32 * WINDOW_TILE_HEIGHT * scale),
                                 );
-                            tiles[phase].paint(origin, tile_scale, clip, window);
+                            tiles[phase].paint(origin, scale, clip, window);
                         }
                     }
                 },
@@ -2251,10 +2310,10 @@ fn backdrop(w: f32, h: f32, time: f32, scale: f32, view: BackdropView) -> gpui_k
             .inset_0(),
         );
     }
-    match moon_phase {
-        Some(level) => skyline.child(vector_art(art::moon_paths(moon, 58., 84., level), scale)),
-        None => skyline.child(vector_art(menu::moon(), scale)),
-    }
+    skyline.child(vector_art(
+        art::moon_paths(moon, 58., COURSE_MOON_DIAMETER, level),
+        scale,
+    ))
 }
 
 fn enemy_sprite(enemy: &Enemy, x: f32, y: f32, time: f32, scale: f32) -> impl IntoElement {
@@ -2776,6 +2835,21 @@ impl Render for Rooftops {
                 scene
             };
         }
+        let flight = self.menu_flight.map(|flight| {
+            flight.render(
+                viewport,
+                self.menu_time,
+                self.menu_camera,
+                &mut self.harbor_art,
+            )
+        });
+        if self
+            .menu_flight
+            .is_some_and(|flight| !flight.reveals_course())
+        {
+            return scene.children(flight);
+        }
+
         self.facade_art.resize(h, scale);
         if let Some(score) = self.displayed_score() {
             let scene = scene
@@ -2791,10 +2865,8 @@ impl Render for Rooftops {
             h,
             drift,
             scale,
-            BackdropView::Course {
-                camera: camera + course_progress(run.level, START_X),
-                level: run.level,
-            },
+            camera + course_progress(run.level, START_X),
+            run.level,
         ));
 
         if let Some(slide) = &self.slide {
@@ -2985,6 +3057,9 @@ impl Render for Rooftops {
                     .child(control_prompt("Space for next level")),
             );
         }
+        if let Some(flight) = flight {
+            return scene.child(flight);
+        }
         self.with_options(scene, window, cx)
     }
 }
@@ -3050,7 +3125,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn harbor_actions_are_stacked_and_achievements_escape_restores_menu_focus(
+    fn harbor_achievements_keep_menu_music_and_escape_restores_focus(
         cx: &mut gpui_kit::TestAppContext,
     ) {
         use gpui_kit::{Modifiers, MouseButton};
@@ -3059,7 +3134,15 @@ mod tests {
             crate::application_menu::init(cx);
         });
         let (game, cx) = cx.add_window_view(|window, cx| Rooftops::new(window, cx, None));
-        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.update(|window, cx| {
+            window.activate_window();
+            window.focus(&game.read(cx).focus.clone(), cx);
+        });
+        cx.executor().run_until_parked();
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(game.read(cx).audio.test_output().0, "menu music is playing");
+        });
         let [play, settings, achievements] =
             ["rooftops-play", "rooftops-options", "rooftops-achievements"]
                 .map(|id| cx.debug_bounds(id).unwrap());
@@ -3080,13 +3163,22 @@ mod tests {
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
             assert!(game.read(cx).achievements_open);
+            assert!(game.read(cx).achievements_focus.is_focused(window));
+        });
+        cx.update(|_, cx| {
+            assert!(
+                game.read(cx).audio.test_output().0,
+                "opening Achievements keeps the menu music playing"
+            );
         });
         assert!(cx.debug_bounds("rooftops-achievements-grid").is_some());
         cx.simulate_keystrokes("escape");
         cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
             let game = game.read(cx);
             assert!(game.menu_open && !game.achievements_open);
             assert!(game.focus.is_focused(window));
+            assert!(game.audio.test_output().0);
         });
     }
 
@@ -3259,11 +3351,14 @@ mod tests {
             click(game_cx, "rooftops-main-menu");
             assert!(game_cx.debug_bounds("rooftops-play").is_some());
             click(game_cx, "rooftops-play");
-            game_cx.update(|_, cx| {
-                view.update(cx, |game, _| {
+            game_cx.update(|window, cx| {
+                view.update(cx, |game, cx| {
                     assert!(!game.menu_open);
+                    game.finish_menu_flight();
                     game.run.elapsed = 12.;
+                    cx.notify();
                 });
+                window.draw(cx).clear(cx);
             });
             click(game_cx, "rooftops-options");
 
@@ -4683,6 +4778,97 @@ mod tests {
             let contrast = (luminance(background) + 0.05) / (luminance(SKY) + 0.05);
             assert!(contrast >= 4.5, "contrast ratio was {contrast:.2}");
         }
+    }
+
+    #[gpui_kit::test]
+    fn play_flight_holds_arrival_and_race_until_landing_or_skip(cx: &mut gpui_kit::TestAppContext) {
+        use gpui_kit::{Modifiers, MouseButton};
+        use std::time::Duration;
+
+        cx.update(gpui_kit::init);
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut game = gameplay(window, cx);
+            game.return_to_menu();
+            window.focus(&game.focus, cx);
+            game
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let Some(button) = cx.debug_bounds("rooftops-play") else {
+            panic!("Play should be visible on the harbor menu");
+        };
+        cx.simulate_mouse_down(button.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(button.center(), MouseButton::Left, Modifiers::default());
+        cx.update(|_, cx| {
+            view.update(cx, |game, cx| {
+                // Test the animated path independently of the host's motion setting.
+                if cx.reduce_motion() {
+                    assert!(game.menu_flight.is_none() && game.arrival.is_none());
+                    return;
+                }
+                let now = Instant::now();
+                assert!(game.menu_flight.is_some());
+                assert!(game.active_frame(now, false).is_none());
+                assert!(
+                    game.active_frame(now + Duration::from_secs(30), true)
+                        .is_none()
+                );
+                assert!(game.menu_flight.is_some());
+                assert_eq!(game.arrival, Some(0.));
+                let resumed = now + Duration::from_secs(30);
+                // Animation time follows the active clock even if two renders
+                // are delayed. No elapsed time is applied to the race or arrival.
+                assert!(
+                    game.active_frame(resumed + Duration::from_millis(1500), true)
+                        .is_none()
+                );
+                assert!(game.menu_flight.is_some());
+                assert_eq!(game.arrival, Some(0.));
+                let during_fade = resumed + Duration::from_secs_f32(menu::Flight::DURATION - 0.05);
+                assert!(game.active_frame(during_fade, true).is_none());
+                assert!(game.menu_flight.is_some_and(menu::Flight::reveals_course));
+                assert_eq!(
+                    game.arrival,
+                    Some(0.),
+                    "the fade-in must not consume the descent"
+                );
+                assert!(
+                    game.active_frame(
+                        resumed + Duration::from_secs_f32(menu::Flight::DURATION + 0.05),
+                        true,
+                    )
+                    .is_none()
+                );
+                assert!(game.menu_flight.is_none());
+                assert_eq!(game.arrival, Some(0.));
+                assert!(!game.started);
+                assert_eq!(game.run.elapsed, 0.);
+            });
+        });
+
+        cx.update(|window, cx| {
+            view.update(cx, |game, cx| {
+                game.return_to_menu();
+                window.focus(&game.focus, cx);
+                cx.notify();
+            });
+        });
+        cx.simulate_keystrokes("space");
+        cx.simulate_keystrokes("right");
+        cx.update(|_, cx| {
+            let game = view.read(cx);
+            assert!(!game.menu_open && game.menu_flight.is_none() && game.arrival.is_none());
+            assert!(game.started && game.run.lit[0] && game.run.input.right);
+        });
+
+        cx.update(|window, cx| {
+            view.update(cx, |game, cx| {
+                game.return_to_menu();
+                game.preferences.animations = false;
+                game.play_from_menu(window, cx);
+                assert!(game.menu_flight.is_none() && game.arrival.is_none());
+                assert!(!game.started && game.run.lit[0]);
+            });
+        });
     }
 
     #[gpui_kit::test]

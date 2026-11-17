@@ -1,13 +1,16 @@
-//! The harbor's Art Deco landmarks, each painted once from crown to entrance.
+//! The painted Art Deco façades used in the menu and harbor fly-through.
 
 use super::*;
-use neighborhood::{Tile, TilePainter};
+use neighborhood::Tile;
+use projection::Camera;
 
 const SHAFT_TOP: f32 = 245.;
 const FLOOR: f32 = 12.;
 const SHAFT_HEIGHT: f32 = FLOOR * 6.;
 const BASE_HEIGHT: f32 = 58.;
 const GROUND: f32 = SHAFT_TOP + SHAFT_HEIGHT + BASE_HEIGHT;
+pub(super) const DEPTH: f32 = 835.;
+const SCALE: f32 = 0.68;
 const STONE: u32 = 0x414358;
 const STEEL: u32 = 0x42465f;
 const GLASS: u32 = 0xe0bf92;
@@ -18,42 +21,100 @@ enum Entrance {
     Steel,
 }
 
-fn landmark(
-    width: f32,
-    ink: u32,
-    entrance: Entrance,
-    crown: impl FnOnce(&mut TilePainter<'_>),
-) -> Tile {
+const EMPIRE_X: f32 = 0.128 * WIDTH;
+const CHRYSLER_X: f32 = 0.877 * WIDTH;
+const ARCHES: [(f32, f32, f32, u32); 5] = [
+    (31., 213., 27., 0x87829c),
+    (27., 200., 25., 0x9794ae),
+    (22., 188., 24., 0xa6a4b7),
+    (16., 176., 22., 0xacaabc),
+    (10., 163., 19., 0xb8b2c0),
+];
+#[derive(Default)]
+struct Facade(Vec<art::ArtPath>);
+
+impl Facade {
+    fn rect(&mut self, bounds: [f32; 4], ink: u32) {
+        quad(&mut self.0, bounds, ink, 1.);
+    }
+
+    fn tint(&mut self, bounds: [f32; 4], ink: u32, opacity: f32) {
+        quad(&mut self.0, bounds, ink, opacity);
+    }
+
+    fn polygon(&mut self, points: Vec<[f32; 2]>, ink: u32, opacity: f32) {
+        shape(&mut self.0, points, ink, opacity);
+    }
+}
+
+struct Landmark {
+    tile: Tile,
+    front: Facade,
+}
+
+fn landmark(width: f32, ink: u32, entrance: Entrance, crown: impl FnOnce(&mut Facade)) -> Landmark {
+    let mut front = Facade::default();
+    crown(&mut front);
+    facade(
+        &mut front,
+        [-width * 0.5, SHAFT_TOP, width, SHAFT_HEIGHT],
+        ink,
+        0,
+    );
+    frontage(&mut front, width, entrance, ink);
     let base_width = width + 16.;
-    Tile::draw(
+    let tile = Tile::draw(
         [-base_width * 0.5, 54., base_width, GROUND - 54.],
         |painter| {
-            crown(painter);
-            facade(
-                painter,
-                [-width * 0.5, SHAFT_TOP, width, SHAFT_HEIGHT],
-                ink,
-                0,
-            );
-            frontage(painter, width, entrance, ink);
+            for shape in &front.0 {
+                let mut path = tiny_skia::PathBuilder::new();
+                path.move_to(shape.points[0][0], shape.points[0][1]);
+                for &[x, y] in &shape.points[1..] {
+                    path.line_to(x, y);
+                }
+                path.close();
+                let [_, r, g, b] = shape.ink.to_be_bytes();
+                let mut paint = tiny_skia::Paint::default();
+                paint.set_color_rgba8(r, g, b, (shape.opacity * 255.).round() as u8);
+                paint.anti_alias = true;
+                painter.fill(path, &paint);
+            }
         },
-    )
+    );
+    Landmark { tile, front }
+}
+
+static EMPIRE: LazyLock<Landmark> = LazyLock::new(empire_state);
+static CHRYSLER: LazyLock<Landmark> = LazyLock::new(chrysler);
+
+fn opening_placement(view: View, x: f32) -> ([f32; 2], f32) {
+    let (foot, zoom) = view.ground_billboard(x, shore::STREET_DEPTH, shore::street_grade(view));
+    (foot, zoom * 0.90)
+}
+
+fn placement(view: View, x: f32) -> ([f32; 2], f32) {
+    let grade = shore::street_grade(view);
+    let ([screen_x, cursor_y], zoom) = view.ground_billboard(x, shore::STREET_DEPTH, grade);
+    let neutral = View {
+        aim: Aim::default(),
+        ..view
+    };
+    let ([_, reference_y], _) = neutral.ground_billboard(x, shore::STREET_DEPTH, grade);
+    let foot = neutral.project(neutral.x_at_depth(x, DEPTH), DEPTH, grade)[1];
+    // Keep the small authored response to the pointer at the deeper anchor.
+    ([screen_x, foot + (cursor_y - reference_y)], zoom * SCALE)
 }
 
 pub(super) fn scene(view: View, scale: f32) -> impl IntoElement {
-    static EMPIRE: LazyLock<Tile> = LazyLock::new(empire_state);
-    static CHRYSLER: LazyLock<Tile> = LazyLock::new(chrysler);
     gpui_kit::canvas(
         |_, _, _| (),
         move |bounds, _, window, _| {
-            for (building, position) in [(&*EMPIRE, 0.128), (&*CHRYSLER, 0.877)] {
-                let ([x, foot], zoom) = view.ground_billboard(
-                    view.width * position,
-                    shore::STREET_DEPTH,
-                    shore::street_grade(view),
-                );
+            for (building, x) in [(&*EMPIRE, EMPIRE_X), (&*CHRYSLER, CHRYSLER_X)] {
+                let ([x, foot], zoom) = opening_placement(view, x);
                 let origin = bounds.origin + gpui_kit::point(px(x * scale), px(foot * scale));
-                building.paint_at(origin, [0., -GROUND], scale * zoom * 0.90, window);
+                building
+                    .tile
+                    .paint_at(origin, [0., -GROUND], scale * zoom, window);
             }
         },
     )
@@ -61,17 +122,69 @@ pub(super) fn scene(view: View, scale: f32) -> impl IntoElement {
     .inset_0()
 }
 
-fn frontage(painter: &mut TilePainter<'_>, width: f32, entrance: Entrance, shaft: u32) {
+pub(super) fn project(
+    original: View,
+    view: View,
+    camera: Camera,
+    inland: f32,
+) -> Vec<art::ArtPath> {
+    let mut paths = Vec::new();
+    if camera.eye[2] >= depth(inland) {
+        return paths;
+    }
+    for (building, position) in [(&*EMPIRE, EMPIRE_X), (&*CHRYSLER, CHRYSLER_X)] {
+        let ([old_x, old_y], old_scale) = opening_placement(original, position);
+        let ([new_x, new_y], new_scale) = placement(original, position);
+        for shape in &building.front.0 {
+            let points = shape.points.iter().map(|&[x, y]| {
+                let opening = original.lift(
+                    [old_x + x * old_scale, old_y + (y - GROUND) * old_scale],
+                    shore::STREET_DEPTH,
+                );
+                let city = original.lift(
+                    [new_x + x * new_scale, new_y + (y - GROUND) * new_scale],
+                    DEPTH,
+                );
+                projection::mix(opening, city, inland)
+            });
+            view.face(&mut paths, points, shape.ink, shape.opacity);
+        }
+    }
+    paths
+}
+
+pub(super) fn depth(inland: f32) -> f32 {
+    shore::STREET_DEPTH + (DEPTH - shore::STREET_DEPTH) * inland
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_pointer_movement_keeps_landmarks_near_their_authored_positions() {
+        for x in [EMPIRE_X, CHRYSLER_X] {
+            for end in [-1., 1.] {
+                let view = View::new(WIDTH, HEIGHT * HORIZON, Aim::new(end, 0.));
+                let ([moved, _], _) = placement(view, x);
+                let displacement = moved - x;
+                assert!((16. ..25.).contains(&(displacement * end)));
+            }
+        }
+    }
+}
+
+fn frontage(painter: &mut Facade, width: f32, entrance: Entrance, shaft: u32) {
     let (stone, trim, metal, portal) = match entrance {
         Entrance::Limestone => (0x5c5661, 0x877881, 0x95807d, 14.),
         Entrance::Steel => (0x474b60, 0x77778a, 0x95909c, 12.),
     };
     let half = width * 0.5;
-    let rect = |painter: &mut TilePainter<'_>, [x, y, w, h]: [f32; 4], ink| {
+    let rect = |painter: &mut Facade, [x, y, w, h]: [f32; 4], ink| {
         painter.rect([x, y + GROUND, w, h], ink);
     };
-    let tint = |painter: &mut TilePainter<'_>, [x, y, w, h]: [f32; 4], ink, alpha| {
-        painter.rounded([x, y + GROUND, w, h], 0., ink, alpha);
+    let tint = |painter: &mut Facade, [x, y, w, h]: [f32; 4], ink, alpha| {
+        painter.tint([x, y + GROUND, w, h], ink, alpha);
     };
     rect(painter, [-half, -BASE_HEIGHT, width, BASE_HEIGHT], stone);
     rect(painter, [-half, -BASE_HEIGHT, width, 7.], shaft);
@@ -154,23 +267,18 @@ fn frontage(painter: &mut TilePainter<'_>, width: f32, entrance: Entrance, shaft
     rect(painter, [-half - 7., -1.5, width + 14., 1.5], 0x343345);
 }
 
-fn facade(painter: &mut TilePainter<'_>, [x, y, width, height]: [f32; 4], ink: u32, seed: usize) {
+fn facade(painter: &mut Facade, [x, y, width, height]: [f32; 4], ink: u32, seed: usize) {
     painter.rect([x, y, width, height], ink);
-    painter.rounded(
-        [x + width * 0.73, y, width * 0.27, height],
-        0.,
-        0x181c31,
-        0.36,
-    );
-    painter.rounded([x, y, 2., height], 0., 0xaaa3ae, 0.27);
+    painter.tint([x + width * 0.73, y, width * 0.27, height], 0x181c31, 0.36);
+    painter.tint([x, y, 2., height], 0xaaa3ae, 0.27);
     let floors = (height / FLOOR).floor() as usize;
     for (bay, offset) in window_bays(width).enumerate() {
         let wx = x + offset;
-        painter.rounded([wx - 1.2, y, 0.65, height], 0., 0x9a91a3, 0.29);
+        painter.tint([wx - 1.2, y, 0.65, height], 0x9a91a3, 0.29);
         for floor in 0..floors {
             let wy = y + (floor as f32 + 0.5) * FLOOR - 2.7;
             let lit = (seed + bay * (5 + floor) + floor * 11) % 17 < 6;
-            painter.rounded([wx, wy, 3.2, 5.4], 0., GLASS, if lit { 0.7 } else { 0.22 });
+            painter.tint([wx, wy, 3.2, 5.4], GLASS, if lit { 0.7 } else { 0.22 });
         }
     }
 }
@@ -181,7 +289,7 @@ fn window_bays(width: f32) -> impl Iterator<Item = f32> {
     (0..bays).map(move |bay| 1.4 + (bay as f32 + 0.5) * pitch)
 }
 
-fn empire_state() -> Tile {
+fn empire_state() -> Landmark {
     landmark(90., STONE, Entrance::Limestone, |painter| {
         // A stepped limestone shaft and the narrow, illuminated mooring mast.
         for (width, top, bottom, ink, seed) in [
@@ -192,7 +300,7 @@ fn empire_state() -> Tile {
         ] {
             facade(painter, [-width * 0.5, top, width, bottom - top], ink, seed);
             if width < 90. {
-                painter.rounded([-width * 0.5, top, width, 1.6], 0., 0xc6b0a8, 0.51);
+                painter.tint([-width * 0.5, top, width, 1.6], 0xc6b0a8, 0.51);
             }
         }
         for (width, y, height, color) in [
@@ -208,38 +316,42 @@ fn empire_state() -> Tile {
         for x in [-7., -2., 3.] {
             painter.rect([x, 108., 2.1, 14.], 0xdac3a8);
         }
-        painter.circle(-1.5, 62., 3., 0xf4a47f, 0.9);
+        painter.polygon(
+            (0..16)
+                .map(|i| {
+                    let angle = i as f32 * std::f32::consts::TAU / 16.;
+                    [1.5 * angle.cos(), 63.5 + 1.5 * angle.sin()]
+                })
+                .collect(),
+            0xf4a47f,
+            0.9,
+        );
     })
 }
 
-fn chrysler() -> Tile {
+fn chrysler() -> Landmark {
     landmark(72., STEEL, Entrance::Steel, |painter| {
         facade(painter, [-36., 211., 72., SHAFT_TOP - 211.], STEEL, 5);
         painter.rect([-36., 211., 72., 3.], 0x77738b);
         painter.rect([-25., 202., 50., 11.], 0x6e738d);
         // The stainless steel sunburst crown has nested arches and dart windows.
-        for (rx, base, height, metal) in [
-            (31., 213., 27., 0x87829c),
-            (27., 200., 25., 0x9794ae),
-            (22., 188., 24., 0xa6a4b7),
-            (16., 176., 22., 0xacaabc),
-            (10., 163., 19., 0xb8b2c0),
-        ] {
-            let mut path = tiny_skia::PathBuilder::new();
-            path.move_to(rx, base);
-            for step in 1..=20 {
-                let angle = step as f32 * std::f32::consts::PI / 20.;
-                path.line_to(rx * angle.cos(), base - height * angle.sin());
-            }
-            path.close();
-            painter.fill_ink(path, metal);
+        for (rx, base, height, metal) in ARCHES {
+            painter.polygon(
+                (0..=20)
+                    .map(|step| {
+                        let angle = step as f32 * std::f32::consts::PI / 20.;
+                        [rx * angle.cos(), base - height * angle.sin()]
+                    })
+                    .collect(),
+                metal,
+                1.,
+            );
             for x in [-rx * 0.56, 0., rx * 0.56] {
-                let mut dart = tiny_skia::PathBuilder::new();
-                dart.move_to(x - 2.5, base - 3.);
-                dart.line_to(x, base - 10.);
-                dart.line_to(x + 2.5, base - 3.);
-                dart.close();
-                painter.fill_ink(dart, 0x43465f);
+                painter.polygon(
+                    vec![[x - 2.5, base - 3.], [x, base - 10.], [x + 2.5, base - 3.]],
+                    0x43465f,
+                    1.,
+                );
             }
         }
         painter.rect([-1.1, 115., 2.2, 31.], 0xb8afbc);

@@ -67,8 +67,6 @@ pub(super) fn tug_channel(view: View) -> [f32; 2] {
     [west + FOOTING[1] + 68., east + FOOTING[0] - 65.]
 }
 
-type Mesh = Arc<[(gpui_kit::Path<gpui_kit::Pixels>, gpui_kit::Hsla)]>;
-
 #[derive(Default)]
 pub(in crate::rooftops) struct BridgeArt {
     layout: Option<(View, f32, f32)>,
@@ -87,12 +85,12 @@ impl BridgeArt {
                 deck,
             }
             .layers()
-            .map(|shapes| mesh(&shapes, scale));
+            .map(|shapes| art_mesh(&shapes, scale));
         }
         div()
             .absolute()
             .inset_0()
-            .child(paint(self.layers[0].clone()))
+            .child(paint_mesh(self.layers[0].clone()))
             .child(traffic::lane(
                 view,
                 deck,
@@ -101,7 +99,7 @@ impl BridgeArt {
                 scale,
                 true,
             ))
-            .child(paint(self.layers[1].clone()))
+            .child(paint_mesh(self.layers[1].clone()))
             .child(traffic::lane(
                 view,
                 deck,
@@ -110,8 +108,8 @@ impl BridgeArt {
                 scale,
                 false,
             ))
-            .child(paint(self.layers[2].clone()))
-            .child(paint(self.layers[3].clone()))
+            .child(paint_mesh(self.layers[2].clone()))
+            .child(paint_mesh(self.layers[3].clone()))
     }
 }
 
@@ -183,6 +181,13 @@ impl Bridge {
         }
         self.road(&mut middle, Roadway::Near);
 
+        if self
+            .view
+            .camera
+            .is_some_and(|camera| camera.eye[1] > self.seat())
+        {
+            self.soffit(&mut near);
+        }
         self.truss(&mut near);
         self.suspension(&mut near, &mut exposed, -OUTER_CABLE, 0xb39ba7, 0.68);
         for tower in self.towers {
@@ -196,10 +201,10 @@ impl Bridge {
     fn deck_end(&self, paths: &mut Vec<art::ArtPath>, x: f32) {
         let front = NEAR_PIER[0];
         let back = FAR_PIER[1];
-        let at = |z, y| self.view.project(x, z, y);
-        shape(
+        let at = |z, y| [x, y, z];
+        self.view.face(
             paths,
-            vec![
+            [
                 at(front, self.deck),
                 at(back, self.deck),
                 at(back, self.seat()),
@@ -219,16 +224,16 @@ impl Bridge {
                 [x + right + spread * 0.58, -half - spread],
                 [x + right + spread * 0.58, half + spread * 0.2],
             ]
-            .map(|[x, depth]| self.view.on_water(x, depth))
+            .map(|[x, depth]| [x, waterline, depth])
         };
         // The contact shade shares the exact corners of the stone on both sides.
         let mut inner = contour(0.);
         for (spread, alpha) in [(2.3, 0.47), (5., 0.29), (8.7, 0.16), (14., 0.075)] {
             let outer = contour(spread);
             for side in 0..2 {
-                shape(
+                self.view.face(
                     paths,
-                    vec![inner[side], inner[side + 1], outer[side + 1], outer[side]],
+                    [inner[side], inner[side + 1], outer[side + 1], outer[side]],
                     0x070f20,
                     alpha,
                 );
@@ -239,10 +244,10 @@ impl Bridge {
         let top = self.seat();
         let base = self.shoulder();
         let [left, right, half] = SEAT;
-        let at = |dx, z| self.view.project(x + dx, z, top);
-        shape(
+        let at = |dx, z| [x + dx, top, z];
+        self.view.face(
             paths,
-            vec![
+            [
                 at(left, -half),
                 at(right, -half),
                 at(right, half),
@@ -287,13 +292,12 @@ impl Bridge {
             [0x454453, 0x343749],
         );
         let [left, corner, right] = contour(0.);
-        stroke(paths, left, corner, 0.85, 0x778198, 0.27);
-        stroke(paths, corner, right, 0.7, 0x758196, 0.20);
+        self.view.line(paths, left, corner, 0.85, 0x778198, 0.27);
+        self.view.line(paths, corner, right, 0.7, 0x758196, 0.20);
     }
 
-    fn plinth_edge(&self, x: f32, y: f32, [left, right, half]: [f32; 3]) -> [[f32; 2]; 3] {
-        [[x + left, -half], [x + right, -half], [x + right, half]]
-            .map(|[x, z]| self.view.project(x, z, y))
+    fn plinth_edge(&self, x: f32, y: f32, [left, right, half]: [f32; 3]) -> [projection::Point; 3] {
+        [[x + left, -half], [x + right, -half], [x + right, half]].map(|[x, z]| [x, y, z])
     }
 
     fn near_bearing_face(&self, paths: &mut Vec<art::ArtPath>, x: f32) {
@@ -304,21 +308,19 @@ impl Bridge {
             let face = x + SEAT[1] + (SHOULDER[1] - SEAT[1]) * t;
             let y = self.seat() + (self.shoulder() - self.seat()) * t;
             [
-                self.view.project(face, NEAR_PIER[0] - flare, y),
-                self.view.project(face, NEAR_PIER[1] + flare, y),
+                [face, y, NEAR_PIER[0] - flare],
+                [face, y, NEAR_PIER[1] + flare],
             ]
         };
         let [front, rear] = edge(0.);
         let [foot_front, foot_rear] = edge(1.);
         let [mid_front, mid_rear] = edge(0.5);
-        shape(
-            paths,
-            vec![front, rear, foot_rear, foot_front],
-            SEAT_INK,
-            1.,
-        );
-        stroke(paths, mid_front, mid_rear, 0.65, 0x242535, 0.67);
-        stroke(paths, front, foot_front, 1.25, STONE_EDGE, 0.31);
+        self.view
+            .face(paths, [front, rear, foot_rear, foot_front], SEAT_INK, 1.);
+        self.view
+            .line(paths, mid_front, mid_rear, 0.65, 0x242535, 0.67);
+        self.view
+            .line(paths, front, foot_front, 1.25, STONE_EDGE, 0.31);
     }
 
     fn plinth(
@@ -336,8 +338,8 @@ impl Bridge {
         };
         let a = edge(top);
         let b = edge(bottom);
-        shape(paths, vec![a[0], a[1], b[1], b[0]], front, 1.);
-        shape(paths, vec![a[1], a[2], b[2], b[1]], end, 1.);
+        self.view.face(paths, [a[0], a[1], b[1], b[0]], front, 1.);
+        self.view.face(paths, [a[1], a[2], b[2], b[1]], end, 1.);
         let courses = ((bottom - top) / 7.4).floor() as usize;
         let pitch = (bottom - top) / (courses + 1) as f32;
         for course in 0..=courses {
@@ -345,53 +347,57 @@ impl Bridge {
             let row = edge(y);
             let below = edge(y + pitch);
             if course > 0 {
-                stroke(paths, row[0], row[1], 0.65, 0x252636, 0.64);
-                stroke(paths, row[1], row[2], 0.65, 0x242535, 0.67);
+                self.view.line(paths, row[0], row[1], 0.65, 0x252636, 0.64);
+                self.view.line(paths, row[1], row[2], 0.65, 0x242535, 0.67);
             }
             if courses > 0 {
                 for (side, divisions) in [(0, 2), (1, PLINTH_END_DIVISIONS)] {
                     for joint in 1..=divisions {
                         let f =
                             (joint as f32 - (course % 2) as f32 * 0.48) / (divisions + 1) as f32;
-                        let join = |line: [[f32; 2]; 3]| {
+                        let join = |line: [projection::Point; 3]| {
                             std::array::from_fn(|i| {
                                 line[side][i] + (line[side + 1][i] - line[side][i]) * f
                             })
                         };
-                        stroke(paths, join(row), join(below), 0.5, 0x242535, 0.34);
+                        self.view
+                            .line(paths, join(row), join(below), 0.5, 0x242535, 0.34);
                     }
                 }
             }
         }
-        stroke(paths, a[1], b[1], 1.25, STONE_EDGE, 0.31);
+        self.view.line(paths, a[1], b[1], 1.25, STONE_EDGE, 0.31);
     }
 
     fn masonry(&self, paths: &mut Vec<art::ArtPath>, x: f32, [a, b]: [f32; 2], ink: u32) {
         let top = self.spring();
         let bottom = self.seat();
         let front = x + TOWER_HALF_DEPTH;
-        let at = |z, y| self.view.project(front, z, y);
+        let at = |z, y| [front, y, z];
         let outer = a == NEAR_PIER[0];
-        let back = |z, y| self.view.project(x - TOWER_HALF_DEPTH, z, y);
-        shape(
+        let back = |z, y| [x - TOWER_HALF_DEPTH, y, z];
+        self.view.face(
             paths,
-            vec![back(a, top), at(a, top), at(a, bottom), back(a, bottom)],
+            [back(a, top), at(a, top), at(a, bottom), back(a, bottom)],
             if outer { STONE_SIDE } else { 0x2d2e40 },
             1.,
         );
-        shape(
+        self.view.face(
             paths,
-            vec![at(a, top), at(b, top), at(b, bottom), at(a, bottom)],
+            [at(a, top), at(b, top), at(b, bottom), at(a, bottom)],
             ink,
             1.,
         );
-        stroke(paths, at(a, top), at(a, bottom), 0.95, STONE_EDGE, 0.31);
+        self.view
+            .line(paths, at(a, top), at(a, bottom), 0.95, STONE_EDGE, 0.31);
         let rows = self.course_rows(top, bottom);
         for y in rows.clone() {
-            stroke(paths, at(a, y), at(b, y), 0.65, STONE_SIDE, 0.72);
+            self.view
+                .line(paths, at(a, y), at(b, y), 0.65, STONE_SIDE, 0.72);
         }
         for y in rows {
-            stroke(paths, at(a, y), back(a, y), 0.55, 0x211f32, 0.53);
+            self.view
+                .line(paths, at(a, y), back(a, y), 0.55, 0x211f32, 0.53);
         }
         for (row, y) in self.course_rows(top - 0.001, bottom - 2.).enumerate() {
             let joint = if row.is_multiple_of(2) {
@@ -399,7 +405,7 @@ impl Bridge {
             } else {
                 b - 4.
             };
-            stroke(
+            self.view.line(
                 paths,
                 at(joint, y),
                 at(joint, (y + COURSE).min(bottom)),
@@ -412,7 +418,7 @@ impl Bridge {
 
     fn crown(&self, paths: &mut Vec<art::ArtPath>, x: f32) {
         let front = x + TOWER_HALF_DEPTH;
-        let at = |z, y| self.view.project(front, z, y);
+        let at = |z, y| [front, y, z];
         let top = self.top();
         let spring = self.spring();
         let opening = |a: f32, b: f32| -> Arch {
@@ -429,10 +435,10 @@ impl Bridge {
         };
         let near_arch = opening(NEAR_PIER[1], CENTER_PIER[0]);
         let far_arch = opening(CENTER_PIER[1], FAR_PIER[0]);
-        let back = |z, y| self.view.project(x - TOWER_HALF_DEPTH, z, y);
-        shape(
+        let back = |z, y| [x - TOWER_HALF_DEPTH, y, z];
+        self.view.face(
             paths,
-            vec![
+            [
                 at(NEAR_PIER[0], top),
                 at(FAR_PIER[1], top),
                 back(FAR_PIER[1], top),
@@ -448,9 +454,9 @@ impl Bridge {
             .unwrap_or(spring + 7.);
         for arch in [far_arch, near_arch] {
             for edge in arch.windows(2).skip(3) {
-                shape(
+                self.view.face(
                     paths,
-                    vec![
+                    [
                         at(edge[0][0], edge[0][1]),
                         at(edge[1][0], edge[1][1]),
                         rear(edge[1]),
@@ -463,9 +469,9 @@ impl Bridge {
         }
         // The closest wall covers the portions of the deeper arch throats that
         // project in front of it.
-        shape(
+        self.view.face(
             paths,
-            vec![
+            [
                 back(NEAR_PIER[0], top),
                 at(NEAR_PIER[0], top),
                 at(NEAR_PIER[0], spring),
@@ -482,9 +488,8 @@ impl Bridge {
         .into_iter()
         .chain(far_arch.into_iter().rev().map(|[z, y]| at(z, y)))
         .chain(near_arch.into_iter().rev().map(|[z, y]| at(z, y)))
-        .chain([at(NEAR_PIER[0], spring)])
-        .collect();
-        shape(paths, outline, STONE, 1.);
+        .chain([at(NEAR_PIER[0], spring)]);
+        self.view.face(paths, outline, STONE, 1.);
         let west = NEAR_PIER[0];
         let east = FAR_PIER[1];
         let rows = self.course_rows(top, spring);
@@ -493,20 +498,23 @@ impl Bridge {
             let near = arch_cut(near_arch, y);
             let far = arch_cut(far_arch, y);
             for [a, b] in [[west, near[0]], [near[1], far[0]], [far[1], east]] {
-                stroke(paths, at(a, y), at(b, y), 0.65, STONE_SIDE, 0.67);
+                self.view
+                    .line(paths, at(a, y), at(b, y), 0.65, STONE_SIDE, 0.67);
             }
             let [near, far] = [arch_cut(near_arch, end), arch_cut(far_arch, end)];
             let stagger = (row % 2) as f32 * 5.;
             for z in [-33., -22., -11., 0., 11., 22., 33.].map(|z| z + stagger) {
                 if (z < near[0] || z > near[1]) && (z < far[0] || z > far[1]) {
-                    stroke(paths, at(z, y), at(z, end), 0.5, 0x292838, 0.36);
+                    self.view
+                        .line(paths, at(z, y), at(z, end), 0.5, 0x292838, 0.36);
                 }
             }
         }
         for y in rows {
-            stroke(paths, back(west, y), at(west, y), 0.55, 0x211f32, 0.53);
+            self.view
+                .line(paths, back(west, y), at(west, y), 0.55, 0x211f32, 0.53);
         }
-        stroke(
+        self.view.line(
             paths,
             at(west, top),
             at(west, spring),
@@ -519,7 +527,7 @@ impl Bridge {
             (top + 7., 1., 0.55),
             (top + 17., 1.6, 0.52),
         ] {
-            stroke(
+            self.view.line(
                 paths,
                 at(NEAR_PIER[0] - 0.7, y),
                 at(FAR_PIER[1] + 0.7, y),
@@ -538,31 +546,34 @@ impl Bridge {
             });
             for i in 0..6 {
                 let stone = [0x675c69, 0x605563][i % 2];
-                shape(
+                self.view.face(
                     paths,
-                    vec![rim[i], rim[i + 1], inner[i + 1], inner[i]],
+                    [rim[i], rim[i + 1], inner[i + 1], inner[i]],
                     stone,
                     1.,
                 );
             }
             for i in 1..6 {
-                stroke(paths, inner[i], rim[i], 0.55, 0x302b38, 0.8);
+                self.view.line(paths, inner[i], rim[i], 0.55, 0x302b38, 0.8);
             }
             for (z, side, ink) in [(arch[0][0], -1., 0x675c69), (arch[6][0], 1., 0x605563)] {
                 let block = |y, width: f32| [at(z, y), at(z + side * width, y)];
                 let [inside, outside] = block(spring, 3.);
                 let [next, edge] = block(first_jamb_course, 2.5);
                 let [last, foot] = block(first_jamb_course + COURSE, 1.2);
-                shape(paths, vec![inside, outside, edge, next], ink, 0.86);
-                shape(paths, vec![next, edge, foot, last], ink, 0.44);
-                stroke(paths, next, edge, 0.47, 0x302b38, 0.65);
+                self.view
+                    .face(paths, [inside, outside, edge, next], ink, 0.86);
+                self.view.face(paths, [next, edge, foot, last], ink, 0.44);
+                self.view.line(paths, next, edge, 0.47, 0x302b38, 0.65);
             }
         }
         // Each steel saddle sits on the cornice and carries the cable over it.
         for z in [-OUTER_CABLE, -4.5, 4.5, OUTER_CABLE] {
-            let [x, y] = self.view.project(x, z, top);
-            quad(paths, [x - 6.7, y - 2.2, 13.4, 2.2], 0x846e7c, 1.);
-            quad(paths, [x - 4.4, y - 5.3, 8.8, 3.2], 0x9c8391, 1.);
+            let saddle = [x, top, z];
+            self.view
+                .detail(paths, saddle, [-6.7, -2.2, 13.4, 2.2], 0x846e7c, 1.);
+            self.view
+                .detail(paths, saddle, [-4.4, -5.3, 8.8, 3.2], 0x9c8391, 1.);
         }
     }
 
@@ -573,12 +584,12 @@ impl Bridge {
             Roadway::Near => (0x51495b, DECK),
         };
         let y = self.deck;
-        let at = |x, z| self.view.project(x, z, y);
+        let at = |x, z| [x, y, z];
         let [left, right] = self.ends;
         for [start, end] in self.spans() {
-            shape(
+            self.view.face(
                 paths,
-                vec![
+                [
                     at(start, outer),
                     at(end, outer),
                     at(end, wall),
@@ -587,11 +598,12 @@ impl Bridge {
                 shoulder,
                 1.,
             );
-            stroke(paths, at(start, outer), at(end, outer), 0.85, STEEL, 0.8);
+            self.view
+                .line(paths, at(start, outer), at(end, outer), 0.85, STEEL, 0.8);
         }
-        shape(
+        self.view.face(
             paths,
-            vec![
+            [
                 at(left, wall),
                 at(right, wall),
                 at(right, inner),
@@ -603,26 +615,64 @@ impl Bridge {
         if matches!(road, Roadway::Far) {
             // This exposed deck edge supports the far roadway inside the view of
             // the center arch. The near roadway and its truss cover the rest.
-            let lip = |x| self.view.project(x, inner, y + 3.);
-            shape(
+            let lip = |x| [x, y + 3., inner];
+            self.view.face(
                 paths,
-                vec![at(left, inner), at(right, inner), lip(right), lip(left)],
+                [at(left, inner), at(right, inner), lip(right), lip(left)],
                 0x353143,
                 1.,
             );
-            stroke(paths, at(left, inner), at(right, inner), 0.68, STEEL, 0.84);
+            self.view
+                .line(paths, at(left, inner), at(right, inner), 0.68, STEEL, 0.84);
+        }
+    }
+
+    fn soffit(&self, paths: &mut Vec<art::ArtPath>) {
+        let [front, rear] = [NEAR_PIER[0], FAR_PIER[1]];
+        let [left, right] = self.ends;
+        let y = self.seat();
+        self.view.face(
+            paths,
+            [
+                [left, y, front],
+                [right, y, front],
+                [right, y, rear],
+                [left, y, rear],
+            ],
+            0x222536,
+            1.,
+        );
+        self.view.face(
+            paths,
+            [
+                [left, self.deck, rear],
+                [right, self.deck, rear],
+                [right, y, rear],
+                [left, y, rear],
+            ],
+            0x333044,
+            1.,
+        );
+        for z in [-39., -22., 0., 22., 39.] {
+            self.view
+                .line(paths, [left, y, z], [right, y, z], 1.5, 0x47435a, 1.);
+        }
+        for bay in -9..=28 {
+            let x = bay as f32 * 38.;
+            self.view
+                .line(paths, [x, y, front], [x, y, rear], 2., 0x51475b, 0.8);
         }
     }
 
     fn truss(&self, paths: &mut Vec<art::ArtPath>) {
-        let at = |x, dy| self.view.project(x, NEAR_PIER[0], self.deck + dy);
+        let at = |x, dy| [x, self.deck + dy, NEAR_PIER[0]];
         let soffit = self.seat() - self.deck;
         let upper = 3.;
         let lower = soffit - 0.7;
         for [left, right] in self.spans() {
-            shape(
+            self.view.face(
                 paths,
-                vec![
+                [
                     at(left, 0.),
                     at(right, 0.),
                     at(right, soffit),
@@ -632,7 +682,8 @@ impl Bridge {
                 1.,
             );
             for chord in [0.65, upper, lower] {
-                stroke(paths, at(left, chord), at(right, chord), 1.5, STEEL, 0.9);
+                self.view
+                    .line(paths, at(left, chord), at(right, chord), 1.5, STEEL, 0.9);
             }
             let bays = ((right - left) / 18.).ceil() as usize;
             let bay_at = |index| left + (right - left) * index / bays as f32;
@@ -640,11 +691,12 @@ impl Bridge {
                 let a = at(bay_at(bay as f32), upper);
                 let tip = at(bay_at(bay as f32 + 0.5), lower);
                 let b = at(bay_at(bay as f32 + 1.), upper);
-                stroke(paths, a, tip, 1.08, STEEL, 0.85);
-                stroke(paths, tip, b, 1.08, STEEL, 0.85);
+                self.view.line(paths, a, tip, 1.08, STEEL, 0.85);
+                self.view.line(paths, tip, b, 1.08, STEEL, 0.85);
             }
             for end in [left, right] {
-                stroke(paths, at(end, upper), at(end, lower), 1.4, STEEL, 0.84);
+                self.view
+                    .line(paths, at(end, upper), at(end, lower), 1.4, STEEL, 0.84);
             }
         }
     }
@@ -687,24 +739,27 @@ impl Bridge {
     }
 
     fn walkway(&self, paths: &mut Vec<art::ArtPath>, y: f32, a: &[[f32; 2]], b: &[[f32; 2]]) {
-        let at = |p: &[f32; 2]| self.view.project(p[0], p[1], y);
-        let surface = a.iter().chain(b.iter().rev()).map(at).collect();
-        shape(paths, surface, 0x786575, 0.96);
+        let at = |p: &[f32; 2]| [p[0], y, p[1]];
+        let surface = a.iter().chain(b.iter().rev()).map(at);
+        self.view.face(paths, surface, 0x786575, 0.96);
         for edge in [a, b] {
             for span in edge.windows(2) {
-                let [ax, ay] = at(&span[0]);
-                let [bx, by] = at(&span[1]);
-                stroke(paths, [ax, ay], [bx, by], 1.35, 0x473b4e, 1.);
-                stroke(paths, [ax, ay - 3.5], [bx, by - 3.5], 0.82, 0x9c818c, 0.65);
-                let count = ((span[1][0] - span[0][0]) / 15.).ceil() as usize;
+                let [a, b] = [at(&span[0]), at(&span[1])];
+                let raised = |p| self.view.offset(p, 0., -3.5);
+                self.view.line(paths, a, b, 1.35, 0x473b4e, 1.);
+                self.view
+                    .line(paths, raised(a), raised(b), 0.82, 0x9c818c, 0.65);
+                let count = ((b[0] - a[0]) / 15.).ceil() as usize;
                 for index in 0..count {
                     let t = index as f32 / count as f32;
-                    let x = ax + (bx - ax) * t;
-                    let py = ay + (by - ay) * t;
-                    quad(paths, [x, py - 3.5, 0.65, 3.5], 0x8b7484, 0.73);
-                    if t == 0. && count > 5 {
-                        quad(paths, [x, py - 10., 0.95, 10.], STEEL, 1.);
-                        quad(paths, [x - 0.9, py - 10.6, 2.7, 2.2], LIGHT, 0.88);
+                    let post = projection::mix(a, b, t);
+                    self.view
+                        .detail(paths, post, [0., -3.5, 0.65, 3.5], 0x8b7484, 0.73);
+                    if index == 0 && count > 5 {
+                        self.view
+                            .detail(paths, post, [0., -10., 0.95, 10.], STEEL, 1.);
+                        self.view
+                            .detail(paths, post, [-0.9, -10.6, 2.7, 2.2], LIGHT, 0.88);
                     }
                 }
             }
@@ -729,7 +784,7 @@ impl Bridge {
         };
         let top = self.top() - 6.;
         let rise = self.deck - 17. - top;
-        let at = |x, y| self.view.project(x, z, y);
+        let at = |x, y| [x, y, z];
         let spans = self.spans();
         let mut sockets = Vec::new();
         let intervals = [
@@ -755,13 +810,14 @@ impl Bridge {
                 .map(|i| cable(start + (finish - start) * i as f32 / count as f32))
                 .collect();
             let weight = if outer { 1.65 } else { 1.15 };
-            let cable_ribbon = |paths: &mut Vec<art::ArtPath>, points: &[[f32; 2]]| {
-                let ribbon = points
-                    .iter()
-                    .copied()
-                    .chain(points.iter().rev().map(|&[x, y]| [x, y + weight]))
-                    .collect();
-                shape(paths, ribbon, ink, opacity);
+            let cable_ribbon = |paths: &mut Vec<art::ArtPath>, points: &[projection::Point]| {
+                let ribbon = points.iter().copied().chain(
+                    points
+                        .iter()
+                        .rev()
+                        .map(|&p| self.view.offset(p, 0., weight)),
+                );
+                self.view.face(paths, ribbon, ink, opacity);
             };
             // The camera sees the right face of each tower. A cable leaving
             // that face passes in front of the masonry until it clears it.
@@ -778,7 +834,7 @@ impl Bridge {
                 let [a, b] = spans[index / 2];
                 let pitch = if outer { 19. } else { 29. };
                 let bays = ((b - a) / pitch).round().max(1.) as usize;
-                stroke(
+                self.view.line(
                     paths,
                     at(a, rail),
                     at(b, rail),
@@ -789,7 +845,8 @@ impl Bridge {
                 for i in 1..bays {
                     let x = a + (b - a) * i as f32 / bays as f32;
                     let socket = at(x, rail);
-                    stroke(paths, cable(x), socket, 0.65, ink, opacity * 0.55);
+                    self.view
+                        .line(paths, cable(x), socket, 0.65, ink, opacity * 0.55);
                     if outer {
                         sockets.push(socket);
                     }
@@ -807,7 +864,7 @@ impl Bridge {
                     };
                     for fraction in [0.15, 0.24, 0.33] {
                         let socket = at(base + (end - base) * fraction, rail);
-                        stroke(
+                        self.view.line(
                             layer,
                             at(face, top + 5.5),
                             socket,
@@ -819,49 +876,12 @@ impl Bridge {
                     }
                 }
             }
-            for [x, y] in sockets {
-                quad(paths, [x - 0.9, y - 1., 1.8, 2.2], ink, opacity * 0.84);
+            for socket in sockets {
+                self.view
+                    .detail(paths, socket, [-0.9, -1., 1.8, 2.2], ink, opacity * 0.84);
             }
         }
     }
-}
-
-fn mesh(shapes: &[art::ArtPath], scale: f32) -> Mesh {
-    shapes
-        .chunk_by(|a, b| a.ink == b.ink && a.opacity == b.opacity)
-        .filter_map(|group| {
-            let mut builder = gpui_kit::PathBuilder::fill();
-            let at = |p: &[f32; 2]| gpui_kit::point(px(p[0] * scale), px(p[1] * scale));
-            for shape in group {
-                builder.move_to(at(&shape.points[0]));
-                for point in &shape.points[1..] {
-                    builder.line_to(at(point));
-                }
-                builder.close();
-            }
-            let color = gpui_kit::Hsla::from(rgb(group[0].ink)).opacity(group[0].opacity);
-            builder.build().ok().map(|path| (path, color))
-        })
-        .collect()
-}
-
-fn paint(layers: Mesh) -> impl IntoElement {
-    gpui_kit::canvas(
-        |_, _, _| (),
-        move |bounds, _, window, _| {
-            let origin = bounds.origin;
-            for (path, color) in layers.iter() {
-                let mut path = path.clone();
-                path.bounds.origin += origin;
-                for vertex in &mut path.vertices {
-                    vertex.xy_position += origin;
-                }
-                window.paint_path(path, *color);
-            }
-        },
-    )
-    .absolute()
-    .inset_0()
 }
 
 #[cfg(test)]

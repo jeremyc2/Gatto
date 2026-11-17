@@ -293,6 +293,8 @@ capture the harbor main menu. Use `--rooftops-achievements` to capture the
 medal grid and the saved Scorecard button at rest and on hover. Use
 `--rooftops-bridge` to capture both lanes through the towers, both extremes of
 the pointer-controlled camera, and both ends of the tug's route.
+Use `--rooftops-flight` to capture the Play fly-through and the start of the
+jetpack descent at 60 frames per second.
 Use `--check-rooftops-menu-resize` to capture the centered, wide, tall, and
 uniformly scaled menu. It compares the landmark regions at matching zoom
 across window shapes and fails if their appearance changes.
@@ -316,8 +318,8 @@ half-transparent player against a flat background. It fails on an outer form
 border or darker overlap inside the flashing cat's body.
 
 Use a release build with `--audit-rooftops` to measure 300 warmed native frame
-constructions per neighborhood, results, both level slides, intro and options
-scene at 960 × 600 and 1440 × 800,
+constructions for each neighborhood, results, both level slides, the harbor
+fly-through, the jetpack arrival, and Options at 960 × 600 and 1440 × 800,
 plus three minutes of 512-frame audio blocks per score. It writes
 `rooftops-frames.json` and `rooftops-audio.json` in the output directory.
 Use `--audit-rooftops-gpu` to include Metal rendering and synchronized pixel

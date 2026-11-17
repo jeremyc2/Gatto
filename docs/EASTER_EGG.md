@@ -55,9 +55,9 @@ Closing the window clears Options and any sound audition.
   keyboard. An unchanged click or 0% stays silent. The game remains held.
 - **Ghost cat** shows the opponent and its distance indicators. Hiding it keeps
   your records and continues recording your run for future races.
-- **Animations** enables decorative motion and the opening and level-slide
-  sequences. Turning it off skips those sequences, holds residents, smoke,
-  stars and Zs still, and removes running gait, landing squash and camera easing.
+- **Animations** enables decorative motion, the harbor fly-through, the jetpack
+  arrival, and the level slides. Turning it off skips those sequences, holds
+  residents, smoke, stars and Zs still, and removes running gait, landing squash and camera easing.
   Movement, jumps and enemies continue to work. System Reduce Motion also
   simplifies these effects.
 
@@ -75,7 +75,9 @@ generates its soundtrack and cues directly; it contains no recorded music files.
 
 ## Playing
 
-The opening reads “Out of fuel and far from home.” The jetpack engines sputter
+Choose **Play** to fly over the harbor, under the bridge, and past the docks
+toward the first neighborhood. The shot fades to black, and the first rooftop
+fades in before the jetpack descent starts. The opening reads “Out of fuel and far from home.” The jetpack engines sputter
 out, the cat lands, and it leaves the empty pack on the first roof: home is
 across the rooftops. Press either movement arrow or Space to skip the short
 opening and start playing immediately. The opening pauses when the game loses focus and
@@ -129,8 +131,10 @@ doorways have no floating door handles; the home's closed side door keeps its ha
 
 ![The cat approaching its final home, with a pitched roof and flowering planters](images/walkthrough/framed/rooftops-home.png)
 
-The moon is the level indicator: a waxing crescent for level 1, a half moon for
-level 2, and a waxing gibbous moon with a narrow dark crescent for level 3.
+The harbor moon is the same waxing crescent that marks Brownstones. It grows
+to 130% of its course diameter during the flight. Each neighborhood
+uses the same in-level diameter,
+with a half moon in Soho and a waxing gibbous moon in Midtown.
 The small purple counters at the top left use a simple coin, a smooth symmetric
 skull for deaths, and crossed swords for defeated enemies. Their shared flat
 style keeps the counters visually consistent. Each count starts at zero and

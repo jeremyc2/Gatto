@@ -7,6 +7,24 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Fly over the harbor, beneath the bridge, and up toward the Brownstones
+  rooftops when starting Rooftops. The crescent sits clear of the menu title and
+  grows to 130% of its in-level diameter as staggered rooftops
+  and chimney stacks emerge from the haze. Bridge vehicles have detailed fronts,
+  rears, and round tires. Harbor boats have deck fittings, and the tug gives
+  off soft steam. The climb slows over a neighborhood lawn with mixed trees,
+  flower beds along the center path, a soccer field, and a half court.
+  Plantings and sports fixtures fade in as their footings come into view.
+  The same window layouts and rooftop silhouettes carry from the menu into
+  the fly-through. More skyline rows emerge as the camera approaches, and
+  the final upward tilt continues into the fade.
+
+### Fixed
+
+- Keep the Rooftops main menu music playing while Achievements is open.
+
 ## [0.24.6] - 2026-11-15
 
 ### Added

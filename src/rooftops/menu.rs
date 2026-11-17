@@ -1,13 +1,16 @@
 //! A harbor diorama drawn from native shapes in the Rooftops window.
 
 mod bridge;
+mod flight;
 mod landmarks;
+mod projection;
 mod shore;
 mod traffic;
 
-pub(super) use bridge::BridgeArt;
+pub(super) use flight::Flight;
 
 use super::*;
+use bridge::BridgeArt;
 
 const WATER: u32 = 0x111e32;
 const TRIM: u32 = 0x938095;
@@ -18,43 +21,39 @@ const HEIGHT: f32 = 560.;
 const FERRY_DEPTH: f32 = -216.;
 const SAILBOAT_DEPTH: f32 = -238.;
 const TUG_DEPTH: f32 = 8.;
+const WAKE_STREAKS: usize = 9;
 const FOREGROUND_BOAT_SPEED: f32 = 14.;
 const TUG_TURN_DISTANCE: f32 = 12.;
 const TUG_PHASE: f32 = 1.32;
 const HARBOR_YAW: f32 = 0.64;
 const VIEW_DEPTH: f32 = 0.72;
 const VIEW_RECESSION: f32 = 0.13;
-const MOON_CENTER: f32 = 706.;
+const MOON_CENTER: [f32; 2] = [832., 64.];
+const MOON_DIAMETER: f32 = 64.;
+
+#[derive(Default)]
+pub(super) struct HarborArt {
+    bridge: BridgeArt,
+    skyline: Option<(View, f32, Mesh)>,
+}
+
+impl HarborArt {
+    fn skyline(&mut self, view: View, scale: f32) -> Mesh {
+        if let Some((previous, previous_scale, mesh)) = &self.skyline
+            && (*previous, *previous_scale) == (view, scale)
+        {
+            return mesh.clone();
+        }
+        let mesh = flight::opening_skyline(view, scale);
+        self.skyline = Some((view, scale, mesh.clone()));
+        mesh
+    }
+}
 
 pub(super) fn moon() -> Arc<[art::ArtPath]> {
     static MOON: LazyLock<Arc<[art::ArtPath]>> = LazyLock::new(|| {
-        let center_y = 69.;
-        let mut paths = Vec::with_capacity(12);
-        for (radius, opacity) in [
-            (58., 0.005),
-            (52., 0.007),
-            (47., 0.009),
-            (42., 0.012),
-            (38., 0.017),
-            (34., 0.018),
-        ] {
-            let points = (0..64)
-                .map(|step| {
-                    let angle = step as f32 * std::f32::consts::TAU / 64.;
-                    [
-                        MOON_CENTER + radius * angle.cos(),
-                        center_y + radius * angle.sin(),
-                    ]
-                })
-                .collect();
-            shape(&mut paths, points, 0xffdba0, opacity);
-        }
-        paths.extend(
-            art::full_moon_paths(MOON_CENTER - 32., center_y - 32., 64.)
-                .into_iter()
-                .skip(2),
-        );
-        paths.into()
+        let [x, y] = MOON_CENTER.map(|center| center - MOON_DIAMETER * 0.5);
+        art::moon_paths(x, y, MOON_DIAMETER, 0).into()
     });
     MOON.clone()
 }
@@ -116,6 +115,7 @@ pub(super) struct View {
     pub(super) width: f32,
     pub(super) horizon: f32,
     aim: Aim,
+    camera: Option<projection::Camera>,
 }
 
 impl View {
@@ -124,6 +124,7 @@ impl View {
             width,
             horizon,
             aim,
+            camera: None,
         }
     }
 
@@ -155,6 +156,16 @@ impl View {
                 / (1. + dx * recession * lens)
     }
 
+    fn rear(self, [x, y, z]: projection::Point, depth: f32) -> projection::Point {
+        // The city streets run in the direction of the camera's fixed heading.
+        let yaw = HARBOR_YAW + self.aim.x * 0.07;
+        [x - yaw * depth, y, z + depth]
+    }
+
+    fn deck(self) -> f32 {
+        self.horizon - 53.
+    }
+
     fn waterline(self) -> f32 {
         self.horizon + 29.
     }
@@ -162,7 +173,6 @@ impl View {
     fn on_water(self, x: f32, depth: f32) -> [f32; 2] {
         self.project(x, depth, self.waterline())
     }
-
     // Pick the point on the street that projects to the landmark's original
     // horizontal position when the camera is centered.
     fn ground_billboard(self, screen_x: f32, depth: f32, grade: f32) -> ([f32; 2], f32) {
@@ -244,9 +254,7 @@ impl Rooftops {
                 sized(score_button("rooftops-play", "Play", cx))
                     .debug_selector(|| "rooftops-play".into())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.reset_run();
-                        window.focus(&this.focus, cx);
-                        cx.notify();
+                        this.play_from_menu(window, cx);
                     })),
             )
             .child(
@@ -273,23 +281,7 @@ impl Rooftops {
             .w(frame.size.width)
             .h(frame.size.height)
             .overflow_hidden()
-            .child(backdrop(
-                WIDTH,
-                HEIGHT,
-                time,
-                scale,
-                BackdropView::Harbor(view),
-            ))
-            .child(vector_art(bank.inland(), scale))
-            .child(landmarks::scene(view, scale))
-            .child(harbor(
-                view,
-                bank,
-                HEIGHT,
-                time,
-                scale,
-                &mut self.menu_bridge,
-            ))
+            .child(menu_scenery(view, bank, time, scale, &mut self.harbor_art))
             .child(
                 v_flex()
                     .absolute()
@@ -297,18 +289,20 @@ impl Rooftops {
                     .top(px(HEIGHT * scale * 0.115))
                     .items_center()
                     .gap(px(14. * scale))
-                    .child(
-                        div()
-                            .font_family("Georgia")
-                            .font_bold()
-                            .text_size(px(119. * scale))
-                            .line_height(px(132. * scale))
-                            .text_color(rgb(0xffe1b1))
-                            .child("Rooftops"),
-                    )
+                    .child(title(scale))
                     .child(actions),
             )
     }
+}
+
+fn title(scale: f32) -> gpui_kit::Div {
+    div()
+        .font_family("Georgia")
+        .font_bold()
+        .text_size(px(119. * scale))
+        .line_height(px(132. * scale))
+        .text_color(rgb(0xffe1b1))
+        .child("Rooftops")
 }
 
 pub(super) fn menu_button(id: &'static str, label: &'static str, cx: &App) -> Button {
@@ -329,7 +323,29 @@ pub(super) fn menu_button(id: &'static str, label: &'static str, cx: &App) -> Bu
         .border_1()
 }
 
-fn harbor(
+fn menu_scenery(
+    view: View,
+    bank: shore::Bank,
+    time: f32,
+    scale: f32,
+    harbor: &mut HarborArt,
+) -> gpui_kit::Div {
+    sky(WIDTH, HEIGHT, time, scale, 145.)
+        .child(vector_art(moon(), scale))
+        .child(paint_mesh(harbor.skyline(view, scale)))
+        .child(vector_art(bank.inland(), scale))
+        .child(landmarks::scene(view, scale))
+        .child(idle_water_and_bridge(
+            view,
+            bank,
+            HEIGHT,
+            time,
+            scale,
+            &mut harbor.bridge,
+        ))
+}
+
+fn idle_water_and_bridge(
     view: View,
     bank: shore::Bank,
     h: f32,
@@ -337,12 +353,28 @@ fn harbor(
     scale: f32,
     bridge: &mut BridgeArt,
 ) -> gpui_kit::Div {
+    let mut water = Vec::with_capacity(110);
+    water_detail(view, h, time, |bounds, ink, alpha| {
+        water.push(native_quad(bounds, ink, alpha, 0., scale));
+    });
+    let tug = tugboat(view, time);
+    let mut boats = ferry(view, time);
+    boats.extend(sailboat(view, time));
+    div()
+        .absolute()
+        .inset_0()
+        .child(vector_art(bank.water(h), scale))
+        .child(div().absolute().child(NativeArt { quads: water }))
+        .child(vector_art(bank.shore(), scale))
+        .child(vector_art(tug, scale))
+        .child(bridge.render(view, view.deck(), time, scale))
+        .child(vector_art(boats, scale))
+}
+
+fn water_detail(view: View, h: f32, time: f32, mut rect: impl FnMut([f32; 4], u32, f32)) {
     let View {
         width: w, horizon, ..
     } = view;
-    let deck = horizon - 53.;
-    let mut water = Vec::with_capacity(134);
-    let mut rect = |bounds, ink, alpha| water.push(native_quad(bounds, ink, alpha, 0., scale));
     let depth = h - horizon;
     for i in 0..8 {
         rect(
@@ -365,7 +397,7 @@ fn harbor(
             0.1 + (glint + 1.) * 0.095,
         );
 
-        let reflection = MOON_CENTER + (i as f32 * 2.39 + time * 0.39).sin() * (3. + d * 34.);
+        let reflection = MOON_CENTER[0] + (i as f32 * 2.39 + time * 0.39).sin() * (3. + d * 34.);
         if i % 2 == 0 {
             rect(
                 [reflection - length * 0.24, y, length * 0.48, 0.8],
@@ -374,18 +406,6 @@ fn harbor(
             );
         }
     }
-    let tug = tugboat(view, time);
-    let mut boats = ferry(view, time);
-    boats.extend(sailboat(view, time));
-    div()
-        .absolute()
-        .inset_0()
-        .child(vector_art(bank.water(h), scale))
-        .child(div().absolute().child(NativeArt { quads: water }))
-        .child(vector_art(bank.shore(), scale))
-        .child(vector_art(tug, scale))
-        .child(bridge.render(view, deck, time, scale))
-        .child(vector_art(boats, scale))
 }
 
 fn tug_route([start, end]: [f32; 2], time: f32) -> (f32, f32) {
@@ -444,15 +464,29 @@ fn ferry(view: View, time: f32) -> Vec<art::ArtPath> {
     let y = (time * 1.45).sin() * 0.9;
     let hull =
         [[-26., -7.], [31., -7.], [23., 0.], [-21., 0.]].map(|p| [x + p[0] * facing, y + p[1]]);
-    let mut paths = Vec::with_capacity(30);
+    let mut paths = Vec::with_capacity(44);
     wake(&mut paths, hull[3], facing, time, 1.);
     shape(&mut paths, hull.to_vec(), 0x080e1b, 1.);
     quad(&mut paths, [x - 23., y - 7.5, 46., 1.5], 0x9a6b70, 0.82);
+    stroke(
+        &mut paths,
+        [x - 21., y - 3.8],
+        [x + 23., y - 3.8],
+        0.65,
+        0x616578,
+        0.77,
+    );
+    deck_rail(&mut paths, [x - 24., y - 7.5], 8.);
+    deck_rail(&mut paths, [x + 17., y - 7.5], 11.);
     quad(&mut paths, [x - 16., y - 16., 33., 8.], 0x3e4154, 1.);
+    quad(&mut paths, [x - 15., y - 10., 31., 1.1], 0x64596b, 1.);
     quad(&mut paths, [x - 19., y - 17., 39., 1.7], TRIM, 1.);
     quad(&mut paths, [x - 4., y - 23., 8., 6.], 0x64596b, 1.);
+    quad(&mut paths, [x - 2.9, y - 21.7, 5.8, 2.25], 0x9aabc2, 0.88);
+    quad(&mut paths, [x - 4.7, y - 23.4, 9.4, 0.9], TRIM, 1.);
     quad(&mut paths, [x - 0.5, y - 29., 1., 7.], TRIM, 1.);
     quad(&mut paths, [x - 1., y - 29., 2., 2.], LIGHT, 0.82);
+    quad(&mut paths, [x + 24., y - 9., 1.65, 1.3], 0x9dbead, 0.86);
     for i in 0..5 {
         quad(
             &mut paths,
@@ -474,7 +508,7 @@ fn tugboat(view: View, time: f32) -> Vec<art::ArtPath> {
             .map(|p| [x + p[0] * facing, y + p[1]])
             .collect()
     };
-    let mut paths = Vec::with_capacity(26);
+    let mut paths = Vec::with_capacity(44);
     let behind = if facing > 0. { x - start } else { end - x };
     let wake_size = (behind / 104.).clamp(0.13, 0.56);
     wake(&mut paths, [x - facing * 13., y], facing, time, wake_size);
@@ -485,34 +519,43 @@ fn tugboat(view: View, time: f32) -> Vec<art::ArtPath> {
         1.,
     );
     quad(&mut paths, [x - 15., y - 5.5, 30., 1.5], 0x965d61, 0.86);
+    for along in [-12., 11.] {
+        let fender = x + along * facing;
+        oval(&mut paths, [fender, y - 3.4], [1.5, 1.7], 0x1d1b2a, 1.);
+        oval(&mut paths, [fender, y - 3.4], [0.64, 0.77], 0x5f5263, 0.9);
+    }
+    deck_rail(&mut paths, [x + facing * 9., y - 5.4], facing * 5.4);
     shape(
         &mut paths,
         at(&[[-9., -5.], [-9., -12.], [1., -12.], [7., -5.]]),
         0x7e6874,
         1.,
     );
+    quad(&mut paths, [x - 5., y - 8.8, 10., 1.05], 0x9a7c81, 1.);
     quad(&mut paths, [x - 4., y - 16., 11., 5.], 0x9c8584, 1.);
     quad(&mut paths, [x - 5., y - 17.5, 13., 1.8], 0x332c43, 1.);
     quad(&mut paths, [x - 2.5, y - 15., 3., 2.5], LIGHT, 0.74);
     quad(&mut paths, [x + 2., y - 15., 3., 2.5], LIGHT, 0.74);
     let stack = x - facing * 8.;
     quad(&mut paths, [stack - 2., y - 21., 4., 10.], 0x615263, 1.);
+    quad(&mut paths, [stack - 1.55, y - 19., 0.9, 7.2], 0x827081, 1.);
     quad(&mut paths, [stack - 2.8, y - 21., 5.6, 2.], 0x9d7576, 1.);
-    for puff in 0..3 {
-        let age = (time * 0.38 + puff as f32 / 3.).fract();
-        let cx = stack - facing * age * 15.;
-        let cy = y - 21. - age * 13.;
-        let r = 1.5 + age * 3.;
-        shape(
+    oval(&mut paths, [stack, y - 21.], [2.6, 0.8], 0x393043, 1.);
+    for puff in 0..5 {
+        let phase = puff as f32;
+        let age = (time * 0.47 + phase / 5.).fract();
+        let drift = (time * 1.7 + phase * 2.4).sin() * age * 1.2;
+        let cx = stack - facing * age * 13. + drift;
+        let cy = y - 21.4 - age * 15.;
+        let r = 1.3 + age * 3.;
+        let opacity = (age * 14.).min(1.) * (1. - age).powi(2) * 0.14;
+        oval(&mut paths, [cx, cy], [r, r * 0.73], 0xb4adc2, opacity);
+        oval(
             &mut paths,
-            vec![
-                [cx - r, cy],
-                [cx, cy - r * 0.6],
-                [cx + r, cy],
-                [cx, cy + r * 0.6],
-            ],
+            [cx + drift * 0.65, cy - r * 0.38],
+            [r * 0.74, r * 0.55],
             0xa39bb7,
-            (1. - age) * 0.19,
+            opacity * 0.6,
         );
     }
     position_boat(paths, view, [x, TUG_DEPTH], 1.)
@@ -529,7 +572,7 @@ fn sailboat(view: View, time: f32) -> Vec<art::ArtPath> {
             .map(|p| [x + p[0] * facing, y + p[1]])
             .collect()
     };
-    let mut paths = Vec::with_capacity(20);
+    let mut paths = Vec::with_capacity(28);
     wake(&mut paths, [x - facing * 15., y], facing, time, 0.44);
     shape(
         &mut paths,
@@ -538,6 +581,15 @@ fn sailboat(view: View, time: f32) -> Vec<art::ArtPath> {
         1.,
     );
     quad(&mut paths, [x - 15., y - 5.3, 30., 1.3], 0xbb8c82, 0.77);
+    stroke(
+        &mut paths,
+        [x - 14., y - 2.5],
+        [x + 16., y - 2.5],
+        0.65,
+        0x8b6b7b,
+        0.9,
+    );
+    quad(&mut paths, [x - 5., y - 7., 10., 2.], 0x68505e, 1.);
     shape(
         &mut paths,
         at(&[[lean - 1.5, -34.], [-2., -8.], [-17., -8.], [-11., -17.]]),
@@ -549,6 +601,30 @@ fn sailboat(view: View, time: f32) -> Vec<art::ArtPath> {
         at(&[[lean + 1.5, -28.], [3., -8.5], [16., -8.5], [11., -16.]]),
         0x817788,
         1.,
+    );
+    stroke(
+        &mut paths,
+        [x - 13.1, y - 14.5],
+        [x - 1.5, y - 14.5],
+        0.62,
+        0x937d83,
+        0.65,
+    );
+    stroke(
+        &mut paths,
+        [x + 5., y - 13.3],
+        [x + 12.4, y - 13.3],
+        0.55,
+        0xb2a0a6,
+        0.64,
+    );
+    stroke(
+        &mut paths,
+        [x - 16., y - 5.6],
+        [x + lean - 0.6, y - 34.3],
+        0.46,
+        0x918799,
+        0.72,
     );
     stroke(
         &mut paths,
@@ -567,6 +643,37 @@ fn sailboat(view: View, time: f32) -> Vec<art::ArtPath> {
     position_boat(paths, view, [x, SAILBOAT_DEPTH], 0.82)
 }
 
+fn deck_rail(paths: &mut Vec<art::ArtPath>, [x, y]: [f32; 2], length: f32) {
+    stroke(
+        paths,
+        [x, y - 2.9],
+        [x + length, y - 2.9],
+        0.65,
+        0x96899c,
+        0.86,
+    );
+    for amount in [0.04, 0.5, 0.96] {
+        let x = x + length * amount;
+        stroke(paths, [x, y - 2.9], [x, y], 0.6, 0x96899c, 0.8);
+    }
+}
+
+fn oval(
+    paths: &mut Vec<art::ArtPath>,
+    [x, y]: [f32; 2],
+    [rx, ry]: [f32; 2],
+    ink: u32,
+    opacity: f32,
+) {
+    let points = (0..16)
+        .map(|i| {
+            let (sin, cos) = (i as f32 * std::f32::consts::TAU / 16.).sin_cos();
+            [x + rx * cos, y + ry * sin]
+        })
+        .collect();
+    shape(paths, points, ink, opacity);
+}
+
 fn wake(
     paths: &mut Vec<art::ArtPath>,
     [stern_x, stern_y]: [f32; 2],
@@ -575,7 +682,7 @@ fn wake(
     size: f32,
 ) {
     // The hull covers the leading pixel and the wake fades into fainter glints.
-    for i in 0..9 {
+    for i in 0..WAKE_STREAKS {
         let age = i as f32;
         let x = stern_x + facing * (1. - age * 10.) * size;
         let offset = (time * 1.35 + age * 0.66).sin() * (age * 0.35) * size;
@@ -586,7 +693,7 @@ fn wake(
             [x - facing * (9. + age) * size, y + offset * 0.75],
             size,
             0x8994aa,
-            0.36 * (1. - age / 9.),
+            0.36 * (1. - age / WAKE_STREAKS as f32),
         );
     }
 }
@@ -632,9 +739,97 @@ fn stroke(
     );
 }
 
+type Mesh = Arc<[(gpui_kit::Path<gpui_kit::Pixels>, gpui_kit::Hsla)]>;
+
+fn art_mesh(shapes: &[art::ArtPath], scale: f32) -> Mesh {
+    shapes
+        .chunk_by(|a, b| a.ink == b.ink && a.opacity == b.opacity)
+        .filter_map(|group| {
+            use gpui_kit::{FillOptions, FillRule, PathBuilder, PathStyle};
+
+            // Overlapping solid shapes cover each other, including rooftop
+            // setbacks that extend into the walls below them.
+            let solid = group[0].opacity == 1.;
+            let mut builder = PathBuilder::fill();
+            if solid {
+                builder.style =
+                    PathStyle::Fill(FillOptions::default().with_fill_rule(FillRule::NonZero));
+            }
+            let at = |p: &[f32; 2]| gpui_kit::point(px(p[0] * scale), px(p[1] * scale));
+            for shape in group {
+                let points = &shape.points;
+                let reversed = solid
+                    && points
+                        .iter()
+                        .zip(points.iter().cycle().skip(1))
+                        .map(|(a, b)| (a[0] - b[0]) * (a[1] + b[1]))
+                        .sum::<f32>()
+                        < 0.;
+                let mut points = (0..points.len()).map(|i| {
+                    if reversed {
+                        &points[points.len() - 1 - i]
+                    } else {
+                        &points[i]
+                    }
+                });
+                if let Some(point) = points.next() {
+                    builder.move_to(at(point));
+                    for point in points {
+                        builder.line_to(at(point));
+                    }
+                    builder.close();
+                }
+            }
+            let color = gpui_kit::Hsla::from(rgb(group[0].ink)).opacity(group[0].opacity);
+            builder.build().ok().map(|path| (path, color))
+        })
+        .collect()
+}
+
+fn paint_mesh(layers: Mesh) -> impl IntoElement {
+    gpui_kit::canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let origin = bounds.origin;
+            for (path, color) in layers.iter() {
+                let mut path = path.clone();
+                path.bounds.origin += origin;
+                for vertex in &mut path.vertices {
+                    vertex.xy_position += origin;
+                }
+                window.paint_path(path, *color);
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlapping_roof_and_wall_contours_fill_the_join() {
+        let mut paths = Vec::new();
+        quad(&mut paths, [0., 0., 10., 10.], 0x2c2b43, 1.);
+        quad(&mut paths, [0., 8., 10., 10.], 0x2c2b43, 1.);
+        paths[1].points.reverse();
+        let mesh = art_mesh(&paths, 1.);
+        assert_eq!(mesh.len(), 1);
+        let area: f32 = mesh[0]
+            .0
+            .vertices
+            .chunks_exact(3)
+            .map(|triangle| {
+                let [a, b, c] = std::array::from_fn(|i| triangle[i].xy_position);
+                let ab = b - a;
+                let ac = c - a;
+                (f32::from(ab.x) * f32::from(ac.y) - f32::from(ab.y) * f32::from(ac.x)).abs() * 0.5
+            })
+            .sum();
+        assert!((area - 180.).abs() < 0.01);
+    }
 
     #[test]
     fn harbor_camera_changes_the_visible_width_and_pitch_of_the_road() {
@@ -668,7 +863,7 @@ mod tests {
             (tugboat(view, 0.), -1.),
             (tugboat(view, tug_turnarounds()[0] + 17.), 1.),
         ] {
-            let hull = &paths[9].points;
+            let hull = &paths[WAKE_STREAKS].points;
             let [stern_x, stern_y] = hull[3];
             let facing = (hull[2][0] - stern_x).signum();
             assert_eq!(facing, expected_facing);
@@ -679,7 +874,7 @@ mod tests {
             assert!((end_x - stern_x) * facing < 0.);
             assert!(((first[0][1] + first[3][1]) * 0.5 - stern_y).abs() < 0.001);
             assert!(
-                paths[..9]
+                paths[..WAKE_STREAKS]
                     .windows(2)
                     .all(|pair| pair[0].opacity > pair[1].opacity)
             );

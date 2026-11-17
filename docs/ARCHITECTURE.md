@@ -59,6 +59,24 @@ flares from the leg's corners and draws in front of the steel at the joint.
 Cached meshes draw around the traffic lanes and show outgoing main cables and
 stays where they cross the facing masonry. Hangers end on steel rails in the open spans.
 Reduce Motion holds the centered view.
+
+Play moves the camera forward along the menu heading on a broad pitch curve.
+The menu and flight share the harbor skyline geometry and window layout.
+The skyline eases into the inland projection as the span passes. The camera
+slows over a planted lawn with a soccer field and half court, then picks up
+speed on the rooftop climb and continues into the fade.
+The harbor uses clipped GPUI paths for the fly-through. The landmarks and boats
+use painted layers. The skyline shares one street elevation and fixed building
+heights during the inland flight, with the landmarks between the nearer and
+farther blocks. Court markings share the ground plane. Park fixtures render
+in front of the city once their ground contacts clear the projected frontage.
+Deeper rows emerge as haze recedes from their opaque surfaces. Ground floors
+have simple entrance silhouettes with muted detail at close range. The harbor
+shares Brownstones' crescent. It rises above the skyline during the climb and
+reaches 130% of its course diameter at the fade. The painted ground horizon
+sits behind the moon.
+The shot uses active window time and leaves the race clock held.
+
 The shoreline, docks, boats, and pier footings share a water plane. The rear
 tug turns within the center span using the actual footing extents and cruises
 at a third of the speed of the ferry and sailboat. These two boats follow
@@ -66,12 +84,12 @@ spaced routes in front of the bridge. Water shading follows the projected edges
 of each footing.
 [Tower elevation and plan](https://www.archives.gov/files/historical-docs/doc-content/images/brooklyn-bridge-tower.pdf)
 and [NYC DOT promenade drawings](https://www.nyc.gov/html/dot/downloads/pdf/brooklyn-bridge-promenade.pdf).
-Vehicle bodies and tires use the same projection as the pavement, with the
-tire bottoms on the road plane. Each lane's pavement covers the base of its
-rear jamb, and the nearer tower leg occludes vehicles as they enter the arch.
-Boats, water, and traffic use the menu animation clock. The landmarks sit on a
-raised street behind the quay. Each landmark uses one cached tile with complete
-floors and a street entrance. The menu moon and its water glints share a
+Vehicle fronts, rears, and round tires use the same projection as the pavement,
+with the tire bottoms on the road plane. Each lane's pavement covers the base
+of its rear jamb, and the nearer tower leg occludes vehicles as they enter the arch.
+Boats, water, and traffic use the menu animation clock. The landmarks sit inside
+the skyline and use a shallow response to pointer motion. Each uses one cached tile with
+complete floors and a street entrance. The moon and water glints share a
 horizontal position.
 The landmark silhouettes use the
 Empire State Building's stepped facade and mast and the Chrysler Building's

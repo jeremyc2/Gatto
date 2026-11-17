@@ -259,7 +259,7 @@ impl Audio {
         self.controls.retry.fetch_add(1, Ordering::AcqRel);
         self.wake();
     }
-    #[cfg(all(test, target_os = "macos"))]
+    #[cfg(test)]
     pub(super) fn test_output(&self) -> (bool, u32, u32) {
         (
             self.controls.active.load(Ordering::Acquire),
