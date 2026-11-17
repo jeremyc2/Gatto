@@ -820,9 +820,11 @@ mod tests {
         let area: f32 = mesh[0]
             .0
             .vertices
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|triangle| {
-                let [a, b, c] = std::array::from_fn(|i| triangle[i].xy_position);
+                let [a, b, c] = triangle.each_ref().map(|vertex| vertex.xy_position);
                 let ab = b - a;
                 let ac = c - a;
                 (f32::from(ab.x) * f32::from(ac.y) - f32::from(ab.y) * f32::from(ac.x)).abs() * 0.5

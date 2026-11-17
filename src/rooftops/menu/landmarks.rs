@@ -157,23 +157,6 @@ pub(super) fn depth(inland: f32) -> f32 {
     shore::STREET_DEPTH + (DEPTH - shore::STREET_DEPTH) * inland
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn menu_pointer_movement_keeps_landmarks_near_their_authored_positions() {
-        for x in [EMPIRE_X, CHRYSLER_X] {
-            for end in [-1., 1.] {
-                let view = View::new(WIDTH, HEIGHT * HORIZON, Aim::new(end, 0.));
-                let ([moved, _], _) = placement(view, x);
-                let displacement = moved - x;
-                assert!((16. ..25.).contains(&(displacement * end)));
-            }
-        }
-    }
-}
-
 fn frontage(painter: &mut Facade, width: f32, entrance: Entrance, shaft: u32) {
     let (stone, trim, metal, portal) = match entrance {
         Entrance::Limestone => (0x5c5661, 0x877881, 0x95807d, 14.),
@@ -357,4 +340,21 @@ fn chrysler() -> Landmark {
         painter.rect([-1.1, 115., 2.2, 31.], 0xb8afbc);
         painter.rect([-2.6, 137., 5.2, 12.], 0x9c95aa);
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_pointer_movement_keeps_landmarks_near_their_authored_positions() {
+        for x in [EMPIRE_X, CHRYSLER_X] {
+            for end in [-1., 1.] {
+                let view = View::new(WIDTH, HEIGHT * HORIZON, Aim::new(end, 0.));
+                let ([moved, _], _) = placement(view, x);
+                let displacement = moved - x;
+                assert!((16. ..25.).contains(&(displacement * end)));
+            }
+        }
+    }
 }

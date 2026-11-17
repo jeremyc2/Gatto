@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.7] - 2026-11-16
+
 ### Added
 
 - Fly over the harbor, beneath the bridge, and up toward the Brownstones
