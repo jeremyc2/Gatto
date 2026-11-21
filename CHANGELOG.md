@@ -7,6 +7,42 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.8] - 2026-11-21
+
+### Added
+
+- Port Gatto Rooftops to the website on its own `/rooftops/` page with a split
+  bundle so the main page stays lightweight, linked directly from the website's
+  portal cat in place of the coming-soon notice. Includes Canvas 2D rendering
+  for all three neighborhoods and the harbor fly-through, procedural Web Audio
+  music and sound effects, eight achievements, a 30 Hz ghost replay,
+  downloadable PNG scorecards, and `localStorage` persistence.
+- Add mobile support for web Rooftops with an opaque landscape and full-screen
+  gate (with an animated rotate-device icon), symmetrical translucent touch
+  joystick and Jump controls, safe-area inset handling across modern iPhone and
+  Android sizes, and larger mobile sprites for the cat, jetpack, coins, and
+  enemies.
+- Add a `--fast` flag to `bun deploy:web` to deploy the website without
+  re-running asset refreshes or checks.
+
+### Changed
+
+- Close the Rooftops Options and Achievements modals when clicking or tapping
+  outside them in both the native app and the web version.
+- Migrate the website frontend to Solid 2 and ReactiveScript.
+
+### Fixed
+
+- Extend the web Rooftops harbor bridge, shoreline, skyline, traffic, and water
+  bands edge-to-edge on ultrawide mobile viewports without clipping or patchy
+  water seams.
+- Draw Rooftops checkpoint and home buildings behind coins and raise checkpoint
+  doorway coins so they clear building roofs cleanly while remaining reachable
+  on a jump.
+- Use exact canvas pixel scaling on web Rooftops so fractional-DPR mobile
+  screens and orientation or full-screen changes stay crisp without cropped
+  margins.
+
 ## [0.24.7] - 2026-11-16
 
 ### Added
