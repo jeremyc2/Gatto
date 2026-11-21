@@ -643,7 +643,7 @@ function flightBoats(original: View, view: View, time: number, depth: number): A
   return paths;
 }
 
-function flightWater(original: View, view: View, time: number): ArtPath[] {
+function flightWater(original: View, view: View, time: number, clip: Rect4): ArtPath[] {
   const paths: ArtPath[] = [];
   const y = view.waterline();
   view.face(
@@ -663,19 +663,28 @@ function flightWater(original: View, view: View, time: number): ArtPath[] {
     const t = (y - eye[1]) / (at[1] - eye[1]);
     return mix3(eye, at, t);
   };
-  waterDetail(original, HARBOR_HEIGHT, time, ([rx, ry, rw, rh], ink, opacity) => {
-    view.face(
-      paths,
-      [
-        onWater([rx, ry]),
-        onWater([rx + rw, ry]),
-        onWater([rx + rw, ry + rh]),
-        onWater([rx, ry + rh]),
-      ],
-      ink,
-      opacity,
-    );
-  });
+  const leftEdge = Math.min(0, clip[0] - 80);
+  const rightEdge = Math.max(original.width, clip[2] + 80);
+  waterDetail(
+    original,
+    HARBOR_HEIGHT,
+    time,
+    ([rx, ry, rw, rh], ink, opacity) => {
+      view.face(
+        paths,
+        [
+          onWater([rx, ry]),
+          onWater([rx + rw, ry]),
+          onWater([rx + rw, ry + rh]),
+          onWater([rx, ry + rh]),
+        ],
+        ink,
+        opacity,
+      );
+    },
+    leftEdge,
+    rightEdge,
+  );
   return paths;
 }
 
@@ -733,9 +742,9 @@ export function menuTitleLayout(
   }
 
   if (shortLandscape || (touchMode && frame.scale < 0.85)) {
-    const titleSize = clamp(viewportH * 0.19, 44, 84);
-    const titleY = Math.max(46, viewportH * 0.15);
-    const actionsTop = titleY + titleSize * 0.56 + 10;
+    const titleSize = clamp(viewportH * 0.17, 42, 72);
+    const titleY = Math.max(36, viewportH * 0.135);
+    const actionsTop = titleY + titleSize * 0.54 + 8;
     return {
       titleY,
       titleSize,
@@ -784,7 +793,7 @@ export class HarborRenderer {
     const key = `${original.aim.x}:${original.aim.y}:${Math.round(clip[0])}:${Math.round(clip[2])}`;
     if (key !== this.skylineKey) {
       this.skylineKey = key;
-      const camera = Camera.atMenu(original);
+      const camera = Camera.atMenu(original).withClip(clip);
       const view = original.withCamera(camera);
       const [paths] = buildCity(original, view, camera, 0, clip, 0);
       this.skylineMesh = compileArtMesh(paths);
@@ -889,7 +898,7 @@ export class HarborRenderer {
     const [clipLeft, clipTop, clipRight, clipBottom] = clip;
     ctx.save();
     ctx.translate(clipLeft * scale, clipTop * scale);
-    drawSky(ctx, clipRight - clipLeft, HARBOR_HEIGHT - clipTop, time, scale, 145);
+    drawSky(ctx, clipRight - clipLeft, clipBottom - clipTop, time, scale, 145);
     ctx.restore();
 
     drawArtPaths(ctx, getHarborMoonPaths(), scale);
@@ -898,27 +907,19 @@ export class HarborRenderer {
     drawMenuLandmarks(ctx, view, scale);
 
     const waterBottom = Math.max(HARBOR_HEIGHT, clipBottom);
-    if (padX > 0 || padBottom > 0) {
-      // Extend deep water cleanly into wide side margins or portrait lower band.
-      ctx.fillStyle = rgbCss(WATER);
-      ctx.globalAlpha = 1;
-      ctx.fillRect(
-        clipLeft * scale,
-        view.horizon * scale,
-        (clipRight - clipLeft) * scale,
-        (waterBottom - view.horizon) * scale,
-      );
-    }
     drawHarborPaths(ctx, bank.water(waterBottom), scale);
-    waterDetail(view, HARBOR_HEIGHT, time, ([rx, ry, rw, rh], ink, alpha) => {
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = rgbCss(ink);
-      if (rx === 0 && rw === view.width) {
-        ctx.fillRect(clipLeft * scale, ry * scale, (clipRight - clipLeft) * scale, rh * scale);
-      } else {
+    waterDetail(
+      view,
+      HARBOR_HEIGHT,
+      time,
+      ([rx, ry, rw, rh], ink, alpha) => {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = rgbCss(ink);
         ctx.fillRect(rx * scale, ry * scale, rw * scale, rh * scale);
-      }
-    });
+      },
+      clipLeft,
+      clipRight,
+    );
     if (padBottom > 0) {
       ctx.fillStyle = rgbCss(0x080d20);
       ctx.globalAlpha = 7 * 0.058;
@@ -933,7 +934,7 @@ export class HarborRenderer {
 
     drawHarborPaths(ctx, bank.shore(), scale);
     drawHarborPaths(ctx, tugboat(view, time), scale);
-    this.bridge.render(ctx, view, view.deck(), time, scale, padX + 120);
+    this.bridge.render(ctx, view, view.deck(), time, scale, padX + 260);
     drawHarborPaths(ctx, ferry(view, time), scale);
     drawHarborPaths(ctx, sailboat(view, time), scale);
   }
@@ -987,11 +988,11 @@ export class HarborRenderer {
     drawHarborPaths(ctx, projectLandmarks(original, cityView, cityCam, inland), scale);
     drawHarborPaths(ctx, nearer, scale);
     drawHarborPaths(ctx, fixtures, scale);
-    drawHarborPaths(ctx, flightWater(original, view, time), scale);
+    drawHarborPaths(ctx, flightWater(original, view, time, clip), scale);
     drawHarborPaths(ctx, bank.inland(), scale);
     drawHarborPaths(ctx, bank.shore(), scale);
     drawHarborPaths(ctx, flightBoats(original, view, time, TUG_DEPTH), scale);
-    this.bridge.render(ctx, view, view.deck(), time, scale);
+    this.bridge.render(ctx, view, view.deck(), time, scale, Math.max(0, -cx) + 260);
     drawHarborPaths(ctx, flightBoats(original, view, time, FERRY_DEPTH), scale);
     drawHarborPaths(ctx, flightBoats(original, view, time, SAILBOAT_DEPTH), scale);
   }

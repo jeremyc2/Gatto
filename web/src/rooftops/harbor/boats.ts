@@ -23,24 +23,32 @@ export function waterDetail(
   h: number,
   time: number,
   rect: (bounds: Rect4, ink: number, alpha: number) => void,
+  leftEdge = 0,
+  rightEdge = view.width,
 ): void {
   const { width: w, horizon } = view;
   const depth = h - horizon;
+  const spanLeft = Math.min(0, leftEdge);
+  const spanRight = Math.max(w, rightEdge);
+  const spanW = spanRight - spanLeft;
+
   for (let i = 0; i < 8; i++) {
-    rect([0, horizon + (depth * i) / 8, w, depth / 8 + 0.2], 0x080d20, i * 0.058);
+    rect([spanLeft, horizon + (depth * i) / 8, spanW, depth / 8 + 0.2], 0x080d20, i * 0.058);
   }
-  for (let i = 0; i < 68; i++) {
+  const wrapW = spanW + 56;
+  const rippleCount = Math.max(68, Math.round((68 * spanW) / w));
+  for (let i = 0; i < rippleCount; i++) {
     const d = ((i * 47 + 2) % 101) / 101;
     const y = horizon + 3 + (depth - 5) * d;
     const base = ((i * 197 + 57) % 997) / 997;
-    const rawX = remEuclid(base * w + time * (0.35 + d * 1.28), w + 56) - 28;
+    const rawX = spanLeft - 28 + remEuclid(base * spanW + time * (0.35 + d * 1.28), wrapW);
     const [[x, by], zoom] = view.billboard(rawX, -120 * d, y);
     const length = (7 + (i % 11) * 4) * (0.4 + d) * zoom;
     const glint = Math.sin(time * (0.41 + (i % 5) * 0.048) + i * 1.61);
     rect([x, by, length, 0.65 + d * 0.8], 0x66749c, 0.1 + (glint + 1) * 0.095);
 
-    const reflection = MOON_CENTER[0] + Math.sin(i * 2.39 + time * 0.39) * (3 + d * 34);
-    if (i % 2 === 0) {
+    if (i < 68 && i % 2 === 0) {
+      const reflection = MOON_CENTER[0] + Math.sin(i * 2.39 + time * 0.39) * (3 + d * 34);
       rect(
         [reflection - length * 0.24, by, length * 0.48, 0.8],
         0xc1a2a1,

@@ -11,7 +11,7 @@ import {
   Synth,
 } from "../src/rooftops/audio/synth";
 import { computeCourseViewport, computeTouchControlsLayout } from "../src/rooftops/course-renderer";
-import { Flight, moonProjection } from "../src/rooftops/harbor/flight";
+import { Flight, menuTitleLayout, moonProjection } from "../src/rooftops/harbor/flight";
 import {
   Camera,
   defaultAim,
@@ -161,6 +161,31 @@ describe("Rooftops simulation", () => {
     slide.time = LevelSlide.PAN;
     expect(slide.sleeping()).toBe(false);
     expect(slide.camera()).toBeCloseTo(0, 5);
+  });
+
+  test("checkpoint shelter coins clear the building coping at mobile scale and remain jump-reachable", () => {
+    const mobileCoinRadius = 35 * 0.5;
+    for (let level = 0; level < 3; level++) {
+      const run = Run.forLevel(level);
+      const lastRoof = run.roofs[run.roofs.length - 1]!;
+      const lastCoin = run.coins[run.coins.length - 1]!;
+      // Checkpoint coping sits at roof.y - 92; bottom edge of mobile coin stays strictly above it.
+      expect(lastCoin.y + mobileCoinRadius).toBeLessThan(lastRoof.y - 92);
+      if (level > 0) {
+        const startRoof = run.roofs[0]!;
+        const startCoin = run.coins[0]!;
+        expect(startCoin.y).toBe(lastCoin.y);
+        expect(startCoin.y + mobileCoinRadius).toBeLessThan(startRoof.y - 92);
+      }
+
+      // Standing directly below the checkpoint coin and jumping collects it cleanly.
+      run.x = lastCoin.x;
+      run.y = lastRoof.y;
+      run.ground = run.roofs.length - 1;
+      run.jumpDown();
+      for (let i = 0; i < 60; i++) run.step();
+      expect(lastCoin.collected).toBe(true);
+    }
   });
 
   test("computes offscreen ghost gap across level boundaries", () => {
@@ -371,5 +396,38 @@ describe("Rooftops harbor 3D projection and fly-through", () => {
     expect(touch.joyBaseX - touch.joyRadius).toBeGreaterThanOrEqual(44);
     expect(touch.jumpX + touch.jumpRadius).toBeLessThanOrEqual(844 - 44);
     expect(touch.joyBaseY + touch.joyRadius).toBeLessThanOrEqual(390 - 20);
+  });
+
+  test("touch controls and menu layout stay within safe areas across modern iPhone and Android sizes", () => {
+    const mobileLandscapes = [
+      // [width, height, safeBottom, safeLeft, safeRight]
+      [667, 375, 0, 0, 0], // iPhone SE
+      [667, 318, 0, 0, 0], // iPhone SE Safari chrome
+      [852, 393, 21, 59, 59], // iPhone 15 / 16 Pro
+      [852, 330, 21, 59, 59], // iPhone 15 / 16 Pro Safari chrome
+      [956, 440, 21, 59, 59], // iPhone 16 Pro Max
+      [915, 412, 0, 24, 24], // Pixel 9 / Galaxy S24
+      [740, 360, 0, 20, 20], // Compact Android
+      [740, 300, 0, 20, 20], // Compact Android Chrome bar
+    ] as const;
+
+    for (const [w, h, safeB, safeL, safeR] of mobileLandscapes) {
+      const touch = computeTouchControlsLayout(w, h, safeB, safeL, safeR);
+      expect(touch.joyRadius).toBe(touch.jumpRadius);
+      expect(touch.joyBaseY).toBe(touch.jumpY);
+      expect(touch.joyRadius).toBeGreaterThanOrEqual(42);
+      expect(touch.joyBaseX - touch.joyRadius).toBeGreaterThanOrEqual(safeL);
+      expect(touch.jumpX + touch.jumpRadius).toBeLessThanOrEqual(w - safeR);
+      expect(touch.joyBaseY + touch.joyRadius).toBeLessThanOrEqual(h - safeB);
+      // Center lane between controls stays wide enough for caption/doorway pills.
+      expect(touch.jumpX - touch.jumpRadius - (touch.joyBaseX + touch.joyRadius)).toBeGreaterThan(
+        260,
+      );
+
+      const menu = menuTitleLayout(w, h, true);
+      expect(menu.actionsTop).toBeGreaterThan(menu.titleY);
+      // Four 40px buttons + three 7px gaps = 181px; must fit above safe-bottom without clipping.
+      expect(menu.actionsTop + 181).toBeLessThanOrEqual(h - safeB);
+    }
   });
 });

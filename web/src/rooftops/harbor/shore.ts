@@ -562,7 +562,7 @@ export class Bank {
     this.view = view;
     const w = view.width;
     this.edge = [
-      [-420, 152],
+      [-1600, 152],
       [w * 0.12, 152],
       [w * 0.12, 138],
       [w * 0.25, 138],
@@ -573,7 +573,7 @@ export class Bank {
       [w * 0.65, 163],
       [w * 0.77, 163],
       [w * 0.77, 147],
-      [w + 315, 147],
+      [w + 1600, 147],
     ];
   }
 
@@ -632,8 +632,8 @@ export class Bank {
       this.view.line(paths, at(a, WALL_TOP), at(b, WALL_TOP), 1.05, 0x736b79, 0.46);
       this.view.line(paths, at(a, -1.4), at(b, -1.4), 0.9, 0x151e31, 0.68);
       if (alongBank) {
-        const left = Math.max(a[0], -140);
-        const right = Math.min(b[0], this.view.width + 75);
+        const left = Math.max(a[0], -560);
+        const right = Math.min(b[0], this.view.width + 560);
         const count = Math.floor((right - left) / 49);
         for (let i = 0; i < count; i++) {
           const x = left + 15 + i * 49;

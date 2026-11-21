@@ -614,7 +614,9 @@ class Bridge {
     for (const z of [-39, -22, 0, 22, 39]) {
       this.view.line(paths, [left, y, z], [right, y, z], 1.5, 0x47435a, 1);
     }
-    for (let bay = -9; bay <= 28; bay++) {
+    const firstBay = Math.floor(left / 38);
+    const lastBay = Math.ceil(right / 38);
+    for (let bay = firstBay; bay <= lastBay; bay++) {
       const x = bay * 38;
       this.view.line(paths, [x, y, front], [x, y, rear], 2, 0x51475b, 0.8);
     }

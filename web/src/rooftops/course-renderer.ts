@@ -347,11 +347,12 @@ function drawCatBody(
   scale: number,
   ink: number,
   opacity: number,
+  spriteScale = 1,
 ): void {
   const path = catArt.pathFor(pose);
   ctx.save();
   ctx.translate((pose.x - camera) * scale, pose.y * scale);
-  ctx.scale(scale, scale);
+  ctx.scale(scale * spriteScale, scale * spriteScale);
   ctx.globalAlpha = opacity;
   ctx.fillStyle = rgbCss(ink);
   ctx.fill(path, "nonzero");
@@ -366,85 +367,82 @@ function drawPlayerSprite(
   camera: number,
   opacity: number,
   scale: number,
+  spriteScale = 1,
 ): void {
-  drawCatBody(ctx, catArt, pose, camera, scale, 0x05070d, opacity);
+  drawCatBody(ctx, catArt, pose, camera, scale, 0x05070d, opacity, spriteScale);
   const head = pose.facing > 0 ? 21 : 0;
   const near = head + (pose.facing > 0 ? 2 : 13);
-  const x = pose.x - camera - 20;
-  const y = pose.y - 36 + pose.squash * 5;
+  const x = -20;
+  const y = -36 + pose.squash * 5;
+  ctx.save();
+  ctx.translate((pose.x - camera) * scale, pose.y * scale);
+  ctx.scale(scale * spriteScale, scale * spriteScale);
   ctx.globalAlpha = opacity;
   ctx.fillStyle = rgbCss(0x71506e);
-  ctx.fillRect((x + near + 1) * scale, (y + 6) * scale, 2 * scale, 3 * scale);
+  ctx.fillRect(x + near + 1, y + 6, 2, 3);
   ctx.fillStyle = rgbCss(0xa8f0ce);
   ctx.beginPath();
-  ctx.roundRect(
-    (x + head + (pose.facing > 0 ? 10 : 3)) * scale,
-    (y + 15) * scale,
-    5 * scale,
-    3 * scale,
-    1.5 * scale,
-  );
+  ctx.roundRect(x + head + (pose.facing > 0 ? 10 : 3), y + 15, 5, 3, 1.5);
   ctx.fill();
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
 function drawJetpack(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
+  bottomCenterX: number,
+  bottomY: number,
   flame: number,
   fuel: number,
   scale: number,
+  spriteScale = 1,
 ): void {
+  ctx.save();
+  ctx.translate(bottomCenterX * scale, bottomY * scale);
+  ctx.scale(scale * spriteScale, scale * spriteScale);
   ctx.globalAlpha = 1;
+  // Local coordinates place nozzle bottoms at y = 0 and twin cylinders centered around x = 0.
+  const x = -8;
+  const y = -22;
   for (const offset of [0, 9]) {
     ctx.fillStyle = rgbCss(0x9e91b5);
     ctx.beginPath();
-    ctx.roundRect((x + offset) * scale, y * scale, 7 * scale, 20 * scale, 3 * scale);
+    ctx.roundRect(x + offset, y, 7, 20, 3);
     ctx.fill();
 
     ctx.fillStyle = rgbCss(0xd5c7e6);
     ctx.beginPath();
-    ctx.roundRect((x + offset + 1) * scale, (y + 2) * scale, 3 * scale, 13 * scale, 1.5 * scale);
+    ctx.roundRect(x + offset + 1, y + 2, 3, 13, 1.5);
     ctx.fill();
 
     ctx.fillStyle = rgbCss(0x73d9ee);
-    ctx.fillRect((x + offset) * scale, (y + 8) * scale, 7 * scale, 3 * scale);
+    ctx.fillRect(x + offset, y + 8, 7, 3);
 
     ctx.fillStyle = rgbCss(0x50465f);
-    ctx.fillRect((x + offset + 1) * scale, (y + 18) * scale, 5 * scale, 4 * scale);
+    ctx.fillRect(x + offset + 1, y + 18, 5, 4);
 
     if (flame > 0) {
       ctx.fillStyle = rgbCss(0x74cfea);
       ctx.beginPath();
-      ctx.roundRect((x + offset) * scale, (y + 21) * scale, 7 * scale, flame * scale, [
-        0,
-        0,
-        4 * scale,
-        4 * scale,
-      ]);
+      ctx.roundRect(x + offset, y + 21, 7, flame, [0, 0, 4, 4]);
       ctx.fill();
 
       ctx.fillStyle = rgbCss(GOLD);
       ctx.beginPath();
-      ctx.roundRect((x + offset + 2) * scale, (y + 21) * scale, 3 * scale, flame * 0.65 * scale, [
-        0,
-        0,
-        2 * scale,
-        2 * scale,
-      ]);
+      ctx.roundRect(x + offset + 2, y + 21, 3, flame * 0.65, [0, 0, 2, 2]);
       ctx.fill();
     }
   }
   ctx.fillStyle = rgbCss(0x50465f);
-  ctx.fillRect((x - 1) * scale, (y - 7) * scale, 18 * scale, 4 * scale);
+  ctx.fillRect(x - 1, y - 7, 18, 4);
   if (fuel > 0) {
     ctx.fillStyle = rgbCss(GOLD);
-    ctx.fillRect(x * scale, (y - 6) * scale, 16 * fuel * scale, 2 * scale);
+    ctx.fillRect(x, y - 6, 16 * fuel, 2);
   } else {
     ctx.fillStyle = rgbCss(0xff6b81);
-    ctx.fillRect(x * scale, (y - 6) * scale, 2 * scale, 2 * scale);
+    ctx.fillRect(x, y - 6, 2, 2);
   }
+  ctx.restore();
 }
 
 function drawArrivalSequence(
@@ -453,6 +451,7 @@ function drawArrivalSequence(
   time: number,
   camera: number,
   scale: number,
+  spriteScale = 1,
 ): void {
   const flight = Math.min(time / ARRIVAL_FLAME_OUT, 1);
   const fall = clamp((time - ARRIVAL_FLAME_OUT) / (ARRIVAL_LANDING - ARRIVAL_FLAME_OUT), 0, 1);
@@ -473,10 +472,24 @@ function drawArrivalSequence(
     camera,
     1,
     scale,
+    spriteScale,
   );
   const flame = arrivalFlamesOn(time) ? 22 * (1 - flight) + 4 : 0;
   const detach = clamp((time - ARRIVAL_UNSTRAP) / (ARRIVAL_DURATION - ARRIVAL_UNSTRAP), 0, 1);
-  drawJetpack(ctx, x - 14 - 38 * detach, y - 35 + 13 * detach, flame, 1 - flight, scale);
+  // Start strapped to the scaled cat's back and settle flush onto roof 0 at START_X - 44.
+  const attachedX = x - 6 * spriteScale;
+  const attachedY = y - 13 * spriteScale;
+  const parkedX = x - 44;
+  const parkedY = y;
+  drawJetpack(
+    ctx,
+    attachedX + (parkedX - attachedX) * detach,
+    attachedY + (parkedY - attachedY) * detach,
+    flame,
+    1 - flight,
+    scale,
+    spriteScale,
+  );
 }
 
 function drawEnemy(
@@ -486,7 +499,20 @@ function drawEnemy(
   cy: number,
   time: number,
   scale: number,
+  spriteScale = 1,
 ): void {
+  if (spriteScale !== 1) {
+    // Anchor rats to the roof surface (cy + 11) so larger mobile sprites never sink into roofs;
+    // scale airborne owls and bats around their center.
+    const pivotY = enemy.kind === "rat" ? cy + 11 : cy;
+    ctx.save();
+    ctx.translate(cx * scale, pivotY * scale);
+    ctx.scale(spriteScale, spriteScale);
+    ctx.translate(-cx * scale, -pivotY * scale);
+    drawEnemy(ctx, enemy, cx, cy, time, scale, 1);
+    ctx.restore();
+    return;
+  }
   const ox = cx - 17;
   const oy = cy - 11;
   const right = Math.cos(time * enemy.speed + enemy.phase) > 0;
@@ -724,10 +750,10 @@ export function computeTouchControlsLayout(
   safeRight = 0,
 ): TouchControlsLayout {
   const shortSide = Math.min(viewportW, viewportH);
-  const radius = clamp(shortSide * 0.13, 48, 60);
+  const radius = clamp(shortSide * 0.13, 42, 58);
   const knobRadius = radius * 0.43;
-  const edgeX = clamp(viewportW * 0.045, 20, 34);
-  const edgeY = clamp(viewportH * 0.05, 22, 36);
+  const edgeX = clamp(viewportW * 0.045, 18, 34);
+  const edgeY = clamp(viewportH * 0.045, 16, 32);
   const centerY = viewportH - safeBottom - edgeY - radius;
   return {
     joyBaseX: safeLeft + edgeX + radius,
@@ -1082,6 +1108,7 @@ export class CourseRenderer {
       reducedMotion: boolean;
       ghost: Frame | null;
       showGhost: boolean;
+      touchMode?: boolean;
     },
   ): void {
     const {
@@ -1097,6 +1124,7 @@ export class CourseRenderer {
       reducedMotion,
       ghost,
       showGhost,
+      touchMode = false,
     } = params;
     const worldH = h - verticalOffset;
     this.facadeArt.resize(Math.max(h, worldH));
@@ -1135,32 +1163,6 @@ export class CourseRenderer {
     }
     this.drawCourseBuildings(ctx, run, camera, w, worldH, drift, scale, false);
 
-    // Draw coins & enemies for outgoing (if sliding) and current course.
-    const courses: [Run, number, boolean][] = slide
-      ? [
-          [slide.previous, camera - slide.offset(), true],
-          [run, camera, false],
-        ]
-      : [[run, camera, false]];
-
-    for (const [course, courseCam, outgoing] of courses) {
-      for (let i = 0; i < course.coins.length; i++) {
-        const coin = course.coins[i]!;
-        if (coin.collected) continue;
-        if (outgoing && i + 1 === course.coins.length) continue;
-        const x = coin.x - courseCam;
-        if (x < -25 || x > w + 25) continue;
-        this.drawCoin(ctx, x, coin.y, scale);
-      }
-      const enemyTime = course.time + (slide ? slide.time : 0);
-      for (const enemy of course.enemies) {
-        if (enemy.defeated) continue;
-        const [ex, ey] = enemyPosition(enemy, course.roofs, enemyTime);
-        if (ex - courseCam < -60 || ex - courseCam > w + 60) continue;
-        drawEnemy(ctx, enemy, ex - courseCam, ey, drift, scale);
-      }
-    }
-
     const slideSleeping = slide !== null && slide.sleeping();
     const sleeping = run.home || slideSleeping;
     const lastRoof = run.roofs[run.roofs.length - 1]!;
@@ -1190,8 +1192,35 @@ export class CourseRenderer {
       );
     }
 
+    // Draw coins & enemies in front of rooftop architecture and checkpoint buildings.
+    const courses: [Run, number, boolean][] = slide
+      ? [
+          [slide.previous, camera - slide.offset(), true],
+          [run, camera, false],
+        ]
+      : [[run, camera, false]];
+    const spriteScale = touchMode ? 1.25 : 1;
+
+    for (const [course, courseCam, outgoing] of courses) {
+      for (let i = 0; i < course.coins.length; i++) {
+        const coin = course.coins[i]!;
+        if (coin.collected) continue;
+        if (outgoing && i + 1 === course.coins.length) continue;
+        const x = coin.x - courseCam;
+        if (x < -25 || x > w + 25) continue;
+        this.drawCoin(ctx, x, coin.y, scale, touchMode ? 35 : 28);
+      }
+      const enemyTime = course.time + (slide ? slide.time : 0);
+      for (const enemy of course.enemies) {
+        if (enemy.defeated) continue;
+        const [ex, ey] = enemyPosition(enemy, course.roofs, enemyTime);
+        if (ex - courseCam < -60 || ex - courseCam > w + 60) continue;
+        drawEnemy(ctx, enemy, ex - courseCam, ey, drift, scale, spriteScale);
+      }
+    }
+
     if (showGhost && arrival === null && slide === null && ghost !== null) {
-      drawCatBody(ctx, this.catArt, ghost.pose, camera, scale, 0xb8abff, 0.28);
+      drawCatBody(ctx, this.catArt, ghost.pose, camera, scale, 0xb8abff, 0.28, spriteScale);
     }
 
     const airborne = run.ground === null;
@@ -1202,13 +1231,13 @@ export class CourseRenderer {
         : Math.sin(run.time * 26) * (Math.abs(run.vx) / SPEED) * 2.5;
 
     if (arrival !== null) {
-      drawArrivalSequence(ctx, this.catArt, arrival, camera, scale);
+      drawArrivalSequence(ctx, this.catArt, arrival, camera, scale, spriteScale);
     } else if (sleeping) {
-      for (const shape of restingCatShapes(run.x - camera, run.y, 0x05070d, 1)) {
+      for (const shape of restingCatShapes(run.x - camera, run.y, 0x05070d, spriteScale)) {
         drawPosterShape(ctx, shape, scale);
       }
       ctx.globalAlpha = 1;
-      drawArtPaths(ctx, sleepPaths(run.x - camera, run.y, drift, 1), scale);
+      drawArtPaths(ctx, sleepPaths(run.x - camera, run.y, drift, spriteScale), scale);
     } else {
       // Soft ground shadow.
       ctx.globalAlpha = airborne ? 0.18 : 0.45;
@@ -1217,8 +1246,8 @@ export class CourseRenderer {
       ctx.ellipse(
         (run.x - camera) * scale,
         (run.y - 0.5) * scale,
-        17 * scale,
-        2.5 * scale,
+        17 * scale * spriteScale,
+        2.5 * scale * spriteScale,
         0,
         0,
         TAU,
@@ -1248,23 +1277,37 @@ export class CourseRenderer {
         camera,
         flashOpacity,
         scale,
+        spriteScale,
       );
     }
 
     if (run.level === 0 && arrival === null) {
-      drawJetpack(ctx, START_X - 52 - camera, ROOFS[0]!.y - 22, 0, 0, scale);
+      drawJetpack(ctx, START_X - 44 - camera, ROOFS[0]!.y, 0, 0, scale, spriteScale);
     }
     ctx.restore();
   }
 
-  private drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number): void {
+  private drawCoin(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    scale: number,
+    diameter = 28,
+  ): void {
+    const half = diameter * 0.5;
     if (this.coinCanvas) {
-      ctx.drawImage(this.coinCanvas, (x - 14) * scale, (y - 14) * scale, 28 * scale, 28 * scale);
+      ctx.drawImage(
+        this.coinCanvas,
+        (x - half) * scale,
+        (y - half) * scale,
+        diameter * scale,
+        diameter * scale,
+      );
     } else {
       // Fallback gold disc until PNG finishes decoding.
       ctx.fillStyle = rgbCss(GOLD);
       ctx.beginPath();
-      ctx.arc(x * scale, y * scale, 11 * scale, 0, TAU);
+      ctx.arc(x * scale, y * scale, half * 0.78 * scale, 0, TAU);
       ctx.fill();
     }
   }

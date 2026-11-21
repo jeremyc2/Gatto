@@ -214,9 +214,10 @@ export class Run {
           collected: false,
         };
       }
+      const isShelterRoof = i === this.roofs.length - 1 || (level > 0 && i === 0);
       return {
         x: roof.x + roof.width * 0.72,
-        y: roof.y - 104,
+        y: roof.y - (isShelterRoof ? 116 : 104),
         collected: false,
       };
     });

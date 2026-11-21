@@ -55,12 +55,12 @@ if (import.meta.env.DEV) {
 }
 
 function setStyleX(
-  element: HTMLElement,
+  element: Element,
   props: ReturnType<typeof stylex.attrs>,
   extraClass?: string,
 ): void {
   const cls = props.class ?? "";
-  element.className = extraClass ? (cls ? `${extraClass} ${cls}` : extraClass) : cls;
+  element.setAttribute("class", extraClass ? (cls ? `${extraClass} ${cls}` : extraClass) : cls);
 }
 
 function setVisible(element: HTMLElement, visible: boolean): void {
@@ -72,35 +72,44 @@ interface LockableOrientation {
   unlock?: () => void;
 }
 
+function canRequestFullscreen(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    typeof document.documentElement?.requestFullscreen === "function"
+  );
+}
+
 function canProgrammaticallyLockLandscape(): boolean {
   const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as
     LockableOrientation | undefined;
   return typeof orientation?.lock === "function";
 }
 
-async function tryLockLandscape(): Promise<boolean> {
+async function enterFullscreenAndLandscape(): Promise<{
+  fullscreen: boolean;
+  locked: boolean;
+}> {
+  let fullscreen = document.fullscreenElement !== null;
+  if (!fullscreen && canRequestFullscreen()) {
+    try {
+      await document.documentElement.requestFullscreen();
+      fullscreen = document.fullscreenElement !== null;
+    } catch {
+      fullscreen = false;
+    }
+  }
+  let locked = false;
   const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as
     LockableOrientation | undefined;
-  if (typeof orientation?.lock !== "function") return false;
-  try {
-    await orientation.lock("landscape");
-    return true;
-  } catch {
-    // Android Chromium/Firefox require fullscreen before locking orientation.
-    if (
-      document.fullscreenElement === null &&
-      typeof document.documentElement.requestFullscreen === "function"
-    ) {
-      try {
-        await document.documentElement.requestFullscreen();
-        await orientation.lock("landscape");
-        return true;
-      } catch {
-        return false;
-      }
+  if (typeof orientation?.lock === "function") {
+    try {
+      await orientation.lock("landscape");
+      locked = true;
+    } catch {
+      locked = false;
     }
-    return false;
   }
+  return { fullscreen, locked };
 }
 
 function createBackArrowIcon(): SVGSVGElement {
@@ -131,6 +140,71 @@ function createRotatePhoneIcon(size: number): SVGSVGElement {
   const svg = document.createElementNS(svgNS, "svg");
   svg.setAttribute("width", String(size));
   svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 0 48 48");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.display = "block";
+  svg.style.flexShrink = "0";
+
+  // Muted upright portrait phone (starting orientation).
+  const portrait = document.createElementNS(svgNS, "rect");
+  portrait.setAttribute("x", "10");
+  portrait.setAttribute("y", "10");
+  portrait.setAttribute("width", "16");
+  portrait.setAttribute("height", "28");
+  portrait.setAttribute("rx", "3");
+  portrait.setAttribute("stroke-width", "2");
+  portrait.setAttribute("stroke-opacity", "0.34");
+
+  // Active phone pivots clockwise around (18, 30) from portrait (-90deg) into landscape (0deg).
+  const activePhone = document.createElementNS(svgNS, "g");
+  setStyleX(activePhone, stylex.attrs(styles.rotatePhoneActive));
+
+  const landscapeMask = document.createElementNS(svgNS, "rect");
+  landscapeMask.setAttribute("x", "10");
+  landscapeMask.setAttribute("y", "22");
+  landscapeMask.setAttribute("width", "28");
+  landscapeMask.setAttribute("height", "16");
+  landscapeMask.setAttribute("rx", "3");
+  landscapeMask.setAttribute("fill", "#101322");
+  landscapeMask.setAttribute("stroke", "none");
+
+  const landscape = document.createElementNS(svgNS, "rect");
+  landscape.setAttribute("x", "10");
+  landscape.setAttribute("y", "22");
+  landscape.setAttribute("width", "28");
+  landscape.setAttribute("height", "16");
+  landscape.setAttribute("rx", "3");
+  landscape.setAttribute("fill", "currentColor");
+  landscape.setAttribute("fill-opacity", "0.1");
+  landscape.setAttribute("stroke-width", "2.2");
+  activePhone.append(landscapeMask, landscape);
+
+  // Concentric clockwise arc centered on the exact pivot (18, 30) so the rotating corner never touches it.
+  const arcGroup = document.createElementNS(svgNS, "g");
+  setStyleX(arcGroup, stylex.attrs(styles.rotatePhoneArc));
+
+  const arc = document.createElementNS(svgNS, "path");
+  arc.setAttribute("d", "M29.1 8.2A24.5 24.5 0 0 1 39.2 17.8");
+  arc.setAttribute("stroke-width", "2");
+
+  const arrow = document.createElementNS(svgNS, "path");
+  arrow.setAttribute("d", "M36 16.5L39.2 17.8L39.7 14.4");
+  arrow.setAttribute("stroke-width", "2");
+  arcGroup.append(arc, arrow);
+
+  svg.append(portrait, activePhone, arcGroup);
+  return svg;
+}
+
+function createFullscreenIcon(size: number): SVGSVGElement {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
@@ -141,17 +215,16 @@ function createRotatePhoneIcon(size: number): SVGSVGElement {
   svg.style.display = "block";
   svg.style.flexShrink = "0";
 
-  const phone = document.createElementNS(svgNS, "rect");
-  phone.setAttribute("x", "3");
-  phone.setAttribute("y", "8");
-  phone.setAttribute("width", "14");
-  phone.setAttribute("height", "9");
-  phone.setAttribute("rx", "2");
-  const arc = document.createElementNS(svgNS, "path");
-  arc.setAttribute("d", "M20 11a7 7 0 0 0-7-7");
-  const arrow = document.createElementNS(svgNS, "path");
-  arrow.setAttribute("d", "M17.5 8.5L20 11l2-2.5");
-  svg.append(phone, arc, arrow);
+  for (const d of [
+    "M8 3H5a2 2 0 0 0-2 2v3",
+    "M16 3h3a2 2 0 0 1 2 2v3",
+    "M8 21H5a2 2 0 0 1-2-2v-3",
+    "M16 21h3a2 2 0 0 0 2-2v-3",
+  ]) {
+    const corner = document.createElementNS(svgNS, "path");
+    corner.setAttribute("d", d);
+    svg.appendChild(corner);
+  }
   return svg;
 }
 
@@ -204,6 +277,7 @@ class RooftopsGame {
   private optionsOpen = false;
   private achievementsOpen = false;
   private rotatePromptOpen = false;
+  private fullscreenRejected = false;
   private viewingScorecard: Score | null = null;
 
   private preferences: Preferences;
@@ -226,7 +300,6 @@ class RooftopsGame {
 
   private viewportW = 900;
   private viewportH = 560;
-  private dpr = 1;
   private safeTop = 0;
   private safeRight = 0;
   private safeBottom = 0;
@@ -258,6 +331,8 @@ class RooftopsGame {
   private resultsMessageEl!: HTMLDivElement;
 
   private rotateDialog!: HTMLDialogElement;
+  private rotatePhoneIcon!: SVGSVGElement;
+  private rotateFullscreenIcon!: SVGSVGElement;
   private rotateBodyEl!: HTMLParagraphElement;
   private rotateEnterBtn!: HTMLButtonElement;
 
@@ -386,8 +461,8 @@ class RooftopsGame {
     this.optionsBtn = document.createElement("button");
     this.optionsBtn.type = "button";
     setStyleX(this.optionsBtn, stylex.attrs(styles.optionsBtn));
-    this.optionsBtn.setAttribute("aria-label", "Options");
-    this.optionsBtn.title = "Options";
+    this.optionsBtn.setAttribute("aria-label", "Settings");
+    this.optionsBtn.title = "Settings";
     this.optionsBtn.appendChild(createGearIcon());
     this.optionsBtn.addEventListener("click", () => {
       this.audio.unlock();
@@ -540,7 +615,7 @@ class RooftopsGame {
     this.achievementsDialog.appendChild(achCard);
     this.root.appendChild(this.achievementsDialog);
 
-    // Full-screen opaque landscape gate whenever a mobile/touch device is in portrait.
+    // Full-screen opaque gate on mobile when in portrait or outside full screen.
     this.rotateDialog = document.createElement("dialog");
     setStyleX(this.rotateDialog, stylex.attrs(styles.rotateDialog), "rooftops-dialog");
     this.rotateDialog.setAttribute("closedby", "none");
@@ -557,18 +632,21 @@ class RooftopsGame {
     rotateBackLabel.textContent = "Gatto";
     rotateBackLink.append(createBackArrowIcon(), rotateBackLabel);
 
-    const rotateIcon = createRotatePhoneIcon(52);
-    rotateIcon.style.color = "#ffdba0";
+    this.rotatePhoneIcon = createRotatePhoneIcon(68);
+    this.rotatePhoneIcon.style.color = "#ffdba0";
+
+    this.rotateFullscreenIcon = createFullscreenIcon(48);
+    this.rotateFullscreenIcon.style.color = "#ffdba0";
+    this.rotateFullscreenIcon.style.display = "none";
 
     const rotateTitle = document.createElement("h2");
     rotateTitle.id = "rooftops-rotate-title";
     setStyleX(rotateTitle, stylex.attrs(styles.rotateTitle));
     rotateTitle.textContent = "Rooftops";
 
-    const canLock = canProgrammaticallyLockLandscape();
     this.rotateBodyEl = document.createElement("p");
     setStyleX(this.rotateBodyEl, stylex.attrs(styles.rotateBody));
-    this.rotateBodyEl.textContent = "Turn your device sideways to play.";
+    this.rotateBodyEl.textContent = "Turn sideways to play.";
 
     const rotateActions = document.createElement("div");
     setStyleX(rotateActions, stylex.attrs(styles.rotateActions));
@@ -576,20 +654,31 @@ class RooftopsGame {
     this.rotateEnterBtn = document.createElement("button");
     this.rotateEnterBtn.type = "button";
     setStyleX(this.rotateEnterBtn, stylex.attrs(styles.btn, styles.btnPrimary, styles.rotateBtn));
-    this.rotateEnterBtn.textContent = "Rotate screen";
-    this.rotateEnterBtn.hidden = !canLock;
+    this.rotateEnterBtn.textContent = "Enter full screen";
     this.rotateEnterBtn.addEventListener("click", () => {
       this.audio.unlock();
-      void tryLockLandscape().then((locked) => {
-        if (!locked && this.needsLandscapeGate()) {
+      void enterFullscreenAndLandscape().then(({ fullscreen, locked }) => {
+        if (!fullscreen && canRequestFullscreen()) {
+          this.fullscreenRejected = true;
+        }
+        if (!fullscreen && !locked && this.needsLandscapeGate()) {
           this.rotateEnterBtn.hidden = true;
+          this.rotateBodyEl.hidden = false;
+          this.rotateBodyEl.textContent = "Turn sideways to play.";
         }
         this.syncViewport();
       });
     });
 
     rotateActions.appendChild(this.rotateEnterBtn);
-    rotateStage.append(rotateBackLink, rotateIcon, rotateTitle, this.rotateBodyEl, rotateActions);
+    rotateStage.append(
+      rotateBackLink,
+      this.rotatePhoneIcon,
+      this.rotateFullscreenIcon,
+      rotateTitle,
+      this.rotateBodyEl,
+      rotateActions,
+    );
     this.rotateDialog.appendChild(rotateStage);
     this.root.appendChild(this.rotateDialog);
   }
@@ -761,13 +850,13 @@ class RooftopsGame {
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      const rect = entry.contentRect;
-      this.viewportW = Math.max(1, rect.width);
-      this.viewportH = Math.max(1, rect.height);
+      // Always read CSS viewport dimensions from clientWidth/clientHeight so
+      // device-pixel-content-box entries can never substitute physical pixels.
+      this.viewportW = Math.max(1, this.root.clientWidth || entry.contentRect.width);
+      this.viewportH = Math.max(1, this.root.clientHeight || entry.contentRect.height);
       const dpc = entry.devicePixelContentBoxSize?.[0];
       const pixelW = dpc ? dpc.inlineSize : Math.round(this.viewportW * window.devicePixelRatio);
       const pixelH = dpc ? dpc.blockSize : Math.round(this.viewportH * window.devicePixelRatio);
-      this.dpr = pixelW / this.viewportW;
       this.canvas.width = Math.max(1, pixelW);
       this.canvas.height = Math.max(1, pixelH);
       this.syncLayout();
@@ -874,6 +963,7 @@ class RooftopsGame {
     };
     window.addEventListener("orientationchange", handleOrientationChange);
     screen.orientation?.addEventListener?.("change", handleOrientationChange);
+    document.addEventListener("fullscreenchange", handleOrientationChange);
 
     const handleDeactivate = () => {
       this.windowFocused = false;
@@ -925,13 +1015,39 @@ class RooftopsGame {
     this.safeLeft = px("--sal");
   }
 
+  private needsFullscreenOnMobile(): boolean {
+    return (
+      this.touchMode &&
+      !this.fullscreenRejected &&
+      canRequestFullscreen() &&
+      document.fullscreenElement === null
+    );
+  }
+
   private needsLandscapeGate(): boolean {
-    return this.touchMode && this.viewportH > this.viewportW;
+    return this.touchMode && (this.viewportH > this.viewportW || this.needsFullscreenOnMobile());
   }
 
   private syncLandscapeGate(): void {
     const shouldGate = this.needsLandscapeGate();
     if (shouldGate) {
+      const portrait = this.viewportH > this.viewportW;
+      const canFs = !this.fullscreenRejected && canRequestFullscreen();
+      const canLock = canProgrammaticallyLockLandscape();
+
+      this.rotatePhoneIcon.style.display = portrait ? "block" : "none";
+      this.rotateFullscreenIcon.style.display = portrait ? "none" : "block";
+
+      if (canFs || (portrait && canLock)) {
+        this.rotateBodyEl.hidden = true;
+        this.rotateEnterBtn.textContent = canFs ? "Enter full screen" : "Rotate screen";
+        this.rotateEnterBtn.hidden = false;
+      } else {
+        this.rotateBodyEl.textContent = "Turn sideways to play.";
+        this.rotateBodyEl.hidden = false;
+        this.rotateEnterBtn.hidden = true;
+      }
+
       this.clearTouchPointers();
       this.run.input = { left: false, right: false, jump: false };
       this.run.buffer = 0;
@@ -958,17 +1074,21 @@ class RooftopsGame {
   }
 
   private posterMetrics(): { scale: number; x: number; y: number; width: number; height: number } {
-    const padX = this.viewportW < 560 ? 24 : 48;
-    const padY = this.viewportH < 480 ? 78 : 100;
-    const scale = Math.max(
-      0.1,
-      Math.min((this.viewportW - padX) / 900, (this.viewportH - padY) / 540),
-    );
+    const padX = this.viewportW < 560 ? 20 : 48;
+    const padY = this.viewportH < 480 ? 80 : 100;
+    const usableW = Math.max(160, this.viewportW - this.safeLeft - this.safeRight - padX);
+    const usableH = Math.max(120, this.viewportH - this.safeTop - this.safeBottom - padY);
+    const scale = Math.max(0.1, Math.min(usableW / 900, usableH / 540));
     const width = 900 * scale;
     const height = 540 * scale;
-    const totalH = height + 12 + 44 + 20;
-    const x = (this.viewportW - width) * 0.5;
-    const y = Math.max(14, (this.viewportH - totalH) * 0.5);
+    const controlsBlockH = 12 + 42 + 18;
+    const totalH = height + controlsBlockH;
+    const x = this.safeLeft + (this.viewportW - this.safeLeft - this.safeRight - width) * 0.5;
+    const freeTop = this.safeTop + 10;
+    const maxY = Math.max(freeTop, this.viewportH - this.safeBottom - totalH - 6);
+    const centeredY =
+      this.safeTop + (this.viewportH - this.safeTop - this.safeBottom - totalH) * 0.5;
+    const y = clamp(centeredY, freeTop, maxY);
     return { scale, x, y, width, height };
   }
 
@@ -976,9 +1096,9 @@ class RooftopsGame {
     const rect = this.root.getBoundingClientRect();
     this.viewportW = Math.max(1, rect.width || window.innerWidth);
     this.viewportH = Math.max(1, rect.height || window.innerHeight);
-    this.dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.max(1, Math.round(this.viewportW * this.dpr));
-    this.canvas.height = Math.max(1, Math.round(this.viewportH * this.dpr));
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = Math.max(1, Math.round(this.viewportW * dpr));
+    this.canvas.height = Math.max(1, Math.round(this.viewportH * dpr));
     this.syncLayout();
   }
 
@@ -989,10 +1109,16 @@ class RooftopsGame {
     this.menuActionsWrap.style.top = `${layout.actionsTop}px`;
     this.menuActionsWrap.style.width = `${layout.frameW}px`;
     this.menuActionsWrap.style.setProperty("--menu-scale", String(layout.scale));
+    this.menuActionsWrap.style.setProperty(
+      "--menu-actions-top",
+      `${Math.round(layout.actionsTop)}px`,
+    );
 
     const poster = this.posterMetrics();
+    const usableControlW = Math.max(240, this.viewportW - this.safeLeft - this.safeRight - 28);
+    const controlW = Math.min(usableControlW, Math.max(Math.round(860 * poster.scale), 320));
     this.resultsControlsEl.style.top = `${Math.round(poster.y + poster.height + 12)}px`;
-    this.resultsControlsEl.style.width = `${Math.round(860 * poster.scale)}px`;
+    this.resultsControlsEl.style.width = `${controlW}px`;
 
     this.syncLandscapeGate();
     this.syncScreenChrome(false);
@@ -1747,7 +1873,9 @@ class RooftopsGame {
   private renderScene(courseViewport: CourseViewport, nowMs: number): void {
     const { scale, viewW, viewH, verticalOffset } = courseViewport;
     const ctx = this.ctx;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const scaleX = this.canvas.width / this.viewportW;
+    const scaleY = this.canvas.height / this.viewportH;
+    ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
 
     if (this.rotatePromptOpen) {
       ctx.fillStyle = "#101322";
@@ -1827,6 +1955,7 @@ class RooftopsGame {
       reducedMotion: this.reducedMotion(),
       ghost,
       showGhost: ghost !== null && gap === null,
+      touchMode: this.touchMode,
     });
 
     let nameFirst = !this.started || this.run.home || this.optionsOpen || !this.windowFocused;

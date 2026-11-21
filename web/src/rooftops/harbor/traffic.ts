@@ -344,7 +344,7 @@ export function drawTrafficLane(
   scale: number,
   westbound: boolean,
 ): void {
-  const PAD = 105;
+  const PAD = 280;
   const length = view.width + PAD * 2;
   const speed = westbound ? -31 : 38;
   const direction = Math.sign(speed);
