@@ -117,6 +117,33 @@ describe("Rooftops simulation", () => {
     expect(hasAchievement(run.stunts.unlocked, "BorrowedLift")).toBe(true);
   });
 
+  test("grants 1.2s of invincibility during respawn flash so enemies cannot immediately kill the cat", () => {
+    const run = Run.forLevel(0);
+    run.enemies = [{ roof: 0, kind: "rat", defeated: false, phase: 0, speed: 0 }];
+    run.respawn();
+    expect(run.returns).toBe(1);
+    expect(run.invulnerable).toBeCloseTo(1.2, 4);
+
+    // Overlap the rat directly throughout the entire flash window: cannot die while flashing.
+    for (let i = 0; i < 140; i++) {
+      const [ex, ey] = enemyPosition(run.enemies[0]!, run.roofs, run.time + 1 / 120);
+      run.x = ex;
+      run.y = ey + 11;
+      run.step();
+    }
+    expect(run.returns).toBe(1);
+    expect(run.invulnerable).toBeGreaterThan(0);
+
+    // Once invincibility expires (after 1.2s = 144 steps), enemy contact respawns again.
+    for (let i = 0; i < 10; i++) {
+      const [ex, ey] = enemyPosition(run.enemies[0]!, run.roofs, run.time + 1 / 120);
+      run.x = ex;
+      run.y = ey + 11;
+      run.step();
+    }
+    expect(run.returns).toBe(2);
+  });
+
   test("deduplicates the shared doorway coin across level handoffs and evaluates slide camera", () => {
     const run = Run.forLevel(0);
     const lastCoin = run.coins[run.coins.length - 1]!;

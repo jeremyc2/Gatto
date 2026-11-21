@@ -112,7 +112,17 @@ impl Rooftops {
                 .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                     cx.stop_propagation()
                 })
-                .child(panel.focus_trap("rooftops-achievements-trap", &self.achievements_focus)),
+                .child(
+                    panel
+                        .on_mouse_down_out(cx.listener(
+                            |this, event: &gpui_kit::MouseDownEvent, window, cx| {
+                                if event.button == gpui_kit::MouseButton::Left {
+                                    this.close_achievements(window, cx);
+                                }
+                            },
+                        ))
+                        .focus_trap("rooftops-achievements-trap", &self.achievements_focus),
+                ),
         )
     }
 }

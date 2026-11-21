@@ -252,7 +252,6 @@ class RooftopsGame {
   private backLink!: HTMLAnchorElement;
   private menuActionsWrap!: HTMLDivElement;
   private menuScorecardBtn!: HTMLButtonElement;
-  private landscapeHintBtn!: HTMLButtonElement;
   private optionsBtn!: HTMLButtonElement;
 
   private resultsControlsEl!: HTMLDivElement;
@@ -379,21 +378,8 @@ class RooftopsGame {
       if (this.bestScorecard) this.showScorecard(this.bestScorecard);
     });
 
-    this.landscapeHintBtn = document.createElement("button");
-    this.landscapeHintBtn.type = "button";
-    setStyleX(this.landscapeHintBtn, stylex.attrs(styles.landscapeHintBtn));
-    const hintText = document.createElement("span");
-    hintText.textContent = canProgrammaticallyLockLandscape()
-      ? "Play in landscape"
-      : "Best in landscape";
-    this.landscapeHintBtn.append(createRotatePhoneIcon(16), hintText);
-    this.landscapeHintBtn.addEventListener("click", () => {
-      this.audio.unlock();
-      void tryLockLandscape();
-    });
-
     menuActions.append(playBtn, settingsBtn, achievementsBtn, this.menuScorecardBtn);
-    this.menuActionsWrap.append(menuActions, this.landscapeHintBtn);
+    this.menuActionsWrap.appendChild(menuActions);
     this.root.appendChild(this.menuActionsWrap);
 
     this.optionsBtn = document.createElement("button");
@@ -439,6 +425,7 @@ class RooftopsGame {
 
     this.optionsDialog = document.createElement("dialog");
     setStyleX(this.optionsDialog, stylex.attrs(styles.dialog), "rooftops-dialog");
+    this.optionsDialog.setAttribute("closedby", "any");
     this.optionsDialog.setAttribute("aria-labelledby", "rooftops-options-title");
 
     const optionsCard = document.createElement("div");
@@ -517,6 +504,7 @@ class RooftopsGame {
 
     this.achievementsDialog = document.createElement("dialog");
     setStyleX(this.achievementsDialog, stylex.attrs(styles.dialog), "rooftops-dialog");
+    this.achievementsDialog.setAttribute("closedby", "any");
     this.achievementsDialog.dataset.backdrop = "achievements";
     this.achievementsDialog.setAttribute("aria-labelledby", "rooftops-achievements-title");
 
@@ -554,6 +542,7 @@ class RooftopsGame {
     // Landscape orientation prompt for portrait phones
     this.rotateDialog = document.createElement("dialog");
     setStyleX(this.rotateDialog, stylex.attrs(styles.dialog), "rooftops-dialog");
+    this.rotateDialog.setAttribute("closedby", "any");
     this.rotateDialog.setAttribute("aria-labelledby", "rooftops-rotate-title");
 
     const rotateCard = document.createElement("div");
@@ -825,17 +814,48 @@ class RooftopsGame {
     window.addEventListener("keydown", (event) => this.handleKeyDown(event));
     window.addEventListener("keyup", (event) => this.handleKeyUp(event));
 
-    this.optionsDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      this.closeOptions();
+    const wireDialogDismiss = (dialog: HTMLDialogElement, onClose: () => void) => {
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        onClose();
+      });
+      dialog.addEventListener("close", () => {
+        onClose();
+      });
+      // Fallback for browsers without native <dialog closedby="any"> support (e.g. Safari).
+      if (!("closedBy" in HTMLDialogElement.prototype)) {
+        let pointerDownOnBackdrop = false;
+        const isOutside = (clientX: number, clientY: number) => {
+          const rect = dialog.getBoundingClientRect();
+          return (
+            clientY < rect.top ||
+            clientY > rect.top + rect.height ||
+            clientX < rect.left ||
+            clientX > rect.left + rect.width
+          );
+        };
+        dialog.addEventListener("pointerdown", (event) => {
+          pointerDownOnBackdrop =
+            event.target === dialog && isOutside(event.clientX, event.clientY);
+        });
+        dialog.addEventListener("click", (event) => {
+          if (!pointerDownOnBackdrop) return;
+          pointerDownOnBackdrop = false;
+          if (event.target !== dialog) return;
+          if (!isOutside(event.clientX, event.clientY)) return;
+          onClose();
+        });
+      }
+    };
+
+    wireDialogDismiss(this.optionsDialog, () => {
+      if (this.optionsOpen) this.closeOptions();
     });
-    this.achievementsDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      this.closeAchievements();
+    wireDialogDismiss(this.achievementsDialog, () => {
+      if (this.achievementsOpen) this.closeAchievements();
     });
-    this.rotateDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      this.closeRotatePrompt();
+    wireDialogDismiss(this.rotateDialog, () => {
+      if (this.rotatePromptOpen) this.closeRotatePrompt();
     });
 
     const handleDeactivate = () => {
@@ -1571,15 +1591,13 @@ class RooftopsGame {
     const showResults = !showMenu && !inFlight && this.displayedScore() !== null;
     const showOptionsBtn = !this.optionsOpen && !showMenu && !inFlight;
     const hasScorecard = this.bestScorecard !== null;
-    const showLandscapeHint = showMenu && this.isPortraitPhone();
-    const key = `${showMenu ? 1 : 0}:${inFlight ? 1 : 0}:${showResults ? 1 : 0}:${showOptionsBtn ? 1 : 0}:${hasScorecard ? 1 : 0}:${showLandscapeHint ? 1 : 0}`;
+    const key = `${showMenu ? 1 : 0}:${inFlight ? 1 : 0}:${showResults ? 1 : 0}:${showOptionsBtn ? 1 : 0}:${hasScorecard ? 1 : 0}`;
     if (!force && key === this.lastScreenKey) return;
     this.lastScreenKey = key;
 
     setVisible(this.backLink, showMenu);
     setVisible(this.menuActionsWrap, showMenu);
     setVisible(this.menuScorecardBtn, hasScorecard);
-    setVisible(this.landscapeHintBtn, showLandscapeHint);
     setVisible(this.optionsBtn, showOptionsBtn);
     setVisible(this.resultsControlsEl, showResults);
     if (showResults) this.syncResultsControls();

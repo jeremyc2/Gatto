@@ -3172,6 +3172,40 @@ mod tests {
             );
         });
         assert!(cx.debug_bounds("rooftops-achievements-grid").is_some());
+        // Clicking inside the Achievements modal keeps it open; clicking the backdrop closes it.
+        let grid = cx.debug_bounds("rooftops-achievements-grid").unwrap();
+        cx.simulate_mouse_down(grid.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(grid.center(), MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(game.read(cx).achievements_open);
+        });
+        let outside = gpui_kit::point(px(2.), px(2.));
+        cx.simulate_mouse_down(outside, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(outside, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let game = game.read(cx);
+            assert!(game.menu_open && !game.achievements_open);
+            assert!(game.focus.is_focused(window));
+            assert!(game.audio.test_output().0);
+        });
+
+        // Reopen Achievements and verify Escape still closes it too.
+        cx.simulate_mouse_down(
+            achievements.center(),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.simulate_mouse_up(
+            achievements.center(),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(game.read(cx).achievements_open);
+        });
         cx.simulate_keystrokes("escape");
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
@@ -3179,6 +3213,22 @@ mod tests {
             assert!(game.menu_open && !game.achievements_open);
             assert!(game.focus.is_focused(window));
             assert!(game.audio.test_output().0);
+        });
+
+        // Opening Settings and clicking the backdrop closes Options and restores focus.
+        cx.simulate_mouse_down(settings.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(settings.center(), MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            assert!(game.read(cx).options_open);
+        });
+        cx.simulate_mouse_down(outside, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(outside, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let game = game.read(cx);
+            assert!(game.menu_open && !game.options_open);
+            assert!(game.focus.is_focused(window));
         });
     }
 
