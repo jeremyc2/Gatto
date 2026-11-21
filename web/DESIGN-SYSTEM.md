@@ -124,10 +124,9 @@ action captureVideo(element: HTMLVideoElement) { video := element }
 
 Keep DOM handles out of module-level state. Effects that depend on a handle list
 it in their inputs and wait until it is attached. Put setup and cleanup in those
-owned effects; a native ref callback only captures the element. `Button`,
-`SiteHeader` and `PortalCat` forward an optional typed callback ref and clear it
-with `undefined` when their component is removed. `PortalEnding` forwards its
-`portalRef` to the portal button. IDs remain for fragment links, CSS and ARIA
+owned effects; a native ref callback only captures the element. `Button` and
+`SiteHeader` forward an optional typed callback ref and clear it
+with `undefined` when their component is removed. IDs remain for fragment links, CSS and ARIA
 relationships; component behavior receives element references rather than finding
 them through IDs or selectors.
 
@@ -198,26 +197,18 @@ The portal content shifts by half that band to stay centered between the cuts.
 The watercolor composition has no shadow. All ordinary component
 styling remains in StyleX.
 
-`SiteNotifications.rx` owns a declarative notification with a persistent polite
-status region. It uses a manual popover for the top layer and
-fixed positioning as its fallback. Dedicated notification tokens keep its cream
-surface, dark green text, gold border and shadow distinct in either appearance.
-It sits in the top right and uses a 320 ms slide on the individual `translate`
-property. Reduced motion disables the entry animation. It has no external toast
-library or vendor stylesheet. The application owns its visible source; repeated activation cannot stack
-notices. The notification derives whether its timer should run from visibility,
-hover and focus. Its effects own timer cancellation and popover cleanup. Removing
-the component clears its timer and notice. Its region is captured by a native ref;
-the application passes the actual portal button ref for focus restoration.
-The document likewise captures its script nonce through the script element's ref
-during hydration. These paths do not look up IDs or search the document.
-The portal's native button
-uses a circular focus indicator and stays hidden from keyboard navigation while
-the scroll section is collapsed.
-Portal activation displays “Gattoverse mini game coming soon.” for six seconds;
-explicit dismissal restores focus to its trigger. For notification changes,
-check activation, repeated clicks, dismissal, focus and timeout behavior on
-desktop and phone widths.
+The document captures its script nonce through the script element's ref
+during hydration without searching the document.
+The portal links directly to `/rooftops/` using a circular focus indicator and
+stays hidden from keyboard navigation while the scroll section is collapsed.
+`/rooftops/` is built as a separate HTML page (`web/rooftops/index.html`) and
+split Vite bundle (`web/vite.rooftops.config.ts`) so the game's Canvas 2D
+renderer, procedural Web Audio worklet, and StyleX controls add zero bytes to
+the main site's HTML, JavaScript, or stylesheet. Non-interactive game world,
+harbor, HUD, and scorecard graphics render in Canvas 2D; interactive dialogs
+and buttons use StyleX (`web/src/rooftops/rooftops.stylex.ts`) with only
+top-layer dialog and native range/checkbox pseudo-elements in
+`web/src/rooftops/rooftops-controls.css`.
 
 Run `bun build:web` and `bun size:web` to measure the actual stylesheet links in
 `web/dist/client/index.html`. Bun reports raw bytes and gzip bytes. The build test
@@ -225,10 +216,9 @@ limits the combined CSS to **24 KiB raw and 7 KiB gzip**, leaving room above the
 current page while catching large regressions. Raise a budget only with a measured
 reason. Font and image payloads are separate from this CSS budget.
 
-Rechecked on 2026-11-20 with Solid 2.0.3, ReactiveScript 0.3.1, Vite 8.3.4 and
-StyleX 0.19.1: one production stylesheet, **23,798 raw bytes and 7,075 gzip
-bytes**, measured with `bun build:web && bun size:web`, within the existing
-24 KiB / 7 KiB limits.
+Rechecked on 2026-11-21 after replacing the portal notice with the split `/rooftops/`
+page: one production stylesheet on the main page, **22,843 raw bytes and 6,736 gzip
+bytes**, measured with `bun build:web && bun size:web`, well within the 24 KiB / 7 KiB limits.
 
 Measured through 2026-10-18 with Vite 8.3.4 and StyleX 0.19.1:
 

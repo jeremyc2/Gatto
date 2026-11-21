@@ -37,6 +37,8 @@ test("prerenders all scenes, concise copy and the two README download badges", a
   expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(8);
   expect(html).not.toContain("Still view");
   expect(html).not.toContain("How it works");
+  expect(html).not.toContain("Gattoverse mini game coming soon");
+  expect(html).toContain('href="/rooftops/"');
   const articles = html.match(/<article\b[^>]*id="chapter-[^"]+"[^>]*>/g) ?? [];
   expect(articles).toHaveLength(3);
   for (const article of articles) {
@@ -104,4 +106,25 @@ test("the ReactiveScript document loads its hashed client entry and preserves re
   expect(html).not.toContain('src="/src/entry-client.ts"');
   expect(html).not.toContain('["A little Mac app');
   expect(html).not.toContain("&amp;quot;");
+});
+
+test("ships Rooftops on its own HTML page with a split bundle excluded from the main page", async () => {
+  const mainHtml = await Bun.file(new URL("index.html", staticDirectory)).text();
+  expect(mainHtml).not.toMatch(/rooftops-[^"]+\.(?:js|css)/);
+  expect(mainHtml).not.toMatch(/worklet-[^"]+\.js/);
+
+  const rooftopsHtml = await Bun.file(new URL("rooftops/index.html", staticDirectory)).text();
+  expect(rooftopsHtml).toContain("<title>Rooftops — Gatto</title>");
+  const assets = [...rooftopsHtml.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map(
+    (match) => match[1]!,
+  );
+  expect(assets.some((p) => /\/assets\/rooftops-[^/]+\.js$/.test(p))).toBe(true);
+  expect(assets.some((p) => /\/assets\/rooftops-[^/]+\.css$/.test(p))).toBe(true);
+  for (const path of assets) {
+    expect(await Bun.file(new URL(path.replace(/^\//, ""), staticDirectory)).exists()).toBe(true);
+  }
+  const worklets = Array.from(
+    new Bun.Glob("assets/worklet-*.js").scanSync(staticDirectory.pathname),
+  );
+  expect(worklets).toHaveLength(1);
 });

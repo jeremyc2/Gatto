@@ -3,15 +3,11 @@ import { SiteHeader } from "./components/SiteHeader.rx"
 import { Features } from "./components/Features.rx"
 import { DownloadSection } from "./components/DownloadSection.rx"
 import { PortalEnding } from "./components/PortalCat.rx"
-import { SiteNotifications } from "./components/SiteNotifications.rx"
 
 export default component App() {
-  source notificationVisible := false
   source header: HTMLElement | undefined := undefined
-  source portalTrigger: HTMLButtonElement | undefined := undefined
 
   action captureHeader(element: HTMLElement | undefined) { header := element }
-  action capturePortal(element: HTMLButtonElement | undefined) { portalTrigger := element }
 
   <SiteHeader ref={captureHeader} />
   <main>
@@ -19,10 +15,5 @@ export default component App() {
     <Features />
     <DownloadSection />
   </main>
-  <PortalEnding portalRef={capturePortal} onActivate={() => { notificationVisible := true }} />
-  <SiteNotifications
-    open={notificationVisible}
-    trigger={portalTrigger}
-    onDismiss={() => { notificationVisible := false }}
-  />
+  <PortalEnding />
 }

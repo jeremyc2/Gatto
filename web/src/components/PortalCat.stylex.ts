@@ -22,6 +22,7 @@ export const styles = stylex.create({
   },
   scene: {
     position: "relative",
+    display: "block",
     width: "min(340px, calc(100% - 36px))",
     aspectRatio: "1",
     overflow: "clip",
@@ -29,6 +30,7 @@ export const styles = stylex.create({
     borderWidth: 0,
     borderRadius: "50%",
     backgroundColor: "transparent",
+    textDecoration: "none",
     cursor: "pointer",
     touchAction: "manipulation",
     outline: { default: null, ":focus-visible": `3px solid ${colors.focus}` },

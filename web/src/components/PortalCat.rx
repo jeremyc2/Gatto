@@ -6,41 +6,30 @@ import pure paper from "../../assets/images/portal-watercolor-paper.webp"
 import { SiteFooter } from "./SiteFooter.rx"
 
 
-export component PortalEnding(props: {
-  onActivate: () => void;
-  portalRef?: ((element: HTMLButtonElement | undefined) => void) | undefined;
-}) {
+export component PortalEnding() {
   <div
     data-portal-finale=""
     {...attrs(styles.setting)}
     style={{ "--portal-paper": `url(${paper})` }}
   >
-    <PortalCat ref={props.portalRef} onActivate={props.onActivate} />
+    <PortalCat />
     <SiteFooter />
     <div data-portal-runway="" aria-hidden="true" />
   </div>
 }
 
-export component PortalCat(props: {
-  onActivate: () => void;
-  ref?: ((element: HTMLButtonElement | undefined) => void) | undefined;
-}) {
-  action captureElement(element: HTMLButtonElement) { if (props.ref) props.ref(element) }
-  effect () { return () => { if (props.ref) props.ref(undefined) } }
-
+export component PortalCat() {
   <section
     {...attrs(styles.root)}
     data-portal-section=""
     aria-label="A visitor from the Gatto multiverse"
   >
     <div {...attrs(styles.content)} data-portal-content="">
-      <button
-        ref={captureElement}
+      <a
         {...attrs(styles.scene)}
         id="download-portal"
-        type="button"
-        onClick={props.onActivate}
-        aria-label="Explore the Gattoverse"
+        href="/rooftops/"
+        aria-label="Play Gatto Rooftops"
       >
         <span data-portal-void-entry="" {...attrs(styles.layers)}>
           <span {...attrs(styles.aperture)} />
@@ -105,7 +94,7 @@ export component PortalCat(props: {
             loading="lazy"
           />
         </span>
-      </button>
+      </a>
     </div>
   </section>
 }

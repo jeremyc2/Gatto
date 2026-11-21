@@ -67,8 +67,9 @@ the complete JavaScript dependency audit and any visible temporary exceptions.
 For responsive story changes, check all three chapters in the browser at
 1397 × 716 and 1920 × 720, plus phone and tablet sizes. Illustrations should fit
 inside their scenes above the chapter tracker without cropping. Bun tests check
-the build and story logic. Check hydration, chapter navigation, notification
-timing and focus, and rendering without JavaScript manually in the browser.
+the build, story logic and Rooftops simulation/audio/storage. Check hydration,
+chapter navigation, portal navigation to `/rooftops/`, and rendering without
+JavaScript manually in the browser.
 
 [Design system](DESIGN-SYSTEM.md) owns the styling conventions, component APIs,
 CSS budget and measurements.
