@@ -19,8 +19,15 @@ import {
   MENU,
   type AudioScene,
 } from "./audio/engine";
-import { CourseRenderer, drawCourseHud, type TouchFeedback } from "./course-renderer";
-import { Flight, harborFrame, HarborRenderer } from "./harbor/flight";
+import {
+  computeCourseViewport,
+  computeTouchControlsLayout,
+  CourseRenderer,
+  drawCourseHud,
+  type CourseViewport,
+  type TouchControlState,
+} from "./course-renderer";
+import { Flight, harborFrame, HarborRenderer, menuTitleLayout } from "./harbor/flight";
 import { aimFromPointer, defaultAim, followAim, type Aim } from "./harbor/projection";
 import { arrivalFlamesOn, ghostGap, LevelSlide, Run } from "./simulation";
 import {
@@ -60,11 +67,99 @@ function setVisible(element: HTMLElement, visible: boolean): void {
   element.hidden = !visible;
 }
 
+interface LockableOrientation {
+  lock?: (orientation: "landscape" | "portrait") => Promise<void>;
+  unlock?: () => void;
+}
+
+function canProgrammaticallyLockLandscape(): boolean {
+  const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as
+    LockableOrientation | undefined;
+  return typeof orientation?.lock === "function";
+}
+
+async function tryLockLandscape(): Promise<boolean> {
+  const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as
+    LockableOrientation | undefined;
+  if (typeof orientation?.lock !== "function") return false;
+  try {
+    await orientation.lock("landscape");
+    return true;
+  } catch {
+    // Android Chromium/Firefox require fullscreen before locking orientation.
+    if (
+      document.fullscreenElement === null &&
+      typeof document.documentElement.requestFullscreen === "function"
+    ) {
+      try {
+        await document.documentElement.requestFullscreen();
+        await orientation.lock("landscape");
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+}
+
+function createBackArrowIcon(): SVGSVGElement {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", "15");
+  svg.setAttribute("height", "15");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.display = "block";
+  svg.style.flexShrink = "0";
+
+  const stem = document.createElementNS(svgNS, "path");
+  stem.setAttribute("d", "M13 8H3.5");
+  const head = document.createElementNS(svgNS, "path");
+  head.setAttribute("d", "M7.5 4L3.5 8L7.5 12");
+  svg.append(stem, head);
+  return svg;
+}
+
+function createRotatePhoneIcon(size: number): SVGSVGElement {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.9");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.display = "block";
+  svg.style.flexShrink = "0";
+
+  const phone = document.createElementNS(svgNS, "rect");
+  phone.setAttribute("x", "3");
+  phone.setAttribute("y", "8");
+  phone.setAttribute("width", "14");
+  phone.setAttribute("height", "9");
+  phone.setAttribute("rx", "2");
+  const arc = document.createElementNS(svgNS, "path");
+  arc.setAttribute("d", "M20 11a7 7 0 0 0-7-7");
+  const arrow = document.createElementNS(svgNS, "path");
+  arrow.setAttribute("d", "M17.5 8.5L20 11l2-2.5");
+  svg.append(phone, arc, arrow);
+  return svg;
+}
+
 function createGearIcon(): SVGSVGElement {
   const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("width", "20");
-  svg.setAttribute("height", "20");
+  svg.setAttribute("width", "21");
+  svg.setAttribute("height", "21");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("fill", "none");
   svg.setAttribute("stroke", "currentColor");
@@ -108,6 +203,8 @@ class RooftopsGame {
   private hudChangedMs: number | null = null;
   private optionsOpen = false;
   private achievementsOpen = false;
+  private rotatePromptOpen = false;
+  private allowPortraitPlay = false;
   private viewingScorecard: Score | null = null;
 
   private preferences: Preferences;
@@ -131,6 +228,10 @@ class RooftopsGame {
   private viewportW = 900;
   private viewportH = 560;
   private dpr = 1;
+  private safeTop = 0;
+  private safeRight = 0;
+  private safeBottom = 0;
+  private safeLeft = 0;
   private lastFrameMs: number | null = null;
   private remainder = 0;
   private camera = 0;
@@ -138,14 +239,12 @@ class RooftopsGame {
   private systemReducedMotion = false;
   private touchMode = false;
   private movePointerId: number | null = null;
-  private moveAnchorX = 0;
-  private moveAnchorY = 0;
-  private moveX = 0;
-  private moveY = 0;
+  private joyOriginX = 0;
+  private joyOriginY = 0;
+  private joyKnobX = 0;
+  private joyKnobY = 0;
   private moveDirection: -1 | 0 | 1 = 0;
   private jumpPointerId: number | null = null;
-  private jumpX = 0;
-  private jumpY = 0;
   private rafId: number | null = null;
   private needsRender = true;
   private lastScreenKey = "";
@@ -153,11 +252,15 @@ class RooftopsGame {
   private backLink!: HTMLAnchorElement;
   private menuActionsWrap!: HTMLDivElement;
   private menuScorecardBtn!: HTMLButtonElement;
+  private landscapeHintBtn!: HTMLButtonElement;
   private optionsBtn!: HTMLButtonElement;
 
   private resultsControlsEl!: HTMLDivElement;
   private downloadScoreBtn!: HTMLButtonElement;
   private resultsMessageEl!: HTMLDivElement;
+
+  private rotateDialog!: HTMLDialogElement;
+  private rotateEnterBtn!: HTMLButtonElement;
 
   private optionsDialog!: HTMLDialogElement;
   private musicSlider!: HTMLInputElement;
@@ -227,7 +330,9 @@ class RooftopsGame {
     this.backLink = document.createElement("a");
     setStyleX(this.backLink, stylex.attrs(styles.backLink));
     this.backLink.href = "/";
-    this.backLink.textContent = "← Gatto";
+    const backLabel = document.createElement("span");
+    backLabel.textContent = "Gatto";
+    this.backLink.append(createBackArrowIcon(), backLabel);
     this.root.appendChild(this.backLink);
 
     this.menuActionsWrap = document.createElement("div");
@@ -274,8 +379,21 @@ class RooftopsGame {
       if (this.bestScorecard) this.showScorecard(this.bestScorecard);
     });
 
+    this.landscapeHintBtn = document.createElement("button");
+    this.landscapeHintBtn.type = "button";
+    setStyleX(this.landscapeHintBtn, stylex.attrs(styles.landscapeHintBtn));
+    const hintText = document.createElement("span");
+    hintText.textContent = canProgrammaticallyLockLandscape()
+      ? "Play in landscape"
+      : "Best in landscape";
+    this.landscapeHintBtn.append(createRotatePhoneIcon(16), hintText);
+    this.landscapeHintBtn.addEventListener("click", () => {
+      this.audio.unlock();
+      void tryLockLandscape();
+    });
+
     menuActions.append(playBtn, settingsBtn, achievementsBtn, this.menuScorecardBtn);
-    this.menuActionsWrap.appendChild(menuActions);
+    this.menuActionsWrap.append(menuActions, this.landscapeHintBtn);
     this.root.appendChild(this.menuActionsWrap);
 
     this.optionsBtn = document.createElement("button");
@@ -432,6 +550,64 @@ class RooftopsGame {
     achCard.append(achHeader, this.achievementsGridEl);
     this.achievementsDialog.appendChild(achCard);
     this.root.appendChild(this.achievementsDialog);
+
+    // Landscape orientation prompt for portrait phones
+    this.rotateDialog = document.createElement("dialog");
+    setStyleX(this.rotateDialog, stylex.attrs(styles.dialog), "rooftops-dialog");
+    this.rotateDialog.setAttribute("aria-labelledby", "rooftops-rotate-title");
+
+    const rotateCard = document.createElement("div");
+    setStyleX(rotateCard, stylex.attrs(styles.rotateCard));
+
+    const rotateIcon = createRotatePhoneIcon(44);
+    rotateIcon.style.color = "#ffdba0";
+
+    const rotateTitle = document.createElement("h2");
+    rotateTitle.id = "rooftops-rotate-title";
+    setStyleX(rotateTitle, stylex.attrs(styles.rotateTitle));
+    rotateTitle.textContent = "Rotate to landscape";
+
+    const rotateBody = document.createElement("p");
+    setStyleX(rotateBody, stylex.attrs(styles.rotateBody));
+    rotateBody.textContent = "Turn your phone sideways for the best view across the rooftops.";
+
+    const rotateActions = document.createElement("div");
+    setStyleX(rotateActions, stylex.attrs(styles.rotateActions));
+
+    this.rotateEnterBtn = document.createElement("button");
+    this.rotateEnterBtn.type = "button";
+    setStyleX(this.rotateEnterBtn, stylex.attrs(styles.btn, styles.btnPrimary));
+    this.rotateEnterBtn.textContent = "Enter landscape";
+    this.rotateEnterBtn.hidden = !canProgrammaticallyLockLandscape();
+    this.rotateEnterBtn.addEventListener("click", () => {
+      this.audio.unlock();
+      void tryLockLandscape().then((locked) => {
+        if (locked) {
+          this.dismissRotatePromptAndStart();
+        }
+      });
+    });
+
+    const playPortraitBtn = document.createElement("button");
+    playPortraitBtn.type = "button";
+    setStyleX(
+      playPortraitBtn,
+      stylex.attrs(
+        styles.btn,
+        canProgrammaticallyLockLandscape() ? styles.btnMenu : styles.btnPrimary,
+      ),
+    );
+    playPortraitBtn.textContent = "Play in portrait";
+    playPortraitBtn.addEventListener("click", () => {
+      this.audio.unlock();
+      this.allowPortraitPlay = true;
+      this.dismissRotatePromptAndStart();
+    });
+
+    rotateActions.append(this.rotateEnterBtn, playPortraitBtn);
+    rotateCard.append(rotateIcon, rotateTitle, rotateBody, rotateActions);
+    this.rotateDialog.appendChild(rotateCard);
+    this.root.appendChild(this.rotateDialog);
   }
 
   private buildVolumeRow(
@@ -657,6 +833,10 @@ class RooftopsGame {
       event.preventDefault();
       this.closeAchievements();
     });
+    this.rotateDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.closeRotatePrompt();
+    });
 
     const handleDeactivate = () => {
       this.windowFocused = false;
@@ -686,19 +866,44 @@ class RooftopsGame {
     });
     window.addEventListener("pagehide", () => {
       this.audio.dispose();
+      const orientation = (typeof screen !== "undefined" ? screen.orientation : undefined) as
+        LockableOrientation | undefined;
+      try {
+        orientation?.unlock?.();
+      } catch {
+        // Ignore unlock failures.
+      }
     });
   }
 
+  private readSafeAreaInsets(): void {
+    const style = getComputedStyle(document.documentElement);
+    const px = (prop: string) => {
+      const value = Number.parseFloat(style.getPropertyValue(prop));
+      return Number.isFinite(value) ? value : 0;
+    };
+    this.safeTop = px("--sat");
+    this.safeRight = px("--sar");
+    this.safeBottom = px("--sab");
+    this.safeLeft = px("--sal");
+  }
+
+  private isPortraitPhone(): boolean {
+    return this.touchMode && this.viewportH > this.viewportW && this.viewportW < 760;
+  }
+
   private posterMetrics(): { scale: number; x: number; y: number; width: number; height: number } {
+    const padX = this.viewportW < 560 ? 24 : 48;
+    const padY = this.viewportH < 480 ? 78 : 100;
     const scale = Math.max(
       0.1,
-      Math.min((this.viewportW - 48) / 900, (this.viewportH - 100) / 540),
+      Math.min((this.viewportW - padX) / 900, (this.viewportH - padY) / 540),
     );
     const width = 900 * scale;
     const height = 540 * scale;
-    const totalH = height + 12 + 36 + 24;
+    const totalH = height + 12 + 44 + 20;
     const x = (this.viewportW - width) * 0.5;
-    const y = Math.max(16, (this.viewportH - totalH) * 0.5);
+    const y = Math.max(14, (this.viewportH - totalH) * 0.5);
     return { scale, x, y, width, height };
   }
 
@@ -713,16 +918,22 @@ class RooftopsGame {
   }
 
   private syncLayout(): void {
-    const frame = harborFrame(this.viewportW, this.viewportH);
-    const actionsTop = frame.y + frame.height * 0.115 + (132 + 14) * frame.scale;
-    this.menuActionsWrap.style.left = `${frame.x}px`;
-    this.menuActionsWrap.style.top = `${actionsTop}px`;
-    this.menuActionsWrap.style.width = `${frame.width}px`;
-    this.menuActionsWrap.style.setProperty("--menu-scale", String(frame.scale));
+    this.readSafeAreaInsets();
+    const layout = menuTitleLayout(this.viewportW, this.viewportH, this.touchMode);
+    this.menuActionsWrap.style.left = `${layout.frameX}px`;
+    this.menuActionsWrap.style.top = `${layout.actionsTop}px`;
+    this.menuActionsWrap.style.width = `${layout.frameW}px`;
+    this.menuActionsWrap.style.setProperty("--menu-scale", String(layout.scale));
 
     const poster = this.posterMetrics();
     this.resultsControlsEl.style.top = `${Math.round(poster.y + poster.height + 12)}px`;
     this.resultsControlsEl.style.width = `${Math.round(860 * poster.scale)}px`;
+
+    // If the player rotated their phone to landscape while the rotate prompt was up, start immediately.
+    if (this.rotatePromptOpen && !this.isPortraitPhone()) {
+      this.dismissRotatePromptAndStart();
+    }
+    this.syncScreenChrome(false);
   }
 
   private reducedMotion(): boolean {
@@ -943,7 +1154,30 @@ class RooftopsGame {
   }
 
   private playFromMenu(): void {
-    if (!this.menuOpen || this.optionsOpen || this.achievementsOpen) return;
+    if (!this.menuOpen || this.optionsOpen || this.achievementsOpen || this.rotatePromptOpen)
+      return;
+    if (this.isPortraitPhone() && !this.allowPortraitPlay) {
+      if (canProgrammaticallyLockLandscape()) {
+        void tryLockLandscape().then((locked) => {
+          if (locked || !this.isPortraitPhone()) {
+            this.startRunFromMenu();
+          } else {
+            this.openRotatePrompt();
+          }
+        });
+      } else {
+        this.openRotatePrompt();
+      }
+      return;
+    }
+    if (this.touchMode && this.viewportH > this.viewportW) {
+      void tryLockLandscape();
+    }
+    this.startRunFromMenu();
+  }
+
+  private startRunFromMenu(): void {
+    if (!this.menuOpen) return;
     this.resetRun();
     if (this.reducedMotion()) {
       this.finishArrival();
@@ -953,6 +1187,33 @@ class RooftopsGame {
     this.root.focus({ preventScroll: true });
     this.syncScreenChrome(true);
     this.requestFrame();
+  }
+
+  private openRotatePrompt(): void {
+    this.rotatePromptOpen = true;
+    this.lastFrameMs = null;
+    this.rotateEnterBtn.hidden = !canProgrammaticallyLockLandscape();
+    if (!this.rotateDialog.open) {
+      this.rotateDialog.showModal();
+    }
+    this.requestFrame();
+  }
+
+  private closeRotatePrompt(): void {
+    this.rotatePromptOpen = false;
+    this.lastFrameMs = null;
+    if (this.rotateDialog.open) {
+      this.rotateDialog.close();
+    }
+    this.root.focus({ preventScroll: true });
+    this.requestFrame();
+  }
+
+  private dismissRotatePromptAndStart(): void {
+    this.closeRotatePrompt();
+    if (this.menuOpen) {
+      this.startRunFromMenu();
+    }
   }
 
   private returnToMenu(): void {
@@ -1051,7 +1312,10 @@ class RooftopsGame {
     this.windowFocused = !document.hidden;
 
     if (event.key === "Escape") {
-      if (this.achievementsOpen) {
+      if (this.rotatePromptOpen) {
+        event.preventDefault();
+        this.closeRotatePrompt();
+      } else if (this.achievementsOpen) {
         event.preventDefault();
         this.closeAchievements();
       } else if (this.optionsOpen) {
@@ -1061,7 +1325,7 @@ class RooftopsGame {
       return;
     }
 
-    if (this.optionsOpen || this.achievementsOpen) return;
+    if (this.optionsOpen || this.achievementsOpen || this.rotatePromptOpen) return;
 
     const isSpace = event.code === "Space" || event.key === " ";
     const isLeft = event.key === "ArrowLeft";
@@ -1112,15 +1376,53 @@ class RooftopsGame {
     }
   }
 
+  private currentTouchLayout() {
+    return computeTouchControlsLayout(
+      this.viewportW,
+      this.viewportH,
+      this.safeBottom,
+      this.safeLeft,
+      this.safeRight,
+    );
+  }
+
   private clearTouchPointers(): void {
     this.movePointerId = null;
     this.moveDirection = 0;
     this.jumpPointerId = null;
   }
 
+  private updateJoystickFromPoint(x: number, y: number): void {
+    const layout = this.currentTouchLayout();
+    const maxOffset = layout.joyRadius - layout.knobRadius * 0.35;
+    const dx = x - this.joyOriginX;
+    const dy = y - this.joyOriginY;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxOffset && dist > 0) {
+      const ratio = maxOffset / dist;
+      this.joyKnobX = this.joyOriginX + dx * ratio;
+      this.joyKnobY = this.joyOriginY + dy * ratio;
+    } else {
+      this.joyKnobX = x;
+      this.joyKnobY = y;
+    }
+
+    // Joystick moves freely in 360°, while horizontal deflection drives left/right walking.
+    const deadzone = 12;
+    const dir: -1 | 0 | 1 = dx > deadzone ? 1 : dx < -deadzone ? -1 : 0;
+    this.moveDirection = dir;
+    if (dir !== 0) {
+      this.beginPlay(performance.now());
+    }
+    this.run.input.left = dir === -1;
+    this.run.input.right = dir === 1;
+  }
+
   private handleTouchDown(event: PointerEvent): void {
     if (event.pointerType !== "touch") return;
+    const wasTouch = this.touchMode;
     this.touchMode = true;
+    if (!wasTouch) this.syncLayout();
     this.windowFocused = !document.hidden;
     this.audio.unlock();
 
@@ -1128,38 +1430,48 @@ class RooftopsGame {
       this.menuOpen ||
       this.optionsOpen ||
       this.achievementsOpen ||
+      this.rotatePromptOpen ||
       this.displayedScore() !== null
     ) {
       return;
     }
 
     event.preventDefault();
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
     if (this.run.home) {
       this.continueFromHome();
       return;
     }
 
-    const rect = this.canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const layout = this.currentTouchLayout();
+    const distToJump = Math.hypot(x - layout.jumpX, y - layout.jumpY);
+    const inJumpSide = distToJump <= layout.jumpRadius * 1.85 || x >= this.viewportW * 0.5;
 
-    if (x < this.viewportW * 0.5 && this.movePointerId === null) {
+    if (!inJumpSide && this.movePointerId === null) {
       this.movePointerId = event.pointerId;
-      this.moveAnchorX = x;
-      this.moveAnchorY = y;
-      this.moveX = x;
-      this.moveY = y;
-      this.moveDirection = 0;
+      // Keep the stick anchored at its visible resting spot if tapped inside/near it,
+      // or gently recenter if the thumb lands further out on the left half.
+      const distToBase = Math.hypot(x - layout.joyBaseX, y - layout.joyBaseY);
+      if (distToBase <= layout.joyRadius * 1.25) {
+        this.joyOriginX = layout.joyBaseX;
+        this.joyOriginY = layout.joyBaseY;
+      } else {
+        this.joyOriginX = clamp(x, layout.joyRadius + 10, this.viewportW * 0.45);
+        this.joyOriginY = clamp(y, layout.joyRadius + 60, this.viewportH - layout.joyRadius - 10);
+      }
+      this.updateJoystickFromPoint(x, y);
       try {
         this.canvas.setPointerCapture(event.pointerId);
       } catch {
         // Synthetic pointer events in tests may not have an active pointer capture target.
       }
+      this.syncScreenChrome(false);
       this.requestFrame();
-    } else if (x >= this.viewportW * 0.5 && this.jumpPointerId === null) {
+    } else if (inJumpSide && this.jumpPointerId === null) {
       this.jumpPointerId = event.pointerId;
-      this.jumpX = x;
-      this.jumpY = y;
       this.beginPlay(performance.now());
       this.run.jumpDown();
       try {
@@ -1178,24 +1490,7 @@ class RooftopsGame {
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    this.moveX = x;
-    this.moveY = y;
-
-    // Dynamic anchor recentering lets direction reversals trigger after a short slide.
-    const maxTravel = 44;
-    const deadzone = 10;
-    const dx = x - this.moveAnchorX;
-    if (dx > maxTravel) this.moveAnchorX = x - maxTravel;
-    else if (dx < -maxTravel) this.moveAnchorX = x + maxTravel;
-
-    const offset = x - this.moveAnchorX;
-    const dir: -1 | 0 | 1 = offset > deadzone ? 1 : offset < -deadzone ? -1 : 0;
-    this.moveDirection = dir;
-    if (dir !== 0) {
-      this.beginPlay(performance.now());
-    }
-    this.run.input.left = dir === -1;
-    this.run.input.right = dir === 1;
+    this.updateJoystickFromPoint(x, y);
     this.syncScreenChrome(false);
     this.requestFrame();
   }
@@ -1276,13 +1571,15 @@ class RooftopsGame {
     const showResults = !showMenu && !inFlight && this.displayedScore() !== null;
     const showOptionsBtn = !this.optionsOpen && !showMenu && !inFlight;
     const hasScorecard = this.bestScorecard !== null;
-    const key = `${showMenu ? 1 : 0}:${inFlight ? 1 : 0}:${showResults ? 1 : 0}:${showOptionsBtn ? 1 : 0}:${hasScorecard ? 1 : 0}`;
+    const showLandscapeHint = showMenu && this.isPortraitPhone();
+    const key = `${showMenu ? 1 : 0}:${inFlight ? 1 : 0}:${showResults ? 1 : 0}:${showOptionsBtn ? 1 : 0}:${hasScorecard ? 1 : 0}:${showLandscapeHint ? 1 : 0}`;
     if (!force && key === this.lastScreenKey) return;
     this.lastScreenKey = key;
 
     setVisible(this.backLink, showMenu);
     setVisible(this.menuActionsWrap, showMenu);
     setVisible(this.menuScorecardBtn, hasScorecard);
+    setVisible(this.landscapeHintBtn, showLandscapeHint);
     setVisible(this.optionsBtn, showOptionsBtn);
     setVisible(this.resultsControlsEl, showResults);
     if (showResults) this.syncResultsControls();
@@ -1304,16 +1601,15 @@ class RooftopsGame {
   private tick(nowMs: number): void {
     this.rafId = null;
 
-    const active = this.windowFocused && !this.optionsOpen;
+    const active = this.windowFocused && !this.optionsOpen && !this.rotatePromptOpen;
     if (this.optionsOpen && this.musicPreview) {
       this.syncMusicPreview(this.windowFocused);
     } else {
       this.syncAudio(active);
     }
 
-    const scale = Math.max(0.1, Math.min(this.viewportW / 900, this.viewportH / 560));
-    const viewW = this.viewportW / scale;
-    const viewH = this.viewportH / scale;
+    const courseViewport = computeCourseViewport(this.viewportW, this.viewportH);
+    const { viewW, cameraLead } = courseViewport;
     let keepAnimating = false;
 
     if (this.menuOpen || this.viewingScorecard !== null) {
@@ -1364,7 +1660,7 @@ class RooftopsGame {
 
         const lastRoof = this.run.roofs[this.run.roofs.length - 1]!;
         const end = lastRoof.x + lastRoof.width;
-        const target = clamp(this.run.x - viewW * 0.34, 0, end - Math.min(viewW, end));
+        const target = clamp(this.run.x - viewW * cameraLead, 0, end - Math.min(viewW, end));
         if (this.run.returns !== returnsBefore || this.run.jumps === 0 || this.reducedMotion()) {
           this.camera = target;
         } else {
@@ -1387,7 +1683,7 @@ class RooftopsGame {
     }
 
     this.syncScreenChrome(false);
-    this.renderScene(viewW, viewH, scale, nowMs);
+    this.renderScene(courseViewport, nowMs);
     this.needsRender = false;
 
     if (keepAnimating || this.needsRender) {
@@ -1438,14 +1734,22 @@ class RooftopsGame {
     return Math.min(elapsed, 0.05);
   }
 
-  private renderScene(viewW: number, viewH: number, scale: number, nowMs: number): void {
+  private renderScene(courseViewport: CourseViewport, nowMs: number): void {
+    const { scale, viewW, viewH, verticalOffset } = courseViewport;
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     if (this.menuOpen) {
       const time = this.reducedMotion() ? 0 : this.menuTime;
       const aim = this.reducedMotion() ? defaultAim() : this.menuCamera;
-      this.harborRenderer.renderMenu(ctx, this.viewportW, this.viewportH, time, aim);
+      this.harborRenderer.renderMenu(
+        ctx,
+        this.viewportW,
+        this.viewportH,
+        time,
+        aim,
+        this.touchMode,
+      );
       return;
     }
 
@@ -1457,6 +1761,7 @@ class RooftopsGame {
         this.menuFlight,
         this.menuTime,
         this.menuCamera,
+        this.touchMode,
       );
       return;
     }
@@ -1500,6 +1805,7 @@ class RooftopsGame {
       camera: this.camera,
       w: viewW,
       h: viewH,
+      verticalOffset,
       scale,
       drift,
       reducedMotion: this.reducedMotion(),
@@ -1515,20 +1821,19 @@ class RooftopsGame {
       clockOpacity = Math.abs(2 * t - 1);
     }
 
-    const touchFeedback: TouchFeedback | null =
-      this.movePointerId !== null || this.jumpPointerId !== null
+    const touchLayout = this.touchMode ? this.currentTouchLayout() : null;
+    const touchControls: TouchControlState | null =
+      touchLayout !== null
         ? {
-            move:
-              this.movePointerId !== null
-                ? {
-                    anchorX: this.moveAnchorX,
-                    anchorY: this.moveAnchorY,
-                    x: this.moveX,
-                    y: this.moveY,
-                    direction: this.moveDirection,
-                  }
-                : null,
-            jump: this.jumpPointerId !== null ? { x: this.jumpX, y: this.jumpY } : null,
+            layout: touchLayout,
+            joyActive: this.movePointerId !== null,
+            joyOriginX: this.movePointerId !== null ? this.joyOriginX : touchLayout.joyBaseX,
+            joyOriginY: this.movePointerId !== null ? this.joyOriginY : touchLayout.joyBaseY,
+            knobX: this.movePointerId !== null ? this.joyKnobX : touchLayout.joyBaseX,
+            knobY: this.movePointerId !== null ? this.joyKnobY : touchLayout.joyBaseY,
+            direction: this.moveDirection,
+            jumpPressed: this.jumpPointerId !== null,
+            doorwayReady: this.run.home,
           }
         : null;
 
@@ -1543,7 +1848,11 @@ class RooftopsGame {
       showArrivalCaption: this.run.level === 0 && !this.started,
       showDoorwayPrompt: this.run.home,
       touchMode: this.touchMode,
-      touchFeedback,
+      touchControls,
+      safeTop: this.safeTop,
+      safeLeft: this.safeLeft,
+      safeRight: this.safeRight,
+      safeBottom: this.safeBottom,
     });
 
     if (this.menuFlight !== null) {

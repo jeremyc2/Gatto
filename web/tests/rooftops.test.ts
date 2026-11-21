@@ -10,6 +10,7 @@ import {
   MENU,
   Synth,
 } from "../src/rooftops/audio/synth";
+import { computeCourseViewport, computeTouchControlsLayout } from "../src/rooftops/course-renderer";
 import { Flight, moonProjection } from "../src/rooftops/harbor/flight";
 import {
   Camera,
@@ -322,5 +323,26 @@ describe("Rooftops harbor 3D projection and fly-through", () => {
     const endCam = flight.camera(view);
     const proj = moonProjection(view, endCam)!;
     expect(proj[1] * 64).toBeCloseTo(COURSE_MOON_DIAMETER * 1.3, 2);
+  });
+
+  test("course viewport zooms in for mobile portrait/landscape while preserving desktop framing", () => {
+    const desktop = computeCourseViewport(1280, 720);
+    expect(desktop.verticalOffset).toBe(0);
+    expect(desktop.viewH).toBeCloseTo(560, 2);
+
+    const landscape = computeCourseViewport(844, 390);
+    expect(landscape.scale).toBeGreaterThan(390 / 560);
+    expect(landscape.viewW).toBeGreaterThan(800);
+
+    const portrait = computeCourseViewport(390, 844);
+    expect(portrait.scale).toBeGreaterThan(0.75);
+    expect(portrait.verticalOffset).toBeGreaterThan(100);
+
+    const touch = computeTouchControlsLayout(844, 390, 20, 44, 44);
+    expect(touch.joyRadius).toBe(touch.jumpRadius);
+    expect(touch.joyBaseY).toBe(touch.jumpY);
+    expect(touch.joyBaseX - touch.joyRadius).toBeGreaterThanOrEqual(44);
+    expect(touch.jumpX + touch.jumpRadius).toBeLessThanOrEqual(844 - 44);
+    expect(touch.joyBaseY + touch.joyRadius).toBeLessThanOrEqual(390 - 20);
   });
 });

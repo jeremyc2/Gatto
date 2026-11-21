@@ -163,6 +163,14 @@ dialog.rooftops-dialog[data-backdrop="achievements"]::backdrop {
   outline-offset: 2px;
 }
 
+/* Safe-area probe custom properties read once per resize for Canvas HUD padding. */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
 [hidden] {
   display: none !important;
 }

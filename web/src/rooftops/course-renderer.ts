@@ -197,16 +197,15 @@ function getCourseMoonTile(level: number): CachedTile {
   return tile;
 }
 
-function drawBackdrop(
+function drawBackdropSkylineAndMoon(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  time: number,
   scale: number,
   camera: number,
   level: number,
+  verticalOffset: number,
 ): void {
-  drawSky(ctx, w, h, time, scale, camera);
   const windowGroups = getSkylineWindowTiles();
 
   for (let layer = 0; layer < SKYLINE_ROWS.length; layer++) {
@@ -270,8 +269,11 @@ function drawBackdrop(
     }
   }
 
-  const moonY = 155 * scale < 96 ? Math.max(58, 74 / scale) : 58;
-  paintTile(ctx, getCourseMoonTile(level), w - 155, moonY, scale);
+  const moonX = w - 155;
+  const screenMoonY = (58 + verticalOffset) * scale;
+  const minScreenY = scale < 0.9 || w < 620 ? 74 : 58 * scale;
+  const moonY = screenMoonY < minScreenY ? minScreenY / scale - verticalOffset : 58;
+  paintTile(ctx, getCourseMoonTile(level), moonX, moonY, scale);
 }
 
 /** Build a single union Path2D (nonzero winding) for the cat body so opacity never creates seams. */
@@ -663,18 +665,91 @@ function drawControlPill(
   ctx.textAlign = "left";
 }
 
-export interface TouchFeedback {
-  move: {
-    anchorX: number;
-    anchorY: number;
-    x: number;
-    y: number;
-    direction: -1 | 0 | 1;
-  } | null;
-  jump: {
-    x: number;
-    y: number;
-  } | null;
+export interface CourseViewport {
+  scale: number;
+  viewW: number;
+  viewH: number;
+  verticalOffset: number;
+  cameraLead: number;
+}
+
+/**
+ * Compute course scale and vertical framing.
+ * Desktop keeps the exact native 900x560 layout; mobile portrait and short
+ * mobile landscape zoom in so the cat, jumps, and rooftops fill the screen
+ * cleanly without wasted vertical space.
+ */
+export function computeCourseViewport(viewportW: number, viewportH: number): CourseViewport {
+  const portrait = viewportH > viewportW;
+  if (portrait && viewportW < 760) {
+    const targetW = clamp(viewportW * 1.18, 430, 560);
+    const scale = Math.max(0.1, viewportW / targetW);
+    const viewW = viewportW / scale;
+    const viewH = viewportH / scale;
+    const verticalOffset = Math.max(0, (viewH - 560) * 0.42);
+    return { scale, viewW, viewH, verticalOffset, cameraLead: 0.27 };
+  }
+  if (!portrait && viewportH < 500) {
+    const scale = Math.max(0.1, Math.min(viewportW / 620, viewportH / 445));
+    const viewW = viewportW / scale;
+    const viewH = viewportH / scale;
+    const verticalOffset = clamp((viewH - 540) * 0.55, -62, 0);
+    return { scale, viewW, viewH, verticalOffset, cameraLead: 0.31 };
+  }
+  const scale = Math.max(0.1, Math.min(viewportW / 900, viewportH / 560));
+  return {
+    scale,
+    viewW: viewportW / scale,
+    viewH: viewportH / scale,
+    verticalOffset: 0,
+    cameraLead: 0.34,
+  };
+}
+
+export interface TouchControlsLayout {
+  joyBaseX: number;
+  joyBaseY: number;
+  joyRadius: number;
+  knobRadius: number;
+  jumpX: number;
+  jumpY: number;
+  jumpRadius: number;
+}
+
+export function computeTouchControlsLayout(
+  viewportW: number,
+  viewportH: number,
+  safeBottom = 0,
+  safeLeft = 0,
+  safeRight = 0,
+): TouchControlsLayout {
+  const shortSide = Math.min(viewportW, viewportH);
+  const radius = clamp(shortSide * 0.13, 48, 60);
+  const knobRadius = radius * 0.43;
+  const edgeX = clamp(viewportW * 0.045, 20, 34);
+  const edgeY = clamp(viewportH * 0.05, 22, 36);
+  const centerY = viewportH - safeBottom - edgeY - radius;
+  return {
+    joyBaseX: safeLeft + edgeX + radius,
+    joyBaseY: centerY,
+    joyRadius: radius,
+    knobRadius,
+    jumpX: viewportW - safeRight - edgeX - radius,
+    jumpY: centerY,
+    jumpRadius: radius,
+  };
+}
+
+export interface TouchControlState {
+  layout: TouchControlsLayout;
+  joyActive: boolean;
+  joyOriginX: number;
+  joyOriginY: number;
+  knobX: number;
+  knobY: number;
+  direction: -1 | 0 | 1;
+  jumpPressed: boolean;
+  doorwayReady: boolean;
 }
 
 export interface CourseHudParams {
@@ -688,7 +763,135 @@ export interface CourseHudParams {
   showArrivalCaption: boolean;
   showDoorwayPrompt: boolean;
   touchMode: boolean;
-  touchFeedback: TouchFeedback | null;
+  touchControls: TouchControlState | null;
+  safeTop: number;
+  safeLeft: number;
+  safeRight: number;
+  safeBottom: number;
+}
+
+function drawSubtleHintPill(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  centerX: number,
+  bottomY: number,
+): void {
+  ctx.font = `500 12px ${POSTER_FONT}`;
+  const textWidth = ctx.measureText(label).width;
+  const padX = 12;
+  const height = 24;
+  const width = textWidth + padX * 2;
+  const x = centerX - width * 0.5;
+  const y = bottomY - height;
+
+  ctx.save();
+  ctx.fillStyle = "rgb(16 19 34 / 0.84)";
+  ctx.strokeStyle = "rgb(76 66 86 / 0.7)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, height * 0.5);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = rgbCss(0xe6ddf0);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, y + height * 0.5);
+  ctx.restore();
+}
+
+function drawTouchControls(ctx: CanvasRenderingContext2D, state: TouchControlState): void {
+  const {
+    layout,
+    joyActive,
+    joyOriginX,
+    joyOriginY,
+    knobX,
+    knobY,
+    direction,
+    jumpPressed,
+    doorwayReady,
+  } = state;
+  const { joyRadius, knobRadius, jumpX, jumpY, jumpRadius } = layout;
+
+  // Bottom-left translucent virtual joystick: whisper-light at rest, clearer while held.
+  ctx.save();
+  ctx.fillStyle = joyActive ? "rgb(16 19 34 / 0.42)" : "rgb(16 19 34 / 0.11)";
+  ctx.strokeStyle = joyActive ? "rgb(255 219 160 / 0.65)" : "rgb(243 221 186 / 0.16)";
+  ctx.lineWidth = joyActive ? 2 : 1.5;
+  ctx.beginPath();
+  ctx.arc(joyOriginX, joyOriginY, joyRadius, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+
+  // Subtle left/right directional chevrons inside the stick ring.
+  const drawChevron = (cx: number, cy: number, dir: -1 | 1, active: boolean) => {
+    ctx.strokeStyle = active
+      ? "rgb(255 219 160 / 0.92)"
+      : joyActive
+        ? "rgb(243 221 186 / 0.42)"
+        : "rgb(243 221 186 / 0.18)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - dir * 3, cy - 6);
+    ctx.lineTo(cx + dir * 3.5, cy);
+    ctx.lineTo(cx - dir * 3, cy + 6);
+    ctx.stroke();
+  };
+  drawChevron(joyOriginX - joyRadius * 0.68, joyOriginY, -1, direction === -1);
+  drawChevron(joyOriginX + joyRadius * 0.68, joyOriginY, 1, direction === 1);
+
+  // Movable thumb knob.
+  ctx.fillStyle =
+    direction !== 0
+      ? "rgb(255 219 160 / 0.62)"
+      : joyActive
+        ? "rgb(243 221 186 / 0.50)"
+        : "rgb(243 221 186 / 0.14)";
+  ctx.strokeStyle = joyActive ? "rgb(255 237 201 / 0.85)" : "rgb(243 221 186 / 0.24)";
+  ctx.lineWidth = joyActive ? 2 : 1.5;
+  ctx.beginPath();
+  ctx.arc(knobX, knobY, knobRadius, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+
+  // Bottom-right translucent Jump button: whisper-light at rest, clearly lit while held.
+  ctx.fillStyle = jumpPressed
+    ? "rgb(255 219 160 / 0.44)"
+    : doorwayReady
+      ? "rgb(255 219 160 / 0.18)"
+      : "rgb(16 19 34 / 0.11)";
+  ctx.strokeStyle = jumpPressed
+    ? "rgb(255 219 160 / 0.88)"
+    : doorwayReady
+      ? "rgb(255 219 160 / 0.48)"
+      : "rgb(243 221 186 / 0.16)";
+  ctx.lineWidth = jumpPressed ? 2 : 1.5;
+  ctx.beginPath();
+  ctx.arc(jumpX, jumpY, jumpRadius, 0, TAU);
+  ctx.fill();
+  ctx.stroke();
+
+  // Crisp upward jump arrow icon centered inside the button.
+  const arrowSize = jumpRadius * 0.34;
+  ctx.strokeStyle = jumpPressed
+    ? "rgb(255 245 224 / 0.96)"
+    : doorwayReady
+      ? "rgb(255 219 160 / 0.62)"
+      : "rgb(255 219 160 / 0.32)";
+  ctx.lineWidth = jumpPressed ? 3 : 2.4;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(jumpX, jumpY + arrowSize * 0.85);
+  ctx.lineTo(jumpX, jumpY - arrowSize * 0.85);
+  ctx.moveTo(jumpX - arrowSize * 0.78, jumpY - arrowSize * 0.12);
+  ctx.lineTo(jumpX, jumpY - arrowSize * 0.9);
+  ctx.lineTo(jumpX + arrowSize * 0.78, jumpY - arrowSize * 0.12);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** Draw all non-interactive gameplay HUD elements directly onto Canvas 2D. */
@@ -704,44 +907,70 @@ export function drawCourseHud(ctx: CanvasRenderingContext2D, hud: CourseHudParam
     showArrivalCaption,
     showDoorwayPrompt,
     touchMode,
-    touchFeedback,
+    touchControls,
+    safeTop,
+    safeLeft,
+    safeRight,
+    safeBottom,
   } = hud;
-  const compact = viewportW < 560;
-  const hudScale = compact ? clamp(viewportW / 560, 0.56, 1) : 1;
+  const narrow = viewportW < 560;
+  const shortScreen = viewportH < 500;
+  const compactMobile = touchMode || narrow || shortScreen;
 
-  // Top-left purple stat counters (Coin, Deaths, Kills).
+  // Top-left purple stat counters, vertically aligned with the top-right Options button.
+  const iconScale = compactMobile ? 1.05 : 1;
+  const iconSize = 20 * iconScale;
+  const barCenterY = compactMobile ? Math.max(32, safeTop + 30) : 29;
+  const statY = barCenterY - iconSize * 0.5;
   ctx.globalAlpha = 1;
-  ctx.font = `600 12px ${POSTER_FONT}`;
+  ctx.font = `600 ${compactMobile ? 14 : 12}px ${POSTER_FONT}`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillStyle = rgbCss(PURPLE);
-  let cursorX = 20;
-  const statY = 19;
-  const statGap = compact ? 12 : 18;
+  let cursorX = Math.max(20, safeLeft + 16);
+  const statGap = narrow ? 14 : 18;
   const entries: readonly [StatIcon, number][] = [
     ["coin", score.coins],
     ["deaths", score.deaths],
     ["kills", score.kills],
   ];
   for (const [kind, count] of entries) {
-    paintTile(ctx, getStatIconTile(kind), cursorX, statY, 1);
+    paintTile(ctx, getStatIconTile(kind), cursorX, statY, iconScale);
     const label = String(count);
-    ctx.fillText(label, cursorX + 26, statY + 10);
-    cursorX += 26 + ctx.measureText(label).width + statGap;
+    ctx.fillText(label, cursorX + iconSize + 6, barCenterY);
+    cursorX += iconSize + 6 + ctx.measureText(label).width + statGap;
   }
 
-  // Top-center neighborhood / clock stack with 0.24s swap fade.
+  // Top-center neighborhood / clock stack: stays compact in the top sky band on mobile
+  // so it never overlaps the cat or high rooftop jump arcs.
   if (clockOpacity > 0.001) {
     const name = neighborhoodTitle(neighborhoodForLevel(level));
     const time = timeLabel(score.seconds);
     const primary = nameFirst ? name : time;
     const secondary = nameFirst ? time : name;
-    const primarySize = (nameFirst ? 42 : 70) * hudScale;
-    const primaryLine = (nameFirst ? 52 : 80) * hudScale;
-    const secondarySize = 20 * hudScale;
     const primaryColor = nameFirst ? GOLD : PURPLE;
     const secondaryColor = nameFirst ? PURPLE : GOLD;
-    const topOffset = compact ? 52 : 16;
+
+    let primarySize: number;
+    let primaryLine: number;
+    let secondarySize: number;
+    let topOffset: number;
+    if (shortScreen) {
+      primarySize = nameFirst ? 22 : 28;
+      primaryLine = nameFirst ? 26 : 32;
+      secondarySize = 12;
+      topOffset = Math.max(10, safeTop + 8);
+    } else if (narrow) {
+      primarySize = nameFirst ? 28 : 40;
+      primaryLine = nameFirst ? 34 : 46;
+      secondarySize = 14;
+      topOffset = Math.max(58, safeTop + 54);
+    } else {
+      primarySize = nameFirst ? 42 : 70;
+      primaryLine = nameFirst ? 52 : 80;
+      secondarySize = 20;
+      topOffset = 16;
+    }
 
     ctx.globalAlpha = clockOpacity;
     ctx.textAlign = "center";
@@ -752,7 +981,7 @@ export function drawCourseHud(ctx: CanvasRenderingContext2D, hud: CourseHudParam
 
     ctx.font = `600 ${secondarySize}px ${POSTER_FONT}`;
     ctx.fillStyle = rgbCss(secondaryColor);
-    ctx.fillText(secondary, viewportW * 0.5, topOffset + primaryLine + 13 * hudScale);
+    ctx.fillText(secondary, viewportW * 0.5, topOffset + primaryLine + secondarySize * 0.65);
     ctx.globalAlpha = 1;
   }
 
@@ -762,78 +991,46 @@ export function drawCourseHud(ctx: CanvasRenderingContext2D, hud: CourseHudParam
     ctx.fillStyle = rgbCss(gap.ahead ? PLAYER_AHEAD_GREEN : PLAYER_BEHIND_RED);
     ctx.textBaseline = "top";
     if (gap.ahead) {
+      const lx = Math.max(20, safeLeft + 16);
       ctx.textAlign = "left";
       ctx.font = `600 18px ${POSTER_FONT}`;
-      ctx.fillText(`← ${gap.meters.toFixed(1)} m`, 20, y);
+      ctx.fillText(`← ${gap.meters.toFixed(1)} m`, lx, y);
       ctx.font = `600 10px ${POSTER_FONT}`;
-      ctx.fillText("AHEAD", 20, y + 24);
+      ctx.fillText("AHEAD", lx, y + 24);
     } else {
+      const rx = viewportW - Math.max(20, safeRight + 16);
       ctx.textAlign = "right";
       ctx.font = `600 18px ${POSTER_FONT}`;
-      ctx.fillText(`${gap.meters.toFixed(1)} m →`, viewportW - 20, y);
+      ctx.fillText(`${gap.meters.toFixed(1)} m →`, rx, y);
       ctx.font = `600 10px ${POSTER_FONT}`;
-      ctx.fillText("BEHIND", viewportW - 20, y + 24);
+      ctx.fillText("BEHIND", rx, y + 24);
     }
     ctx.textAlign = "left";
   }
 
-  // Arrival opening caption and controls hint.
+  // Arrival opening caption (on touch devices the translucent joystick + Jump button are self-explanatory).
   if (showArrivalCaption) {
-    ctx.font = `400 12px ${POSTER_FONT}`;
-    ctx.fillStyle = rgbCss(0xb9adc9);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    const hint = touchMode
-      ? "Slide left side to move · Tap & hold right side to jump"
-      : "← → move · Space jump";
-    ctx.fillText(hint, viewportW * 0.5, viewportH - 22);
-    drawControlPill(ctx, "Out of fuel and far from home.", viewportW * 0.5, viewportH - 44);
+    const baseBottom = viewportH - Math.max(22, safeBottom + 16);
+    if (touchMode) {
+      drawControlPill(ctx, "Out of fuel and far from home.", viewportW * 0.5, baseBottom);
+    } else {
+      drawSubtleHintPill(ctx, "← → move · Space jump", viewportW * 0.5, baseBottom);
+      drawControlPill(ctx, "Out of fuel and far from home.", viewportW * 0.5, baseBottom - 30);
+    }
   }
 
   // Checkpoint doorway prompt.
   if (showDoorwayPrompt) {
     drawControlPill(
       ctx,
-      touchMode ? "Tap for next level" : "Space for next level",
+      touchMode ? "Tap jump for next level" : "Space for next level",
       viewportW * 0.5,
-      viewportH - 20,
+      viewportH - Math.max(20, safeBottom + 16),
     );
   }
 
-  // Whisper-subtle floating touch indicators rendered only while fingers are down.
-  if (touchFeedback) {
-    if (touchFeedback.move) {
-      const { anchorX, anchorY, x, direction } = touchFeedback.move;
-      const clampedDx = clamp(x - anchorX, -36, 36);
-      ctx.save();
-      ctx.strokeStyle = rgbCss(0xf3ddba);
-      ctx.globalAlpha = 0.24;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(anchorX - 44, anchorY - 22, 88, 44, 22);
-      ctx.stroke();
-
-      ctx.fillStyle = rgbCss(direction === 0 ? 0xf3ddba : GOLD);
-      ctx.globalAlpha = direction === 0 ? 0.22 : 0.42;
-      ctx.beginPath();
-      ctx.arc(anchorX + clampedDx, anchorY, 15, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    }
-    if (touchFeedback.jump) {
-      const { x, y } = touchFeedback.jump;
-      ctx.save();
-      ctx.strokeStyle = rgbCss(GOLD);
-      ctx.globalAlpha = 0.34;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, 24, 0, TAU);
-      ctx.stroke();
-      ctx.fillStyle = rgbCss(GOLD);
-      ctx.globalAlpha = 0.16;
-      ctx.fill();
-      ctx.restore();
-    }
+  if (touchControls) {
+    drawTouchControls(ctx, touchControls);
   }
 
   ctx.textAlign = "left";
@@ -879,6 +1076,7 @@ export class CourseRenderer {
       camera: number;
       w: number;
       h: number;
+      verticalOffset: number;
       scale: number;
       drift: number;
       reducedMotion: boolean;
@@ -886,14 +1084,42 @@ export class CourseRenderer {
       showGhost: boolean;
     },
   ): void {
-    const { run, slide, arrival, camera, w, h, scale, drift, reducedMotion, ghost, showGhost } =
-      params;
-    this.facadeArt.resize(h);
+    const {
+      run,
+      slide,
+      arrival,
+      camera,
+      w,
+      h,
+      verticalOffset,
+      scale,
+      drift,
+      reducedMotion,
+      ghost,
+      showGhost,
+    } = params;
+    const worldH = h - verticalOffset;
+    this.facadeArt.resize(Math.max(h, worldH));
 
     ctx.fillStyle = rgbCss(SKY);
     ctx.fillRect(0, 0, w * scale, h * scale);
 
-    drawBackdrop(ctx, w, h, drift, scale, camera + courseProgress(run.level, START_X), run.level);
+    drawSky(ctx, w, h, drift, scale, camera + courseProgress(run.level, START_X));
+
+    ctx.save();
+    if (verticalOffset !== 0) {
+      ctx.translate(0, verticalOffset * scale);
+    }
+
+    drawBackdropSkylineAndMoon(
+      ctx,
+      w,
+      worldH,
+      scale,
+      camera + courseProgress(run.level, START_X),
+      run.level,
+      verticalOffset,
+    );
 
     if (slide) {
       this.drawCourseBuildings(
@@ -901,13 +1127,13 @@ export class CourseRenderer {
         slide.previous,
         camera - slide.offset(),
         w,
-        h,
+        worldH,
         drift,
         scale,
         true,
       );
     }
-    this.drawCourseBuildings(ctx, run, camera, w, h, drift, scale, false);
+    this.drawCourseBuildings(ctx, run, camera, w, worldH, drift, scale, false);
 
     // Draw coins & enemies for outgoing (if sliding) and current course.
     const courses: [Run, number, boolean][] = slide
@@ -1028,6 +1254,7 @@ export class CourseRenderer {
     if (run.level === 0 && arrival === null) {
       drawJetpack(ctx, START_X - 52 - camera, ROOFS[0]!.y - 22, 0, 0, scale);
     }
+    ctx.restore();
   }
 
   private drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number): void {

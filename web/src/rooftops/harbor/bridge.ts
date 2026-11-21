@@ -64,12 +64,12 @@ export function tugChannel(view: View): Point2 {
   return [west + FOOTING[1] + 68, east + FOOTING[0] - 65];
 }
 
-function viewCacheKey(view: View, deck: number): string {
+function viewCacheKey(view: View, deck: number, overhang: number): string {
   const c = view.camera;
   if (!c) {
-    return `menu:${view.width}:${view.horizon}:${view.aim.x}:${view.aim.y}:${deck}`;
+    return `menu:${view.width}:${view.horizon}:${view.aim.x}:${view.aim.y}:${deck}:${overhang}`;
   }
-  return `cam:${c.eye[0]}:${c.eye[1]}:${c.eye[2]}:${c.axes[1][1]}:${c.axes[2][2]}:${deck}`;
+  return `cam:${c.eye[0]}:${c.eye[1]}:${c.eye[2]}:${c.axes[1][1]}:${c.axes[2][2]}:${deck}:${overhang}`;
 }
 
 export class BridgeArt {
@@ -87,13 +87,15 @@ export class BridgeArt {
     deck: number,
     time: number,
     scale: number,
+    extraOverhang = 0,
   ): void {
-    const key = viewCacheKey(view, deck);
+    const overhang = Math.max(OVERHANG, Math.ceil(extraOverhang / 60) * 60);
+    const key = viewCacheKey(view, deck, overhang);
     if (key !== this.lastKey) {
       this.lastKey = key;
       const built = new Bridge(
         view,
-        [-OVERHANG, view.width + OVERHANG],
+        [-overhang, view.width + overhang],
         towersFor(view.width),
         deck,
       ).layers();

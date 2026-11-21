@@ -702,20 +702,76 @@ function flightRecreation(
   return recreation(view, camera.eye[2], frontage);
 }
 
+export function menuTitleLayout(
+  viewportW: number,
+  viewportH: number,
+  touchMode: boolean,
+): {
+  titleY: number;
+  titleSize: number;
+  actionsTop: number;
+  scale: number;
+  frameX: number;
+  frameW: number;
+} {
+  const frame = harborFrame(viewportW, viewportH);
+  const portrait = viewportH > viewportW;
+  const shortLandscape = !portrait && viewportH < 480;
+
+  if (portrait) {
+    const titleSize = clamp(viewportW * 0.19, 52, 92);
+    const titleY = Math.max(88, viewportH * 0.16);
+    const actionsTop = titleY + titleSize * 0.62 + 18;
+    return {
+      titleY,
+      titleSize,
+      actionsTop,
+      scale: frame.scale,
+      frameX: 0,
+      frameW: viewportW,
+    };
+  }
+
+  if (shortLandscape || (touchMode && frame.scale < 0.85)) {
+    const titleSize = clamp(viewportH * 0.19, 44, 84);
+    const titleY = Math.max(46, viewportH * 0.15);
+    const actionsTop = titleY + titleSize * 0.56 + 10;
+    return {
+      titleY,
+      titleSize,
+      actionsTop,
+      scale: frame.scale,
+      frameX: frame.x,
+      frameW: frame.width,
+    };
+  }
+
+  return {
+    titleY: frame.y + frame.height * 0.115 + 66 * frame.scale,
+    titleSize: 119 * frame.scale,
+    actionsTop: frame.y + frame.height * 0.115 + (132 + 14) * frame.scale,
+    scale: frame.scale,
+    frameX: frame.x,
+    frameW: frame.width,
+  };
+}
+
 export function drawHarborTitle(
   ctx: CanvasRenderingContext2D,
-  frame: { x: number; y: number; width: number; height: number; scale: number },
+  viewportW: number,
+  viewportH: number,
+  touchMode: boolean,
   opacity: number,
 ): void {
   if (opacity <= 0.001) return;
+  const layout = menuTitleLayout(viewportW, viewportH, touchMode);
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.fillStyle = rgbCss(0xffe1b1);
-  ctx.font = `700 ${119 * frame.scale}px Georgia, "Times New Roman", serif`;
+  ctx.font = `700 ${layout.titleSize}px Georgia, "Times New Roman", serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const topY = frame.y + frame.height * 0.115 + 66 * frame.scale;
-  ctx.fillText("Rooftops", frame.x + frame.width * 0.5, topY);
+  ctx.fillText("Rooftops", viewportW * 0.5, layout.titleY);
   ctx.restore();
 }
 
@@ -724,13 +780,13 @@ export class HarborRenderer {
   private skylineKey = "";
   private skylineMesh: CompiledLayer[] = [];
 
-  private getOpeningSkyline(original: View): CompiledLayer[] {
-    const key = `${original.aim.x}:${original.aim.y}`;
+  private getOpeningSkyline(original: View, clip: Rect4): CompiledLayer[] {
+    const key = `${original.aim.x}:${original.aim.y}:${Math.round(clip[0])}:${Math.round(clip[2])}`;
     if (key !== this.skylineKey) {
       this.skylineKey = key;
       const camera = Camera.atMenu(original);
       const view = original.withCamera(camera);
-      const [paths] = buildCity(original, view, camera, 0, [0, 0, HARBOR_WIDTH, HARBOR_HEIGHT], 0);
+      const [paths] = buildCity(original, view, camera, 0, clip, 0);
       this.skylineMesh = compileArtMesh(paths);
     }
     return this.skylineMesh;
@@ -742,22 +798,30 @@ export class HarborRenderer {
     viewportH: number,
     time: number,
     aim: Aim,
+    touchMode = false,
   ): void {
     ctx.fillStyle = rgbCss(SKY);
     ctx.fillRect(0, 0, viewportW, viewportH);
 
     const frame = harborFrame(viewportW, viewportH);
+    const portrait = viewportH > viewportW;
+    // In portrait, seat the harbor diorama near the lower-middle so sky extends seamlessly above
+    // and water extends seamlessly to the bottom without letterbox bars.
+    const drawY = portrait
+      ? Math.max(frame.y, viewportH - frame.height - Math.min(110, viewportH * 0.14))
+      : frame.y;
+    const padX = frame.x / frame.scale;
+    const padTop = drawY / frame.scale;
+    const padBottom = Math.max(0, (viewportH - (drawY + frame.height)) / frame.scale);
+    const clip: Rect4 = [-padX, -padTop, HARBOR_WIDTH + padX, HARBOR_HEIGHT + padBottom];
     const view = new View(HARBOR_WIDTH, HARBOR_HEIGHT * HORIZON, aim);
     const bank = new Bank(view);
 
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(frame.x, frame.y, frame.width, frame.height);
-    ctx.clip();
-    ctx.translate(frame.x, frame.y);
-    this.renderMenuScenery(ctx, view, bank, time, frame.scale);
+    ctx.translate(frame.x, drawY);
+    this.renderMenuScenery(ctx, view, bank, time, frame.scale, clip, padX, padBottom);
     ctx.restore();
-    drawHarborTitle(ctx, frame, 1);
+    drawHarborTitle(ctx, viewportW, viewportH, touchMode, 1);
   }
 
   renderFlight(
@@ -767,6 +831,7 @@ export class HarborRenderer {
     flight: Flight,
     menuTime: number,
     aim: Aim,
+    touchMode = false,
   ): void {
     const frame = harborFrame(viewportW, viewportH);
     const original = new View(HARBOR_WIDTH, HARBOR_HEIGHT * HORIZON, aim);
@@ -782,10 +847,16 @@ export class HarborRenderer {
     ctx.save();
     ctx.translate(frame.x, frame.y);
     if (flight.time <= LAUNCH) {
-      ctx.beginPath();
-      ctx.rect(0, 0, frame.width, frame.height);
-      ctx.clip();
-      this.renderMenuScenery(ctx, original, new Bank(original), time, frame.scale);
+      this.renderMenuScenery(
+        ctx,
+        original,
+        new Bank(original),
+        time,
+        frame.scale,
+        clip,
+        padX,
+        padY,
+      );
     } else {
       this.renderFlightHarbor(ctx, original, camera, time, frame.scale, clip);
     }
@@ -793,7 +864,7 @@ export class HarborRenderer {
 
     const titleOpacity = flight.titleFadeOpacity();
     if (titleOpacity > 0) {
-      drawHarborTitle(ctx, frame, titleOpacity);
+      drawHarborTitle(ctx, viewportW, viewportH, touchMode, titleOpacity);
     }
 
     const veil = flight.veilOpacity();
@@ -811,24 +882,58 @@ export class HarborRenderer {
     bank: Bank,
     time: number,
     scale: number,
+    clip: Rect4,
+    padX: number,
+    padBottom: number,
   ): void {
-    drawSky(ctx, HARBOR_WIDTH, HARBOR_HEIGHT, time, scale, 145);
+    const [clipLeft, clipTop, clipRight, clipBottom] = clip;
+    ctx.save();
+    ctx.translate(clipLeft * scale, clipTop * scale);
+    drawSky(ctx, clipRight - clipLeft, HARBOR_HEIGHT - clipTop, time, scale, 145);
+    ctx.restore();
+
     drawArtPaths(ctx, getHarborMoonPaths(), scale);
-    drawCompiledMesh(ctx, this.getOpeningSkyline(view), scale);
+    drawCompiledMesh(ctx, this.getOpeningSkyline(view, clip), scale);
     drawHarborPaths(ctx, bank.inland(), scale);
     drawMenuLandmarks(ctx, view, scale);
 
-    drawHarborPaths(ctx, bank.water(HARBOR_HEIGHT), scale);
+    const waterBottom = Math.max(HARBOR_HEIGHT, clipBottom);
+    if (padX > 0 || padBottom > 0) {
+      // Extend deep water cleanly into wide side margins or portrait lower band.
+      ctx.fillStyle = rgbCss(WATER);
+      ctx.globalAlpha = 1;
+      ctx.fillRect(
+        clipLeft * scale,
+        view.horizon * scale,
+        (clipRight - clipLeft) * scale,
+        (waterBottom - view.horizon) * scale,
+      );
+    }
+    drawHarborPaths(ctx, bank.water(waterBottom), scale);
     waterDetail(view, HARBOR_HEIGHT, time, ([rx, ry, rw, rh], ink, alpha) => {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = rgbCss(ink);
-      ctx.fillRect(rx * scale, ry * scale, rw * scale, rh * scale);
+      if (rx === 0 && rw === view.width) {
+        ctx.fillRect(clipLeft * scale, ry * scale, (clipRight - clipLeft) * scale, rh * scale);
+      } else {
+        ctx.fillRect(rx * scale, ry * scale, rw * scale, rh * scale);
+      }
     });
+    if (padBottom > 0) {
+      ctx.fillStyle = rgbCss(0x080d20);
+      ctx.globalAlpha = 7 * 0.058;
+      ctx.fillRect(
+        clipLeft * scale,
+        HARBOR_HEIGHT * scale,
+        (clipRight - clipLeft) * scale,
+        padBottom * scale,
+      );
+    }
     ctx.globalAlpha = 1;
 
     drawHarborPaths(ctx, bank.shore(), scale);
     drawHarborPaths(ctx, tugboat(view, time), scale);
-    this.bridge.render(ctx, view, view.deck(), time, scale);
+    this.bridge.render(ctx, view, view.deck(), time, scale, padX + 120);
     drawHarborPaths(ctx, ferry(view, time), scale);
     drawHarborPaths(ctx, sailboat(view, time), scale);
   }
