@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 
 const narrowAchievements = "@media (width < 540px)";
 const mobileMedia = "@media (pointer: coarse), (width < 760px), (height < 500px)";
+const coarsePointerMedia = "@media (pointer: coarse)";
 const shortLandscapeMedia = "@media (height < 480px)";
 
 export const styles = stylex.create({
@@ -216,10 +217,10 @@ export const styles = stylex.create({
     width: "min(330px, calc(100vw - 32px))",
     maxHeight: "calc(100dvh - 24px)",
     overflowY: "auto",
-    padding: { default: 26, [shortLandscapeMedia]: 18 },
+    padding: { default: 24, [shortLandscapeMedia]: 18 },
     display: "flex",
     flexDirection: "column",
-    gap: { default: 12, [shortLandscapeMedia]: 8 },
+    gap: { default: 8, [shortLandscapeMedia]: 6 },
     borderRadius: 14,
     backgroundColor: "#202236",
     borderWidth: 1,
@@ -235,7 +236,7 @@ export const styles = stylex.create({
     flexDirection: "column",
     alignItems: "center",
     textAlign: "center",
-    gap: 14,
+    gap: 12,
     borderRadius: 16,
     backgroundColor: "#181b2c",
     borderWidth: 1,
@@ -265,18 +266,22 @@ export const styles = stylex.create({
   },
   optionsTitle: {
     margin: 0,
+    marginBottom: 4,
     fontSize: 28,
     lineHeight: "34px",
     fontWeight: 600,
     color: "#ffdba0",
   },
   volumeRow: {
+    boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 4,
     marginInline: -2,
-    paddingBlock: 6,
-    paddingInline: 8,
+    paddingTop: 4,
+    paddingBottom: 4,
+    paddingLeft: 8,
+    paddingRight: 8,
     borderRadius: 5,
     color: { default: "#f3ddba", ":focus-within": "#ffdba0" },
   },
@@ -291,13 +296,18 @@ export const styles = stylex.create({
     fontVariantNumeric: "tabular-nums",
   },
   optionCheckboxRow: {
+    boxSizing: "border-box",
     display: "flex",
     alignItems: "center",
     gap: 12,
-    minBlockSize: 44,
-    padding: 6,
+    minBlockSize: { default: 32, [coarsePointerMedia]: 44 },
+    paddingTop: 4,
+    paddingBottom: 4,
+    paddingLeft: 6,
+    paddingRight: 6,
     borderRadius: 5,
     fontSize: 16,
+    lineHeight: "22px",
     color: { default: "#f3ddba", ":focus-within": "#ffdba0" },
     cursor: "pointer",
   },
@@ -310,7 +320,7 @@ export const styles = stylex.create({
   optionsActions: {
     display: "flex",
     gap: 8,
-    marginTop: 4,
+    marginTop: 8,
   },
   achievementsCard: {
     boxSizing: "border-box",
@@ -365,6 +375,7 @@ export const styles = stylex.create({
     overscrollBehavior: "contain",
   },
   awardCard: {
+    boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
