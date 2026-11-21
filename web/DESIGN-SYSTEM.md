@@ -19,14 +19,14 @@ information without repeating the download section's open-source claim.
 
 ## Structure
 
-| Layer             | Location                                                   | Responsibility                                                                                                               |
-| ----------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Tokens            | `src/design-system/tokens.stylex.ts`                       | Semantic colors, type roles, fixed spacing and radii, viewport conditions, browser preferences and shared layout dimensions. |
-| Primitives        | `src/design-system/`                                       | `Container`, `Heading`, `Text`, `Link`, `Button`, `MediaFrame` and `VisuallyHidden`, with styles beside their markup.        |
-| Compositions      | `src/components/`                                          | Header, brand, features, download section and footer. These compose primitives and own their specific layout.                |
-| Story             | `src/Story.tsx`, `src/story-layout.stylex.ts`              | Pinned scenes, responsive story geometry and chapter state. These details do not belong to the shared token scale.           |
-| Document          | `src/design-system/document.stylex.ts`, `src/Document.tsx` | Page canvas and browser preferences. The client imports the foundation for build-time CSS extraction.                        |
-| Font registration | `src/document.css`                                         | Only the two bundled `@font-face` declarations. Font licenses remain in the HTML.                                            |
+| Layer             | Location                                              | Responsibility                                                                                                                  |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Tokens            | `src/design-system/tokens.stylex.ts`                  | Semantic colors, type roles, fixed spacing and radii, viewport conditions, browser preferences and shared layout dimensions.    |
+| Primitives        | `src/design-system/`                                  | `Container`, `Heading`, `Text`, `Link`, `Button`, `MediaFrame` and `VisuallyHidden`, with adjacent `*.stylex.ts` style modules. |
+| Compositions      | `src/components/`                                     | Header, brand, features, download section and footer. These compose primitives and own their specific layout.                   |
+| Story             | `src/Story.rx`, `src/story-layout.stylex.ts`          | Pinned scenes, responsive story geometry and chapter state. These details do not belong to the shared token scale.              |
+| Document          | `src/design-system/document.stylex.ts`, `src/Page.rx` | Page canvas and browser preferences. The client imports the foundation for build-time CSS extraction.                           |
+| Font registration | `src/document.css`                                    | Only the two bundled `@font-face` declarations. Font licenses remain in the HTML.                                               |
 
 ## Using the system
 
@@ -70,8 +70,11 @@ properties. Components consume semantic roles such as `colors.text` or
 need to change at runtime, such as footprint placement. Prefer native CSS scroll
 timelines for decorative progress.
 
-Author `stylex.create` beside its consuming JSX. Local static calls can compile
-away; importing one giant style map forces more composition to happen at runtime.
+Author `stylex.create` in the consuming component's adjacent `*.stylex.ts` module.
+ReactiveScript owns the `.rx` view and equations; StyleX's Vite integration extracts
+these ordinary TypeScript style declarations. Keep each style map local to its
+component rather than creating one giant global catalog. `attrs` composes these
+extracted rules at the view boundary.
 Repeated declarations across components are deduplicated by the compiler, so a
 catalog of hand-written utility classes is unnecessary. Production classes are
 hashed atomic rules; development includes readable source labels. Do not couple
@@ -94,10 +97,52 @@ move every one-off measurement into a global variable; story geometry stays loca
 ## Build and CSS budget
 
 The official `@stylexjs/unplugin/vite` integration extracts the styles; the official
-`@solidjs/vite-plugin` compiles Solid and provides HMR. The development stylesheet
+`@solidjs/vite-plugin` 3.0.1 loads `@reactivescript/compiler` automatically for
+`.rx` modules and compiles the remaining Solid entry points. The development stylesheet
 uses StyleX's CSS-only hot-reload module. Production extracts and minifies one
 stylesheet with cascade layers, without runtime injection. Vite serves fonts as
 separate hashed files, which can be cached independently of the stylesheet.
+
+All site components, including the full `Page.rx` document, are authored in
+ReactiveScript. `entry-client.ts` hydrates its compiled program; `entry-server.ts`
+streams it with Vite's asset manifest and the request's nonce and abort signal.
+`reactivescript.ts` creates one runtime per root and passes JSX children directly
+to Solid on both targets: ReactiveScript 0.3.1's default `show` serializes text-only
+arrays and double-escapes SSR strings. Keep this compatibility boundary covered by
+the compiled-rendering regression test and manual hydration checks until the upstream runtime handles JSX
+children directly. No `.rx` module is declared as `any`; `?program` types only the
+compiler's JavaScript factory boundary.
+
+Use Solid's native `ref` attribute to capture component-owned elements. In
+ReactiveScript, bind it to a named action that writes a typed source:
+
+```rx
+source video: HTMLVideoElement | undefined := undefined
+action captureVideo(element: HTMLVideoElement) { video := element }
+<video ref={captureVideo} />
+```
+
+Keep DOM handles out of module-level state. Effects that depend on a handle list
+it in their inputs and wait until it is attached. Put setup and cleanup in those
+owned effects; a native ref callback only captures the element. `Button`,
+`SiteHeader` and `PortalCat` forward an optional typed callback ref and clear it
+with `undefined` when their component is removed. `PortalEnding` forwards its
+`portalRef` to the portal button. IDs remain for fragment links, CSS and ARIA
+relationships; component behavior receives element references rather than finding
+them through IDs or selectors.
+
+`Story.rx` owns the active chapter, the observed browser frame and video readiness,
+along with refs for its section, stage, video, chapter articles, copy and controls.
+The application passes the header ref into the story. The observer starts only
+after every required ref is attached, and its cleanup runs when refs change or
+the story is removed. Chapter selection passes directly through its callback
+contract; it does not dispatch a DOM event to find its own observer. Focus
+synchronization uses the captured chapter/control refs and `document.activeElement`.
+Pinned state, copy height, terminal state and live status are equations.
+`story-browser.ts` owns native layout reads, event listeners, View Transitions and
+autoplay, with no Solid state or effects. Its cleanup belongs to the `.rx` ref-dependent
+effect. The hidden primitives have explicit span, heading and status roots so
+ReactiveScript can verify HTML nesting through component boundaries.
 
 Vite builds both the browser and server graphs. A small Bun script renders the
 root response into static HTML, so all three scenes remain readable without
@@ -153,15 +198,20 @@ The portal content shifts by half that band to stay centered between the cuts.
 The watercolor composition has no shadow. All ordinary component
 styling remains in StyleX.
 
-`SiteNotifications` owns a small native DOM notification with a persistent polite
+`SiteNotifications.rx` owns a declarative notification with a persistent polite
 status region. It uses a manual popover for the top layer and
 fixed positioning as its fallback. Dedicated notification tokens keep its cream
 surface, dark green text, gold border and shadow distinct in either appearance.
 It sits in the top right and uses a 320 ms slide on the individual `translate`
 property. Reduced motion disables the entry animation. It has no external toast
-library or vendor stylesheet. It keeps one active notice and pauses its timer
-while hovered or keyboard-focused. Removing the component clears its timer and
-notice. The portal's native button
+library or vendor stylesheet. The application owns its visible source; repeated activation cannot stack
+notices. The notification derives whether its timer should run from visibility,
+hover and focus. Its effects own timer cancellation and popover cleanup. Removing
+the component clears its timer and notice. Its region is captured by a native ref;
+the application passes the actual portal button ref for focus restoration.
+The document likewise captures its script nonce through the script element's ref
+during hydration. These paths do not look up IDs or search the document.
+The portal's native button
 uses a circular focus indicator and stays hidden from keyboard navigation while
 the scroll section is collapsed.
 Portal activation displays “Gattoverse mini game coming soon.” for six seconds;
@@ -174,6 +224,11 @@ Run `bun build:web` and `bun size:web` to measure the actual stylesheet links in
 limits the combined CSS to **24 KiB raw and 7 KiB gzip**, leaving room above the
 current page while catching large regressions. Raise a budget only with a measured
 reason. Font and image payloads are separate from this CSS budget.
+
+Rechecked on 2026-11-20 with Solid 2.0.3, ReactiveScript 0.3.1, Vite 8.3.4 and
+StyleX 0.19.1: one production stylesheet, **23,798 raw bytes and 7,075 gzip
+bytes**, measured with `bun build:web && bun size:web`, within the existing
+24 KiB / 7 KiB limits.
 
 Measured through 2026-10-18 with Vite 8.3.4 and StyleX 0.19.1:
 
@@ -303,7 +358,7 @@ no portal or jetpack. The [artwork record](../docs/design/explorations/art/brand
 owns their editable Aseprite sources and export instructions. This direction
 supersedes the SVG treatment in ADR 0003 at the user's request on 2026-10-25.
 
-`Document.tsx` declares the native 16 px and 32 px PNGs, a 96 px PNG, and an ICO
+`Page.rx` declares the native 16 px and 32 px PNGs, a 96 px PNG, and an ICO
 with 16, 32 and 64 px entries. The Apple touch icon places a 160 px integer-scale
 portrait in an opaque 180 px warm-paper canvas. Keep these exports in sync;
 the smallest portrait is an optical redraw rather than a downsample.
@@ -349,7 +404,7 @@ and do not add floating sparks or sideways waves. The far flame remains visible
 after clearing the body. Fill enclosed flame pinholes and connect the visible
 nozzle directly to the hot core without a black gap. The 56-color source has
 its own editable exhaust layer; the portal remains
-separate. `PortalCat.tsx`
+separate. `PortalCat.rx`
 uses the 512 px lossless WebP with `image-rendering: pixelated`. The
 [pixel portal master](../docs/design/explorations/art/pixel-portal/portal.aseprite)
 is a separate 384 px still adapted from the original ring, with ember-glow,
@@ -414,7 +469,7 @@ tail poses and prop references. Edit the visible cels directly and keep the
 reference library hidden for export. The [artwork record](../docs/design/explorations/art/scroll-story/journey.md)
 owns the reference inventory, staging, repair lessons and export workflow.
 
-`Story.tsx` owns one muted, inline video shared across chapters. It autoplays
+`Story.rx` owns one muted, inline video shared across chapters. It autoplays
 once on page load, independently of scrolling, and remains on its final frame
 when playback ends. Chapter copy, paw trails and the finale remain scroll-driven.
 `story-video.ts` retains only the export dimensions and frame clock; playback
@@ -501,4 +556,5 @@ and index order; the obsolete scroll-seeking runtime tests have been removed.
 - [Official StyleX Vite integration](https://stylexjs.com/docs/learn/installation/vite/)
 - [StyleX DOM attributes for Solid](https://stylexjs.com/docs/api/javascript/attrs/)
 - [Solid Vite plugin and start mode](https://github.com/solidjs/solid-vite-plugin)
+- [ReactiveScript language and compiler integration](https://github.com/solidjs/reactivescript)
 - [Oxlint JavaScript plugin support](https://oxc.rs/docs/guide/usage/linter/js-plugins.html)

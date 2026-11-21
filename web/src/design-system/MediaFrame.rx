@@ -1,0 +1,9 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./MediaFrame.stylex"
+
+export component MediaFrame(props: { children: import("@solidjs/web").JSX.Element; xstyle?: import("@stylexjs/stylex").StyleXStyles }) {
+  <div {...attrs(styles.root, props.xstyle)}>
+    {props.children}
+    <span {...attrs(styles.edge)} aria-hidden="true" />
+  </div>
+}

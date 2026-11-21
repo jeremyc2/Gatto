@@ -1,31 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { colors, media } from "../design-system/tokens.stylex";
-import seam from "../../assets/images/portal-seam.svg";
-import complement from "../../assets/images/portal-seam-complement.svg";
-
-export function PortalSeam(props: { edge: "top" | "bottom" }) {
-  return (
-    <div
-      aria-hidden="true"
-      {...stylex.attrs(styles.edge, props.edge === "top" ? styles.top : styles.bottom)}
-      style={{ "--portal-seam": `url(${props.edge === "top" ? complement : seam})` }}
-    >
-      <div
-        {...stylex.attrs(styles.material, styles.paper, props.edge === "top" && styles.clearTop)}
-      />
-      <div
-        {...stylex.attrs(
-          styles.material,
-          props.edge === "top" ? styles.footer : styles.download,
-          props.edge === "top" ? styles.faceTop : styles.faceBottom,
-          props.edge === "top" && styles.clearTop,
-        )}
-      />
-    </div>
-  );
-}
-
-const styles = stylex.create({
+export const styles = stylex.create({
   edge: {
     position: "absolute",
     insetInline: 0,

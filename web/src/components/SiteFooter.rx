@@ -1,0 +1,23 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./SiteFooter.stylex"
+import { Link } from "../design-system/Link.rx"
+import { FontCredits } from "./FontCredits.rx"
+import { Container } from "../design-system/Container.rx"
+import { Brand } from "./Brand.rx"
+import { PortalSeam } from "./PortalSeam.rx"
+
+export component SiteFooter() {
+  <footer {...attrs(styles.footer)}>
+    <PortalSeam edge="top" />
+    <Container>
+      <div {...attrs(styles.footerTop)}>
+        <Brand small dot />
+        <nav {...attrs(styles.footerNav)} aria-label="Project links">
+          <Link href="https://github.com/jeremyc2/Gatto/blob/main/SUPPORT.md">Support</Link>
+          <Link href="https://github.com/jeremyc2/Gatto/blob/main/LICENSE">MIT license</Link>
+        </nav>
+      </div>
+      <FontCredits />
+    </Container>
+  </footer>
+}

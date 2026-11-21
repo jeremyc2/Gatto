@@ -1,0 +1,28 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./Button.stylex"
+
+export component Button(props: {
+  children: import("@solidjs/web").JSX.Element;
+  onClick: () => void;
+  variant?: "quiet" | "selected";
+  disabled?: boolean;
+  "aria-current"?: "step" | undefined;
+  "aria-controls"?: string;
+  xstyle?: import("@stylexjs/stylex").StyleXStyles;
+  ref?: ((element: HTMLButtonElement | undefined) => void) | undefined;
+}) {
+  action captureElement(element: HTMLButtonElement) { if (props.ref) props.ref(element) }
+  effect () { return () => { if (props.ref) props.ref(undefined) } }
+
+  <button
+    ref={captureElement}
+    type="button"
+    disabled={props.disabled}
+    onClick={props.onClick}
+    aria-current={props["aria-current"]}
+    aria-controls={props["aria-controls"]}
+    {...attrs(styles.root, props.variant === "selected" && styles.selected, props.xstyle)}
+  >
+    {props.children}
+  </button>
+}

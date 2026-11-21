@@ -1,13 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { type, media, colors } from "../design-system/tokens.stylex";
-export function Brand(props: { small?: boolean; dot?: boolean }) {
-  return (
-    <span {...stylex.attrs(styles.root, props.small && styles.small)}>
-      Gatto{props.dot && <span {...stylex.attrs(styles.dot)} aria-hidden="true" />}
-    </span>
-  );
-}
-const styles = stylex.create({
+export const styles = stylex.create({
   root: {
     fontFamily: type.display,
     fontSize: { default: 40, [media.phone]: 33 },

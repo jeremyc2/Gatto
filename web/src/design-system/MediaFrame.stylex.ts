@@ -1,17 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
-import type { JSX } from "@solidjs/web";
 import { colors, radius } from "./tokens.stylex";
-
-export function MediaFrame(props: { children: JSX.Element; xstyle?: stylex.StyleXStyles }) {
-  return (
-    <div {...stylex.attrs(styles.root, props.xstyle)}>
-      {props.children}
-      <span {...stylex.attrs(styles.edge)} aria-hidden="true" />
-    </div>
-  );
-}
-
-const styles = stylex.create({
+export const styles = stylex.create({
   root: {
     position: "relative",
     width: "100%",

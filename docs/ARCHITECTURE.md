@@ -4,8 +4,10 @@ Gatto is a desktop app for macOS and Windows. GPUI owns the application and
 window lifecycle. Platform adapters isolate desktop integration, and shared
 modules handle GitHub access, projects, and persistent settings.
 
-The public website is a separate static Solid project in `web/`. Vite runs under
-Bun for development and builds; Bun prerenders its static HTML. It does not add
+The public website is a separate static Solid 2 project in `web/`. Its components
+and reactive state are authored in ReactiveScript `.rx` files; TypeScript adapters
+own browser APIs, the hydration shell and Vite entry. Vite runs under Bun for
+development and builds; Bun prerenders its static HTML. It does not add
 a backend to the app. See
 [website development](../web/README.md) for its source and tooling boundaries.
 

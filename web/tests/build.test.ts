@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 test("prerenders all scenes, concise copy and the two README download badges", async () => {
   const html = await Bun.file(new URL("index.html", staticDirectory)).text();
-  expect(html).toContain("Gatto — GitHub, illustrated.");
+  expect(html).toMatch(/<title>Gatto (?:—|&#8212;) GitHub, illustrated\.<\/title>/);
   expect(html).toContain("Choose a repository, then drop in your files.");
   expect(html).toContain("Add several files at once.");
   expect(html).toContain("Annotate before uploading.");
@@ -87,4 +87,21 @@ test("discovers the muted inline video before hydration for page-load autoplay",
   const buffer = Buffer.from(bytes);
   expect(buffer.indexOf("moov")).toBeGreaterThan(0);
   expect(buffer.indexOf("moov")).toBeLessThan(buffer.indexOf("mdat"));
+});
+
+test("the ReactiveScript document loads its hashed client entry and preserves request nonces", async () => {
+  const { handleRequest } = (await import(
+    new URL("../dist/server/server.js", import.meta.url).href
+  )) as typeof import("virtual:solid-ssr-handler");
+  const response = await handleRequest(new Request("http://localhost/"), {
+    nonce: "test-script-nonce",
+  });
+  expect(response.status).toBe(200);
+  const html = await response.text();
+  expect(html).toMatch(
+    /<script[^>]+type="module"[^>]+src="\/assets\/entry-client-[^"]+\.js"[^>]+nonce="test-script-nonce"/,
+  );
+  expect(html).not.toContain('src="/src/entry-client.ts"');
+  expect(html).not.toContain('["A little Mac app');
+  expect(html).not.toContain("&amp;quot;");
 });

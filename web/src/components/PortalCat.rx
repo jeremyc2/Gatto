@@ -1,0 +1,111 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./PortalCat.stylex"
+import pure cat from "../../assets/images/download-rocket-cat-pixel.webp"
+import pure portal from "../../assets/images/download-portal-pixel.webp"
+import pure paper from "../../assets/images/portal-watercolor-paper.webp"
+import { SiteFooter } from "./SiteFooter.rx"
+
+
+export component PortalEnding(props: {
+  onActivate: () => void;
+  portalRef?: ((element: HTMLButtonElement | undefined) => void) | undefined;
+}) {
+  <div
+    data-portal-finale=""
+    {...attrs(styles.setting)}
+    style={{ "--portal-paper": `url(${paper})` }}
+  >
+    <PortalCat ref={props.portalRef} onActivate={props.onActivate} />
+    <SiteFooter />
+    <div data-portal-runway="" aria-hidden="true" />
+  </div>
+}
+
+export component PortalCat(props: {
+  onActivate: () => void;
+  ref?: ((element: HTMLButtonElement | undefined) => void) | undefined;
+}) {
+  action captureElement(element: HTMLButtonElement) { if (props.ref) props.ref(element) }
+  effect () { return () => { if (props.ref) props.ref(undefined) } }
+
+  <section
+    {...attrs(styles.root)}
+    data-portal-section=""
+    aria-label="A visitor from the Gatto multiverse"
+  >
+    <div {...attrs(styles.content)} data-portal-content="">
+      <button
+        ref={captureElement}
+        {...attrs(styles.scene)}
+        id="download-portal"
+        type="button"
+        onClick={props.onActivate}
+        aria-label="Explore the Gattoverse"
+      >
+        <span data-portal-void-entry="" {...attrs(styles.layers)}>
+          <span {...attrs(styles.aperture)} />
+        </span>
+        <span data-portal-entry="" {...attrs(styles.layers)}>
+          <svg {...attrs(styles.ringFrame)} viewBox="0 0 1000 1000" aria-hidden="true">
+            <defs>
+              <filter id="portal-brush-edge" x="-25%" y="-25%" width="150%" height="150%">
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.035"
+                  numOctaves="2"
+                  seed="8"
+                  result="grain"
+                />
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="grain"
+                  scale="24"
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+                <feGaussianBlur stdDeviation="18" />
+              </filter>
+              <mask
+                id="portal-brush-mask"
+                maskUnits="userSpaceOnUse"
+                x="0"
+                y="0"
+                width="1000"
+                height="1000"
+              >
+                <circle
+                  data-portal-trace=""
+                  cx="500"
+                  cy="500"
+                  r="400"
+                  pathLength="1"
+                  fill="none"
+                  stroke="white"
+                  stroke-width="320"
+                  stroke-linecap="round"
+                  stroke-dasharray="1 1"
+                  stroke-dashoffset="0"
+                  transform="rotate(-90 500 500)"
+                  filter="url(#portal-brush-edge)"
+                />
+              </mask>
+            </defs>
+            <g mask="url(#portal-brush-mask)">
+              <image {...attrs(styles.ring)} href={portal} width="1000" height="1000" />
+            </g>
+          </svg>
+        </span>
+        <span data-portal-flight="" {...attrs(styles.layers)}>
+          <img
+            {...attrs(styles.cat)}
+            src={cat}
+            width="512"
+            height="512"
+            alt=""
+            loading="lazy"
+          />
+        </span>
+      </button>
+    </div>
+  </section>
+}

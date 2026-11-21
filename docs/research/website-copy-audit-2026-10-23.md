@@ -46,10 +46,10 @@ well as word choice; no isolated clause or punctuation mark establishes authorsh
 ## Local findings before this pass
 
 These observations concern the existing copy, not a claim about its authorship.
-The source text lives in [Story.tsx](../../web/src/Story.tsx),
-[Features.tsx](../../web/src/components/Features.tsx),
-[SiteFooter.tsx](../../web/src/components/SiteFooter.tsx), and
-[Document.tsx](../../web/src/Document.tsx).
+The source text (moved to ReactiveScript on 2026-11-20) lives in [Story.rx](../../web/src/Story.rx),
+[Features.rx](../../web/src/components/Features.rx),
+[SiteFooter.rx](../../web/src/components/SiteFooter.rx), and
+[Page.rx](../../web/src/Page.rx).
 
 | Repetition                                                                                                               | Editorial consequence                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,3 +1,5 @@
+/// <reference types="@solidjs/vite-plugin/virtual-modules" />
+
 declare module "*.png" {
   const url: string;
   export default url;
