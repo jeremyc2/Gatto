@@ -43,6 +43,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   screens and orientation or full-screen changes stay crisp without cropped
   margins.
 
+
+- Show release progress immediately and collect the version and notes before
+  fetching Git history, preparing the updater, or building video encoders.
+- Replace Gatto's direct Chrono dependency with native Windows timestamp
+  conversion so the release dependency audit passes its unmaintained-crate check.
+
 ## [0.24.7] - 2026-11-16
 
 ### Added

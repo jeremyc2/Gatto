@@ -114,6 +114,7 @@ if (import.meta.main) {
     console.log(`Validated version, lockfile, bundle and changelog for v${current}`);
     process.exit(0);
   }
+  console.log("Checking the latest Stable release on GitHub...");
   const published = Bun.spawnSync(["gh", "release", "view", "--json", "tagName"], { cwd: root });
   if (published.exitCode !== 0)
     throw new Error("Cannot establish the last published release; check GitHub access");
@@ -122,6 +123,7 @@ if (import.meta.main) {
   // intentionally remains the stable baseline.
   if (releaseChannel(previous) !== "stable")
     throw new Error("GitHub's latest release must remain Stable");
+  console.log("Checking published versions to calculate release choices...");
   const listed = Bun.spawnSync(
     ["gh", "api", "--paginate", "--slurp", "repos/jeremyc2/Gatto/releases?per_page=100"],
     { cwd: root },

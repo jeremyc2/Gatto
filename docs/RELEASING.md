@@ -127,13 +127,14 @@ After the one-time credential/tool setup, run from `main`:
 
 Merge feature branches into `main` first. Your local main may contain uncommitted
 work or commits ready to push, but must include `origin/main` without conflicts.
-The script fetches the remote before proceeding.
+The script fetches the remote after collecting the version and notes, before
+building or publishing. It logs startup, GitHub lookups, and each major stage so
+slow preparation remains visible.
 
 The script guides the release in this order:
 
-1. Check tool availability, build the pinned video encoder helpers and compile the native updater SDK without
-   reading signing credentials.
-2. Show a numbered release menu with the exact destination version and channel:
+1. Check local tools and the checkout, then show a numbered release menu with the
+   exact destination version and channel before downloads or compilation:
    the prepared version, next Beta, promotion to Stable, patch/minor/major Stable
    releases, and a custom version. Use a minor bump for new compatible
    capabilities and a major bump for user-facing compatibility breaks. Reuse
@@ -141,6 +142,9 @@ The script guides the release in this order:
    It updates Cargo, the lockfile, both bundle versions, and the dated changelog.
    The lockfile update changes only Gatto's package version, preserving dependency
    pins and checksums. Reusing a prepared version also repairs a stale lockfile.
+2. Fetch `origin/main` and release tags, check that the checkout includes the
+   remote, then build the pinned video encoder helpers and compile the native
+   updater SDK without reading signing credentials.
 3. Install locked Bun dependencies without lifecycle scripts, run the JavaScript
    dependency audit, and run `bun refresh:assets`: export artwork and animation,
    compile app icons, render current app screenshots and the framed installer
@@ -168,6 +172,8 @@ committing and pushing all pending changes and publishing the release. Both flag
 also work with `--resume`. Version and release-note prompts still require input
 when preparing a release. Cancelling keeps prepared changes and artifacts
 available for inspection.
+With prepared notes, choose the version at the start of a `--yes` run; the
+remaining script confirmations are automatic.
 
 Review the changes and test affected hardware before publishing.
 

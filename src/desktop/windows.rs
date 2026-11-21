@@ -1,17 +1,8 @@
 use anyhow::{Context as _, Result, ensure};
-use chrono::{DateTime, Local};
 
-pub fn format_local_timestamp(milliseconds: u64) -> Option<String> {
-    if milliseconds == 0 || milliseconds > 253_402_300_799_999 {
-        return None;
-    }
-    let date = DateTime::from_timestamp_millis(milliseconds as i64)?;
-    Some(
-        date.with_timezone(&Local)
-            .format("%b %-d, %Y %H:%M")
-            .to_string(),
-    )
-}
+#[path = "windows/timestamp.rs"]
+mod timestamp;
+pub use timestamp::format_local_timestamp;
 
 #[path = "windows/shell.rs"]
 mod shell;
