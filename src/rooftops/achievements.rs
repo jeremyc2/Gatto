@@ -50,6 +50,7 @@ impl Rooftops {
 
         let panel = v_flex()
             .id("rooftops-achievements-modal")
+            .debug_selector(|| "rooftops-achievements-modal".into())
             .track_focus(&self.achievements_focus)
             .w(px(610.))
             .h(px(536.))

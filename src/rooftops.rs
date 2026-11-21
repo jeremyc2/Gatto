@@ -3173,9 +3173,9 @@ mod tests {
         });
         assert!(cx.debug_bounds("rooftops-achievements-grid").is_some());
         // Clicking inside the Achievements modal keeps it open; clicking the backdrop closes it.
-        let grid = cx.debug_bounds("rooftops-achievements-grid").unwrap();
-        cx.simulate_mouse_down(grid.center(), MouseButton::Left, Modifiers::default());
-        cx.simulate_mouse_up(grid.center(), MouseButton::Left, Modifiers::default());
+        let modal = cx.debug_bounds("rooftops-achievements-modal").unwrap();
+        cx.simulate_mouse_down(modal.center(), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(modal.center(), MouseButton::Left, Modifiers::default());
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
             assert!(game.read(cx).achievements_open);
