@@ -22,8 +22,18 @@ const buildEnv = Object.fromEntries(
 const run = $.cwd(root.pathname).env(buildEnv);
 const output = new URL(".cloudflare/output/v0/", root);
 
-await run`bun --no-env-file scripts/refresh-assets.ts`;
-await run`bun run build:web`;
+const args = Bun.argv.slice(2);
+const fast = args.includes("--fast");
+const cfArgs = args.filter((arg) => arg !== "--fast");
+
+if (fast) {
+  await run`bunx --no-env-file --no-install --bun vite build --config web/vite.config.ts`;
+  await run`bun --no-env-file web/scripts/prerender.ts`;
+  await run`bunx --no-env-file --no-install --bun vite build --config web/vite.rooftops.config.ts`;
+} else {
+  await run`bun --no-env-file scripts/refresh-assets.ts`;
+  await run`bun run build:web`;
+}
 await run`rm -rf .cloudflare/output/v0`;
 await run`mkdir -p .cloudflare/output/v0/workers/default/bundle`;
 await run`cp -R web/dist/client .cloudflare/output/v0/workers/default/assets`;
@@ -60,4 +70,4 @@ await Bun.write(
     },
   }),
 );
-await run.env(deployEnv)`cf deploy --prebuilt ${Bun.argv.slice(2)}`;
+await run.env(deployEnv)`cf deploy --prebuilt ${cfArgs}`;

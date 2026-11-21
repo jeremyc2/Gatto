@@ -39,6 +39,10 @@ dialog.rooftops-dialog[data-backdrop="achievements"]::backdrop {
   background-color: rgb(16 19 34 / 0.88);
 }
 
+dialog.rooftops-dialog[data-backdrop="opaque"]::backdrop {
+  background-color: #101322;
+}
+
 .rooftops-slider {
   --slider-track-size: 6px;
   --slider-thumb-size: 16px;

@@ -36,7 +36,7 @@ with `bun refresh:assets` and building. The refresh requires macOS and the
 [artwork refresh requirements](../CONTRIBUTING.md#artwork-refresh-requirements). Keep credentials
 out of root `.env` so regular Bun commands do not automatically load them.
 
-Validate deployment without uploading with `bun deploy:web --dry-run`. After a
+Validate deployment without uploading with `bun deploy:web --dry-run`. Pass `--fast` (`bun deploy:web --fast`) to skip asset refreshes and type checks and run only the build steps required for deployment. After a
 deployment, run `bun --no-env-file web/scripts/check-story-video.ts <website-url>`
 to check video ranges against the real host. A local Vite preview already
 supports ranges and cannot catch missing production range support.

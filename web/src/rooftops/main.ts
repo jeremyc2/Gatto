@@ -204,7 +204,6 @@ class RooftopsGame {
   private optionsOpen = false;
   private achievementsOpen = false;
   private rotatePromptOpen = false;
-  private allowPortraitPlay = false;
   private viewingScorecard: Score | null = null;
 
   private preferences: Preferences;
@@ -259,6 +258,7 @@ class RooftopsGame {
   private resultsMessageEl!: HTMLDivElement;
 
   private rotateDialog!: HTMLDialogElement;
+  private rotateBodyEl!: HTMLParagraphElement;
   private rotateEnterBtn!: HTMLButtonElement;
 
   private optionsDialog!: HTMLDialogElement;
@@ -303,6 +303,7 @@ class RooftopsGame {
     this.touchMode = coarseQuery.matches;
     coarseQuery.addEventListener("change", (event) => {
       this.touchMode = event.matches;
+      this.syncLandscapeGate();
       this.requestFrame();
     });
 
@@ -539,63 +540,57 @@ class RooftopsGame {
     this.achievementsDialog.appendChild(achCard);
     this.root.appendChild(this.achievementsDialog);
 
-    // Landscape orientation prompt for portrait phones
+    // Full-screen opaque landscape gate whenever a mobile/touch device is in portrait.
     this.rotateDialog = document.createElement("dialog");
-    setStyleX(this.rotateDialog, stylex.attrs(styles.dialog), "rooftops-dialog");
-    this.rotateDialog.setAttribute("closedby", "any");
+    setStyleX(this.rotateDialog, stylex.attrs(styles.rotateDialog), "rooftops-dialog");
+    this.rotateDialog.setAttribute("closedby", "none");
+    this.rotateDialog.dataset.backdrop = "opaque";
     this.rotateDialog.setAttribute("aria-labelledby", "rooftops-rotate-title");
 
-    const rotateCard = document.createElement("div");
-    setStyleX(rotateCard, stylex.attrs(styles.rotateCard));
+    const rotateStage = document.createElement("div");
+    setStyleX(rotateStage, stylex.attrs(styles.rotateStage));
 
-    const rotateIcon = createRotatePhoneIcon(44);
+    const rotateBackLink = document.createElement("a");
+    setStyleX(rotateBackLink, stylex.attrs(styles.backLink));
+    rotateBackLink.href = "/";
+    const rotateBackLabel = document.createElement("span");
+    rotateBackLabel.textContent = "Gatto";
+    rotateBackLink.append(createBackArrowIcon(), rotateBackLabel);
+
+    const rotateIcon = createRotatePhoneIcon(52);
     rotateIcon.style.color = "#ffdba0";
 
     const rotateTitle = document.createElement("h2");
     rotateTitle.id = "rooftops-rotate-title";
     setStyleX(rotateTitle, stylex.attrs(styles.rotateTitle));
-    rotateTitle.textContent = "Rotate to landscape";
+    rotateTitle.textContent = "Rooftops";
 
-    const rotateBody = document.createElement("p");
-    setStyleX(rotateBody, stylex.attrs(styles.rotateBody));
-    rotateBody.textContent = "Turn your phone sideways for the best view across the rooftops.";
+    const canLock = canProgrammaticallyLockLandscape();
+    this.rotateBodyEl = document.createElement("p");
+    setStyleX(this.rotateBodyEl, stylex.attrs(styles.rotateBody));
+    this.rotateBodyEl.textContent = "Turn your device sideways to play.";
 
     const rotateActions = document.createElement("div");
     setStyleX(rotateActions, stylex.attrs(styles.rotateActions));
 
     this.rotateEnterBtn = document.createElement("button");
     this.rotateEnterBtn.type = "button";
-    setStyleX(this.rotateEnterBtn, stylex.attrs(styles.btn, styles.btnPrimary));
-    this.rotateEnterBtn.textContent = "Enter landscape";
-    this.rotateEnterBtn.hidden = !canProgrammaticallyLockLandscape();
+    setStyleX(this.rotateEnterBtn, stylex.attrs(styles.btn, styles.btnPrimary, styles.rotateBtn));
+    this.rotateEnterBtn.textContent = "Rotate screen";
+    this.rotateEnterBtn.hidden = !canLock;
     this.rotateEnterBtn.addEventListener("click", () => {
       this.audio.unlock();
       void tryLockLandscape().then((locked) => {
-        if (locked) {
-          this.dismissRotatePromptAndStart();
+        if (!locked && this.needsLandscapeGate()) {
+          this.rotateEnterBtn.hidden = true;
         }
+        this.syncViewport();
       });
     });
 
-    const playPortraitBtn = document.createElement("button");
-    playPortraitBtn.type = "button";
-    setStyleX(
-      playPortraitBtn,
-      stylex.attrs(
-        styles.btn,
-        canProgrammaticallyLockLandscape() ? styles.btnMenu : styles.btnPrimary,
-      ),
-    );
-    playPortraitBtn.textContent = "Play in portrait";
-    playPortraitBtn.addEventListener("click", () => {
-      this.audio.unlock();
-      this.allowPortraitPlay = true;
-      this.dismissRotatePromptAndStart();
-    });
-
-    rotateActions.append(this.rotateEnterBtn, playPortraitBtn);
-    rotateCard.append(rotateIcon, rotateTitle, rotateBody, rotateActions);
-    this.rotateDialog.appendChild(rotateCard);
+    rotateActions.appendChild(this.rotateEnterBtn);
+    rotateStage.append(rotateBackLink, rotateIcon, rotateTitle, this.rotateBodyEl, rotateActions);
+    this.rotateDialog.appendChild(rotateStage);
     this.root.appendChild(this.rotateDialog);
   }
 
@@ -784,8 +779,12 @@ class RooftopsGame {
       supportsDevicePixelBox ? { box: "device-pixel-content-box" } : {},
     );
 
-    this.root.addEventListener("pointerdown", () => {
+    this.root.addEventListener("pointerdown", (event) => {
       this.windowFocused = !document.hidden;
+      if (event.pointerType === "touch" && !this.touchMode) {
+        this.touchMode = true;
+        this.syncLayout();
+      }
       this.audio.unlock();
     });
 
@@ -854,9 +853,27 @@ class RooftopsGame {
     wireDialogDismiss(this.achievementsDialog, () => {
       if (this.achievementsOpen) this.closeAchievements();
     });
-    wireDialogDismiss(this.rotateDialog, () => {
-      if (this.rotatePromptOpen) this.closeRotatePrompt();
+    // The landscape gate cannot be dismissed until the device is actually in landscape.
+    this.rotateDialog.addEventListener("cancel", (event) => {
+      if (this.needsLandscapeGate()) {
+        event.preventDefault();
+      }
     });
+    this.rotateDialog.addEventListener("close", () => {
+      if (this.needsLandscapeGate()) {
+        this.rotatePromptOpen = false;
+        this.syncLandscapeGate();
+      } else {
+        this.rotatePromptOpen = false;
+      }
+    });
+
+    const handleOrientationChange = () => {
+      this.syncViewport();
+      this.requestFrame();
+    };
+    window.addEventListener("orientationchange", handleOrientationChange);
+    screen.orientation?.addEventListener?.("change", handleOrientationChange);
 
     const handleDeactivate = () => {
       this.windowFocused = false;
@@ -908,8 +925,36 @@ class RooftopsGame {
     this.safeLeft = px("--sal");
   }
 
-  private isPortraitPhone(): boolean {
-    return this.touchMode && this.viewportH > this.viewportW && this.viewportW < 760;
+  private needsLandscapeGate(): boolean {
+    return this.touchMode && this.viewportH > this.viewportW;
+  }
+
+  private syncLandscapeGate(): void {
+    const shouldGate = this.needsLandscapeGate();
+    if (shouldGate) {
+      this.clearTouchPointers();
+      this.run.input = { left: false, right: false, jump: false };
+      this.run.buffer = 0;
+      this.lastFrameMs = null;
+      this.remainder = 0;
+      this.audio.suspend();
+      if (!this.rotatePromptOpen || !this.rotateDialog.open) {
+        this.rotatePromptOpen = true;
+        if (!this.rotateDialog.open) {
+          this.rotateDialog.showModal();
+        }
+      }
+    } else if (this.rotatePromptOpen || this.rotateDialog.open) {
+      this.rotatePromptOpen = false;
+      this.lastFrameMs = null;
+      this.remainder = 0;
+      if (this.rotateDialog.open) {
+        this.rotateDialog.close();
+      }
+      if (!this.optionsOpen && !this.achievementsOpen) {
+        this.root.focus({ preventScroll: true });
+      }
+    }
   }
 
   private posterMetrics(): { scale: number; x: number; y: number; width: number; height: number } {
@@ -949,10 +994,7 @@ class RooftopsGame {
     this.resultsControlsEl.style.top = `${Math.round(poster.y + poster.height + 12)}px`;
     this.resultsControlsEl.style.width = `${Math.round(860 * poster.scale)}px`;
 
-    // If the player rotated their phone to landscape while the rotate prompt was up, start immediately.
-    if (this.rotatePromptOpen && !this.isPortraitPhone()) {
-      this.dismissRotatePromptAndStart();
-    }
+    this.syncLandscapeGate();
     this.syncScreenChrome(false);
   }
 
@@ -1176,28 +1218,6 @@ class RooftopsGame {
   private playFromMenu(): void {
     if (!this.menuOpen || this.optionsOpen || this.achievementsOpen || this.rotatePromptOpen)
       return;
-    if (this.isPortraitPhone() && !this.allowPortraitPlay) {
-      if (canProgrammaticallyLockLandscape()) {
-        void tryLockLandscape().then((locked) => {
-          if (locked || !this.isPortraitPhone()) {
-            this.startRunFromMenu();
-          } else {
-            this.openRotatePrompt();
-          }
-        });
-      } else {
-        this.openRotatePrompt();
-      }
-      return;
-    }
-    if (this.touchMode && this.viewportH > this.viewportW) {
-      void tryLockLandscape();
-    }
-    this.startRunFromMenu();
-  }
-
-  private startRunFromMenu(): void {
-    if (!this.menuOpen) return;
     this.resetRun();
     if (this.reducedMotion()) {
       this.finishArrival();
@@ -1207,33 +1227,6 @@ class RooftopsGame {
     this.root.focus({ preventScroll: true });
     this.syncScreenChrome(true);
     this.requestFrame();
-  }
-
-  private openRotatePrompt(): void {
-    this.rotatePromptOpen = true;
-    this.lastFrameMs = null;
-    this.rotateEnterBtn.hidden = !canProgrammaticallyLockLandscape();
-    if (!this.rotateDialog.open) {
-      this.rotateDialog.showModal();
-    }
-    this.requestFrame();
-  }
-
-  private closeRotatePrompt(): void {
-    this.rotatePromptOpen = false;
-    this.lastFrameMs = null;
-    if (this.rotateDialog.open) {
-      this.rotateDialog.close();
-    }
-    this.root.focus({ preventScroll: true });
-    this.requestFrame();
-  }
-
-  private dismissRotatePromptAndStart(): void {
-    this.closeRotatePrompt();
-    if (this.menuOpen) {
-      this.startRunFromMenu();
-    }
   }
 
   private returnToMenu(): void {
@@ -1334,7 +1327,6 @@ class RooftopsGame {
     if (event.key === "Escape") {
       if (this.rotatePromptOpen) {
         event.preventDefault();
-        this.closeRotatePrompt();
       } else if (this.achievementsOpen) {
         event.preventDefault();
         this.closeAchievements();
@@ -1756,6 +1748,12 @@ class RooftopsGame {
     const { scale, viewW, viewH, verticalOffset } = courseViewport;
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    if (this.rotatePromptOpen) {
+      ctx.fillStyle = "#101322";
+      ctx.fillRect(0, 0, this.viewportW, this.viewportH);
+      return;
+    }
 
     if (this.menuOpen) {
       const time = this.reducedMotion() ? 0 : this.menuTime;
