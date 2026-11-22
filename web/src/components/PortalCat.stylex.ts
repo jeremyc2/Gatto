@@ -11,8 +11,6 @@ export const styles = stylex.create({
     position: "relative",
     containerType: "size",
     height: { default: "min(464px, 68svh)", [media.phone]: "min(394px, 61svh)" },
-    // Matches the page around the seam until the canvas paints over it.
-    backgroundImage: `linear-gradient(to bottom, ${colors.subtle} 50%, ${colors.canvas} 50%)`,
   },
   canvas: {
     position: "absolute",
