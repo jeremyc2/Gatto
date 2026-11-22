@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.24.9] - 2026-11-22
+
 ### Changed
 
 - Rebuild the website’s portal finale as a Canvas 2D shot that plays when fully
