@@ -28,6 +28,7 @@ import {
   type TouchControlState,
 } from "./course-renderer";
 import { Flight, harborFrame, HarborRenderer, menuTitleLayout } from "./harbor/flight";
+import { takePortalArrival } from "./harbor/portal-arrival";
 import { aimFromPointer, defaultAim, followAim, type Aim } from "./harbor/projection";
 import { arrivalFlamesOn, ghostGap, LevelSlide, Run } from "./simulation";
 import {
@@ -265,8 +266,11 @@ class RooftopsGame {
   private readonly audio = new AudioEngine();
 
   private run: Run = Run.forArrival();
+  private readonly portalArrival = takePortalArrival();
+  private portalMenu = this.portalArrival !== undefined;
+  private portalMenuShownAt: number | undefined;
   private menuOpen = true;
-  private menuTime = 0;
+  private menuTime = this.portalArrival ?? 0;
   private menuCamera: Aim = defaultAim();
   private menuAim: Aim = defaultAim();
   private menuFlight: Flight | null = null;
@@ -398,6 +402,17 @@ class RooftopsGame {
     this.audio.setStatusListener(() => this.syncOptionsUi());
     this.syncViewport();
     this.syncScreenChrome(true);
+    if (this.portalArrival !== undefined) {
+      const now = performance.now();
+      document.documentElement.dataset.portalArrival = "";
+      if (!this.reducedMotion()) {
+        this.portalMenuShownAt = now;
+        const fade = { delay: 60, duration: 360, fill: "backwards", easing: "ease-out" } as const;
+        this.menuActionsWrap.animate([{ opacity: 0 }, { opacity: 1 }], fade);
+        this.backLink.animate([{ opacity: 0 }, { opacity: 1 }], fade);
+      }
+      this.renderScene(computeCourseViewport(this.viewportW, this.viewportH), now);
+    }
     this.requestFrame();
   }
 
@@ -456,6 +471,22 @@ class RooftopsGame {
 
     menuActions.append(playBtn, settingsBtn, achievementsBtn, this.menuScorecardBtn);
     this.menuActionsWrap.appendChild(menuActions);
+    // Enable scrolling only when the buttons overflow, so they never drift or
+    // rubber-band when everything already fits.
+    let scrollable: boolean | undefined;
+    const updateMenuScroll = () => {
+      const overflows = menuActions.scrollHeight > menuActions.clientHeight + 1;
+      if (overflows === scrollable) return;
+      scrollable = overflows;
+      setStyleX(
+        menuActions,
+        stylex.attrs(styles.menuActions, overflows && styles.menuActionsScrollable),
+      );
+      if (!overflows) menuActions.scrollTop = 0;
+    };
+    const menuSize = new ResizeObserver(updateMenuScroll);
+    menuSize.observe(menuActions);
+    for (const button of menuActions.children) menuSize.observe(button);
     this.root.appendChild(this.menuActionsWrap);
 
     this.optionsBtn = document.createElement("button");
@@ -1025,7 +1056,11 @@ class RooftopsGame {
   }
 
   private needsLandscapeGate(): boolean {
-    return this.touchMode && (this.viewportH > this.viewportW || this.needsFullscreenOnMobile());
+    return (
+      !this.portalMenu &&
+      this.touchMode &&
+      (this.viewportH > this.viewportW || this.needsFullscreenOnMobile())
+    );
   }
 
   private syncLandscapeGate(): void {
@@ -1344,6 +1379,11 @@ class RooftopsGame {
   private playFromMenu(): void {
     if (!this.menuOpen || this.optionsOpen || this.achievementsOpen || this.rotatePromptOpen)
       return;
+    if (this.portalMenu) {
+      this.portalMenu = false;
+      this.syncLandscapeGate();
+      if (this.rotatePromptOpen) return;
+    }
     this.resetRun();
     if (this.reducedMotion()) {
       this.finishArrival();
@@ -1884,8 +1924,12 @@ class RooftopsGame {
     }
 
     if (this.menuOpen) {
-      const time = this.reducedMotion() ? 0 : this.menuTime;
+      const time = this.reducedMotion() && this.portalArrival === undefined ? 0 : this.menuTime;
       const aim = this.reducedMotion() ? defaultAim() : this.menuCamera;
+      const titleOpacity =
+        this.portalMenuShownAt === undefined || this.reducedMotion()
+          ? 1
+          : clamp((nowMs - this.portalMenuShownAt - 60) / 360, 0, 1);
       this.harborRenderer.renderMenu(
         ctx,
         this.viewportW,
@@ -1893,6 +1937,7 @@ class RooftopsGame {
         time,
         aim,
         this.touchMode,
+        titleOpacity,
       );
       return;
     }

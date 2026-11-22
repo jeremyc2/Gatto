@@ -197,14 +197,12 @@ function getCourseMoonTile(level: number): CachedTile {
   return tile;
 }
 
-function drawBackdropSkylineAndMoon(
+export function drawCourseSkyline(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   scale: number,
   camera: number,
-  level: number,
-  verticalOffset: number,
 ): void {
   const windowGroups = getSkylineWindowTiles();
 
@@ -268,7 +266,15 @@ function drawBackdropSkylineAndMoon(
       ctx.restore();
     }
   }
+}
 
+function drawCourseMoon(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  scale: number,
+  level: number,
+  verticalOffset: number,
+): void {
   const moonX = w - 155;
   const screenMoonY = (58 + verticalOffset) * scale;
   const minScreenY = scale < 0.9 || w < 620 ? 74 : 58 * scale;
@@ -1132,22 +1138,16 @@ export class CourseRenderer {
     ctx.fillStyle = rgbCss(SKY);
     ctx.fillRect(0, 0, w * scale, h * scale);
 
-    drawSky(ctx, w, h, drift, scale, camera + courseProgress(run.level, START_X));
+    const backdropCamera = camera + courseProgress(run.level, START_X);
+    drawSky(ctx, w, h, drift, scale, backdropCamera);
 
     ctx.save();
     if (verticalOffset !== 0) {
       ctx.translate(0, verticalOffset * scale);
     }
 
-    drawBackdropSkylineAndMoon(
-      ctx,
-      w,
-      worldH,
-      scale,
-      camera + courseProgress(run.level, START_X),
-      run.level,
-      verticalOffset,
-    );
+    drawCourseSkyline(ctx, w, worldH, scale, backdropCamera);
+    drawCourseMoon(ctx, w, scale, run.level, verticalOffset);
 
     if (slide) {
       this.drawCourseBuildings(

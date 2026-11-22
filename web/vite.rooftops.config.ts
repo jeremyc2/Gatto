@@ -8,6 +8,19 @@ export default defineConfig({
   base: "/",
   publicDir: false,
   plugins: [
+    {
+      name: "rooftops-render-blocking-entry",
+      transformIndexHtml: {
+        order: "post",
+        handler(html) {
+          // Vite replaces the module tag and drops its blocking attribute.
+          return html.replace(
+            /<script type="module" crossorigin(?= src="\/assets\/rooftops-)/,
+            '<script type="module" blocking="render" crossorigin',
+          );
+        },
+      },
+    },
     stylex({
       useCSSLayers: true,
       devMode: "css-only",

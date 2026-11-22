@@ -7,6 +7,25 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Rebuild the website’s portal finale as a Canvas 2D shot that plays when fully
+  visible. The sandstone seam cracks open, a ring of sparks reveals Rooftops,
+  and the jetpack cat flies straight out toward the viewer with a flickering
+  pixel-art flame. The sparks gather into a continuous gold and orange rim that
+  stays active after arrival. Activating the portal banks the cat into a rear
+  view. It slows to a hover beyond the opening while the camera draws level and
+  looks ahead into Rooftops’ harbor, where the title and menu fade in.
+- Redraw the flying jetpack cat in the portal and macOS header in a stretched
+  flying pose. Its turn is now rendered from one model, so the limbs, harness,
+  side-by-side thrusters and flames stay consistent from every angle, and the
+  sprite scales without shimmering seams.
+- Remove the website portal's static still image; without Canvas, the portal
+  link still opens Rooftops.
+- Keep the Rooftops main-menu buttons in place when they fit on screen; they
+  scroll only on very short windows.
+- Add a compact footer control for System, Light, and Dark appearance.
+
 ## [0.24.8] - 2026-11-21
 
 ### Added
@@ -42,7 +61,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Use exact canvas pixel scaling on web Rooftops so fractional-DPR mobile
   screens and orientation or full-screen changes stay crisp without cropped
   margins.
-
 
 - Show release progress immediately and collect the version and notes before
   fetching Git history, preparing the updater, or building video encoders.
@@ -438,7 +456,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Dismiss Rooftops opening messages and control hints on the first gameplay
   input. Keep the next-level prompt visible until Space advances the level.
-
 
 - Mark Rooftops gameplay screenshot scenes as started so opening instructions
   do not appear over a run in progress. Regenerate the first game screenshot.

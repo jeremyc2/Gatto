@@ -4,7 +4,6 @@ import { Container } from "../design-system/Container.rx"
 import { Heading, Text } from "../design-system/Typography.rx"
 import { Link } from "../design-system/Link.rx"
 import { DownloadBadge } from "../DownloadBadge.rx"
-import { PortalSeam } from "./PortalSeam.rx"
 
 export component DownloadSection() {
   <section {...attrs(styles.downloadSection)} id="download">
@@ -28,6 +27,5 @@ export component DownloadSection() {
         <DownloadBadge placement="footer" />
       </div>
     </Container>
-    <PortalSeam edge="bottom" />
   </section>
 }

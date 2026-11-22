@@ -1,100 +1,64 @@
 import pure { attrs } from "@stylexjs/stylex"
 import pure { styles } from "./PortalCat.stylex"
-import pure cat from "../../assets/images/download-rocket-cat-pixel.webp"
-import pure portal from "../../assets/images/download-portal-pixel.webp"
-import pure paper from "../../assets/images/portal-watercolor-paper.webp"
+import pure { portalElements } from "./portal-browser"
+import { observePortal } from "./portal-browser"
 import { SiteFooter } from "./SiteFooter.rx"
 
-
 export component PortalEnding() {
-  <div
-    data-portal-finale=""
-    {...attrs(styles.setting)}
-    style={{ "--portal-paper": `url(${paper})` }}
-  >
-    <PortalCat />
-    <SiteFooter />
-    <div data-portal-runway="" aria-hidden="true" />
-  </div>
-}
+  source stage: HTMLElement | undefined := undefined
+  source toggle: HTMLButtonElement | undefined := undefined
+  source motionPaused: boolean | undefined := undefined
+  source overlay: HTMLCanvasElement | undefined := undefined
+  source canvas: HTMLCanvasElement | undefined := undefined
+  source link: HTMLAnchorElement | undefined := undefined
+  source interactive := true
+  elements = portalElements(stage, canvas, overlay, link, toggle)
 
-export component PortalCat() {
-  <section
-    {...attrs(styles.root)}
-    data-portal-section=""
-    aria-label="A visitor from the Gatto multiverse"
-  >
-    <div {...attrs(styles.content)} data-portal-content="">
+  action captureStage(element: HTMLElement) { stage := element }
+  action captureToggle(element: HTMLButtonElement) { toggle := element }
+  action captureOverlay(element: HTMLCanvasElement) { overlay := element }
+  action captureCanvas(element: HTMLCanvasElement) { canvas := element }
+  action captureLink(element: HTMLAnchorElement) { link := element }
+
+  effect (elements) {
+    if (!$0) return
+    return observePortal($0, {
+      onInteractive: value => { interactive := value },
+      onMotionControl: value => { motionPaused := value }
+    })
+  }
+
+  <div {...attrs(styles.ending)}>
+    <canvas ref={captureCanvas} {...attrs(styles.canvas)} data-portal-canvas="" aria-hidden="true" />
+    <section
+      ref={captureStage}
+      {...attrs(styles.stage)}
+      data-portal-section=""
+      aria-label="A visitor from the Gatto multiverse"
+    >
       <a
-        {...attrs(styles.scene)}
+        ref={captureLink}
+        {...attrs(styles.link, !interactive && styles.waiting)}
         id="download-portal"
         href="/rooftops/"
         aria-label="Play Gatto Rooftops"
+      />
+      <button
+        ref={captureToggle}
+        type="button"
+        {...attrs(styles.motionControl, motionPaused === undefined && styles.hidden)}
+        aria-label={motionPaused ? "Resume portal animation" : "Pause portal animation"}
       >
-        <span data-portal-void-entry="" {...attrs(styles.layers)}>
-          <span {...attrs(styles.aperture)} />
-        </span>
-        <span data-portal-entry="" {...attrs(styles.layers)}>
-          <svg {...attrs(styles.ringFrame)} viewBox="0 0 1000 1000" aria-hidden="true">
-            <defs>
-              <filter id="portal-brush-edge" x="-25%" y="-25%" width="150%" height="150%">
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.035"
-                  numOctaves="2"
-                  seed="8"
-                  result="grain"
-                />
-                <feDisplacementMap
-                  in="SourceGraphic"
-                  in2="grain"
-                  scale="24"
-                  xChannelSelector="R"
-                  yChannelSelector="G"
-                />
-                <feGaussianBlur stdDeviation="18" />
-              </filter>
-              <mask
-                id="portal-brush-mask"
-                maskUnits="userSpaceOnUse"
-                x="0"
-                y="0"
-                width="1000"
-                height="1000"
-              >
-                <circle
-                  data-portal-trace=""
-                  cx="500"
-                  cy="500"
-                  r="400"
-                  pathLength="1"
-                  fill="none"
-                  stroke="white"
-                  stroke-width="320"
-                  stroke-linecap="round"
-                  stroke-dasharray="1 1"
-                  stroke-dashoffset="0"
-                  transform="rotate(-90 500 500)"
-                  filter="url(#portal-brush-edge)"
-                />
-              </mask>
-            </defs>
-            <g mask="url(#portal-brush-mask)">
-              <image {...attrs(styles.ring)} href={portal} width="1000" height="1000" />
-            </g>
-          </svg>
-        </span>
-        <span data-portal-flight="" {...attrs(styles.layers)}>
-          <img
-            {...attrs(styles.cat)}
-            src={cat}
-            width="512"
-            height="512"
-            alt=""
-            loading="lazy"
-          />
-        </span>
-      </a>
-    </div>
-  </section>
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+          {if motionPaused {
+            <path d="M5 3.25 13 8 5 12.75Z" />
+          } else {
+            <path d="M4.5 3.5h2v9h-2zM9.5 3.5h2v9h-2z" />
+          }}
+        </svg>
+      </button>
+    </section>
+    <SiteFooter />
+  </div>
+  <canvas ref={captureOverlay} {...attrs(styles.flyThrough)} data-portal-camera="" aria-hidden="true" />
 }

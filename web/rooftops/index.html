@@ -14,7 +14,21 @@
     <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
-    <script type="module" src="/src/rooftops/main.ts"></script>
+    <style>
+      html {
+        background-color: #101322;
+      }
+      @view-transition {
+        navigation: auto;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        @view-transition {
+          navigation: none;
+        }
+      }
+    </style>
+    <link rel="expect" href="#rooftops-root" blocking="render" />
+    <script type="module" src="/src/rooftops/main.ts" blocking="render"></script>
   </head>
   <body>
     <div id="rooftops-root"></div>

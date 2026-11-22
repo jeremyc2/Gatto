@@ -1,6 +1,6 @@
 import "./document.css";
 import "./story-transitions.css";
-import "./components/portal-entry.css";
+import "./portal/navigation.css";
 import { hydrate } from "@solidjs/web";
 import { createSiteRuntime } from "./reactivescript";
 import program from "./Page.rx?program";

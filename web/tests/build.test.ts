@@ -34,11 +34,14 @@ test("prerenders all scenes, concise copy and the two README download badges", a
     ...html.matchAll(/<link[^>]+rel="preload"[^>]+href="([^"]+)"[^>]+as="font"/g),
   ];
   expect(preloadedFonts).toHaveLength(2);
-  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(8);
+  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(6);
   expect(html).not.toContain("Still view");
   expect(html).not.toContain("How it works");
   expect(html).not.toContain("Gattoverse mini game coming soon");
-  expect(html).toContain('href="/rooftops/"');
+  expect(html).toMatch(
+    /<a[^>]+href="\/rooftops\/"[^>]+id="download-portal"[^>]+aria-label="Play Gatto Rooftops"/,
+  );
+  expect(html).toMatch(/<canvas[^>]+data-portal-canvas[^>]+aria-hidden="true"/);
   const articles = html.match(/<article\b[^>]*id="chapter-[^"]+"[^>]*>/g) ?? [];
   expect(articles).toHaveLength(3);
   for (const article of articles) {
@@ -115,6 +118,8 @@ test("ships Rooftops on its own HTML page with a split bundle excluded from the 
 
   const rooftopsHtml = await Bun.file(new URL("rooftops/index.html", staticDirectory)).text();
   expect(rooftopsHtml).toContain("<title>Rooftops — Gatto</title>");
+  expect(rooftopsHtml).toContain("@view-transition");
+  expect(rooftopsHtml).toMatch(/<script type="module" blocking="render"[^>]+rooftops-[^"]+\.js/);
   const assets = [...rooftopsHtml.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map(
     (match) => match[1]!,
   );

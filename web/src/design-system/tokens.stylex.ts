@@ -2,22 +2,15 @@ import * as stylex from "@stylexjs/stylex";
 
 // Themeable roles. Components consume these names rather than palette values.
 export const colors = stylex.defineVars({
-  canvas: { default: "#f7f3e9", "@media (prefers-color-scheme: dark)": "#1d302b" },
-  text: { default: "#263e36", "@media (prefers-color-scheme: dark)": "#f2efdd" },
-  muted: { default: "#58675e", "@media (prefers-color-scheme: dark)": "#bdcabb" },
-  border: { default: "#d4d9c8", "@media (prefers-color-scheme: dark)": "#4e6656" },
-  accent: { default: "#315e4c", "@media (prefers-color-scheme: dark)": "#bbdac0" },
-  onAccent: { default: "#fffdf4", "@media (prefers-color-scheme: dark)": "#21382d" },
-  subtle: { default: "#e7ecdf", "@media (prefers-color-scheme: dark)": "#30493b" },
+  canvas: "light-dark(#f7f3e9, #1d302b)",
+  text: "light-dark(#263e36, #f2efdd)",
+  muted: "light-dark(#58675e, #bdcabb)",
+  border: "light-dark(#d4d9c8, #4e6656)",
+  accent: "light-dark(#315e4c, #bbdac0)",
+  onAccent: "light-dark(#fffdf4, #21382d)",
+  subtle: "light-dark(#e7ecdf, #30493b)",
   focus: "#a66c39",
   mediaSurface: "#0e1017",
-  portalPaper: "#f3e5ce",
-  portalSeam: "rgba(67, 44, 24, 0.32)",
-  portalSeamAmbient: "rgba(67, 44, 24, 0.18)",
-  portalPaperEdge: "#d6bb8f",
-  portalVoid: "#000",
-  portalVoidDepth: "#100910",
-  portalVoidHaze: "rgba(89, 40, 17, 0.35)",
 });
 
 export const type = stylex.defineVars({

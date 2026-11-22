@@ -167,7 +167,7 @@ preserving the source pixels.
 The page loads the video only for the enhanced motion-enabled story. Reduced
 motion, normal flow, unavailable video and disabled JavaScript use the stills.
 The muted video autoplays once on page load and holds its final frame;
-chapter copy, paw trails and the finale remain scroll-driven.
+chapter copy and paw trails remain scroll-driven.
 
 Run `bun build:web`, `bun test:web`, `bun lint:web` and `bun typecheck:web` after
 changes. Build tests retain the 8 MiB video budget and fast-seeking index check;

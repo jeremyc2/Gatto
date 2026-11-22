@@ -2,6 +2,7 @@ import pure { HydrationScript as hydrationScript } from "@solidjs/web"
 import pure { attrs } from "@stylexjs/stylex"
 import pure { documentStyles } from "./design-system/document.stylex"
 import pure { development, scriptNonce } from "./environment"
+import pure { applyStoredTheme } from "./theme"
 import pure coconat from "../assets/fonts/Coconat.woff2"
 import pure apfel from "../assets/fonts/Apfel.woff2"
 import { App } from "./App.rx"
@@ -19,6 +20,7 @@ export default component Page() {
         content="Gatto is a small Mac app for adding images and videos to GitHub pull requests, issues, and comments."
       />
       <meta name="color-scheme" content="light dark" />
+      <script nonce={nonce} innerHTML={applyStoredTheme} />
       <meta property="og:type" content="website" />
       <meta property="og:url" content="https://gatto.jeremyc2.workers.dev/" />
       <meta property="og:title" content="Gatto — GitHub, illustrated." />

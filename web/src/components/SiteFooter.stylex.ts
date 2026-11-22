@@ -1,15 +1,11 @@
 import * as stylex from "@stylexjs/stylex";
-import { colors, media } from "../design-system/tokens.stylex";
+import { media } from "../design-system/tokens.stylex";
 export const styles = stylex.create({
   footer: {
     position: "relative",
     zIndex: 0,
-    backgroundImage: {
-      default: `linear-gradient(to bottom, transparent 48px, ${colors.canvas} 48px)`,
-      [media.phone]: `linear-gradient(to bottom, transparent 40px, ${colors.canvas} 40px)`,
-    },
     boxSizing: "border-box",
-    paddingBlockStart: { default: 64, [media.phone]: 56 },
+    paddingBlockStart: 20,
     paddingBlockEnd: 27,
   },
   footerTop: {
@@ -17,6 +13,13 @@ export const styles = stylex.create({
     justifyContent: "space-between",
     alignItems: { default: "center", [media.phone]: "start" },
     gap: 25,
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: { default: 20, [media.phone]: "6px 14px" },
   },
   footerNav: {
     display: "flex",

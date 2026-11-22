@@ -38,8 +38,6 @@ try {
     [`${brand}/favicon-32.aseprite`, 5, `${work}/apple-160.png`],
     [`${brand}/menu-bar.aseprite`, 2, "packaging/menu-bar-icon.png"],
     [`${art}/app-cat/app-cat.aseprite`, 2, "packaging/app-cat-pixel.png"],
-    [`${art}/portal-cat/portal-cat.aseprite`, 2, "web/assets/images/download-rocket-cat-pixel.png"],
-    [`${art}/pixel-portal/portal.aseprite`, 2, "web/assets/images/download-portal-pixel.png"],
     [
       "docs/design/art/screenshot-cat/scout.aseprite",
       1,
@@ -87,14 +85,30 @@ try {
     const bytes = await new Bun.Image(Bun.file(path)).png({ compressionLevel: 9 }).bytes();
     await Bun.write(path, bytes);
   }
-  for (const name of [
-    "download-rocket-cat-pixel",
-    "download-portal-pixel",
-    "portal-watercolor-paper",
-  ])
-    await new Bun.Image(Bun.file(resolve(root, `web/assets/images/${name}.png`)))
+  await new Bun.Image(Bun.file(resolve(root, "web/assets/images/portal-watercolor-paper.png")))
+    .webp({ lossless: true })
+    .write(resolve(root, "web/assets/images/portal-watercolor-paper.webp"));
+
+  for (const [master, tag, name] of [
+    ["portal-cat", "Thrust", "portal-cat-thrust"],
+    ["portal-cat-turn", "Turn", "portal-cat-turn"],
+  ] as const) {
+    const sheet = resolve(work, `${name}.png`);
+    await run([
+      aseprite,
+      "--batch",
+      resolve(root, `${art}/portal-cat/${master}.aseprite`),
+      "--tag",
+      tag,
+      "--sheet-type",
+      "horizontal",
+      "--sheet",
+      sheet,
+    ]);
+    await new Bun.Image(Bun.file(sheet))
       .webp({ lossless: true })
       .write(resolve(root, `web/assets/images/${name}.webp`));
+  }
 
   const compiled = resolve(work, "compiled");
   await mkdir(compiled);

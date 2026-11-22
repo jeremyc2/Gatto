@@ -178,3 +178,15 @@ dialog.rooftops-dialog[data-backdrop="opaque"]::backdrop {
 [hidden] {
   display: none !important;
 }
+
+/* Both documents paint the same harbor frame. Hold the outgoing scene until
+   Rooftops is ready, then let only the menu's own controls fade in. */
+:root[data-portal-arrival]::view-transition-group(root),
+:root[data-portal-arrival]::view-transition-new(root) {
+  animation: none;
+}
+
+:root[data-portal-arrival]::view-transition-old(root) {
+  animation: none;
+  opacity: 0;
+}

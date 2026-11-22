@@ -147,7 +147,7 @@ Vite builds both the browser and server graphs. A small Bun script renders the
 root response into static HTML, so all three scenes remain readable without
 JavaScript. CSS selects the pinned story before hydration on script-enabled screens taller
 than 500 CSS pixels. Hydration updates its chapter state without changing its
-geometry. System appearance is a CSS token condition. The initial chapter update is
+geometry. The root color-scheme controls the light and dark tokens. The initial chapter update is
 scheduled for the next animation frame so focus synchronization can flush outside
 Solid's setup effect. The sticky range includes a final paw trail after Share's
 arrival. The three trail legs cover 2%–31%, 33%–69% and 71%–100% of the pinned
@@ -169,46 +169,104 @@ transforms; reduced motion and unsupported
 browsers update immediately. `src/story-transitions.css` owns the document-level
 snapshot pseudo-elements and keyframes that cannot be scoped to component
 selectors. It also sets the route’s `animation-range`, which StyleX 0.19’s
-property validator does not yet accept. The download composition similarly keeps
-its feature-detected finale timeline in `src/components/portal-entry.css`, including
-the paired section/spacer height animations, the SVG brush's stroke-dashoffset,
-and the void expansion and independent cat approach ranges. Rounded overlapping brush caps and a displaced,
-feathered mask edge preserve the ring's sparks without a hard angular cut.
-The section grows as the compensating spacer shrinks, keeping total scroll
-geometry constant. Its appearance, spin and floating animations remain in StyleX.
-The imported paper asset URL is passed through an inline custom property; its
-repeat size is a component style. The [Aseprite paper master](../docs/design/art/portal-paper/artwork.md)
-is 256 × 256, exported at 2× to a 512 × 512 PNG and lossless WebP. The existing
-512 CSS-pixel repeat stays fixed in both axes; the texture never stretches to
-fit the viewport. Its tan plaster palette follows the courtyard wall, and its
-periodic pigment and wrapped grain continue across tile boundaries. `PortalSeam` owns the shared repeating SVG
-mask; the download and footer compositions own their respective lower and upper
-edge geometry. The 768 × 48 SVG repeat has varied tear depths and a tan paper
-underside; phone masks retain its aspect ratio at 640 × 40. Both masks share the
-same origin; `scripts/build-portal-seam.ts` derives the footer mask by closing the
-same contour along the opposite side, instead of rotating or offsetting it.
-The build regenerates this vector asset from the source path. The footer mask's
-empty top margin is clipped by 4 pixels to avoid a rasterization hairline before
-applying its shadows. The paper halves meet at the same cut;
-the colored faces inset 2 pixels (1 on phones) to expose their thickness inward.
-Directional drop shadows follow each contour. The finale owns the continuous
-paper background, while the footer's background begins below its masked band.
-The portal content shifts by half that band to stay centered between the cuts.
-The watercolor composition has no shadow. All ordinary component
-styling remains in StyleX.
+property validator does not yet accept.
 
-The document captures its script nonce through the script element's ref
-during hydration without searching the document.
-The portal links directly to `/rooftops/` using a circular focus indicator and
-stays hidden from keyboard navigation while the scroll section is collapsed.
-`/rooftops/` is built as a separate HTML page (`web/rooftops/index.html`) and
-split Vite bundle (`web/vite.rooftops.config.ts`) so the game's Canvas 2D
-renderer, procedural Web Audio worklet, and StyleX controls add zero bytes to
-the main site's HTML, JavaScript, or stylesheet. Non-interactive game world,
-harbor, HUD, and scorecard graphics render in Canvas 2D; interactive dialogs
-and buttons use StyleX (`web/src/rooftops/rooftops.stylex.ts`) with only
-top-layer dialog and native range/checkbox pseudo-elements in
-`web/src/rooftops/rooftops-controls.css`.
+## Portal finale
+
+`PortalCat.rx` reserves a responsive stage between the download and footer.
+A Canvas 2D surface spans the stage and footer, using adjacent section colors
+from StyleX. Embers can continue below the stage, pass behind the native footer
+content, and fade before the bottom of the page. The stage and footer keep
+stable positions in the document throughout playback. The stage height and
+available width determine the aperture and hit target. The paper lips also
+clear the bright rim at their tightest point. The page root disables vertical overscroll
+bounce at its boundaries.
+
+`portal-browser.ts` loads the scene as the stage approaches the viewport.
+An IntersectionObserver starts the animation when the stage is fully in view.
+A requestAnimationFrame clock runs the opening shot once and keeps the
+settled scene moving at up to 30 frames per second. It pauses when the scene or
+document leaves view. The icon-only pause button works with keyboard, pointer,
+and touch. Resize and appearance changes repaint the current composition.
+Reduced motion draws a still of the open portal. Without JavaScript or Canvas
+2D, the stage shows its two-tone background and the native Rooftops link still
+works. The link takes pointer input when the aperture
+opens and retains its circular keyboard focus indicator.
+
+The closed seam uses the hand-drawn contour of the original paper edge.
+Its opposing faces separate at different rates into a tear wider at the center.
+Fine torn fibers and soft contact shadows catch the light at the edges. Small
+fragments tumble from the seam and fall under gravity. Warm ochre and olive
+undertones bring the sandstone closer to the courtyard’s plaster. The
+[Aseprite paper master](../docs/design/art/portal-paper/artwork.md) is
+256 × 256 and exports at 2×. Canvas repeats the 512 px lossless WebP at its
+native size so the grain stays consistent across viewport sizes.
+
+Rotating filaments gather first. Overlapping ribbons then turn them into a
+continuous white-gold rim with a glowing orange fringe and moving embers.
+Detached sparks leave tangentially, curve downward, and cool. Short radial
+sparks also fan upward and sideways.
+A soft amber spill lights the cut. The opening is a cropped view of the actual
+Rooftops harbor. It frames the skyline, bridge and water before the title has
+appeared. A diagonal
+crossing plane reveals the foreground portion over the sparks. Inside the
+aperture, Canvas draws the complete cel underneath so that the clipping edge
+stays invisible across the fur. One continuous flight curve brings it out at a steady
+speed with short acceleration and braking at the ends. The cat holds its
+approved orientation and drifts subtly after arrival. Its flame comes from six attached Aseprite poses sampled
+with nearest-neighbor scaling. The original film’s visual effects
+team used animated guides, separate spark motion, and light from the particles
+to illuminate the foreground. [RISE and SideFX breakdown](https://www.sidefx.com/community/rise-fx-doctor-strange/) ·
+[RISE VFX supervisor interview](https://www.artofvfx.com/doctor-strange-florian-gellinger-vfx-supervisor-rise-visual-effects-studios/).
+
+The cat flies straight out of the middle of the portal, its face toward the
+viewer at a front three-quarter angle that shows the pack and plumes.
+Activating the portal banks it away from the viewer through eighteen poses
+rendered from the visitor's model, through profile to a rear view. Each cel is
+enlarged by a whole number with nearest-neighbour sampling, then drawn with
+smoothing, so pixels stay even while the cat moves and scales. The return holds the rear angle while both
+flames flicker. The cat flies forward through the opening and
+brakes at a fixed point in the harbor. The camera continues forward until it
+draws level with the cat. Perspective takes the stationary cat out of view
+as the camera looks ahead. The camera enlarges the opening in front of the harbor. The harbor has its
+own framing so the visible portion grows until the renderer fills the viewport
+at the menu’s native scale. Its projection keeps every on-screen part of the
+aperture covered throughout the move.
+
+The portal and Rooftops use the same harbor renderer and opening aim.
+The final frame’s harbor time passes once through session storage so the
+first game frame matches it. A same-origin View Transition holds the outgoing
+frame while the render-blocking game initializes. The harbor stays visible
+through the handoff. The Rooftops title and native menu controls fade in over
+it. On mobile the landscape and fullscreen prompt appears when the player
+selects Play. The native link handles reduced motion, modified clicks, and
+pages without Canvas 2D.
+
+The footer's icon-only radio group offers System, Light, and Dark. An early,
+nonce-aware script applies a saved preference to the color-scheme meta tag
+before first paint. StyleX tokens use `light-dark()`. Canvas reads that same
+preference and repaints when the tag changes. Returning to System clears the
+override and follows the OS.
+
+The renderer caches the viewport-resolution harbor frame, spark glow, and
+settled sandstone. While the portal is visible it samples the harbor at 18 fps.
+It groups particle strokes by color and opacity and redraws only the active
+area of the stage after the seam opens. The backing store is capped at about
+1.65 million pixels. The production finale is a lazy-loaded chunk that shares
+scenic drawing with Rooftops. The game’s simulation, controls, and Web Audio
+remain in the standalone `/rooftops/` build. Its interactive dialogs and buttons
+use StyleX (`web/src/rooftops/rooftops.stylex.ts`) with native top-layer and
+range/checkbox pseudo-elements in `web/src/rooftops/rooftops-controls.css`.
+
+For visual verification, jump directly to the page bottom and check that the
+crack precedes ignition and the cat clears the rim. Scroll away during playback
+and return to check that it resumes in place. Check sustained ember motion
+after the arrival and pause it from the keyboard. Check a short landscape
+viewport and a high-DPR phone for rim clearance. Verify the theme control in
+both OS appearances. During the fly-through, check that the cat slows beyond
+the opening and track the same bridge towers through the opening and into the menu.
+Check the mobile Play prompt, reduced
+motion, and the native link with JavaScript disabled.
 
 Run `bun build:web` and `bun size:web` to measure the actual stylesheet links in
 `web/dist/client/index.html`. Bun reports raw bytes and gzip bytes. The build test
@@ -216,11 +274,20 @@ limits the combined CSS to **24 KiB raw and 7 KiB gzip**, leaving room above the
 current page while catching large regressions. Raise a budget only with a measured
 reason. Font and image payloads are separate from this CSS budget.
 
+The 2026-11-21 fly-through build ships one main-page stylesheet with
+**20,212 raw bytes and 5,985 gzip bytes**, measured with
+`bun build:web && bun size:web`. The continuous finale build measured
+19,048 raw bytes and 5,750 gzip bytes. The initial Canvas 2D build measured
+18,781 raw bytes and 5,668 gzip bytes.
+
 Rechecked on 2026-11-21 after replacing the portal notice with the split `/rooftops/`
 page: one production stylesheet on the main page, **22,843 raw bytes and 6,736 gzip
 bytes**, measured with `bun build:web && bun size:web`, well within the 24 KiB / 7 KiB limits.
 
-Measured through 2026-10-18 with Vite 8.3.4 and StyleX 0.19.1:
+The earlier 2026-11-21 build with the split `/rooftops/` page measured
+22,843 raw bytes and 6,736 gzip bytes.
+
+Historical measurements use Vite 8.3.4 and StyleX 0.19.1.
 
 Rechecked on 2026-10-22 after removing Toastify: the production stylesheet remains
 23,326 raw bytes and 6,971 gzip bytes with the same Vite/StyleX versions. Removing
@@ -253,10 +320,10 @@ unused styles: 23,135 raw bytes and 6,910 gzip bytes, measured the same day.
 | Consistent links, header GitHub icon and matching brand dots (2026-10-26) |        23,674 |      7,032 |
 | Feature screenshots with a shared media frame (2026-10-26)                |        23,858 |      7,100 |
 
-The finale adds 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
-correction. The independent cat approach and feathered void add 324 raw bytes
+The original CSS finale added 3,956 raw bytes and 1,159 gzip bytes over the responsive scene
+correction. The independent cat approach and feathered void added 324 raw bytes
 and 154 gzip bytes over the brush-mask composition. The portal button, collapsed
-focus handling and notification styles add 850 raw bytes and 258 gzip bytes.
+focus handling and notification styles added 850 raw bytes and 258 gzip bytes.
 The budgets increase to 22 KiB raw and 7 KiB gzip for this measured addition.
 The contrasting notification treatment and slide add another 410 raw bytes and
 148 gzip bytes, remaining within those budgets.
@@ -357,58 +424,18 @@ export, enlarged with nearest-neighbor sampling to 480 px on a 1200 × 630
 warm-paper canvas. Its separate `social-image-pixel.png` URL prevents cached
 previews from retaining the former SVG-based card.
 
-The website's flying visitor is separate artwork. Its
-[256 px Aseprite master](../docs/design/explorations/art/portal-cat/portal-cat.aseprite)
-separates exhaust, each rocket, tail, body and hind legs, mounting hardware,
-forelegs and paws, head and ears, and expression. The compact Pocket Kitten has
-an oversized rounded head, little forepaws tucked near its chest, short curled
-hind paws, a rich black-purple coat and the approved cyan/violet eyes. Soft,
-localized shading follows a diffuse light above and to the left, with stronger
-value separation for clear fur and anatomical detail, without ring bands,
-faceted planes or mottled spots. The slimmer tail is a continuous rounded
-curve with a solid root behind the body and no old fragments on other layers.
-Forelegs sweep gently into broad wrists; the hind ankles stay substantial
-through a softer hock bend, with an open gap between the forward-facing feet.
-Preserve the approved knee shapes and purple shading. All four paws show their
-fur-covered tops with short toe divisions, without exposed undersides or pads.
-Broader purple shadows and small fur clusters keep the limbs distinct.
-The rounded lower jaw meets the neck without a hooked chin ledge, transparent
-seam or bright internal edge.
-Keep torso fragments out of the head layer and shoulder straps smooth to avoid
-a zigzag across the back. The single tapered
-torso has no separate back bulge, belly lobe or underside flap. Avoid black
-hairlines and curved belly seams. A continuous light-purple rim frames the exposed
-body, feet and entire tail against black, without flame-colored reflections;
-avoid near-white highlights on its matte
-fur. The three-quarter flying pose turns toward the upper right. Exactly two
-silver-lavender thrusters sit behind the torso, with the tail behind the rocket
-assembly. Two visible shoulder straps and a partial near barrel establish the back
-attachment; the far engine is entirely obscured. Keep complete rounded leg and
-paw contours in front of all hardware, without cutouts for nozzles. Both barrels
-remain straight and the engines keep their compact size. Two straight teardrop
-flames flare wide from the small nozzle openings along the parallel barrel
-axes, with long pointed tails. Layered white/yellow hot cores, orange, violet and
-blue/cyan detail reproduce the earlier reference's spiky pixel fringe. The
-flames may have a sharper rendering style than the cat; keep the fringe attached
-and do not add floating sparks or sideways waves. The far flame remains visible
-after clearing the body. Fill enclosed flame pinholes and connect the visible
-nozzle directly to the hot core without a black gap. The 56-color source has
-its own editable exhaust layer; the portal remains
-separate. `PortalCat.rx`
-uses the 512 px lossless WebP with `image-rendering: pixelated`. The
-[pixel portal master](../docs/design/explorations/art/pixel-portal/portal.aseprite)
-is a separate 384 px still adapted from the original ring, with ember-glow,
-luminous-strand and spark layers, exported
-at 2× to `download-portal-pixel.png` and lossless WebP. Both its aperture and
-exterior remain transparent. The SVG image also uses `image-rendering: pixelated`;
-the existing dark radial center, reveal masks and independent rotation remain.
-Its fine strands, translucent spaces, dense embers and stepped glow preserve
-the original portal's fiery look and meet the center without a pale gap. Avoid
-a uniformly filled orange band. The ring exports at 768 × 768 with a limited
-warm palette and four nonzero alpha levels.
-The earlier painted portal PNG/WebP have been removed. The
-[ring artwork record](../docs/design/explorations/art/pixel-portal/artwork.md)
-owns the palette, geometry, exports and spark inspection guidance. The
+The website's flying visitor is separate artwork. One model in
+[`scripts/render-portal-cat.ts`](../scripts/render-portal-cat.ts) renders the
+[256 px thrust master](../docs/design/explorations/art/portal-cat/portal-cat.aseprite)
+and the 320 px turn master, so every angle keeps the same anatomy, harness,
+thrusters and exhaust. The compact Pocket Kitten has an oversized rounded head,
+a black-purple coat, the approved cyan/violet eyes and a two-pixel dark outline around the cat and harness.
+It flies in a stretched pose: forelegs reach forward under the chin, while the
+hind legs and tail trail straight back. Two identical barrels sit side by side
+along the spine with a chest strap and buckle. Their layered white-to-cyan
+teardrop plumes start at the nozzles and keep their on-screen length at every
+angle. Light stays fixed in world space as the cat turns. The portal ring is
+drawn entirely by the finale’s moving sparks. The
 [visitor artwork record](../docs/design/explorations/art/portal-cat/artwork.md)
 owns exports and anatomy guidance.
 
@@ -461,7 +488,7 @@ owns the reference inventory, staging, repair lessons and export workflow.
 
 `Story.rx` owns one muted, inline video shared across chapters. It autoplays
 once on page load, independently of scrolling, and remains on its final frame
-when playback ends. Chapter copy, paw trails and the finale remain scroll-driven.
+when playback ends. Chapter copy and paw trails remain scroll-driven.
 `story-video.ts` retains only the export dimensions and frame clock; playback
 has no scroll mapping, queued seeks or scroll-triggered loading.
 

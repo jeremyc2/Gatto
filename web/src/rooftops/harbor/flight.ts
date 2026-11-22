@@ -165,6 +165,18 @@ export function harborFrame(
   };
 }
 
+export function harborMenuFrame(
+  viewportW: number,
+  viewportH: number,
+): ReturnType<typeof harborFrame> {
+  const frame = harborFrame(viewportW, viewportH);
+  // In portrait, keep a continuous sky above the harbor and water below it.
+  if (viewportH > viewportW) {
+    frame.y = Math.max(frame.y, viewportH - frame.height - Math.min(110, viewportH * 0.14));
+  }
+  return frame;
+}
+
 export class Flight {
   static readonly DURATION = CUT + BLACK_BEAT + FADE_IN;
   static readonly LAUNCH = LAUNCH;
@@ -784,8 +796,8 @@ export function drawHarborTitle(
   ctx.restore();
 }
 
-export class HarborRenderer {
-  private readonly bridge = new BridgeArt();
+export class HarborMenuRenderer {
+  protected readonly bridge = new BridgeArt();
   private skylineKey = "";
   private skylineMesh: CompiledLayer[] = [];
 
@@ -808,84 +820,27 @@ export class HarborRenderer {
     time: number,
     aim: Aim,
     touchMode = false,
+    titleOpacity = 1,
   ): void {
     ctx.fillStyle = rgbCss(SKY);
     ctx.fillRect(0, 0, viewportW, viewportH);
 
-    const frame = harborFrame(viewportW, viewportH);
-    const portrait = viewportH > viewportW;
-    // In portrait, seat the harbor diorama near the lower-middle so sky extends seamlessly above
-    // and water extends seamlessly to the bottom without letterbox bars.
-    const drawY = portrait
-      ? Math.max(frame.y, viewportH - frame.height - Math.min(110, viewportH * 0.14))
-      : frame.y;
+    const frame = harborMenuFrame(viewportW, viewportH);
     const padX = frame.x / frame.scale;
-    const padTop = drawY / frame.scale;
-    const padBottom = Math.max(0, (viewportH - (drawY + frame.height)) / frame.scale);
+    const padTop = frame.y / frame.scale;
+    const padBottom = Math.max(0, (viewportH - (frame.y + frame.height)) / frame.scale);
     const clip: Rect4 = [-padX, -padTop, HARBOR_WIDTH + padX, HARBOR_HEIGHT + padBottom];
     const view = new View(HARBOR_WIDTH, HARBOR_HEIGHT * HORIZON, aim);
     const bank = new Bank(view);
 
     ctx.save();
-    ctx.translate(frame.x, drawY);
+    ctx.translate(frame.x, frame.y);
     this.renderMenuScenery(ctx, view, bank, time, frame.scale, clip, padX, padBottom);
     ctx.restore();
-    drawHarborTitle(ctx, viewportW, viewportH, touchMode, 1);
+    drawHarborTitle(ctx, viewportW, viewportH, touchMode, titleOpacity);
   }
 
-  renderFlight(
-    ctx: CanvasRenderingContext2D,
-    viewportW: number,
-    viewportH: number,
-    flight: Flight,
-    menuTime: number,
-    aim: Aim,
-    touchMode = false,
-  ): void {
-    const frame = harborFrame(viewportW, viewportH);
-    const original = new View(HARBOR_WIDTH, HARBOR_HEIGHT * HORIZON, aim);
-    const padX = frame.x / frame.scale;
-    const padY = frame.y / frame.scale;
-    const clip: Rect4 = [-padX, -padY, HARBOR_WIDTH + padX, HARBOR_HEIGHT + padY];
-    const camera = flight.camera(original).withClip(clip);
-    const time = menuTime + flight.time;
-
-    ctx.fillStyle = rgbCss(SKY);
-    ctx.fillRect(0, 0, viewportW, viewportH);
-
-    ctx.save();
-    ctx.translate(frame.x, frame.y);
-    if (flight.time <= LAUNCH) {
-      this.renderMenuScenery(
-        ctx,
-        original,
-        new Bank(original),
-        time,
-        frame.scale,
-        clip,
-        padX,
-        padY,
-      );
-    } else {
-      this.renderFlightHarbor(ctx, original, camera, time, frame.scale, clip);
-    }
-    ctx.restore();
-
-    const titleOpacity = flight.titleFadeOpacity();
-    if (titleOpacity > 0) {
-      drawHarborTitle(ctx, viewportW, viewportH, touchMode, titleOpacity);
-    }
-
-    const veil = flight.veilOpacity();
-    if (veil > 0) {
-      ctx.fillStyle = "#000000";
-      ctx.globalAlpha = veil;
-      ctx.fillRect(0, 0, viewportW, viewportH);
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  private renderMenuScenery(
+  protected renderMenuScenery(
     ctx: CanvasRenderingContext2D,
     view: View,
     bank: Bank,
@@ -937,6 +892,60 @@ export class HarborRenderer {
     this.bridge.render(ctx, view, view.deck(), time, scale, padX + 260);
     drawHarborPaths(ctx, ferry(view, time), scale);
     drawHarborPaths(ctx, sailboat(view, time), scale);
+  }
+}
+
+export class HarborRenderer extends HarborMenuRenderer {
+  renderFlight(
+    ctx: CanvasRenderingContext2D,
+    viewportW: number,
+    viewportH: number,
+    flight: Flight,
+    menuTime: number,
+    aim: Aim,
+    touchMode = false,
+  ): void {
+    const frame = harborFrame(viewportW, viewportH);
+    const original = new View(HARBOR_WIDTH, HARBOR_HEIGHT * HORIZON, aim);
+    const padX = frame.x / frame.scale;
+    const padY = frame.y / frame.scale;
+    const clip: Rect4 = [-padX, -padY, HARBOR_WIDTH + padX, HARBOR_HEIGHT + padY];
+    const camera = flight.camera(original).withClip(clip);
+    const time = menuTime + flight.time;
+
+    ctx.fillStyle = rgbCss(SKY);
+    ctx.fillRect(0, 0, viewportW, viewportH);
+
+    ctx.save();
+    ctx.translate(frame.x, frame.y);
+    if (flight.time <= LAUNCH) {
+      this.renderMenuScenery(
+        ctx,
+        original,
+        new Bank(original),
+        time,
+        frame.scale,
+        clip,
+        padX,
+        padY,
+      );
+    } else {
+      this.renderFlightHarbor(ctx, original, camera, time, frame.scale, clip);
+    }
+    ctx.restore();
+
+    const titleOpacity = flight.titleFadeOpacity();
+    if (titleOpacity > 0) {
+      drawHarborTitle(ctx, viewportW, viewportH, touchMode, titleOpacity);
+    }
+
+    const veil = flight.veilOpacity();
+    if (veil > 0) {
+      ctx.fillStyle = "#000000";
+      ctx.globalAlpha = veil;
+      ctx.fillRect(0, 0, viewportW, viewportH);
+      ctx.globalAlpha = 1;
+    }
   }
 
   private renderFlightHarbor(

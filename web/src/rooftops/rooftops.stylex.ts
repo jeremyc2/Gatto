@@ -83,9 +83,10 @@ export const styles = stylex.create({
     },
     maxHeight:
       "calc(100dvh - var(--menu-actions-top, 100px) - max(12px, env(safe-area-inset-bottom)))",
-    overflowY: "auto",
-    overscrollBehavior: "contain",
-    touchAction: "pan-y",
+    // The buttons stay put unless the viewport is too short to show them all.
+    overflow: "hidden",
+    overscrollBehavior: "none",
+    touchAction: "manipulation",
     paddingBottom: 6,
     gap: {
       default: "calc(8px * var(--menu-scale, 1))",
@@ -93,6 +94,12 @@ export const styles = stylex.create({
       [shortLandscapeMedia]: 7,
     },
     pointerEvents: "auto",
+  },
+  menuActionsScrollable: {
+    overflowX: "hidden",
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    touchAction: "pan-y",
   },
   menuBtnSized: {
     width: "100%",
