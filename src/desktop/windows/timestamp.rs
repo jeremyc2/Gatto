@@ -30,22 +30,9 @@ fn format_timestamp(
     // SAFETY: All pointers reference live, distinct structures for these
     // synchronous calls. None selects the system time zone, including DST rules.
     unsafe {
-        let utc_result = FileTimeToSystemTime(&filetime, &mut utc);
-        eprintln!(
-            "[DEBUG-ts247] utc={utc_result:?}, date={}-{}-{}",
-            utc.wYear, utc.wMonth, utc.wDay
-        );
-        utc_result.ok()?;
-        let local_result =
-            SystemTimeToTzSpecificLocalTimeEx(timezone.map(std::ptr::from_ref), &utc, &mut local);
-        eprintln!(
-            "[DEBUG-ts247] explicit_zone={}, local={local_result:?}, date={}-{}-{}",
-            timezone.is_some(),
-            local.wYear,
-            local.wMonth,
-            local.wDay
-        );
-        local_result.ok()?;
+        FileTimeToSystemTime(&filetime, &mut utc).ok()?;
+        SystemTimeToTzSpecificLocalTimeEx(timezone.map(std::ptr::from_ref), &utc, &mut local)
+            .ok()?;
     }
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -68,7 +55,11 @@ mod tests {
 
     #[test]
     fn formats_unix_milliseconds_and_rejects_missing_or_out_of_range_dates() {
-        let utc = DYNAMIC_TIME_ZONE_INFORMATION::default();
+        // Use these fixed rules without looking up an absent registry key.
+        let utc = DYNAMIC_TIME_ZONE_INFORMATION {
+            DynamicDaylightTimeDisabled: true,
+            ..Default::default()
+        };
         let format = |milliseconds| format_timestamp(milliseconds, Some(&utc));
         assert_eq!(format(1).as_deref(), Some("Jan 1, 1970 00:00"));
         assert_eq!(
@@ -94,6 +85,8 @@ mod tests {
         let eastern = DYNAMIC_TIME_ZONE_INFORMATION {
             Bias: 300,
             DaylightBias: -60,
+            // Keep the supplied transition dates instead of registry-based rules.
+            DynamicDaylightTimeDisabled: true,
             DaylightDate: SYSTEMTIME {
                 wMonth: 3,
                 wDay: 2,
