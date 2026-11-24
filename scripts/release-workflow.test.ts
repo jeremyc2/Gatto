@@ -159,6 +159,7 @@ if (tool === 'git') {
       join(root, "scripts/prepare-updater.sh"),
       `#!/bin/bash
 set -e
+printf '["prepare-updater"]\\n' >> calls
 mkdir -p dist/sparkle/bin dist/sparkle/Sparkle.framework
 printf bridge > dist/sparkle/libGattoUpdater.dylib
 printf license > dist/sparkle/LICENSE
@@ -270,10 +271,20 @@ if [[ "$GATTO_TEST_MODE" == beta-feed-failure ]]; then exit 1; fi
 const find = (calls: string[][], ...prefix: string[]) =>
   calls.findIndex((call) => prefix.every((part, i) => call[i] === part));
 test.each(["release", "beta-release"])(
-  "%s appcast excludes encoder sources while its release still uploads them",
+  "%s chooses the version first and keeps encoder sources out of the appcast",
   async (mode) => {
     const result = await workflow(mode, false, "--yes");
     expect(result.exit, result.output).toBe(0);
+    expect(result.output).toStartWith("\n==> Starting Gatto release:");
+    const prepare = find(result.calls, "bun", "scripts/prepare-release.ts");
+    expect(prepare).toBeGreaterThan(-1);
+    for (const prefix of [
+      ["git", "fetch"],
+      ["prepare-updater"],
+      ["bun", "scripts/prepare-video-encoders.ts"],
+      ["bun", "install"],
+    ])
+      expect(find(result.calls, ...prefix)).toBeGreaterThan(prepare);
     expect(result.output).not.toContain("Skipped video-encoder-sources.tar.xz");
     expect(result.calls[find(result.calls, "gh", "release", "create")]).toContain(
       "dist/release/video-encoder-sources.tar.xz",
@@ -369,6 +380,7 @@ test("published release recovery only verifies and syncs metadata", async () => 
   const result = await workflow("published-resume", true);
   expect(result.exit, result.output).toBe(0);
   expect(find(result.calls, "cargo", "run")).toBe(-1);
+  expect(find(result.calls, "bun", "scripts/prepare-release.ts")).toBe(-1);
   expect(result.screenshot).toBe("stale screenshot");
   expect(find(result.calls, "cargo", "build")).toBe(-1);
   expect(find(result.calls, "gh", "release", "create")).toBe(-1);

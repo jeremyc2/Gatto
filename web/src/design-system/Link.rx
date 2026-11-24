@@ -1,0 +1,36 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./Link.stylex"
+import { VisuallyHidden } from "./VisuallyHidden.rx"
+
+export component Link(props: {
+  href: string;
+  children: import("@solidjs/web").JSX.Element;
+  label?: string;
+  variant?: "text" | "graphic" | "icon";
+  xstyle?: import("@stylexjs/stylex").StyleXStyles;
+}) {
+  scheme = props.href.slice(0, 8).toLowerCase()
+  external = scheme.startsWith("http://") || scheme.startsWith("https://") || props.href.startsWith("//")
+  decorated = !props.href.startsWith("#") && (!props.variant || props.variant === "text")
+
+  <a
+    href={props.href}
+    target={external ? "_blank" : undefined}
+    rel={external ? "noopener noreferrer" : undefined}
+    aria-label={props.label && external ? `${props.label} (opens in a new tab)` : props.label}
+    {...attrs(
+      styles.root,
+      props.variant && props.variant !== "text" && styles.graphic,
+      props.variant === "icon" && styles.icon,
+      props.xstyle,
+    )}
+  >
+    {props.children}
+    {if decorated {
+      <span aria-hidden="true" {...attrs(styles.arrow)}>{" ↗"}</span>
+    }}
+    {if external && !props.label {
+      <VisuallyHidden>{" (opens in a new tab)"}</VisuallyHidden>
+    }}
+  </a>
+}

@@ -1,0 +1,73 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./Features.stylex"
+import { Container } from "../design-system/Container.rx"
+import { Heading, Text } from "../design-system/Typography.rx"
+import { HiddenHeading } from "../design-system/VisuallyHidden.rx"
+import { MediaFrame } from "../design-system/MediaFrame.rx"
+import pure batchImage from "../../assets/images/feature-batch-1240.webp"
+import pure batchSmall from "../../assets/images/feature-batch-620.webp"
+import pure annotateImage from "../../assets/images/feature-annotate-1240.webp"
+import pure annotateSmall from "../../assets/images/feature-annotate-620.webp"
+import pure compareImage from "../../assets/images/feature-compare-1240.webp"
+import pure compareSmall from "../../assets/images/feature-compare-620.webp"
+
+features = [
+  {
+    title: "Bring a batch.",
+    description: "Add several files at once.",
+    image: batchImage,
+    small: batchSmall,
+    width: 1240,
+    height: 930,
+    alt: "Gatto with an uploaded image, a video sending, and a queued image in the same batch.",
+  },
+  {
+    title: "Make your point.",
+    description: "Annotate before uploading.",
+    image: annotateImage,
+    small: annotateSmall,
+    width: 1240,
+    height: 943,
+    alt: "Gatto’s image editor with a note and arrow pointing to the active color in a screenshot.",
+  },
+  {
+    title: "Side by side.",
+    description: "Compare two images.",
+    image: compareImage,
+    small: compareSmall,
+    width: 1240,
+    height: 866,
+    alt: "Gatto’s comparison editor showing orange and black gardener cats in matching pixel-editor views.",
+  },
+]
+
+export component Features() {
+  <section {...attrs(styles.details)} id="details">
+    <Container>
+      <HiddenHeading>More ways to work</HiddenHeading>
+      <div {...attrs(styles.extraGrid)}>
+        {for feature in features { <article {...attrs(styles.feature)}>
+            <MediaFrame xstyle={styles.screenshotFrame}>
+              <img
+                {...attrs(styles.screenshot)}
+                src={feature.image}
+                srcset={`${feature.small} 620w, ${feature.image} 1240w`}
+                sizes="(max-width: 760px) min(530px, calc(100vw - 36px)), (max-width: 1050px) calc((100vw - 146px) / 3), (min-width: 1500px) min(477px, calc((100vw - 230px) / 3)), min(437px, calc((100vw - 190px) / 3))"
+                width={feature.width}
+                height={feature.height}
+                alt={feature.alt}
+                loading="lazy"
+                decoding="async"
+              />
+            </MediaFrame>
+            <Heading as="h3" size="subheading" xstyle={styles.featureHeading}>
+              {feature.title}
+            </Heading>
+            <Text muted xstyle={styles.featureDescription}>
+              {feature.description}
+            </Text>
+          </article> }}
+      </div>
+    </Container>
+  </section>
+}

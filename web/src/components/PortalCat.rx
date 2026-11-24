@@ -1,0 +1,64 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./PortalCat.stylex"
+import pure { portalElements } from "./portal-browser"
+import { observePortal } from "./portal-browser"
+import { SiteFooter } from "./SiteFooter.rx"
+
+export component PortalEnding() {
+  source stage: HTMLElement | undefined := undefined
+  source toggle: HTMLButtonElement | undefined := undefined
+  source motionPaused: boolean | undefined := undefined
+  source overlay: HTMLCanvasElement | undefined := undefined
+  source canvas: HTMLCanvasElement | undefined := undefined
+  source link: HTMLAnchorElement | undefined := undefined
+  source interactive := true
+  elements = portalElements(stage, canvas, overlay, link, toggle)
+
+  action captureStage(element: HTMLElement) { stage := element }
+  action captureToggle(element: HTMLButtonElement) { toggle := element }
+  action captureOverlay(element: HTMLCanvasElement) { overlay := element }
+  action captureCanvas(element: HTMLCanvasElement) { canvas := element }
+  action captureLink(element: HTMLAnchorElement) { link := element }
+
+  effect (elements) {
+    if (!$0) return
+    return observePortal($0, {
+      onInteractive: value => { interactive := value },
+      onMotionControl: value => { motionPaused := value }
+    })
+  }
+
+  <div {...attrs(styles.ending)}>
+    <canvas ref={captureCanvas} {...attrs(styles.canvas)} data-portal-canvas="" aria-hidden="true" />
+    <section
+      ref={captureStage}
+      {...attrs(styles.stage)}
+      data-portal-section=""
+      aria-label="A visitor from the Gatto multiverse"
+    >
+      <a
+        ref={captureLink}
+        {...attrs(styles.link, !interactive && styles.waiting)}
+        id="download-portal"
+        href="/rooftops/"
+        aria-label="Play Gatto Rooftops"
+      />
+      <button
+        ref={captureToggle}
+        type="button"
+        {...attrs(styles.motionControl, motionPaused === undefined && styles.hidden)}
+        aria-label={motionPaused ? "Resume portal animation" : "Pause portal animation"}
+      >
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+          {if motionPaused {
+            <path d="M5 3.25 13 8 5 12.75Z" />
+          } else {
+            <path d="M4.5 3.5h2v9h-2zM9.5 3.5h2v9h-2z" />
+          }}
+        </svg>
+      </button>
+    </section>
+    <SiteFooter />
+  </div>
+  <canvas ref={captureOverlay} {...attrs(styles.flyThrough)} data-portal-camera="" aria-hidden="true" />
+}

@@ -1,0 +1,41 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles, headings, texts } from "./Typography.stylex"
+
+type View = import("@solidjs/web").JSX.Element
+type Styles = import("@stylexjs/stylex").StyleXStyles
+type HeadingSize = "display" | "headline" | "title" | "subheading"
+type TextSize = "body" | "lead" | "small" | "caption"
+
+export component Heading(props: {
+  as?: "h1" | "h2" | "h3";
+  size: HeadingSize;
+  id?: string;
+  children: View;
+  xstyle?: Styles;
+}) {
+  appearance = attrs(styles.heading, headings[props.size], props.xstyle)
+
+  if props.as === "h1" {
+    <h1 id={props.id} {...appearance}>{props.children}</h1>
+  } else if props.as === "h3" {
+    <h3 id={props.id} {...appearance}>{props.children}</h3>
+  } else {
+    <h2 id={props.id} {...appearance}>{props.children}</h2>
+  }
+}
+
+export component Text(props: {
+  as?: "p" | "span";
+  size?: TextSize;
+  muted?: boolean;
+  children: View;
+  xstyle?: Styles;
+}) {
+  appearance = attrs(styles.text, texts[props.size ?? "body"], props.muted && styles.muted, props.xstyle)
+
+  if props.as === "span" {
+    <span {...appearance}>{props.children}</span>
+  } else {
+    <p {...appearance}>{props.children}</p>
+  }
+}

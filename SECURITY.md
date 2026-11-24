@@ -42,9 +42,11 @@ This patch covers the reported [typed-array constructor injection](https://githu
 [array/sequence deserialization denial of service](https://github.com/advisories/GHSA-97r2-qh9m-474h),
 [array-length denial of service](https://github.com/advisories/GHSA-wp97-x4hv-qvhp),
 and [async-iterator callable invocation](https://github.com/advisories/GHSA-7rv5-mrxv-xcr9).
-No Seroval advisory is exempted from the audit. Remove the override when the
-Solid packages themselves resolve to a patched Seroval release and the full
-dependency audit and website checks pass.
+No Seroval advisory is exempted from the audit.
+
+On 2026-11-20, upgrading to Solid 2.0.3 removed this override. Solid's supported
+Seroval and Seroval Plugins 1.8.0 now resolve directly in `bun.lock`; the full
+JavaScript audit reports no known vulnerabilities.
 
 ### Temporary lint exception
 
@@ -129,8 +131,11 @@ media orchestration denies it except in its explicit private binding/schema modu
 
 JavaScript installs explicitly disable the default trusted-package script list;
 release installs additionally use `--ignore-scripts`. Package executables use
-`bunx --no-install --bun`, and Bun's built-in checker replaces the separate
-TypeScript compiler package. Bun 1.4.4's built-in formatter also replaces the
+`bunx --no-install --bun`. Bun's built-in checker handles root scripts and
+ordinary TypeScript tests. The website additionally runs ReactiveScript's
+`rx-tsc` under Bun with TypeScript 6.0.3, which its Volar integration requires.
+Build and lint commands both require this language/type check to pass, and a
+checker analysis failure is a failed check even if the tool exits zero. Bun 1.4.4's built-in formatter also replaces the
 Oxfmt package. Oxlint and its typed-rule backend remain installed because the
 stable Bun release does not include a linter; StyleX's custom rules remain active.
 Existing installed package code still executes

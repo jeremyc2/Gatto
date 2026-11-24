@@ -4,8 +4,10 @@ Gatto is a desktop app for macOS and Windows. GPUI owns the application and
 window lifecycle. Platform adapters isolate desktop integration, and shared
 modules handle GitHub access, projects, and persistent settings.
 
-The public website is a separate static Solid project in `web/`. Vite runs under
-Bun for development and builds; Bun prerenders its static HTML. It does not add
+The public website is a separate static Solid 2 project in `web/`. Its components
+and reactive state are authored in ReactiveScript `.rx` files; TypeScript adapters
+own browser APIs, the hydration shell and Vite entry. Vite runs under Bun for
+development and builds; Bun prerenders its static HTML. It does not add
 a backend to the app. See
 [website development](../web/README.md) for its source and tooling boundaries.
 
@@ -299,8 +301,8 @@ notes, completed upload URLs, and workspace metadata: nullable description,
 repository and owner, creation time, and update time. New projects with no
 description store `null`; Scratchpad has a built-in description. Timestamps are
 Unix milliseconds; updates advance monotonically. Project metadata is required
-when reading the manifest. Foundation formats timestamps in the user's local
-time zone.
+when reading the manifest. Foundation on macOS and the native Windows time APIs
+format timestamps in the user's local time zone.
 The schema reference points to
 `https://raw.githubusercontent.com/jeremyc2/Gatto/main/schemas/gatto-project.schema.json`.
 Settings reference `schemas/gatto-settings.schema.json` at the same repository URL.

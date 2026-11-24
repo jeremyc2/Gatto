@@ -1,0 +1,16 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./VisuallyHidden.stylex"
+
+type View = import("@solidjs/web").JSX.Element
+
+export component VisuallyHidden(props: { children: View }) {
+  <span {...attrs(styles.root)}>{props.children}</span>
+}
+
+export component HiddenHeading(props: { children: View }) {
+  <h2 {...attrs(styles.root)}>{props.children}</h2>
+}
+
+export component LiveStatus(props: { children: View; id: string }) {
+  <p {...attrs(styles.root)} id={props.id} role="status" aria-live="polite">{props.children}</p>
+}

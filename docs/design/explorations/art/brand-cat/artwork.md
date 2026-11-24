@@ -115,7 +115,7 @@ grid. The ICO contains 16, 32 and 64 px entries. The Apple touch export centers
 160 px of artwork in a 180 px opaque canvas, leaving masking to the device.
 The social preview centers a crisp 480 px enlargement of the favicon on a
 1200 × 630 warm-paper canvas.
-Keep declarations in `web/src/Document.tsx` synchronized with those files.
+Keep declarations in `web/src/Page.rx` synchronized with those files.
 
 Inspect native 16/32 px versions on light and dark tab backgrounds, their integer
 enlargements, and the README at its declared size. Use `view_sprite`,

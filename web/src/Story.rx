@@ -1,0 +1,226 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { chapters } from "./story-data"
+import pure { styles, pawSlots } from "./Story.stylex"
+import pure { storyElements } from "./story-browser"
+import { observeStory, scrollToChapter } from "./story-browser"
+import { flush } from "solid-js"
+import { Heading, Text } from "./design-system/Typography.rx"
+import { Button } from "./design-system/Button.rx"
+import { LiveStatus } from "./design-system/VisuallyHidden.rx"
+import { MediaFrame } from "./design-system/MediaFrame.rx"
+import { DownloadBadge } from "./DownloadBadge.rx"
+import pure bringImage from "../assets/images/story-bring.webp"
+import pure journeyVideo from "../assets/video/story-journey.mp4"
+import pure { storyVideo } from "./story-video"
+
+type Chapter = import("./story-progress").Chapter
+type StoryFrame = import("./story-browser").StoryFrame
+
+export component Story(props: { header: HTMLElement | undefined }) {
+  source story: HTMLElement | undefined := undefined
+  source stage: HTMLDivElement | undefined := undefined
+  source video: HTMLVideoElement | undefined := undefined
+  source articles: (HTMLElement | undefined)[] := []
+  source copies: (HTMLDivElement | undefined)[] := []
+  source controls: (HTMLButtonElement | undefined)[] := []
+  source active: Chapter := 0
+  source frame: StoryFrame := { pinned: false, progress: 0, copyHeight: 0 }
+  source videoReady := false
+  source controlSelection := false
+  elements = storyElements(props.header, story, stage, video, articles, copies, controls)
+  enhanced = frame.pinned
+  copyHeight = frame.copyHeight
+  atEnd = frame.progress === 1
+  status = enhanced ? chapters[active].status : ""
+
+  action captureStory(element: HTMLElement) { story := element }
+  action captureStage(element: HTMLDivElement) { stage := element }
+  action captureVideo(element: HTMLVideoElement) { video := element }
+
+  action selectChapter(chapter: Chapter) {
+    if (!elements) return
+    controlSelection := true
+    scrollToChapter(elements, chapter)
+  }
+
+  effect (elements) {
+    if (!$0) return
+    return observeStory($0, {
+      onFrame: value => { frame := value },
+      onChapter: value => { active := value },
+      onVideoReady: value => { videoReady := value },
+      consumeControlSelection: () => {
+        let selected = controlSelection
+        controlSelection := false
+        return selected
+      },
+      flush
+    })
+  }
+
+  <section ref={captureStory} {...attrs(styles.story)} id="journey" aria-label="An image finds its way to GitHub">
+    <div ref={captureStage} {...attrs(styles.stage)}>
+      <div {...attrs(styles.steps)}>
+        {for chapter in chapters {
+          action captureArticle(element: HTMLElement) { articles[chapter.index] := element }
+          action captureCopy(element: HTMLDivElement) { copies[chapter.index] := element }
+
+          <article
+            ref={captureArticle}
+            {...attrs(styles.step, active === chapter.index && styles.activeStep)}
+            id={`chapter-${chapter.id}`}
+            aria-labelledby={`${chapter.id}-heading`}
+            aria-hidden={enhanced ? (active !== chapter.index ? "true" : "false") : undefined}
+            inert={enhanced && active !== chapter.index}
+            tabindex={-1}
+          >
+            <div
+              ref={captureCopy}
+              {...attrs(styles.copy, active === chapter.index && styles.transitionCopy)}
+            >
+              <ChapterCopy chapter={chapter.index} />
+            </div>
+            <figure {...attrs(styles.scene, videoReady && styles.coveredStill)}>
+              <MediaFrame xstyle={styles.sceneFrame}>
+                <img
+                  {...attrs(styles.sceneImage)}
+                  src={chapter.image}
+                  width={storyVideo.width}
+                  height={storyVideo.height}
+                  fetchpriority={chapter.index === 0 ? "high" : "auto"}
+                  alt={chapter.alt}
+                />
+              </MediaFrame>
+            </figure>
+          </article>
+        }}
+        <div
+          {...attrs(styles.step, styles.videoStage, videoReady && styles.videoReady)}
+          aria-hidden={videoReady ? "false" : "true"}
+        >
+          <div {...attrs(styles.copy, styles.videoPlaceholder(copyHeight))} />
+          <figure {...attrs(styles.scene)} role="img" aria-label={chapters[active].alt}>
+            <MediaFrame xstyle={styles.sceneFrame}>
+              <video
+                ref={captureVideo}
+                {...attrs(styles.sceneImage)}
+                poster={bringImage}
+                width={storyVideo.width}
+                height={storyVideo.height}
+                autoplay
+                muted
+                playsinline
+                preload="auto"
+                aria-hidden="true"
+                onLoadedData={() => { videoReady := true }}
+                onCanPlay={() => { videoReady := true }}
+                onError={() => { videoReady := false }}
+              >
+                <source src={journeyVideo} type="video/mp4" />
+              </video>
+            </MediaFrame>
+          </figure>
+        </div>
+      </div>
+      <div {...attrs(styles.storyBottom)}>
+        <nav {...attrs(styles.chapterNav)} aria-label="Story chapters">
+          {for chapter in chapters {
+            action captureControl(element: HTMLButtonElement | undefined) { controls[chapter.index] := element }
+
+            <Button
+              ref={captureControl}
+              xstyle={[styles.chapterButton, chapter.index <= active && styles.litChapter]}
+              variant={chapter.index <= active ? "selected" : "quiet"}
+              aria-current={active === chapter.index ? "step" : undefined}
+              aria-controls={`chapter-${chapter.id}`}
+              onClick={() => { selectChapter(chapter.index) }}
+            >
+              <span {...attrs(styles.number, chapter.index <= active && styles.activeNumber)}>
+                {chapter.index + 1}
+              </span>
+              {chapter.label}
+            </Button>
+            <Footsteps gap={chapter.index} />
+          }}
+          <span
+            {...attrs(styles.number, styles.endMarker, atEnd && styles.reachedMarker)}
+            aria-hidden="true"
+            data-story-end=""
+          >
+            <svg {...attrs(styles.finalPaw, atEnd && styles.reachedPaw)} viewBox="0 0 12 14">
+              <defs>
+                <linearGradient id="story-paw-rainbow" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#f36b79" />
+                  <stop offset="18%" stop-color="#f89a50" />
+                  <stop offset="36%" stop-color="#e9ca54" />
+                  <stop offset="52%" stop-color="#73bc87" />
+                  <stop offset="68%" stop-color="#59b9d7" />
+                  <stop offset="84%" stop-color="#8c8de6" />
+                  <stop offset="100%" stop-color="#cd7dcc" />
+                </linearGradient>
+              </defs>
+              <g fill="url(#story-paw-rainbow)">
+                <ellipse cx="2" cy="5" rx="1.5" ry="2" transform="rotate(-25 2 5)" />
+                <ellipse cx="4.5" cy="2.5" rx="1.5" ry="2" transform="rotate(-8 4.5 2.5)" />
+                <ellipse cx="8" cy="2.5" rx="1.5" ry="2" transform="rotate(8 8 2.5)" />
+                <ellipse cx="10.5" cy="5" rx="1.5" ry="2" transform="rotate(25 10.5 5)" />
+                <path d="M2.5 11 C2 9 4 6.5 6 6.5 S10 9 9.5 11 C9 13 7.5 11.5 6 11.5 S3 13 2.5 11Z" />
+              </g>
+            </svg>
+          </span>
+        </nav>
+      </div>
+      <LiveStatus id="story-status">{status}</LiveStatus>
+    </div>
+  </section>
+}
+
+component ChapterCopy(props: { chapter: Chapter }) {
+  if props.chapter === 0 {
+    <Heading as="h1" size="display" xstyle={styles.title} id="bring-heading">
+      GitHub,
+      <br />
+      illustrated.
+    </Heading>
+    <Text size="lead" xstyle={styles.lead}>
+      A little Mac app for sharing images and videos in pull requests, issues, and comments.
+    </Text>
+    <DownloadBadge />
+  } else if props.chapter === 1 {
+    <Heading size="headline" xstyle={styles.title} id="upload-heading">
+      Give it a place
+      <br />
+      on GitHub.
+    </Heading>
+    <Text size="lead" xstyle={styles.lead}>
+      Choose a repository, then drop in your files.
+    </Text>
+  } else {
+    <Heading size="headline" xstyle={styles.title} id="copy-heading">
+      Copy it.
+      <br />
+      Carry on.
+    </Heading>
+    <Text size="lead" xstyle={styles.lead}>
+      Paste the Markdown into your conversation.
+    </Text>
+  }
+}
+
+component Footsteps(props: { gap: Chapter }) {
+  <div {...attrs(styles.route)} aria-hidden="true">
+    <div {...attrs(styles.trail)}>
+      {for slot in pawSlots {
+        <span {...attrs(styles.pawSlot, slot.style)}>
+          <svg {...attrs(styles.paw(slot.step, props.gap))} data-story-paw="" viewBox="0 0 12 14">
+            <ellipse cx="2" cy="5" rx="1.5" ry="2" transform="rotate(-25 2 5)" />
+            <ellipse cx="4.5" cy="2.5" rx="1.5" ry="2" transform="rotate(-8 4.5 2.5)" />
+            <ellipse cx="8" cy="2.5" rx="1.5" ry="2" transform="rotate(8 8 2.5)" />
+            <ellipse cx="10.5" cy="5" rx="1.5" ry="2" transform="rotate(25 10.5 5)" />
+            <path d="M2.5 11 C2 9 4 6.5 6 6.5 S10 9 9.5 11 C9 13 7.5 11.5 6 11.5 S3 13 2.5 11Z" />
+          </svg>
+        </span>
+      }}
+    </div>
+  </div>
+}

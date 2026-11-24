@@ -1,0 +1,192 @@
+/* Minimal document, top-layer dialog, and native form-control pseudo-elements
+   that StyleX cannot express directly. All component layout and styling live
+   in rooftops.stylex.ts, and all HUD/world graphics are rendered in Canvas 2D. */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: #101322;
+  color: #f3ddba;
+  font-family:
+    "Helvetica Neue",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+dialog.rooftops-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.rooftops-dialog::backdrop {
+  background-color: rgb(16 19 34 / 0.84);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+dialog.rooftops-dialog[data-backdrop="achievements"]::backdrop {
+  background-color: rgb(16 19 34 / 0.88);
+}
+
+dialog.rooftops-dialog[data-backdrop="opaque"]::backdrop {
+  background-color: #101322;
+}
+
+.rooftops-slider {
+  --slider-track-size: 6px;
+  --slider-thumb-size: 16px;
+  --slider-track-radius: 999px;
+  --slider-thumb-radius: 50%;
+  --slider-track-color: #36344c;
+  --slider-fill-color: #8b7bff;
+  --slider-thumb-color: #ffdba0;
+  --slider-direction: to right;
+  --attr-min: attr(min type(<number>), 0);
+  --attr-max: attr(max type(<number>), 100);
+  --control-value: attr(value type(<number>), 50);
+  --slider-progress: calc(progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%);
+  appearance: none;
+  inline-size: 100%;
+  block-size: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+@supports not (opacity: progress(1, 0, 100)) {
+  .rooftops-slider {
+    --slider-progress: calc(
+      (var(--control-value) - var(--attr-min)) / (var(--attr-max) - var(--attr-min)) * 100%
+    );
+  }
+}
+
+.rooftops-slider::-webkit-slider-runnable-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: var(--slider-track-radius);
+  background: linear-gradient(
+    var(--slider-direction),
+    var(--slider-fill-color) var(--slider-progress),
+    var(--slider-track-color) var(--slider-progress)
+  );
+}
+
+.rooftops-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+  border: 0;
+  border-radius: var(--slider-thumb-radius);
+  background: var(--slider-thumb-color);
+}
+
+.rooftops-slider::-moz-range-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: var(--slider-track-radius);
+  background: var(--slider-track-color);
+}
+
+.rooftops-slider::-moz-range-progress {
+  block-size: var(--slider-track-size);
+  border-radius: var(--slider-track-radius);
+  background: var(--slider-fill-color);
+}
+
+.rooftops-slider::-moz-range-thumb {
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  border: 0;
+  border-radius: var(--slider-thumb-radius);
+  background: var(--slider-thumb-color);
+}
+
+.rooftops-slider:focus-visible {
+  outline: 2px solid #ffdba0;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.rooftops-checkbox {
+  --icon-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  inline-size: 17px;
+  block-size: 17px;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 3px;
+  border: 1px solid #8b7bff;
+  background-color: #101322;
+  cursor: pointer;
+}
+
+.rooftops-checkbox::before {
+  content: "";
+  inline-size: 12px;
+  block-size: 12px;
+  background-color: #101322;
+  mask: var(--icon-check) no-repeat center / contain;
+  scale: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rooftops-checkbox::before {
+    transition: scale 120ms ease;
+  }
+}
+
+.rooftops-checkbox:checked {
+  background-color: #8b7bff;
+}
+
+.rooftops-checkbox:checked::before {
+  scale: 1;
+}
+
+.rooftops-checkbox:focus-visible {
+  outline: 2px solid #ffdba0;
+  outline-offset: 2px;
+}
+
+/* Safe-area probe custom properties read once per resize for Canvas HUD padding. */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Both documents paint the same harbor frame. Hold the outgoing scene until
+   Rooftops is ready, then let only the menu's own controls fade in. */
+:root[data-portal-arrival]::view-transition-group(root),
+:root[data-portal-arrival]::view-transition-new(root) {
+  animation: none;
+}
+
+:root[data-portal-arrival]::view-transition-old(root) {
+  animation: none;
+  opacity: 0;
+}

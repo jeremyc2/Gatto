@@ -1,0 +1,19 @@
+import { Story } from "./Story.rx"
+import { SiteHeader } from "./components/SiteHeader.rx"
+import { Features } from "./components/Features.rx"
+import { DownloadSection } from "./components/DownloadSection.rx"
+import { PortalEnding } from "./components/PortalCat.rx"
+
+export default component App() {
+  source header: HTMLElement | undefined := undefined
+
+  action captureHeader(element: HTMLElement | undefined) { header := element }
+
+  <SiteHeader ref={captureHeader} />
+  <main>
+    <Story header={header} />
+    <Features />
+    <DownloadSection />
+  </main>
+  <PortalEnding />
+}

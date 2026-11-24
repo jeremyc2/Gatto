@@ -50,6 +50,7 @@ impl Rooftops {
 
         let panel = v_flex()
             .id("rooftops-achievements-modal")
+            .debug_selector(|| "rooftops-achievements-modal".into())
             .track_focus(&self.achievements_focus)
             .w(px(610.))
             .h(px(536.))
@@ -112,7 +113,17 @@ impl Rooftops {
                 .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                     cx.stop_propagation()
                 })
-                .child(panel.focus_trap("rooftops-achievements-trap", &self.achievements_focus)),
+                .child(
+                    panel
+                        .on_mouse_down_out(cx.listener(
+                            |this, event: &gpui_kit::MouseDownEvent, window, cx| {
+                                if event.button == gpui_kit::MouseButton::Left {
+                                    this.close_achievements(window, cx);
+                                }
+                            },
+                        ))
+                        .focus_trap("rooftops-achievements-trap", &self.achievements_focus),
+                ),
         )
     }
 }

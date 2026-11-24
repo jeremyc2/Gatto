@@ -1,0 +1,20 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./DownloadBadge.stylex"
+import { Link } from "./design-system/Link.rx"
+import pure downloadBadge from "../../docs/images/download-macos.svg"
+
+export component DownloadBadge(props: { placement?: "story" | "footer" }) {
+  <Link
+    href="https://github.com/jeremyc2/Gatto/releases/latest"
+    variant="graphic"
+    xstyle={[styles.root, props.placement === "footer" ? styles.footer : styles.story]}
+  >
+    <img
+      {...attrs(styles.image)}
+      src={downloadBadge}
+      width="380"
+      height="64"
+      alt="Download Gatto for macOS"
+    />
+  </Link>
+}

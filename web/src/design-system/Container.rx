@@ -1,0 +1,6 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./Container.stylex"
+
+export component Container(props: { children: import("@solidjs/web").JSX.Element; xstyle?: import("@stylexjs/stylex").StyleXStyles }) {
+  <div {...attrs(styles.root, props.xstyle)}>{props.children}</div>
+}

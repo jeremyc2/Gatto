@@ -1,4 +1,12 @@
-/* Font registration only. Document and UI styles live in StyleX. */
+/* Match the early HTML color hint to the root's native color scheme. */
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+}
+
 @font-face {
   font-family: "Coconat";
   src: url("../assets/fonts/Coconat.woff2") format("woff2");

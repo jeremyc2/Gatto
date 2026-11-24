@@ -1,0 +1,8 @@
+import pure { attrs } from "@stylexjs/stylex"
+import pure { styles } from "./Brand.stylex"
+
+export component Brand(props: { small?: boolean; dot?: boolean }) {
+  <span {...attrs(styles.root, props.small && styles.small)}>
+    Gatto{if props.dot { <span {...attrs(styles.dot)} aria-hidden="true" /> }}
+  </span>
+}

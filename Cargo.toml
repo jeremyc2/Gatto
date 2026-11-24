@@ -1,6 +1,6 @@
 [package]
 name = "gatto"
-version = "0.24.7"
+version = "0.24.9"
 edition = "2024"
 default-run = "Gatto"
 rust-version = "1.90"
@@ -159,7 +159,6 @@ raw-window-handle = "0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 raw-window-handle = "0.6"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
 cosmic-text = "0.19"
 futures-util = "0.3"
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream"] }
@@ -175,6 +174,7 @@ windows = { version = "0.62", features = [
   "Win32_System_LibraryLoader",
   "Win32_System_Registry",
   "Win32_System_Threading",
+  "Win32_System_Time",
   "Win32_UI_HiDpi",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Shell",

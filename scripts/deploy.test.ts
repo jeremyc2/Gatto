@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-async function deploy(failRefresh: boolean) {
+async function deploy(failRefresh: boolean, extraArgs: string[] = ["--dry-run"]) {
   const root = await mkdtemp(join(tmpdir(), "gatto-deploy-"));
   try {
     for (const path of ["web/scripts", "web/cloudflare", "tools"])
@@ -16,7 +16,7 @@ async function deploy(failRefresh: boolean) {
       join(root, "web/cloudflare/worker.ts"),
       'export default { fetch() { return new Response("fixture"); } };',
     );
-    for (const tool of ["bun", "cf"]) {
+    for (const tool of ["bun", "bunx", "cf"]) {
       const executable = join(root, "tools", tool);
       await Bun.write(
         executable,
@@ -24,7 +24,7 @@ async function deploy(failRefresh: boolean) {
 import {appendFileSync, mkdirSync, writeFileSync, readFileSync} from 'node:fs';
 const args = process.argv.slice(2);
 appendFileSync('calls', JSON.stringify([${JSON.stringify(tool)}, ...args])+'\\n');
-if (${JSON.stringify(tool)} === 'bun') {
+if (${JSON.stringify(tool)} === 'bun' || ${JSON.stringify(tool)} === 'bunx') {
   if (process.env.CLOUDFLARE_API_TOKEN) throw new Error('Build received deployment credentials');
   if (args.includes('scripts/refresh-assets.ts')) {
     if (${failRefresh}) process.exit(1);
@@ -34,6 +34,10 @@ if (${JSON.stringify(tool)} === 'bun') {
     mkdirSync('web/dist/client', {recursive: true});
     writeFileSync('web/dist/client/screenshot', readFileSync('refreshed'));
   }
+  if (args.includes('web/scripts/prerender.ts')) {
+    mkdirSync('web/dist/client', {recursive: true});
+    writeFileSync('web/dist/client/index.html', '<html></html>');
+  }
 } else if (args.includes('--dry-run') && !process.env.CLOUDFLARE_API_TOKEN) {
   throw new Error('Deploy lost its credentials');
 }
@@ -41,7 +45,7 @@ if (${JSON.stringify(tool)} === 'bun') {
       );
       await chmod(executable, 0o755);
     }
-    const child = Bun.spawn([process.execPath, join(root, "web/scripts/deploy.ts"), "--dry-run"], {
+    const child = Bun.spawn([process.execPath, join(root, "web/scripts/deploy.ts"), ...extraArgs], {
       cwd: root,
       env: {
         ...Bun.env,
@@ -85,6 +89,35 @@ test("deployment builds with fresh screenshots before invoking cf, forwarding dr
     ["cf", "deploy", "--prebuilt", "--dry-run"],
   ]);
   expect(result.screenshot).toBe("new screenshot");
+});
+
+test("fast deployment skips asset refresh and checks, runs only build steps, and strips --fast for cf", async () => {
+  const result = await deploy(true, ["--fast", "--dry-run"]);
+  expect(result.exit, result.output).toBe(0);
+  expect(result.calls).toEqual([
+    [
+      "bunx",
+      "--no-env-file",
+      "--no-install",
+      "--bun",
+      "vite",
+      "build",
+      "--config",
+      "web/vite.config.ts",
+    ],
+    ["bun", "--no-env-file", "web/scripts/prerender.ts"],
+    [
+      "bunx",
+      "--no-env-file",
+      "--no-install",
+      "--bun",
+      "vite",
+      "build",
+      "--config",
+      "web/vite.rooftops.config.ts",
+    ],
+    ["cf", "deploy", "--prebuilt", "--dry-run"],
+  ]);
 });
 
 test("failed screenshot preparation stops deployment before building or contacting cf", async () => {

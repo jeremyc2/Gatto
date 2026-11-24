@@ -71,6 +71,13 @@ impl Rooftops {
         cx.notify();
     }
 
+    pub(super) fn close_options(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.persist_options(cx, 0);
+        self.set_options_open(false);
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
     pub(super) fn dismiss_overlay(
         &mut self,
         _: &crate::application_menu::DismissWindow,
@@ -80,10 +87,7 @@ impl Rooftops {
         if self.achievements_open {
             self.close_achievements(window, cx);
         } else if self.options_open {
-            self.persist_options(cx, 0);
-            self.set_options_open(false);
-            window.focus(&self.focus, cx);
-            cx.notify();
+            self.close_options(window, cx);
         } else {
             cx.propagate();
         }
@@ -571,7 +575,16 @@ impl Rooftops {
                 .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                     cx.stop_propagation()
                 })
-                .child(card.focus_trap("rooftops-options-trap", &self.options_focus)),
+                .child(
+                    card.on_mouse_down_out(cx.listener(
+                        |this, event: &gpui_kit::MouseDownEvent, window, cx| {
+                            if event.button == gpui_kit::MouseButton::Left {
+                                this.close_options(window, cx);
+                            }
+                        },
+                    ))
+                    .focus_trap("rooftops-options-trap", &self.options_focus),
+                ),
         );
         scene
     }

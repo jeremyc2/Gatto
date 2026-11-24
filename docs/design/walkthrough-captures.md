@@ -10,6 +10,8 @@ The app's header artwork was refreshed on October 27, 2026 using the
 [dark-background pixel cat](explorations/art/app-cat/artwork.md). App captures
 were regenerated through the same native renderer; the illustrated editor
 fixtures and their source crops remain independent.
+On November 22, 2026, the captures that show the header were refreshed with
+the model-rendered flying cat in its three-quarter profile.
 
 Desktop walkthrough captures use the **18 pt** interface size. Main-window
 captures show the current interface at 800 logical pixels wide,

@@ -5,6 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fail() { echo "error: $*" >&2; exit 1; }
+progress() { printf '\n==> %s\n' "$*"; }
 # Builds get no inherited publishing/signing tokens. This is environment hygiene,
 # not a sandbox: use a separate credentialless build user for strong isolation.
 build() (
@@ -30,6 +31,8 @@ for option in "$@"; do
   esac
 done
 
+progress "Starting Gatto release: checking local tools and checkout..."
+
 confirm() {
   if "$accept_all"; then
     return 0
@@ -49,8 +52,6 @@ for tool in bun gh git cargo plutil hdiutil diskutil; do
   command -v "$tool" >/dev/null || fail "missing required tool: $tool; see docs/RELEASING.md"
 done
 [[ "$(git branch --show-current)" == main ]] || fail "merge your work into main, then run this command there"
-git fetch --quiet origin main --tags
-git merge-base --is-ancestor origin/main HEAD || fail "main is behind or diverged from origin/main; reconcile it first"
 [[ -z "$(git diff --name-only --diff-filter=U)" ]] || fail "resolve merge conflicts first"
 
 TARGET=aarch64-apple-darwin
@@ -82,6 +83,7 @@ set_channel() {
 }
 
 sync_metadata() {
+  progress "Refreshing and verifying published release metadata..."
   ./scripts/publish-beta-feed.sh "$tag" \
     || fail "$tag is published; beta feed refresh failed; run ./scripts/release.sh --resume"
   if [[ "$channel" == beta ]]; then
@@ -105,7 +107,25 @@ sync_metadata() {
   echo "Published $tag. README and Homebrew cask are verified, committed and pushed."
 }
 
+# Collect version and notes before downloads, compilation, or other slow setup.
+if [[ "$mode" == release ]]; then
+  progress "Choosing the release version and preparing notes..."
+  bun scripts/prepare-release.ts
+  version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+  set_channel
+  tag="v$version"
+  progress "Checking whether $tag already has a GitHub release..."
+  if gh release view "$tag" >/dev/null 2>&1; then
+    fail "$tag already has a release; use --resume to finish it"
+  fi
+fi
+
+progress "Fetching origin/main and release tags..."
+git fetch --quiet origin main --tags
+git merge-base --is-ancestor origin/main HEAD || fail "main is behind or diverged from origin/main; reconcile it first"
+
 if [[ "$mode" == resume ]]; then
+  progress "Checking the existing release and recovery artifacts..."
   gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run gh auth login"
   version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
   set_channel
@@ -137,28 +157,26 @@ if [[ "$mode" == resume ]]; then
   exit 0
 fi
 
+progress "Checking release build tools..."
 for tool in rustup security codesign xcrun spctl ditto ruby; do
   command -v "$tool" >/dev/null || fail "missing required tool: $tool"
 done
 cargo deny --version >/dev/null 2>&1 \
   || fail "install the one-time audit tool: cargo install --locked cargo-deny --version 0.20.2"
+progress "Preparing the Sparkle updater SDK and native driver..."
 build ./scripts/prepare-updater.sh
+progress "Preparing video encoders and their source archive..."
 build bun --no-env-file scripts/prepare-video-encoders.ts --archive
 
-bun scripts/prepare-release.ts
-version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
-set_channel
-tag="v$version"
-if gh release view "$tag" >/dev/null 2>&1; then
-  fail "$tag already has a release; use --resume to finish it"
-fi
-
 # Run required checks here so releasing does not rely on a remembered checklist.
+progress "Installing and auditing locked JavaScript dependencies..."
 build bun --no-env-file install --frozen-lockfile --ignore-scripts
 build bun --no-env-file audit:dependencies
 # Regenerate embedded art before compilation and all derived captures before the
 # website checks and commit review. This also compiles the app's icon resources.
+progress "Refreshing artwork, animations, and screenshots..."
 build bun --no-env-file scripts/refresh-assets.ts
+progress "Running Rust compilation, formatting, lint, tests, and dependency checks..."
 build cargo check --locked --all-targets
 bun scripts/prepare-release.ts --check
 plutil -lint packaging/Info.plist
@@ -166,6 +184,7 @@ build cargo fmt --all -- --check
 build cargo clippy --locked --all-targets --all-features -- -D warnings
 build cargo test --locked --all-targets
 build cargo deny --locked check --hide-inclusion-graph advisories licenses bans sources
+progress "Checking release scripts and native updater integration..."
 build bun --no-env-file typecheck:scripts
 build bun --no-env-file lint:scripts
 build bun --no-env-file test:scripts
@@ -173,6 +192,7 @@ build ./scripts/test-updater.sh
 build ./scripts/test-platform.sh
 build bun --no-env-file scripts/test-update-install.ts
 ruby -c Casks/gatto.rb
+progress "Building and checking the website..."
 build bun --no-env-file build:web
 build bun --no-env-file lint:web
 build bun --no-env-file typecheck:web
@@ -191,10 +211,12 @@ if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
   [[ "$(git rev-parse "$tag^{commit}")" == "$release_commit" ]] || fail "$tag already points to another commit"
 fi
 
+progress "Building the unsigned release binary for $tag..."
 build rustup target add "$TARGET" > /dev/null
 GIT_COMMIT_HASH="$(git rev-parse HEAD)" build cargo build --locked --release --target "$TARGET"
 
 # No third-party compilation or install steps follow credential preflight.
+progress "Checking GitHub, signing, and notarization credentials..."
 gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run gh auth login"
 if [[ -z "${SIGN_IDENTITY:-}" ]]; then
   identities="$(security find-identity -v -p codesigning | grep 'Developer ID Application' || true)"
@@ -209,6 +231,7 @@ sparkle_key="$(dist/sparkle/bin/generate_keys --account "$SPARKLE_ACCOUNT" -p)" 
 [[ -n "$sparkle_key" ]] || fail "Sparkle signing key is empty"
 echo "Releasing $tag signed as: $SIGN_IDENTITY"
 
+progress "Packaging and signing the app..."
 dist="dist/release"
 bundle="$dist/$APP_NAME"
 rm -rf "$dist"
@@ -250,6 +273,7 @@ codesign --verify --deep --strict --verbose=2 "$bundle"
 
 notarize_zip="$dist/notarize.zip"
 ditto -c -k --keepParent "$bundle" "$notarize_zip"
+progress "Notarizing and verifying the app..."
 xcrun notarytool submit "$notarize_zip" --keychain-profile "$NOTARY_PROFILE" --wait
 rm "$notarize_zip"
 
@@ -258,6 +282,7 @@ xcrun stapler validate "$bundle"
 spctl --assess --type execute --verbose=2 "$bundle"
 
 archive="gatto-$version-$TARGET.dmg"
+progress "Building, signing, and notarizing the disk image..."
 ./scripts/build-dmg.sh "$bundle" "$dist/$archive" "$installer_template"
 rm "$installer_template"
 codesign --timestamp --sign "$SIGN_IDENTITY" "$dist/$archive"
@@ -277,6 +302,7 @@ cp "$encoders/video-encoder-sources.tar.xz" "$dist/"
 
 confirm "Publish $tag to GitHub Releases?" || fail "cancelled; signed artifacts are in $dist"
 
+progress "Uploading and verifying the GitHub release..."
 notes_file="$(mktemp "${TMPDIR:-/tmp}/gatto-release-notes.XXXXXX")"
 trap 'rm -f "$notes_file"' EXIT
 bun scripts/prepare-release.ts --print-notes > "$notes_file"

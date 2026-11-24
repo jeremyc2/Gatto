@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 test("prerenders all scenes, concise copy and the two README download badges", async () => {
   const html = await Bun.file(new URL("index.html", staticDirectory)).text();
-  expect(html).toContain("Gatto — GitHub, illustrated.");
+  expect(html).toMatch(/<title>Gatto (?:—|&#8212;) GitHub, illustrated\.<\/title>/);
   expect(html).toContain("Choose a repository, then drop in your files.");
   expect(html).toContain("Add several files at once.");
   expect(html).toContain("Annotate before uploading.");
@@ -34,9 +34,14 @@ test("prerenders all scenes, concise copy and the two README download badges", a
     ...html.matchAll(/<link[^>]+rel="preload"[^>]+href="([^"]+)"[^>]+as="font"/g),
   ];
   expect(preloadedFonts).toHaveLength(2);
-  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(8);
+  expect(html.match(/(?:src|href)="[^"]+\.webp"/g)).toHaveLength(6);
   expect(html).not.toContain("Still view");
   expect(html).not.toContain("How it works");
+  expect(html).not.toContain("Gattoverse mini game coming soon");
+  expect(html).toMatch(
+    /<a[^>]+href="\/rooftops\/"[^>]+id="download-portal"[^>]+aria-label="Play Gatto Rooftops"/,
+  );
+  expect(html).toMatch(/<canvas[^>]+data-portal-canvas[^>]+aria-hidden="true"/);
   const articles = html.match(/<article\b[^>]*id="chapter-[^"]+"[^>]*>/g) ?? [];
   expect(articles).toHaveLength(3);
   for (const article of articles) {
@@ -87,4 +92,44 @@ test("discovers the muted inline video before hydration for page-load autoplay",
   const buffer = Buffer.from(bytes);
   expect(buffer.indexOf("moov")).toBeGreaterThan(0);
   expect(buffer.indexOf("moov")).toBeLessThan(buffer.indexOf("mdat"));
+});
+
+test("the ReactiveScript document loads its hashed client entry and preserves request nonces", async () => {
+  const { handleRequest } = (await import(
+    new URL("../dist/server/server.js", import.meta.url).href
+  )) as typeof import("virtual:solid-ssr-handler");
+  const response = await handleRequest(new Request("http://localhost/"), {
+    nonce: "test-script-nonce",
+  });
+  expect(response.status).toBe(200);
+  const html = await response.text();
+  expect(html).toMatch(
+    /<script[^>]+type="module"[^>]+src="\/assets\/entry-client-[^"]+\.js"[^>]+nonce="test-script-nonce"/,
+  );
+  expect(html).not.toContain('src="/src/entry-client.ts"');
+  expect(html).not.toContain('["A little Mac app');
+  expect(html).not.toContain("&amp;quot;");
+});
+
+test("ships Rooftops on its own HTML page with a split bundle excluded from the main page", async () => {
+  const mainHtml = await Bun.file(new URL("index.html", staticDirectory)).text();
+  expect(mainHtml).not.toMatch(/rooftops-[^"]+\.(?:js|css)/);
+  expect(mainHtml).not.toMatch(/worklet-[^"]+\.js/);
+
+  const rooftopsHtml = await Bun.file(new URL("rooftops/index.html", staticDirectory)).text();
+  expect(rooftopsHtml).toContain("<title>Rooftops — Gatto</title>");
+  expect(rooftopsHtml).toContain("@view-transition");
+  expect(rooftopsHtml).toMatch(/<script type="module" blocking="render"[^>]+rooftops-[^"]+\.js/);
+  const assets = [...rooftopsHtml.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map(
+    (match) => match[1]!,
+  );
+  expect(assets.some((p) => /\/assets\/rooftops-[^/]+\.js$/.test(p))).toBe(true);
+  expect(assets.some((p) => /\/assets\/rooftops-[^/]+\.css$/.test(p))).toBe(true);
+  for (const path of assets) {
+    expect(await Bun.file(new URL(path.replace(/^\//, ""), staticDirectory)).exists()).toBe(true);
+  }
+  const worklets = Array.from(
+    new Bun.Glob("assets/worklet-*.js").scanSync(staticDirectory.pathname),
+  );
+  expect(worklets).toHaveLength(1);
 });

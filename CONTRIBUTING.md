@@ -500,9 +500,10 @@ The Windows adapters in [Cargo.toml](Cargo.toml) have target-specific dependenci
 Reqwest, Tokio, and Futures stream uploads with cancellation and timeouts. Reqwest
 uses Windows Schannel for TLS. The standard library lacks an HTTP client, and the
 existing macOS transport uses Foundation. Cosmic Text shapes and rasterizes
-annotation and scorecard text because Core Text runs on Mac. Chrono supplies local
-time conversion in place of Foundation. The Windows bindings provide Win32 and
-Media Foundation APIs, and embed-resource calls the Windows resource compiler to
+annotation and scorecard text because Core Text runs on Mac. The existing Windows
+bindings supply local time conversion, including daylight saving rules, in place
+of Foundation; no separate date/time dependency is needed. They also provide Win32
+and Media Foundation APIs, and embed-resource calls the Windows resource compiler to
 embed the app icon. The Windows build uses the system TLS and media libraries.
 
 Project persistence uses `uuid` for UUID generation and validation, and `sha2`

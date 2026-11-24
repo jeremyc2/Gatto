@@ -148,6 +148,7 @@ checksum = "keep-this-checksum"
       const errors = new Response(child.stderr).text();
       expect(await child.exited, (await output) + (await errors)).toBe(0);
       expect(await output).toContain("Choose a release:");
+      expect(await output).toStartWith("Checking the latest Stable release on GitHub...");
       if (current.includes("-beta.")) expect(await output).toContain("Promote this Beta to Stable");
       expect(await Bun.file(join(root, "Cargo.toml")).text()).toContain(`version = "${expected}"`);
       expect(await Bun.file(join(root, "Cargo.lock")).text()).toBe(

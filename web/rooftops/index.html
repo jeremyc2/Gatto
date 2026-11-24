@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Rooftops — a black-cat nighttime platformer across Brownstones, SoHo, and Midtown."
+    />
+    <title>Rooftops — Gatto</title>
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 64x64" />
+    <link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <style>
+      html {
+        background-color: #101322;
+      }
+      @view-transition {
+        navigation: auto;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        @view-transition {
+          navigation: none;
+        }
+      }
+    </style>
+    <link rel="expect" href="#rooftops-root" blocking="render" />
+    <script type="module" src="/src/rooftops/main.ts" blocking="render"></script>
+  </head>
+  <body>
+    <div id="rooftops-root"></div>
+    <noscript>
+      <main class="noscript-notice">
+        <h1>Rooftops</h1>
+        <p>Enable JavaScript to play Gatto Rooftops.</p>
+        <p><a href="/">Back to Gatto</a></p>
+      </main>
+    </noscript>
+  </body>
+</html>

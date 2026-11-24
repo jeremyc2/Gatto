@@ -1,0 +1,17 @@
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+}
+
+:root[data-portal-flight] {
+  view-transition-name: root;
+}
+
+:root[data-portal-flight]::view-transition-group(root) {
+  animation-duration: 250ms;
+}
