@@ -30,9 +30,22 @@ fn format_timestamp(
     // SAFETY: All pointers reference live, distinct structures for these
     // synchronous calls. None selects the system time zone, including DST rules.
     unsafe {
-        FileTimeToSystemTime(&filetime, &mut utc).ok()?;
-        SystemTimeToTzSpecificLocalTimeEx(timezone.map(std::ptr::from_ref), &utc, &mut local)
-            .ok()?;
+        let utc_result = FileTimeToSystemTime(&filetime, &mut utc);
+        eprintln!(
+            "[DEBUG-ts247] utc={utc_result:?}, date={}-{}-{}",
+            utc.wYear, utc.wMonth, utc.wDay
+        );
+        utc_result.ok()?;
+        let local_result =
+            SystemTimeToTzSpecificLocalTimeEx(timezone.map(std::ptr::from_ref), &utc, &mut local);
+        eprintln!(
+            "[DEBUG-ts247] explicit_zone={}, local={local_result:?}, date={}-{}-{}",
+            timezone.is_some(),
+            local.wYear,
+            local.wMonth,
+            local.wDay
+        );
+        local_result.ok()?;
     }
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -47,6 +60,11 @@ fn format_timestamp(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_time_zone_formats_a_present_timestamp() {
+        assert!(format_local_timestamp(1_700_000_000_000).is_some());
+    }
 
     #[test]
     fn formats_unix_milliseconds_and_rejects_missing_or_out_of_range_dates() {
