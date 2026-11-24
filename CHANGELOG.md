@@ -13,6 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   backend and existing component and asset features.
 - Update Tokio from 1.53.3 to 1.54.1 for the Windows upload runtime and shared
   dependency graph.
+- Update the test-only JSON Schema validator from 0.61.0 to 0.61.2.
 
 ## [0.24.9] - 2026-11-22
 
