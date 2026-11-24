@@ -47,10 +47,38 @@ fn format_timestamp(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows::Win32::System::Time::EnumDynamicTimeZoneInformation;
+
+    fn timezone(key: &str) -> DYNAMIC_TIME_ZONE_INFORMATION {
+        for index in 0.. {
+            let mut zone = DYNAMIC_TIME_ZONE_INFORMATION::default();
+            // SAFETY: The output points to a live structure for this synchronous call.
+            let result = unsafe { EnumDynamicTimeZoneInformation(index, &mut zone) };
+            assert_eq!(
+                result, 0,
+                "Time zone {key} not found: Windows error {result}"
+            );
+            // Native buffers may contain unrelated data after the first NUL.
+            let name = zone.TimeZoneKeyName;
+            let end = name
+                .iter()
+                .position(|&unit| unit == 0)
+                .unwrap_or(name.len());
+            if name[..end].iter().copied().eq(key.encode_utf16()) {
+                return zone;
+            }
+        }
+        unreachable!()
+    }
+
+    #[test]
+    fn system_time_zone_formats_a_present_timestamp() {
+        assert!(format_local_timestamp(1_700_000_000_000).is_some());
+    }
 
     #[test]
     fn formats_unix_milliseconds_and_rejects_missing_or_out_of_range_dates() {
-        let utc = DYNAMIC_TIME_ZONE_INFORMATION::default();
+        let utc = timezone("UTC");
         let format = |milliseconds| format_timestamp(milliseconds, Some(&utc));
         assert_eq!(format(1).as_deref(), Some("Jan 1, 1970 00:00"));
         assert_eq!(
@@ -72,24 +100,8 @@ mod tests {
 
     #[test]
     fn local_time_crosses_year_and_daylight_saving_boundaries() {
-        // US Eastern rules: second Sunday in March, first Sunday in November.
-        let eastern = DYNAMIC_TIME_ZONE_INFORMATION {
-            Bias: 300,
-            DaylightBias: -60,
-            DaylightDate: SYSTEMTIME {
-                wMonth: 3,
-                wDay: 2,
-                wHour: 2,
-                ..Default::default()
-            },
-            StandardDate: SYSTEMTIME {
-                wMonth: 11,
-                wDay: 1,
-                wHour: 2,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
+        // Registered Eastern rules include the 2024 DST transitions below.
+        let eastern = timezone("Eastern Standard Time");
         let format = |milliseconds| format_timestamp(milliseconds, Some(&eastern)).unwrap();
         assert_eq!(format(1), "Dec 31, 1969 19:00");
         assert_eq!(format(1_710_053_999_999), "Mar 10, 2024 01:59");
