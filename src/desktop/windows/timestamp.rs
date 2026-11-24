@@ -58,8 +58,13 @@ mod tests {
                 result, 0,
                 "Time zone {key} not found: Windows error {result}"
             );
-            let name = String::from_utf16_lossy(&zone.TimeZoneKeyName);
-            if name.trim_end_matches('\0') == key {
+            // Native buffers may contain unrelated data after the first NUL.
+            let name = zone.TimeZoneKeyName;
+            let end = name
+                .iter()
+                .position(|&unit| unit == 0)
+                .unwrap_or(name.len());
+            if name[..end].iter().copied().eq(key.encode_utf16()) {
                 return zone;
             }
         }
