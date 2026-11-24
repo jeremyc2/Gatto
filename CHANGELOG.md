@@ -11,6 +11,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Update GPUI Kit from 0.9.1 to 0.10.0, retaining the compatible GPUI 0.3.12
   backend and existing component and asset features.
+- Update Tokio from 1.53.3 to 1.54.1 for the Windows upload runtime and shared
+  dependency graph.
 
 ## [0.24.9] - 2026-11-22
 
